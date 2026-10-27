@@ -16,7 +16,7 @@ import {
   Panel,
   busyPhase,
 } from '@/app/(authed)/inventory/_components/stock-ui';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import {
   useCreateProduct,
   useCreateVariant,
@@ -24,6 +24,8 @@ import {
   useProductsList,
   useRegisterImage,
 } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * Add a product and every variant it ships in, in one step.
@@ -243,6 +245,7 @@ function ValueChips({
   readonly onAdd: () => void;
   readonly onRemove: (index: number) => void;
 }): ReactElement {
+  const t = useT();
   return (
     <div className="prd-values">
       {values.map((v, vi) => (
@@ -251,7 +254,7 @@ function ValueChips({
             value={v}
             onChange={(e) => onChange(vi, e.target.value)}
             placeholder={placeholderFor(vi)}
-            aria-label={`${axisLabel} value ${vi + 1}`}
+            aria-label={t('productNew.value', { axisLabel, vi: vi + 1 })}
             maxLength={40}
             size={Math.max(4, Math.min(14, v.length || 6))}
             className="prd-chip__input"
@@ -259,7 +262,12 @@ function ValueChips({
           <button
             type="button"
             onClick={() => onRemove(vi)}
-            aria-label={`Remove ${v.trim() === '' ? `${axisLabel} value ${vi + 1}` : v.trim()}`}
+            aria-label={t('productNew.removeValue', {
+              value:
+                v.trim() === ''
+                  ? t('productNew.axisValueN', { axis: axisLabel, n: vi + 1 })
+                  : v.trim(),
+            })}
             className="prd-chip__x"
           >
             <X size={12} aria-hidden />
@@ -267,7 +275,7 @@ function ValueChips({
         </span>
       ))}
       <Button type="button" variant="ghost" size="sm" icon={<Plus size={13} />} onClick={onAdd}>
-        Add value
+        {t('productNew.addValue')}
       </Button>
     </div>
   );
@@ -294,6 +302,7 @@ function VariantImagePicker({
   readonly onAdd: (files: FileList | null) => void;
   readonly onRemove: (index: number) => void;
 }): ReactElement {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const previews = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
   useEffect(() => () => previews.forEach((url) => URL.revokeObjectURL(url)), [previews]);
@@ -307,7 +316,7 @@ function VariantImagePicker({
           <button
             type="button"
             onClick={() => onRemove(i)}
-            aria-label={`Remove image ${i + 1} for ${label}`}
+            aria-label={t('productNew.removeImageFor', { i: i + 1, label })}
             className="prd-pick__x"
           >
             <X size={10} aria-hidden />
@@ -322,9 +331,9 @@ function VariantImagePicker({
             size="sm"
             icon={<ImagePlus size={14} />}
             onClick={() => inputRef.current?.click()}
-            aria-label={`Add images for ${label}`}
+            aria-label={t('productNew.addImagesFor', { label })}
           >
-            {files.length === 0 ? 'Add' : ''}
+            {files.length === 0 ? t('productNew.add') : ''}
           </Button>
           <input
             ref={inputRef}
@@ -345,6 +354,7 @@ function VariantImagePicker({
 }
 
 export function NewProductForm(): ReactElement {
+  const t = useT();
   const router = useRouter();
   const toast = useToast();
   const [form, setForm] = useState<FormState>(INITIAL);
@@ -500,25 +510,27 @@ export function NewProductForm(): ReactElement {
   }
 
   function validate(): string | null {
-    if (matched === null && !form.name.trim()) return 'Product name is required.';
-    if (rows.length === 0) return 'Keep at least one variant — a product with none cannot be sold.';
+    if (matched === null && !form.name.trim()) return t('productNew.productNameIsRequired');
+    if (rows.length === 0) return t('productNew.keepAtLeastOne');
 
     const axisNames = options.map((o) => o.name.trim().toLowerCase()).filter((n) => n !== '');
     if (new Set(axisNames).size !== axisNames.length) {
       // Two axes with one name overwrite each other in the attributes
       // map, so the rows would multiply while recording only the last
       // one — the SKUs would look right and the data would be wrong.
-      return 'Two options share a name. Give each one its own — Colour and Size, not Colour twice.';
+      return t('productNew.twoOptionsShareA');
     }
 
     const seen = new Set<string>();
     for (const r of rows) {
       const sku = skuFor(r).trim();
       if (sku === '') {
-        return `Every variant needs a SKU${r.label ? ` — ${r.label} has none.` : '.'}`;
+        return r.label
+          ? t('productNew.variantNeedsSkuNamed', { label: r.label })
+          : t('productNew.variantNeedsSku');
       }
       if (seen.has(sku.toLowerCase())) {
-        return `SKU "${sku}" is used twice. Each variant needs its own — it is how stock and orders tell them apart.`;
+        return t('productNew.skuIsUsedTwice', { sku });
       }
       seen.add(sku.toLowerCase());
     }
@@ -526,20 +538,22 @@ export function NewProductForm(): ReactElement {
     for (const r of rows) {
       const d = (rowDeclared[r.key] ?? '').trim();
       if (d !== '' && (!Number.isFinite(Number(d)) || Number(d) < 0)) {
-        return `Declared value for ${r.label === '' ? 'the variant' : r.label} must be a number of 0 or more.`;
+        return r.label === ''
+          ? t('productNew.declaredValueUnnamed')
+          : t('productNew.declaredValueNamed', { label: r.label });
       }
     }
 
     for (const [label, v] of [
-      ['Weight', form.weightGrams],
-      ['Length', form.lengthCm],
-      ['Width', form.widthCm],
-      ['Height', form.heightCm],
-      ['Declared value', form.declaredValueInr],
+      [t('productNew.weight'), form.weightGrams],
+      [t('productNew.length'), form.lengthCm],
+      [t('productNew.width'), form.widthCm],
+      [t('productNew.height'), form.heightCm],
+      [t('productNew.declaredValueShort'), form.declaredValueInr],
     ] as const) {
-      const t = v.trim();
-      if (t !== '' && (!Number.isFinite(Number(t)) || Number(t) < 0)) {
-        return `${label} must be a number of 0 or more.`;
+      const value = v.trim();
+      if (value !== '' && (!Number.isFinite(Number(value)) || Number(value) < 0)) {
+        return t('productNew.mustBeANumber', { label });
       }
     }
     return null;
@@ -547,7 +561,7 @@ export function NewProductForm(): ReactElement {
 
   function fmtError(err: unknown): string {
     // FE-2: the server's verdict, verbatim.
-    return serverVerdict(err, 'Something went wrong.');
+    return verdict(err, t, t('productNew.somethingWentWrong'));
   }
 
   async function onSubmit(e: FormEvent): Promise<void> {
@@ -639,7 +653,9 @@ export function NewProductForm(): ReactElement {
 
     if (failures.length === 0) {
       toast.success(
-        rows.length === 1 ? 'Product created.' : `Product created with ${rows.length} variants.`,
+        rows.length === 1
+          ? t('productNew.productCreated')
+          : t('productNew.productCreatedWithVariants', { rows: rows.length }),
       );
       router.push(`/products/${productId}`);
       return;
@@ -650,7 +666,14 @@ export function NewProductForm(): ReactElement {
     // whole thing again, and saving again would then duplicate it.
     const ok = Object.keys(landed).length;
     setError(
-      `The product was created${ok > 0 ? ` with ${ok} variant${ok === 1 ? '' : 's'}` : ''}, but ${failures.length} could not be added:\n${failures.join('\n')}\nFix and save again — only the missing ones are sent.`,
+      t(
+        ok === 0
+          ? 'productNew.createdPartialNone'
+          : ok === 1
+            ? 'productNew.createdPartialOne'
+            : 'productNew.createdPartialMany',
+        { ok, count: failures.length, failures: failures.join('\n') },
+      ),
     );
     setBusy(false);
   }
@@ -729,8 +752,11 @@ export function NewProductForm(): ReactElement {
   const saveLook = {
     icon: <PackagePlus size={16} />,
     labels: {
-      idle: createdProductId === null ? 'Create product' : 'Add the missing variants',
-      busy: 'Creating…',
+      idle:
+        createdProductId === null
+          ? t('productNew.createProduct')
+          : t('productNew.addTheMissingVariants'),
+      busy: t('productNew.creating'),
     },
     state: busyPhase(busy),
   };
@@ -743,30 +769,26 @@ export function NewProductForm(): ReactElement {
         </div>
       )}
 
-      <AreaSection title="Product" note="What the thing is called.">
+      <AreaSection title={t('productNew.product')} note={t('productNew.whatTheThingIs')}>
         <Panel>
           <FieldGrid columns={2}>
             <TextField
-              label="Product name"
+              label={t('productNew.productName')}
               required={matched === null}
-              hint={
-                matched === null
-                  ? undefined
-                  : 'Set by the product this code belongs to — edit it on the product itself.'
-              }
+              hint={matched === null ? undefined : t('productNew.setByTheProduct')}
               value={matched === null ? form.name : matched.name}
               onChange={(e) => set('name', e.target.value)}
               maxLength={200}
               disabled={matched !== null}
             />
             <TextField
-              label="Your product ID"
+              label={t('productNew.yourProductId')}
               hint={
                 matched !== null
-                  ? `This code belongs to "${matched.name}". The variants below will be ADDED to it — no second product is created, and they inherit its weight and dimensions.`
+                  ? t('productNew.thisCodeBelongsTo', { matched: matched.name })
                   : codeQuery.length >= 2 && !lookup.isFetching
-                    ? 'No product has this code yet, so a new one will be created.'
-                    : 'Optional. Your own reference — reuse the code of an existing product to add variants to it instead of creating another, and a CSV re-upload matches on it too.'
+                    ? t('productNew.noProductHasThis')
+                    : t('productNew.optionalYourOwnReference')
               }
               value={form.externalRef}
               onChange={(e) => set('externalRef', e.target.value)}
@@ -775,8 +797,8 @@ export function NewProductForm(): ReactElement {
             />
             <div className="inv-span-all">
               <TextArea
-                label="Description"
-                hint="Optional. Shown on your invoice line."
+                label={t('productNew.description')}
+                hint={t('productNew.optionalShownOnYour')}
                 value={form.description}
                 onChange={(e) => set('description', e.target.value)}
                 rows={2}
@@ -787,26 +809,29 @@ export function NewProductForm(): ReactElement {
         </Panel>
       </AreaSection>
 
-      <AreaSection title="Applies to every variant" note="Asked once, inherited by each SKU.">
+      <AreaSection
+        title={t('productNew.appliesToEveryVariant')}
+        note={t('productNew.askedOnceInheritedBy')}
+      >
         <Panel>
           <div className="inv-stack">
             <Note>
               {inherited === null
-                ? 'Asked once. A variant that differs — a size that weighs more, say — can override its own value on the variant page.'
-                : `Already set on ${inherited.name}, and shown here so you can see what these variants inherit. Change them on the product itself — editing one product from two screens is how the two come to disagree.`}
+                ? t('productNew.askedOnceAVariant')
+                : t('productNew.alreadySetOnAnd', { inherited: inherited.name })}
             </Note>
             <FieldGrid columns={3}>
               <TextField
-                label="Weight (g)"
-                hint="What the courier bills on."
+                label={t('productNew.weightG')}
+                hint={t('productNew.whatTheCourierBills')}
                 value={inherited === null ? form.weightGrams : (inherited.defaultWeightGrams ?? '')}
                 onChange={(e) => set('weightGrams', e.target.value)}
                 inputMode="decimal"
                 disabled={inherited !== null}
               />
               <TextField
-                label="Declared value (₹)"
-                hint="Customs and RTO write-offs."
+                label={t('productNew.declaredValue')}
+                hint={t('productNew.customsAndRtoWrite')}
                 value={
                   inherited === null
                     ? form.declaredValueInr
@@ -817,21 +842,21 @@ export function NewProductForm(): ReactElement {
                 disabled={inherited !== null}
               />
               <TextField
-                label="Length (cm)"
+                label={t('productNew.lengthCm')}
                 value={inherited === null ? form.lengthCm : (inherited.defaultLengthCm ?? '')}
                 onChange={(e) => set('lengthCm', e.target.value)}
                 inputMode="decimal"
                 disabled={inherited !== null}
               />
               <TextField
-                label="Width (cm)"
+                label={t('productNew.widthCm')}
                 value={inherited === null ? form.widthCm : (inherited.defaultWidthCm ?? '')}
                 onChange={(e) => set('widthCm', e.target.value)}
                 inputMode="decimal"
                 disabled={inherited !== null}
               />
               <TextField
-                label="Height (cm)"
+                label={t('productNew.heightCm')}
                 value={inherited === null ? form.heightCm : (inherited.defaultHeightCm ?? '')}
                 onChange={(e) => set('heightCm', e.target.value)}
                 inputMode="decimal"
@@ -843,15 +868,10 @@ export function NewProductForm(): ReactElement {
       </AreaSection>
 
       {/* ── STEP 1 — Options ───────────────────────────────────────── */}
-      <AreaSection title="Options" note="What it varies by — names and values, never a quantity.">
+      <AreaSection title={t('productNew.options')} note={t('productNew.whatItVariesBy')}>
         <Panel>
           <div className="inv-stack">
-            {options.length === 0 && (
-              <Note>
-                A single item needs no options — it gets one SKU below. Add one for a product that
-                comes in more than one colour, size or pack.
-              </Note>
-            )}
+            {options.length === 0 && <Note>{t('productNew.aSingleItemNeeds')}</Note>}
 
             {options.map((o, i) => {
               // An option only multiplies the variants once it has a name
@@ -866,7 +886,7 @@ export function NewProductForm(): ReactElement {
                   ? o.values.some((v) => v.trim() !== '')
                   : Object.values(o.perParent).some((vs) => vs.some((v) => v.trim() !== ''));
               const incomplete = !named || !filled;
-              const axisLabel = named ? o.name.trim() : `Option ${i + 1}`;
+              const axisLabel = named ? o.name.trim() : t('productNew.optionN', { n: i + 1 });
 
               return (
                 <section
@@ -877,11 +897,11 @@ export function NewProductForm(): ReactElement {
                 >
                   <div className="prd-option__head">
                     <TextField
-                      label="Option"
+                      label={t('productNew.option')}
                       id={`option-${i}-name`}
                       value={o.name}
                       onChange={(e) => setOptionName(i, e.target.value)}
-                      placeholder="e.g. Colour"
+                      placeholder={t('productNew.eGColour')}
                       maxLength={40}
                       className="prd-option__name"
                     />
@@ -890,11 +910,11 @@ export function NewProductForm(): ReactElement {
                       variant="ghost"
                       size="sm"
                       icon={<X size={14} />}
-                      aria-label={`Remove ${axisLabel}`}
-                      title={`Remove ${axisLabel}`}
+                      aria-label={t('productNew.remove', { axisLabel })}
+                      title={t('productNew.remove', { axisLabel })}
                       onClick={() => removeOption(i)}
                     >
-                      <span className="prd-hide-sm">Remove</span>
+                      <span className="prd-hide-sm">{t('productNew.remove2')}</span>
                     </Button>
                   </div>
 
@@ -902,18 +922,22 @@ export function NewProductForm(): ReactElement {
                     <ValueChips
                       values={o.values}
                       axisLabel={axisLabel}
-                      placeholderFor={(vi) => (vi === 0 ? 'e.g. Red' : 'e.g. Blue')}
+                      placeholderFor={(vi) =>
+                        vi === 0 ? t('productNew.egRed') : t('productNew.egBlue')
+                      }
                       onChange={(vi, value) => setOptionValue(i, vi, value)}
                       onAdd={() => addOptionValue(i)}
                       onRemove={(vi) => removeOptionValue(i, vi)}
                     />
                   ) : parentValues.length === 0 ? (
                     <Note>
-                      Fill in{' '}
-                      {options[0]?.name.trim() === ''
-                        ? 'the first option'
-                        : options[0]?.name.trim()}{' '}
-                      first — these lists are one per value of it.
+                      {richMessage(t('productNew.fillIn'), {
+                        options:
+                          options[0]?.name.trim() === ''
+                            ? t('productNew.theFirstOption')
+                            : options[0]?.name.trim(),
+                        t: t('productNew.firstTheseListsAre'),
+                      })}
                     </Note>
                   ) : (
                     <div className="inv-stack inv-stack--tight">
@@ -926,7 +950,7 @@ export function NewProductForm(): ReactElement {
                             <div>
                               <ValueChips
                                 values={list}
-                                axisLabel={`${axisLabel} for ${pv}`}
+                                axisLabel={t('productNew.axisFor', { axis: axisLabel, parent: pv })}
                                 placeholderFor={() => '—'}
                                 onChange={(vi, value) => setParentValue(i, pv, vi, value)}
                                 onAdd={() => addParentValue(i, pv)}
@@ -934,7 +958,7 @@ export function NewProductForm(): ReactElement {
                               />
                               {!any && (
                                 <p className="inv-sub">
-                                  Nothing listed — {pv} will make no variant.
+                                  {richMessage(t('productNew.nothingListedWillMake'), { pv })}
                                 </p>
                               )}
                             </div>
@@ -946,13 +970,15 @@ export function NewProductForm(): ReactElement {
 
                   {incomplete && (
                     <p className="prd-incomplete">
-                      Not counted yet —{' '}
-                      {!named && !filled
-                        ? 'type a name and at least one value.'
-                        : !named
-                          ? 'this option needs a name.'
-                          : 'this option needs at least one value.'}{' '}
-                      The greyed-out text is an example, not something you have entered.
+                      {richMessage(t('productNew.notCountedYet'), {
+                        t:
+                          !named && !filled
+                            ? t('productNew.typeANameAnd')
+                            : !named
+                              ? t('productNew.thisOptionNeedsA')
+                              : t('productNew.thisOptionNeedsAt'),
+                        t2: t('productNew.theGreyedOutText'),
+                      })}
                     </p>
                   )}
                 </section>
@@ -968,15 +994,11 @@ export function NewProductForm(): ReactElement {
                   icon={<Plus size={15} />}
                   onClick={addOption}
                 >
-                  Add an option
+                  {t('productNew.addAnOption')}
                 </Button>
               </div>
             ) : (
-              <Note>
-                Two options is the limit. A third would multiply the rows again — and only the
-                second can hold a list per value of the first, so a third has no unambiguous place
-                to sit.
-              </Note>
+              <Note>{t('productNew.twoOptionsIsThe')}</Note>
             )}
           </div>
         </Panel>
@@ -984,29 +1006,28 @@ export function NewProductForm(): ReactElement {
 
       {/* ── STEP 2 — the variants those options produce ─────────────── */}
       <AreaSection
-        title="Variants"
-        note="One row per orderable item — stock is counted against these, never the product."
+        title={t('productNew.variants')}
+        note={t('productNew.oneRowPerOrderable')}
         action={
           <span className="inv-fact sk-figure">
-            {rows.length === 1 ? '1 variant' : `${rows.length} variants`}
+            {rows.length === 1
+              ? t('productNew.1Variant')
+              : t('productNew.variants2', { rows: rows.length })}
           </span>
         }
       >
         <div className="inv-stack">
           {options.length > 0 && rows.length === 1 && rows[0]?.label === '' && (
-            <Note>
-              No option is complete yet, so nothing is being multiplied — this is the single variant
-              the product would ship as.
-            </Note>
+            <Note>{t('productNew.noOptionIsComplete')}</Note>
           )}
 
-          <Table caption="Variants to create">
+          <Table caption={t('productNew.variantsToCreate')}>
             <THead>
               <Tr>
-                <Th>Variant</Th>
-                <Th>SKU</Th>
-                <Th align="right">Declared (₹)</Th>
-                <Th>Images</Th>
+                <Th>{t('productNew.variant')}</Th>
+                <Th>{t('productNew.sku')}</Th>
+                <Th align="right">{t('productNew.declared')}</Th>
+                <Th>{t('productNew.images')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -1014,7 +1035,7 @@ export function NewProductForm(): ReactElement {
                 <Tr key={r.key}>
                   <Td>
                     {r.label === '' ? (
-                      <span className="inv-muted">Single variant</span>
+                      <span className="inv-muted">{t('productNew.singleVariant')}</span>
                     ) : (
                       <span>{r.label}</span>
                     )}
@@ -1023,7 +1044,11 @@ export function NewProductForm(): ReactElement {
                     <TextField
                       value={skuFor(r)}
                       onChange={(e) => setSkuEdits((p) => ({ ...p, [r.key]: e.target.value }))}
-                      aria-label={r.label === '' ? 'SKU' : `SKU for ${r.label}`}
+                      aria-label={
+                        r.label === ''
+                          ? t('productNew.sku')
+                          : t('productNew.skuFor', { label: r.label })
+                      }
                       maxLength={80}
                       className="prd-cell-field"
                       inputClassName="sk-ident"
@@ -1034,7 +1059,9 @@ export function NewProductForm(): ReactElement {
                       value={rowDeclared[r.key] ?? ''}
                       onChange={(e) => setRowDeclared((p) => ({ ...p, [r.key]: e.target.value }))}
                       aria-label={
-                        r.label === '' ? 'Declared value' : `Declared value for ${r.label}`
+                        r.label === ''
+                          ? t('productNew.declaredValue2')
+                          : t('productNew.declaredValueFor', { label: r.label })
                       }
                       inputMode="decimal"
                       placeholder={form.declaredValueInr === '' ? '—' : form.declaredValueInr}
@@ -1044,7 +1071,7 @@ export function NewProductForm(): ReactElement {
                   </Td>
                   <Td>
                     <VariantImagePicker
-                      label={r.label === '' ? 'this variant' : r.label}
+                      label={r.label === '' ? t('productNew.thisVariant') : r.label}
                       files={rowImages[r.key] ?? []}
                       onAdd={(files) => addImages(r.key, files)}
                       onRemove={(index) => removeImage(r.key, index)}
@@ -1055,10 +1082,7 @@ export function NewProductForm(): ReactElement {
             </TBody>
           </Table>
 
-          <Note>
-            SKUs are suggested from the product name — edit any of them. A SKU is permanent once
-            saved, because every order, pick and stock count refers to it.
-          </Note>
+          <Note>{t('productNew.skusAreSuggestedFrom')}</Note>
         </div>
       </AreaSection>
 
@@ -1087,10 +1111,12 @@ export function NewProductForm(): ReactElement {
           onClick={() => router.push('/products')}
           disabled={busy}
         >
-          Cancel
+          {t('productNew.cancel')}
         </Button>
         <span className="prd-savebar__count">
-          {rows.length === 1 ? 'Creates 1 variant' : `Creates ${rows.length} variants`}
+          {rows.length === 1
+            ? t('productNew.creates1Variant')
+            : t('productNew.createsVariants', { rows: rows.length })}
         </span>
       </div>
     </form>

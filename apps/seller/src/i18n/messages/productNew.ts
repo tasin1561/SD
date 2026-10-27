@@ -1,0 +1,208 @@
+import { defineMessages } from '../define';
+
+/** Copy owned by the "productNew" feature. */
+export const productNew = defineMessages({
+  'productNew.value': ['{axisLabel} value {vi}', '{axisLabel}-এর মান {vi}'],
+  'productNew.addValue': ['Add value', 'মান যোগ করুন'],
+  'productNew.removeImageFor': ['Remove image {i} for {label}', '{label}-এর {i} নম্বর ছবি সরান'],
+  'productNew.addImagesFor': ['Add images for {label}', '{label}-এর জন্য ছবি যোগ করুন'],
+  'productNew.add': ['Add', 'যোগ করুন'],
+  'productNew.productNameIsRequired': ['Product name is required.', 'পণ্যের নাম আবশ্যক।'],
+  'productNew.keepAtLeastOne': [
+    'Keep at least one variant — a product with none cannot be sold.',
+    'কমপক্ষে একটি ভ্যারিয়েন্ট রাখুন — ভ্যারিয়েন্ট ছাড়া পণ্য বিক্রি করা যায় না।',
+  ],
+  'productNew.twoOptionsShareA': [
+    'Two options share a name. Give each one its own — Colour and Size, not Colour twice.',
+    'দুটি অপশনের নাম একই। প্রতিটির আলাদা নাম দিন — যেমন রঙ ও সাইজ, রঙ দুইবার নয়।',
+  ],
+  'productNew.skuIsUsedTwice': [
+    'SKU "{sku}" is used twice. Each variant needs its own — it is how stock and orders tell them apart.',
+    'SKU "{sku}" দুইবার ব্যবহার হয়েছে। প্রতিটি ভ্যারিয়েন্টের নিজস্ব SKU দরকার — এর মাধ্যমেই স্টক ও অর্ডার তাদের আলাদা করে।',
+  ],
+  'productNew.mustBeANumber': [
+    '{label} must be a number of 0 or more.',
+    '{label} 0 বা তার বেশি একটি সংখ্যা হতে হবে।',
+  ],
+  'productNew.somethingWentWrong': ['Something went wrong.', 'কিছু একটা ভুল হয়েছে।'],
+  'productNew.productCreated': ['Product created.', 'পণ্য তৈরি হয়েছে।'],
+  'productNew.productCreatedWithVariants': [
+    'Product created with {rows} variants.',
+    '{rows}টি ভ্যারিয়েন্টসহ পণ্য তৈরি হয়েছে।',
+  ],
+  'productNew.createProduct': ['Create product', 'পণ্য তৈরি করুন'],
+  'productNew.addTheMissingVariants': [
+    'Add the missing variants',
+    'বাকি ভ্যারিয়েন্টগুলো যোগ করুন',
+  ],
+  'productNew.creating': ['Creating…', 'তৈরি হচ্ছে…'],
+  'productNew.product': ['Product', 'পণ্য'],
+  'productNew.whatTheThingIs': ['What the thing is called.', 'জিনিসটির নাম কী।'],
+  'productNew.productName': ['Product name', 'পণ্যের নাম'],
+  'productNew.setByTheProduct': [
+    'Set by the product this code belongs to — edit it on the product itself.',
+    'এই কোডটি যে পণ্যের, সেই পণ্য থেকে ঠিক করা — পণ্যটিতে গিয়েই সম্পাদনা করুন।',
+  ],
+  'productNew.yourProductId': ['Your product ID', 'আপনার পণ্যের আইডি'],
+  'productNew.noProductHasThis': [
+    'No product has this code yet, so a new one will be created.',
+    'এই কোডে এখনো কোনো পণ্য নেই, তাই নতুন একটি তৈরি হবে।',
+  ],
+  'productNew.optionalYourOwnReference': [
+    'Optional. Your own reference — reuse the code of an existing product to add variants to it instead of creating another, and a CSV re-upload matches on it too.',
+    'ঐচ্ছিক। আপনার নিজস্ব রেফারেন্স — আরেকটি পণ্য না বানিয়ে বিদ্যমান পণ্যে ভ্যারিয়েন্ট যোগ করতে তার কোড আবার ব্যবহার করুন; CSV আবার আপলোড করলে এর ভিত্তিতেই মেলানো হয়।',
+  ],
+  'productNew.thisCodeBelongsTo': [
+    'This code belongs to "{matched}". The variants below will be ADDED to it — no second product is created, and they inherit its weight and dimensions.',
+    'এই কোডটি "{matched}"-এর। নিচের ভ্যারিয়েন্টগুলো তাতে যোগ করা হবে — দ্বিতীয় কোনো পণ্য তৈরি হবে না, আর এগুলো তার ওজন ও মাপ উত্তরাধিকারে পাবে।',
+  ],
+  'productNew.description': ['Description', 'বিবরণ'],
+  'productNew.optionalShownOnYour': [
+    'Optional. Shown on your invoice line.',
+    'ঐচ্ছিক। আপনার ইনভয়েসের লাইনে দেখানো হবে।',
+  ],
+  'productNew.appliesToEveryVariant': [
+    'Applies to every variant',
+    'প্রতিটি ভ্যারিয়েন্টে প্রযোজ্য',
+  ],
+  'productNew.askedOnceInheritedBy': [
+    'Asked once, inherited by each SKU.',
+    'একবারই জিজ্ঞাসা করা হয়, প্রতিটি SKU তা উত্তরাধিকারে পায়।',
+  ],
+  'productNew.askedOnceAVariant': [
+    'Asked once. A variant that differs — a size that weighs more, say — can override its own value on the variant page.',
+    'একবারই জিজ্ঞাসা করা হয়। যে ভ্যারিয়েন্ট আলাদা — যেমন যে সাইজের ওজন বেশি — সে ভ্যারিয়েন্টের পেজে নিজের মান বদলাতে পারে।',
+  ],
+  'productNew.alreadySetOnAnd': [
+    'Already set on {inherited}, and shown here so you can see what these variants inherit. Change them on the product itself — editing one product from two screens is how the two come to disagree.',
+    '{inherited}-এ আগেই ঠিক করা আছে, এবং এখানে দেখানো হয়েছে যাতে এই ভ্যারিয়েন্টগুলো কী উত্তরাধিকারে পায় তা দেখতে পান। এগুলো পণ্যটিতে গিয়েই বদলান — একটি পণ্য দুই স্ক্রিন থেকে সম্পাদনা করলেই দুটোর মধ্যে অমিল হয়।',
+  ],
+  'productNew.weightG': ['Weight (g)', 'ওজন (গ্রাম)'],
+  'productNew.whatTheCourierBills': [
+    'What the courier bills on.',
+    'কুরিয়ার যার ভিত্তিতে বিল করে।',
+  ],
+  'productNew.declaredValue': ['Declared value (₹)', 'ঘোষিত মূল্য (₹)'],
+  'productNew.customsAndRtoWrite': ['Customs and RTO write-offs.', 'কাস্টমস ও RTO রাইট-অফ।'],
+  'productNew.lengthCm': ['Length (cm)', 'দৈর্ঘ্য (সেমি)'],
+  'productNew.widthCm': ['Width (cm)', 'প্রস্থ (সেমি)'],
+  'productNew.heightCm': ['Height (cm)', 'উচ্চতা (সেমি)'],
+  'productNew.options': ['Options', 'অপশন'],
+  'productNew.whatItVariesBy': [
+    'What it varies by — names and values, never a quantity.',
+    'কীসের ভিত্তিতে এটি বদলায় — নাম ও মান, কখনো পরিমাণ নয়।',
+  ],
+  'productNew.aSingleItemNeeds': [
+    'A single item needs no options — it gets one SKU below. Add one for a product that comes in more than one colour, size or pack.',
+    'একক পণ্যের অপশন লাগে না — নিচে এটি একটি SKU পাবে। যে পণ্য একাধিক রঙ, সাইজ বা প্যাকে আসে তার জন্য একটি যোগ করুন।',
+  ],
+  'productNew.option': ['Option', 'অপশন'],
+  'productNew.eGColour': ['e.g. Colour', 'যেমন রঙ'],
+  'productNew.remove': ['Remove {axisLabel}', '{axisLabel} সরান'],
+  'productNew.remove2': ['Remove', 'সরান'],
+  'productNew.theFirstOption': ['the first option', 'প্রথম অপশন'],
+  'productNew.firstTheseListsAre': [
+    'first — these lists are one per value of it.',
+    'আগে — এই তালিকাগুলো তার প্রতিটি মানের জন্য একটি করে।',
+  ],
+  'productNew.nothingListedWillMake': [
+    'Nothing listed — {pv} will make no variant.',
+    'কিছু তালিকাভুক্ত নেই — {pv} থেকে কোনো ভ্যারিয়েন্ট হবে না।',
+  ],
+  'productNew.typeANameAnd': [
+    'type a name and at least one value.',
+    'একটি নাম এবং কমপক্ষে একটি মান লিখুন।',
+  ],
+  'productNew.thisOptionNeedsA': ['this option needs a name.', 'এই অপশনের একটি নাম দরকার।'],
+  'productNew.thisOptionNeedsAt': [
+    'this option needs at least one value.',
+    'এই অপশনের কমপক্ষে একটি মান দরকার।',
+  ],
+  'productNew.theGreyedOutText': [
+    'The greyed-out text is an example, not something you have entered.',
+    'ধূসর লেখাটি একটি উদাহরণ, আপনার লেখা কিছু নয়।',
+  ],
+  'productNew.addAnOption': ['Add an option', 'অপশন যোগ করুন'],
+  'productNew.twoOptionsIsThe': [
+    'Two options is the limit. A third would multiply the rows again — and only the second can hold a list per value of the first, so a third has no unambiguous place to sit.',
+    'সর্বোচ্চ দুটি অপশন। তৃতীয়টি সারির সংখ্যা আবার গুণ করে দিত — আর শুধু দ্বিতীয়টিই প্রথমটির প্রতিটি মানের জন্য আলাদা তালিকা রাখতে পারে, তাই তৃতীয়টির জন্য কোনো স্পষ্ট জায়গা নেই।',
+  ],
+  'productNew.variants': ['Variants', 'ভ্যারিয়েন্ট'],
+  'productNew.oneRowPerOrderable': [
+    'One row per orderable item — stock is counted against these, never the product.',
+    'প্রতিটি অর্ডারযোগ্য পণ্যের জন্য একটি সারি — স্টক এগুলোর বিপরীতে গোনা হয়, পণ্যের বিপরীতে নয়।',
+  ],
+  'productNew.1Variant': ['1 variant', '1টি ভ্যারিয়েন্ট'],
+  'productNew.variants2': ['{rows} variants', '{rows}টি ভ্যারিয়েন্ট'],
+  'productNew.noOptionIsComplete': [
+    'No option is complete yet, so nothing is being multiplied — this is the single variant the product would ship as.',
+    'এখনো কোনো অপশন সম্পূর্ণ নয়, তাই কিছু গুণ হচ্ছে না — পণ্যটি যে একক ভ্যারিয়েন্ট হিসেবে যাবে এটিই সেটি।',
+  ],
+  'productNew.variantsToCreate': ['Variants to create', 'তৈরি হবে যে ভ্যারিয়েন্ট'],
+  'productNew.variant': ['Variant', 'ভ্যারিয়েন্ট'],
+  'productNew.sku': ['SKU', 'SKU'],
+  'productNew.declared': ['Declared (₹)', 'ঘোষিত (₹)'],
+  'productNew.images': ['Images', 'ছবি'],
+  'productNew.singleVariant': ['Single variant', 'একক ভ্যারিয়েন্ট'],
+  'productNew.skuFor': ['SKU for {label}', '{label}-এর SKU'],
+  'productNew.declaredValue2': ['Declared value', 'ঘোষিত মূল্য'],
+  'productNew.declaredValueFor': ['Declared value for {label}', '{label}-এর ঘোষিত মূল্য'],
+  'productNew.thisVariant': ['this variant', 'এই ভ্যারিয়েন্ট'],
+  'productNew.skusAreSuggestedFrom': [
+    'SKUs are suggested from the product name — edit any of them. A SKU is permanent once saved, because every order, pick and stock count refers to it.',
+    'পণ্যের নাম থেকে SKU প্রস্তাব করা হয় — যেকোনোটি বদলাতে পারেন। সংরক্ষণের পর SKU স্থায়ী, কারণ প্রতিটি অর্ডার, পিক ও স্টক গণনা এটিকেই উল্লেখ করে।',
+  ],
+  'productNew.cancel': ['Cancel', 'বাতিল'],
+  'productNew.creates1Variant': ['Creates 1 variant', '1টি ভ্যারিয়েন্ট তৈরি হবে'],
+  'productNew.createsVariants': ['Creates {rows} variants', '{rows}টি ভ্যারিয়েন্ট তৈরি হবে'],
+  'productNew.fillIn': ['Fill in {options} {t}', 'পূরণ করুন {options} {t}'],
+  'productNew.notCountedYet': ['Not counted yet — {t} {t2}', 'এখনো গোনা হয়নি — {t} {t2}'],
+  'productNew.clientConsole': ['Client console', 'ক্লায়েন্ট কনসোল'],
+  'productNew.stockWms': ['Stock & WMS', 'স্টক ও WMS'],
+  'productNew.products': ['Products', 'পণ্য'],
+  'productNew.new': ['New', 'নতুন'],
+  'productNew.newProduct': ['New product', 'নতুন পণ্য'],
+  'productNew.oneProductAndEvery': [
+    'One product and every variant it ships in. Reusing an existing product reference adds to that product instead. Bringing in a whole catalogue? Use the CSV import.',
+    'একটি পণ্য এবং সে যত ভ্যারিয়েন্টে আসে সবগুলো। বিদ্যমান পণ্যের রেফারেন্স আবার ব্যবহার করলে সেই পণ্যেই যোগ হয়। পুরো ক্যাটালগ আনছেন? CSV ইম্পোর্ট ব্যবহার করুন।',
+  ],
+  'productNew.removeValue': ['Remove {value}', '{value} সরান'],
+  'productNew.axisValueN': ['{axis} value {n}', '{axis}-এর মান {n}'],
+  'productNew.variantNeedsSkuNamed': [
+    'Every variant needs a SKU — {label} has none.',
+    'প্রতিটি ভ্যারিয়েন্টের একটি SKU দরকার — {label}-এর নেই।',
+  ],
+  'productNew.variantNeedsSku': [
+    'Every variant needs a SKU.',
+    'প্রতিটি ভ্যারিয়েন্টের একটি SKU দরকার।',
+  ],
+  'productNew.declaredValueUnnamed': [
+    'Declared value for the variant must be a number of 0 or more.',
+    'ভ্যারিয়েন্টের ঘোষিত মূল্য 0 বা তার বেশি একটি সংখ্যা হতে হবে।',
+  ],
+  'productNew.declaredValueNamed': [
+    'Declared value for {label} must be a number of 0 or more.',
+    '{label}-এর ঘোষিত মূল্য 0 বা তার বেশি একটি সংখ্যা হতে হবে।',
+  ],
+  'productNew.weight': ['Weight', 'ওজন'],
+  'productNew.length': ['Length', 'দৈর্ঘ্য'],
+  'productNew.width': ['Width', 'প্রস্থ'],
+  'productNew.height': ['Height', 'উচ্চতা'],
+  'productNew.declaredValueShort': ['Declared value', 'ঘোষিত মূল্য'],
+  'productNew.createdPartialNone': [
+    'The product was created, but {count} could not be added:\n{failures}\nFix and save again — only the missing ones are sent.',
+    'পণ্যটি তৈরি হয়েছে, কিন্তু {count}টি যোগ করা যায়নি:\n{failures}\nঠিক করে আবার সংরক্ষণ করুন — শুধু বাকিগুলোই পাঠানো হবে।',
+  ],
+  'productNew.createdPartialOne': [
+    'The product was created with {ok} variant, but {count} could not be added:\n{failures}\nFix and save again — only the missing ones are sent.',
+    'পণ্যটি {ok}টি ভ্যারিয়েন্টসহ তৈরি হয়েছে, কিন্তু {count}টি যোগ করা যায়নি:\n{failures}\nঠিক করে আবার সংরক্ষণ করুন — শুধু বাকিগুলোই পাঠানো হবে।',
+  ],
+  'productNew.createdPartialMany': [
+    'The product was created with {ok} variants, but {count} could not be added:\n{failures}\nFix and save again — only the missing ones are sent.',
+    'পণ্যটি {ok}টি ভ্যারিয়েন্টসহ তৈরি হয়েছে, কিন্তু {count}টি যোগ করা যায়নি:\n{failures}\nঠিক করে আবার সংরক্ষণ করুন — শুধু বাকিগুলোই পাঠানো হবে।',
+  ],
+  'productNew.optionN': ['Option {n}', 'অপশন {n}'],
+  'productNew.egRed': ['e.g. Red', 'যেমন লাল'],
+  'productNew.egBlue': ['e.g. Blue', 'যেমন নীল'],
+  'productNew.axisFor': ['{axis} for {parent}', '{parent}-এর জন্য {axis}'],
+});

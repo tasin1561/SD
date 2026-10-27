@@ -5,7 +5,11 @@ import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { PasswordField, type PasswordCriterion } from '@skydrop/ui/app/password-field';
 import { Button } from '@skydrop/ui/app/button';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Team-invitation acceptance form. Posts to
@@ -27,8 +31,8 @@ interface FormState {
  * rules themselves are unchanged and the server's verdict still wins
  * (FE-2).
  */
-const PASSWORD_CRITERIA: readonly PasswordCriterion[] = [
-  { id: 'length', label: 'At least 12 characters', test: (v) => v.length >= 12 },
+const passwordCriteriaOf = (t: Translate<MessageKey>): readonly PasswordCriterion[] => [
+  { id: 'length', label: t('authAcceptTeam.atLeast12Characters'), test: (v) => v.length >= 12 },
 ];
 
 const INITIAL: FormState = {
@@ -38,6 +42,7 @@ const INITIAL: FormState = {
 };
 
 export function AcceptTeamInvitationForm({ token }: { readonly token: string }): ReactElement {
+  const t = useT();
   const [form, setForm] = useState<FormState>(INITIAL);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,11 +56,11 @@ export function AcceptTeamInvitationForm({ token }: { readonly token: string }):
     if (submitting) return;
     setError(null);
     if (form.password.length < 12) {
-      setError('Password must be at least 12 characters.');
+      setError(t('authAcceptTeam.passwordMustBeAt'));
       return;
     }
     if (form.password !== form.confirmPassword) {
-      setError('Passwords do not match.');
+      setError(t('authAcceptTeam.passwordsDoNotMatch'));
       return;
     }
     setSubmitting(true);
@@ -78,13 +83,17 @@ export function AcceptTeamInvitationForm({ token }: { readonly token: string }):
       });
       window.location.assign('/dashboard');
     } catch (err) {
-      setError(serverVerdict(err, 'Accept failed.'));
+      setError(verdict(err, t, t('authAcceptTeam.acceptFailed')));
       setSubmitting(false);
     }
   }
 
   const confirmCriteria: readonly PasswordCriterion[] = [
-    { id: 'match', label: 'Matches the password', test: (v) => v !== '' && v === form.password },
+    {
+      id: 'match',
+      label: t('authAcceptTeam.matchesThePassword'),
+      test: (v) => v !== '' && v === form.password,
+    },
   ];
 
   return (
@@ -98,11 +107,11 @@ export function AcceptTeamInvitationForm({ token }: { readonly token: string }):
       <TextField
         id="full-name"
         type="text"
-        label="Full name"
+        label={t('authAcceptTeam.fullName')}
         required
         minLength={1}
         maxLength={120}
-        placeholder="Your full name"
+        placeholder={t('authAcceptTeam.yourFullName')}
         value={form.fullName}
         onChange={(e) => set('fullName', e.target.value)}
         disabled={submitting}
@@ -111,7 +120,9 @@ export function AcceptTeamInvitationForm({ token }: { readonly token: string }):
         id="password"
         label={
           <>
-            Password <span className="text-text-faint">(min 12 characters)</span>
+            {richMessage(t('authAcceptTeam.password'), {
+              span: <span className="text-text-faint">{t('authAcceptTeam.min12Characters')}</span>,
+            })}
           </>
         }
         autoComplete="new-password"
@@ -122,12 +133,12 @@ export function AcceptTeamInvitationForm({ token }: { readonly token: string }):
         onChange={(e) => set('password', e.target.value)}
         disabled={submitting}
         showStrength
-        criteria={PASSWORD_CRITERIA}
+        criteria={passwordCriteriaOf(t)}
       />
       <PasswordField
         id="confirm-password"
-        toggleLabel="Show confirm password"
-        label="Confirm password"
+        toggleLabel={t('authAcceptTeam.showConfirmPassword')}
+        label={t('authAcceptTeam.confirmPassword')}
         autoComplete="new-password"
         required
         minLength={12}
@@ -144,7 +155,7 @@ export function AcceptTeamInvitationForm({ token }: { readonly token: string }):
         </div>
       )}
       <Button type="submit" fullWidth loading={submitting}>
-        {submitting ? 'Joining…' : 'Accept invitation'}
+        {submitting ? t('authAcceptTeam.joining') : t('authAcceptTeam.acceptInvitation')}
       </Button>
     </form>
   );

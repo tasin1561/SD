@@ -10,16 +10,20 @@ import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { Skeleton } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { roleLine, roleNamesOf } from '@/lib/role-words';
 import { useLogoutEverywhere, useRequestEmailVerification } from '@/lib/session-hooks';
 import { SetCallout, SetFact, SetPageHeader } from '../../_components/settings-parts';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
-const CRUMBS = [
-  { label: 'Client console' },
-  { label: 'Account' },
-  { label: 'Settings', href: '/settings' },
-  { label: 'Sign-in & sessions' },
+const crumbsOf = (t: Translate<MessageKey>) => [
+  { label: t('settingsSecurity.clientConsole') },
+  { label: t('settingsSecurity.account') },
+  { label: t('settingsSecurity.settings'), href: '/settings' },
+  { label: t('settingsSecurity.signInSessions') },
 ];
 
 /**
@@ -38,6 +42,7 @@ const CRUMBS = [
  * server actually revoked.
  */
 export function SecurityIndex(): ReactElement {
+  const t = useT();
   const identity = useSellerIdentity();
   const toast = useToast();
   const logoutAll = useLogoutEverywhere();
@@ -53,9 +58,9 @@ export function SecurityIndex(): ReactElement {
       await verify.mutateAsync();
       // No new state to show: the account is still unverified until the
       // link is clicked, so saying "sent" is the whole honest outcome.
-      toast.success('Sent. Check your inbox — the link confirms this address.');
+      toast.success(t('settingsSecurity.sentCheckYourInbox'));
     } catch (e) {
-      setError(serverVerdict(e, 'Could not send a verification link.'));
+      setError(verdict(e, t, t('settingsSecurity.couldNotSendA')));
       // Rethrown so the button shows the failure on itself.
       throw e;
     }
@@ -72,16 +77,16 @@ export function SecurityIndex(): ReactElement {
       // here is worth reading: it is the difference between "the network
       // dropped" and "this account is suspended".
       setConfirmOpen(false);
-      setError(serverVerdict(e, 'Could not end your sessions.'));
+      setError(verdict(e, t, t('settingsSecurity.couldNotEndYour')));
     }
   }
 
   return (
     <div className="set-page">
       <SetPageHeader
-        crumbs={CRUMBS}
-        title="Sign-in & sessions"
-        subtitle="Who this browser is signed in as, and how to end every session for this account at once."
+        crumbs={crumbsOf(t)}
+        title={t('settingsSecurity.signInSessions')}
+        subtitle={t('settingsSecurity.whoThisBrowserIs')}
         /*
           The comps put a session count and a last-seen location here.
           The API exposes no read over `seller_refresh_tokens`, so
@@ -91,13 +96,15 @@ export function SecurityIndex(): ReactElement {
           identity === null ? undefined : (
             <span className="set-meta">
               <SetFact tone={identity.emailVerifiedAt === null ? 'warn' : 'good'} dot>
-                {identity.emailVerifiedAt === null ? 'Email not verified' : 'Email verified'}
+                {identity.emailVerifiedAt === null
+                  ? t('settingsSecurity.emailNotVerified')
+                  : t('settingsSecurity.emailVerified')}
               </SetFact>
               {/* EVERY role, not the first one. `roleName` is a label
                   the server keeps truthful; somebody who is Finance AND
                   Ops read as Finance on the page that tells them what
                   they are. */}
-              <SetFact>{roleLine(identity)}</SetFact>
+              <SetFact>{roleLine(identity, t('roleWords.noRole'))}</SetFact>
             </span>
           )
         }
@@ -110,7 +117,7 @@ export function SecurityIndex(): ReactElement {
           role="alert"
           action={
             <Button variant="secondary" size="sm" onClick={() => setConfirmOpen(true)}>
-              Try again
+              {t('settingsSecurity.tryAgain')}
             </Button>
           }
         >
@@ -120,8 +127,8 @@ export function SecurityIndex(): ReactElement {
 
       <section className="set-section">
         <SectionHeading
-          title="This session"
-          note="What the server says about the person signed in here."
+          title={t('settingsSecurity.thisSession')}
+          note={t('settingsSecurity.whatTheServerSays')}
         />
         <div className="set-card">
           {identity === null ? (
@@ -139,18 +146,22 @@ export function SecurityIndex(): ReactElement {
           ) : (
             <>
               <dl className="set-dl">
-                <dt>Signed in as</dt>
+                <dt>{t('settingsSecurity.signedInAs')}</dt>
                 <dd>{identity.fullName}</dd>
-                <dt>Email</dt>
+                <dt>{t('settingsSecurity.email')}</dt>
                 <dd>
                   <span className="sk-ident sk-ident--wrap">{identity.emailDisplay}</span>
                   {identity.emailVerifiedAt === null && (
-                    <span className="set-faint"> — not verified</span>
+                    <span className="set-faint">{t('settingsSecurity.notVerified')}</span>
                   )}
                 </dd>
-                <dt>{roleNamesOf(identity).length === 1 ? 'Role' : 'Roles'}</dt>
-                <dd>{roleLine(identity)}</dd>
-                <dt>Company</dt>
+                <dt>
+                  {roleNamesOf(identity).length === 1
+                    ? t('settingsSecurity.role')
+                    : t('settingsSecurity.roles')}
+                </dt>
+                <dd>{roleLine(identity, t('roleWords.noRole'))}</dd>
+                <dt>{t('settingsSecurity.company')}</dt>
                 <dd>{identity.companyName}</dd>
               </dl>
               {identity.emailVerifiedAt === null && (
@@ -162,20 +173,17 @@ export function SecurityIndex(): ReactElement {
                       variant="secondary"
                       size="sm"
                       labels={{
-                        idle: 'Send me a new link',
-                        busy: 'Sending…',
-                        done: 'Sent',
-                        error: 'Not sent',
+                        idle: t('settingsSecurity.sendMeANew'),
+                        busy: t('settingsSecurity.sending'),
+                        done: t('settingsSecurity.sent'),
+                        error: t('settingsSecurity.notSent'),
                       }}
                       disabled={verify.isPending}
                       onAction={onVerify}
                     />
                   }
                 >
-                  <p>
-                    We have not confirmed this address yet. The link may have been filtered, or sent
-                    before you finished setting up — either way you can have another.
-                  </p>
+                  <p>{t('settingsSecurity.weHaveNotConfirmed')}</p>
                 </SetCallout>
               )}
             </>
@@ -184,27 +192,32 @@ export function SecurityIndex(): ReactElement {
       </section>
 
       <section className="set-section">
-        <SectionHeading title="Sign out everywhere" note="Every device, including this one." />
+        <SectionHeading
+          title={t('settingsSecurity.signOutEverywhere')}
+          note={t('settingsSecurity.everyDeviceIncludingThis')}
+        />
         {revokedCount === null ? (
           <div className="set-card" data-tone="danger">
             <SetCallout tone="critical" icon={<ShieldAlert size={15} />}>
               <p>
-                Use this when a device is out of your hands, or when the same login has been used on
-                machines you can no longer account for. Every browser and app signed in as{' '}
-                <span className="sk-ident set-strong">
-                  {identity?.emailDisplay ?? 'this account'}
-                </span>{' '}
-                is signed out.
+                {richMessage(t('settingsSecurity.useThisWhenA'), {
+                  span: (
+                    <span className="sk-ident set-strong">
+                      {identity?.emailDisplay ?? t('settingsSecurity.thisAccount')}
+                    </span>
+                  ),
+                  t: t('settingsSecurity.isSignedOut'),
+                })}
               </p>
             </SetCallout>
             <p className="set-muted">
-              That includes this one — you will sign in again straight after. It does not change
-              your password, and it does not touch API keys: a key is a separate credential and is
-              revoked on the{' '}
-              <Link href="/settings/api-keys" className="set-link">
-                API keys
-              </Link>{' '}
-              page.
+              {richMessage(t('settingsSecurity.thatIncludesThisOne'), {
+                link: (
+                  <Link href="/settings/api-keys" className="set-link">
+                    {t('settingsSecurity.apiKeys')}
+                  </Link>
+                ),
+              })}
             </p>
             <div className="set-buttons" data-align="start">
               <Button
@@ -214,24 +227,33 @@ export function SecurityIndex(): ReactElement {
                 onClick={() => setConfirmOpen(true)}
                 disabled={logoutAll.isPending}
               >
-                {logoutAll.isPending ? 'Ending sessions…' : 'Sign out everywhere'}
+                {logoutAll.isPending
+                  ? t('settingsSecurity.endingSessions')
+                  : t('settingsSecurity.signOutEverywhere')}
               </Button>
             </div>
           </div>
         ) : (
           <div className="set-card" aria-live="polite">
-            <SetCallout tone="good" icon={<CircleCheck size={15} />} title="Sessions ended">
+            <SetCallout
+              tone="good"
+              icon={<CircleCheck size={15} />}
+              title={t('settingsSecurity.sessionsEnded')}
+            >
               <p>
                 {/* The server's own count, not a claim of our own. Zero is
                     reported as zero rather than dressed up as success —
                     if nothing was revoked, that is the fact worth seeing. */}
                 {revokedCount === 0
-                  ? 'The server reported no active sessions to revoke.'
-                  : `${revokedCount} ${revokedCount === 1 ? 'session was' : 'sessions were'} revoked.`}
+                  ? t('settingsSecurity.theServerReportedNo')
+                  : t(
+                      revokedCount === 1
+                        ? 'settingsSecurity.sessionRevokedOne'
+                        : 'settingsSecurity.sessionsRevokedMany',
+                      { revokedCount },
+                    )}
               </p>
-              <p className="set-callout__aside">
-                This browser&apos;s session was ended too. Sign in again to carry on.
-              </p>
+              <p className="set-callout__aside">{t('settingsSecurity.thisBrowserSSession')}</p>
             </SetCallout>
             <div className="set-buttons" data-align="start">
               <Button
@@ -242,7 +264,7 @@ export function SecurityIndex(): ReactElement {
                 // actually clears it from this tab.
                 onClick={() => window.location.assign('/login')}
               >
-                Sign in again
+                {t('settingsSecurity.signInAgain')}
               </Button>
             </div>
           </div>
@@ -252,11 +274,11 @@ export function SecurityIndex(): ReactElement {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Sign out everywhere?"
-        entity={identity?.emailDisplay ?? 'This account'}
+        title={t('settingsSecurity.signOutEverywhere2')}
+        entity={identity?.emailDisplay ?? t('settingsSecurity.thisAccount2')}
         entityIsIdentifier={identity !== null}
-        consequence="Every device signed in as this account is signed out, including this one. Anyone using the account will need to sign in again."
-        confirmLabel="Sign out everywhere"
+        consequence={t('settingsSecurity.everyDeviceSignedIn')}
+        confirmLabel={t('settingsSecurity.signOutEverywhere')}
         destructive
         onConfirm={onConfirm}
       />

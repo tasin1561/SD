@@ -13,6 +13,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
+import { useUiT } from '../i18n-client';
 import {
   FieldShell,
   describedBy,
@@ -88,7 +89,7 @@ export const ComboSelect = forwardRef<HTMLInputElement, ComboSelectProps>(functi
     value,
     defaultValue,
     onChange,
-    emptyText = 'No matches',
+    emptyText: emptyTextProp,
     onQueryChange,
     remote = false,
     name,
@@ -104,6 +105,8 @@ export const ComboSelect = forwardRef<HTMLInputElement, ComboSelectProps>(functi
   },
   ref,
 ): ReactElement {
+  const t = useUiT();
+  const emptyText = emptyTextProp ?? t('ui.combo.noMatches');
   const autoId = useId();
   const id = idProp ?? `sk-f-${autoId}`;
   const listId = `${id}-list`;
@@ -214,7 +217,7 @@ export const ComboSelect = forwardRef<HTMLInputElement, ComboSelectProps>(functi
             className="sk-field__btn sk-combo__toggle"
             tabIndex={-1}
             disabled={disabled}
-            aria-label="Show options"
+            aria-label={t('ui.combo.showOptions')}
             aria-controls={listId}
             aria-expanded={open}
             data-open={open || undefined}

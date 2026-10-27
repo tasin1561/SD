@@ -1,19 +1,21 @@
 import type { ReactElement } from 'react';
 import { SetPageHeader } from '../_components/settings-parts';
 import { OrderDefaultsPanel } from './_components/order-defaults-panel';
+import { getT } from '@/i18n/server';
 
-export default function OrderDefaultsPage(): ReactElement {
+export default async function OrderDefaultsPage(): Promise<ReactElement> {
+  const { t } = await getT();
   return (
     <div className="set-page">
       <SetPageHeader
         crumbs={[
-          { label: 'Client console' },
-          { label: 'Account' },
-          { label: 'Settings', href: '/settings' },
-          { label: 'Order defaults' },
+          { label: t('settingsOrders.clientConsole') },
+          { label: t('settingsOrders.account') },
+          { label: t('settingsOrders.settings'), href: '/settings' },
+          { label: t('settingsOrders.orderDefaults') },
         ]}
-        title="Order defaults"
-        subtitle="What a new order starts with. Every one of these stays editable on the order itself — this only saves you typing the usual answer."
+        title={t('settingsOrders.orderDefaults')}
+        subtitle={t('settingsOrders.whatANewOrder')}
       />
       <OrderDefaultsPanel />
     </div>

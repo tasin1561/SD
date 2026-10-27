@@ -50,12 +50,7 @@ import {
 } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { useStores } from '@/lib/store-hooks';
-import {
-  ADDRESS_LINE_1_HINT,
-  ADDRESS_LINE_2_HINT,
-  DUPLICATE_LINES_ERROR,
-  linesAreDuplicated,
-} from '@/lib/address-guidance';
+import { linesAreDuplicated } from '@/lib/address-guidance';
 import { prefixHint, stripSellerPrefix } from '@/lib/seller-prefix';
 import { CustomerHistoryPanel } from './customer-history-panel';
 import { DuplicateOrderDialog, type DuplicateCandidate } from './duplicate-order-dialog';
@@ -63,13 +58,14 @@ import { useServiceability } from '@/lib/ops-hooks';
 import {
   IN_DIAL,
   IN_LOCAL_LENGTH,
-  IN_PHONE_ERROR,
   isCompleteLocal,
   sanitiseLocal,
   toE164,
   toLocalDigits,
 } from '@/lib/phone';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * Manual order form.
@@ -142,6 +138,7 @@ const INITIAL: FormState = {
 };
 
 export function NewOrderForm(): ReactElement {
+  const t = useT();
   const sellerInitials = useSellerIdentity()?.initials ?? null;
   const stores = useStores();
   // CLOSED stores are left out: the server refuses one by name, and a
@@ -501,7 +498,7 @@ export function NewOrderForm(): ReactElement {
         r.addressLine2 !== null && r.addressLine2 !== '' ? r.addressLine2 : (r.landmark ?? ''),
       recipientPostalCode: r.postalCode,
     }));
-    toast.success('Filled from their last order — check it is still right.');
+    toast.success(t('orderNew.filledFromTheirLast'));
   }
 
   /**
@@ -538,31 +535,31 @@ export function NewOrderForm(): ReactElement {
   }
 
   function validate(): string | null {
-    if (!form.recipientName.trim()) return 'Recipient name is required.';
-    if (!isCompleteLocal(toLocalDigits(form.recipientPhoneE164))) return IN_PHONE_ERROR;
-    if (!form.recipientAddressLine1.trim()) return 'Address line 1 is required.';
-    if (!form.recipientAddressLine2.trim()) return 'Address line 2 (the landmark) is required.';
+    if (!form.recipientName.trim()) return t('orderNew.recipientNameIsRequired');
+    if (!isCompleteLocal(toLocalDigits(form.recipientPhoneE164)))
+      return t('guidance.phoneError', { len: IN_LOCAL_LENGTH, dial: IN_DIAL });
+    if (!form.recipientAddressLine1.trim()) return t('orderNew.addressLine1Is');
+    if (!form.recipientAddressLine2.trim()) return t('orderNew.addressLine2The');
     // Advisory, NOT a mirror of a server rule — the API has no such
     // check, so a CSV import still gets through. It is here because
     // duplicated lines get the order held by hand downstream, and
     // finding that out at the field beats finding it out afterwards.
     if (linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2))
-      return DUPLICATE_LINES_ERROR;
-    if (!/^[1-9]\d{5}$/.test(form.recipientPostalCode.trim()))
-      return 'PIN must be 6 digits (first digit 1-9).';
+      return t('guidance.duplicateLines');
+    if (!/^[1-9]\d{5}$/.test(form.recipientPostalCode.trim())) return t('orderNew.pinMustBe6');
     const effectiveCollectable = computedCollectable;
     if (form.paymentMode === 'COD' && !(effectiveCollectable > 0))
-      return 'The collectable amount must be more than zero for a cash-on-delivery order.';
+      return t('orderNew.theCollectableAmountMust');
     if (shortLines.length > 0 && !acceptShort) {
-      return 'Some products are short of stock — see the note below, and tick the box if you mean to order them anyway.';
+      return t('orderNew.someProductsAreShort');
     }
     // A line cannot exist without a product now — it is created by
     // clicking one — so the only thing left to check is the quantity.
-    if (items.length === 0)
-      return 'At least one product is required — add one from the list on the right.';
+    if (items.length === 0) return t('orderNew.atLeastOneProduct');
     for (const it of items) {
       const qty = Number(it.quantity);
-      if (!Number.isFinite(qty) || qty < 1) return `Quantity must be at least 1 for ${it.skuCode}.`;
+      if (!Number.isFinite(qty) || qty < 1)
+        return t('orderNew.quantityMustBeAt', { skuCode: it.skuCode });
     }
     return null;
   }
@@ -632,9 +629,11 @@ export function NewOrderForm(): ReactElement {
       const created = await create.mutateAsync(buildBody(acknowledgeDuplicate));
       if (action === 'submit') {
         await submit.mutateAsync({ id: created.id });
-        toast.success(`Order ${created.orderNumber} submitted for confirmation.`);
+        toast.success(
+          t('orderNew.orderSubmittedForConfirmation', { orderNumber: created.orderNumber }),
+        );
       } else {
-        toast.success(`Draft order ${created.orderNumber} saved.`);
+        toast.success(t('orderNew.draftOrderSaved', { orderNumber: created.orderNumber }));
       }
       setDuplicates(null);
       // This reference now belongs to that order. The next order needs
@@ -659,7 +658,7 @@ export function NewOrderForm(): ReactElement {
           return;
         }
       }
-      setError(serverVerdict(err, 'Failed to create order.'));
+      setError(verdict(err, t, t('orderNew.failedToCreateOrder')));
       if (action === 'submit') setSubmitFailed(true);
       setBusy(null);
     }
@@ -698,7 +697,7 @@ export function NewOrderForm(): ReactElement {
         disabled={busy !== null}
         onClick={() => router.push('/orders')}
       >
-        Cancel
+        {t('orderNew.cancel')}
       </Button>
       <AsyncButton
         type="button"
@@ -706,7 +705,7 @@ export function NewOrderForm(): ReactElement {
         className="ord-nowrap"
         icon={<Save size={15} />}
         state={busy === 'draft' ? 'busy' : undefined}
-        labels={{ idle: 'Save as draft', busy: 'Saving…' }}
+        labels={{ idle: t('orderNew.saveAsDraft'), busy: t('orderNew.saving') }}
         disabled={busy !== null}
         onClick={(e) => void go('draft', e)}
       />
@@ -716,9 +715,9 @@ export function NewOrderForm(): ReactElement {
         variant="primary"
         className="ord-nowrap"
         icon={<Send size={15} />}
-        label="Submit for confirmation"
-        busyLabel="Submitting…"
-        errorLabel="Not submitted"
+        label={t('orderNew.submitForConfirmation')}
+        busyLabel={t('orderNew.submitting')}
+        errorLabel={t('orderNew.notSubmitted')}
         state={busy === 'submit' ? 'busy' : submitFailed ? 'error' : 'idle'}
         disabled={busy === 'draft'}
         onAction={async () => {
@@ -732,19 +731,17 @@ export function NewOrderForm(): ReactElement {
     serviceability.data?.known !== true ? null : serviceability.data.serviceable ? (
       <span className="ord-serviceable" data-ok="1">
         <MapPin size={12} aria-hidden />
-        We deliver there
+        {t('orderNew.weDeliverThere')}
       </span>
     ) : (
       <span className="ord-serviceable" data-ok="0">
         <MapPin size={12} aria-hidden />
-        May not be serviceable
+        {t('orderNew.mayNotBeServiceable')}
       </span>
     );
 
   const storeHint =
-    openStores.length > 1
-      ? 'Which of your shops this order was placed on'
-      : 'Every order is filed under a shop. Add another to sell under more than one brand.';
+    openStores.length > 1 ? t('orderNew.whichOfYourShops') : t('orderNew.everyOrderIsFiled');
 
   return (
     <form
@@ -755,19 +752,19 @@ export function NewOrderForm(): ReactElement {
       }}
     >
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
-        Back to orders
+        {t('orderNew.backToOrders')}
       </BackLink>
 
       <PageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Fulfilment' },
-          { label: 'Orders', href: '/orders' },
-          { label: 'New' },
+          { label: t('orderNew.clientConsole') },
+          { label: t('orderNew.fulfilment') },
+          { label: t('orderNew.orders2'), href: '/orders' },
+          { label: t('orderNew.new') },
         ]}
         Link={Link}
-        title="New order"
-        subtitle="Who it goes to and what is in it. Stock is held when the call centre confirms the order, not now."
+        title={t('orderNew.newOrder')}
+        subtitle={t('orderNew.whoItGoesTo')}
         // Desktop only. The sticky bar carries the same three actions and
         // is always on screen; on a phone the pair together cost about a
         // fifth of the viewport before a single field is visible.
@@ -779,14 +776,14 @@ export function NewOrderForm(): ReactElement {
           or unmounted — every field stays in the one form. */}
       <Stepper
         mode="sections"
-        label="Order form sections"
+        label={t('orderNew.orderFormSections')}
         sticky
         steps={[
-          { id: 'no-recipient', label: 'Recipient', icon: <MapPin size={15} /> },
-          { id: 'no-notes', label: 'Reference', icon: <NotebookPen size={15} /> },
-          { id: 'no-products', label: 'Products', icon: <PackageSearch size={15} /> },
-          { id: 'no-lines', label: 'Ordered', icon: <ListChecks size={15} /> },
-          { id: 'no-payment', label: 'Payment', icon: <Banknote size={15} /> },
+          { id: 'no-recipient', label: t('orderNew.recipient'), icon: <MapPin size={15} /> },
+          { id: 'no-notes', label: t('orderNew.reference'), icon: <NotebookPen size={15} /> },
+          { id: 'no-products', label: t('orderNew.products'), icon: <PackageSearch size={15} /> },
+          { id: 'no-lines', label: t('orderNew.ordered'), icon: <ListChecks size={15} /> },
+          { id: 'no-payment', label: t('orderNew.payment'), icon: <Banknote size={15} /> },
         ]}
       />
 
@@ -808,8 +805,8 @@ export function NewOrderForm(): ReactElement {
         <div className="ord-stack">
           <OrdSection
             id="no-recipient"
-            title="Recipient"
-            note="Where the parcel is going."
+            title={t('orderNew.recipient')}
+            note={t('orderNew.whereTheParcelIs')}
             action={serviceabilityChip}
           >
             <div className="ord-stack ord-stack--tight">
@@ -819,12 +816,12 @@ export function NewOrderForm(): ReactElement {
                   parcel, so it is the first thing they copy across
                   rather than the last. */}
               <TextField
-                label="Order ID"
-                hint="Optional. Your own order ID — unique per store."
+                label={t('orderNew.orderId')}
+                hint={t('orderNew.optionalYourOwnOrder')}
                 value={form.sellerOrderRef}
                 onChange={(e) => set('sellerOrderRef', e.target.value)}
                 maxLength={120}
-                placeholder="ORD-2024-9981"
+                placeholder={t('orderNew.ord20249981')}
                 inputClassName="sk-ident"
               />
               {/* The seller code is CHROME, exactly like the +91 below:
@@ -832,9 +829,9 @@ export function NewOrderForm(): ReactElement {
                   the customer's name. The API composes the stored value,
                   so a CSV import lands the same shape as this form. */}
               <TextField
-                label="Full name"
+                label={t('orderNew.fullName')}
                 required
-                hint={prefixHint(sellerInitials)}
+                hint={prefixHint(sellerInitials, t)}
                 lead={
                   sellerInitials !== null && sellerInitials !== '' ? (
                     <span className="ord-prefix" aria-hidden>
@@ -851,9 +848,12 @@ export function NewOrderForm(): ReactElement {
                   paste a differently-formatted number into it. The field
                   itself holds only the ten national digits. */}
               <TextField
-                label="Phone"
+                label={t('orderNew.phone')}
                 required
-                hint={`${IN_DIAL} — ${IN_LOCAL_LENGTH} digits, starting 6-9`}
+                hint={t('orderNew.digitsStarting69', {
+                  inDial: IN_DIAL,
+                  inLocalLength: IN_LOCAL_LENGTH,
+                })}
                 lead={
                   <span className="ord-prefix" aria-hidden>
                     {IN_DIAL}
@@ -868,24 +868,27 @@ export function NewOrderForm(): ReactElement {
                 autoComplete="tel-national"
                 maxLength={IN_LOCAL_LENGTH}
                 placeholder="9812345678"
-                aria-label={`Phone number, ${IN_DIAL} then ${IN_LOCAL_LENGTH} digits`}
+                aria-label={t('orderNew.phoneNumberThenDigits', {
+                  inDial: IN_DIAL,
+                  inLocalLength: IN_LOCAL_LENGTH,
+                })}
                 inputClassName="sk-figure"
               />
               <TextField
-                label="Address line 1"
+                label={t('orderNew.addressLine1')}
                 required
-                hint={ADDRESS_LINE_1_HINT}
+                hint={t('guidance.addressLine1Hint')}
                 value={form.recipientAddressLine1}
                 onChange={(e) => set('recipientAddressLine1', e.target.value)}
                 maxLength={200}
               />
               <TextField
-                label="Address line 2 (the landmark)"
+                label={t('orderNew.addressLine2The2')}
                 required
-                hint={ADDRESS_LINE_2_HINT}
+                hint={t('guidance.addressLine2Hint')}
                 error={
                   linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
-                    ? DUPLICATE_LINES_ERROR
+                    ? t('guidance.duplicateLines')
                     : undefined
                 }
                 value={form.recipientAddressLine2}
@@ -893,7 +896,7 @@ export function NewOrderForm(): ReactElement {
                 maxLength={200}
               />
               <TextField
-                label="PIN code"
+                label={t('orderNew.pinCode')}
                 required
                 // A WARNING, so `notice` and not `hint`: it is the one
                 // thing on this field the seller did not ask about and
@@ -901,11 +904,10 @@ export function NewOrderForm(): ReactElement {
                 // never blocks the submit.
                 notice={
                   serviceability.data?.known === true && !serviceability.data.serviceable
-                    ? (serviceability.data.reason ??
-                      'Our courier may not deliver here — the order can still be placed.')
+                    ? (serviceability.data.reason ?? t('orderNew.ourCourierMayNot'))
                     : undefined
                 }
-                hint="Delhivery routes on the PIN and works the locality out itself."
+                hint={t('orderNew.delhiveryRoutesOnThe')}
                 value={form.recipientPostalCode}
                 onChange={(e) =>
                   set('recipientPostalCode', e.target.value.replace(/\D/g, '').slice(0, 6))
@@ -931,13 +933,10 @@ export function NewOrderForm(): ReactElement {
               <p className="ord-pin-facts">
                 {pincodeInfo.data.district ?? '—'}
                 {pincodeInfo.data.state === null ? '' : `, ${pincodeInfo.data.state}`}
-                <span> from PIN code</span>
+                <span>{t('orderNew.fromPinCode')}</span>
               </p>
             ) : pincodeInfo.data?.valid === false ? (
-              <Notice tone="warn">
-                That PIN code does not exist. The order can still be placed, but check it first — a
-                wrong PIN is the single most expensive typing mistake on this form.
-              </Notice>
+              <Notice tone="warn">{t('orderNew.thatPinCodeDoes')}</Notice>
             ) : null}
 
             <AddressCheckPanel
@@ -956,8 +955,8 @@ export function NewOrderForm(): ReactElement {
 
           <OrdSection
             id="no-notes"
-            title="Reference &amp; notes"
-            note="Yours and the call agent's — none of it reaches the customer."
+            title={t('orderNew.referenceNotes')}
+            note={t('orderNew.yoursAndTheCall')}
           >
             <div className="ord-stack ord-stack--tight">
               {/*
@@ -971,7 +970,7 @@ export function NewOrderForm(): ReactElement {
               */}
               {openStores.length > 1 ? (
                 <Select
-                  label="Store"
+                  label={t('orderNew.store')}
                   hint={storeHint}
                   value={form.storeId}
                   onChange={(e) => set('storeId', e.target.value)}
@@ -985,26 +984,26 @@ export function NewOrderForm(): ReactElement {
                 </Select>
               ) : (
                 <div className="ord-stack ord-stack--tight">
-                  <span className="ord-strong">Store</span>
+                  <span className="ord-strong">{t('orderNew.store')}</span>
                   <div className="ord-store-line">
                     <span className="ord-store-line__name">
                       <Store size={14} aria-hidden />
-                      <span>{openStores[0]?.name ?? 'Your default store'}</span>
+                      <span>{openStores[0]?.name ?? t('orderNew.yourDefaultStore')}</span>
                     </span>
                     <Link href="/settings/stores" className="ord-link">
-                      Manage stores
+                      {t('orderNew.manageStores')}
                     </Link>
                   </div>
                   <span className="ord-faint">{storeHint}</span>
                 </div>
               )}
               <TextArea
-                label="Delivery Notes"
-                hint="Read out on the confirmation call — a preferred time, a fragile item, a second number."
+                label={t('orderNew.deliveryNotes')}
+                hint={t('orderNew.readOutOnThe')}
                 rows={3}
                 value={form.sellerNotes}
                 onChange={(e) => set('sellerNotes', e.target.value)}
-                placeholder="Anything the call agent should know"
+                placeholder={t('orderNew.anythingTheCallAgent')}
               />
             </div>
           </OrdSection>
@@ -1014,8 +1013,8 @@ export function NewOrderForm(): ReactElement {
         <div className="ord-stack">
           <OrdSection
             id="no-products"
-            title="Click to add products"
-            note="Price and stock are on the row, before you choose."
+            title={t('orderNew.clickToAddProducts')}
+            note={t('orderNew.priceAndStockAre')}
             flush
           >
             <ProductCatalogue
@@ -1027,12 +1026,16 @@ export function NewOrderForm(): ReactElement {
 
           <OrdSection
             id="no-lines"
-            title="Ordered products"
-            note={`${items.length} ${items.length === 1 ? 'item' : 'items'}`}
+            title={t('orderNew.orderedProducts')}
+            note={t(items.length === 1 ? 'orderNew.itemCountOne' : 'orderNew.itemCountMany', {
+              count: items.length,
+            })}
             action={
               items.length === 0 ? null : (
                 <span className="ord-strong sk-figure">
-                  Subtotal <Money amount={itemsTotal} convert={false} />
+                  {richMessage(t('orderNew.subtotal'), {
+                    money: <Money amount={itemsTotal} convert={false} />,
+                  })}
                 </span>
               )
             }
@@ -1052,34 +1055,32 @@ export function NewOrderForm(): ReactElement {
               icon={<PackageX size={16} />}
               title={
                 shortLines.length === 1
-                  ? 'One product is short of stock'
-                  : `${shortLines.length} products are short of stock`
+                  ? t('orderNew.oneProductIsShort')
+                  : t('orderNew.productsAreShortOf', { shortLines: shortLines.length })
               }
             >
               <ul className="ord-mini-list">
                 {shortLines.map((l) => (
                   <li key={l.variantId} className="ord-faint">
-                    asked for {l.want},{' '}
-                    {l.have === 0 ? 'none available' : `only ${l.have} available`}
+                    {l.have === 0
+                      ? t('orderNew.askedForNone', { want: l.want })
+                      : t('orderNew.askedForOnly', { want: l.want, have: l.have })}
                   </li>
                 ))}
               </ul>
-              <span className="ord-faint">
-                You can still place it — stock on its way in will cover it once it lands. But the
-                call centre cannot confirm an order we cannot pick, so it waits until then.
-              </span>
+              <span className="ord-faint">{t('orderNew.youCanStillPlace')}</span>
               <Checkbox
                 checked={acceptShort}
                 onChange={(e) => setAcceptShort(e.target.checked)}
-                label="Place it anyway"
+                label={t('orderNew.placeItAnyway')}
               />
             </Notice>
           )}
 
           <OrdSection
             id="no-payment"
-            title="Payment &amp; parcel"
-            note="What the customer pays, and what it weighs."
+            title={t('orderNew.paymentParcel')}
+            note={t('orderNew.whatTheCustomerPays')}
           >
             {/*
               Two cards, not a dropdown. There are exactly two answers,
@@ -1087,14 +1088,14 @@ export function NewOrderForm(): ReactElement {
               chosen changes what the rest of this card means.
             */}
             <ChoiceCards
-              label="Payment mode"
+              label={t('orderNew.paymentMode')}
               required
               columns={2}
               value={form.paymentMode}
               onChange={(v) => set('paymentMode', v === 'PREPAID' ? 'PREPAID' : 'COD')}
               options={[
-                { value: 'COD', title: 'Cash on delivery', icon: <Banknote size={16} /> },
-                { value: 'PREPAID', title: 'Prepaid', icon: <CreditCard size={16} /> },
+                { value: 'COD', title: t('orderNew.cashOnDelivery'), icon: <Banknote size={16} /> },
+                { value: 'PREPAID', title: t('orderNew.prepaid'), icon: <CreditCard size={16} /> },
               ]}
             />
 
@@ -1114,7 +1115,7 @@ export function NewOrderForm(): ReactElement {
               <div className="ord-collect">
                 <TextField
                   id="collectable-amount"
-                  label="Collectable amount (INR)"
+                  label={t('orderNew.collectableAmountInr')}
                   required
                   className="ord-collect__field"
                   lead={
@@ -1148,20 +1149,28 @@ export function NewOrderForm(): ReactElement {
                 <p className="ord-collect__sum sk-figure">
                   {/* The arithmetic, spelled out. A number the call centre
                       reads to a customer should be checkable at a glance. */}
-                  {itemsTotal.toLocaleString('en-IN')} of goods
+                  {t('orderNew.ofGoods', { total: itemsTotal.toLocaleString('en-IN') })}
                   {num(form.deliveryFeeInr) !== 0
-                    ? ` + ${num(form.deliveryFeeInr).toLocaleString('en-IN')} delivery`
+                    ? t('orderNew.delivery', {
+                        deliveryFeeInr: num(form.deliveryFeeInr).toLocaleString('en-IN'),
+                      })
                     : ''}
                   {num(form.advanceAmountInr) !== 0
-                    ? ` − ${num(form.advanceAmountInr).toLocaleString('en-IN')} advance`
+                    ? t('orderNew.advance', {
+                        advanceAmountInr: num(form.advanceAmountInr).toLocaleString('en-IN'),
+                      })
                     : ''}
                   {/* A NEGATIVE discount is a surcharge, and reads as one.
                       "− -40 discount" is arithmetic nobody should have to
                       parse to check their own total. */}
                   {num(form.discountInr) > 0
-                    ? ` − ${num(form.discountInr).toLocaleString('en-IN')} discount`
+                    ? t('orderNew.discount', {
+                        discountInr: num(form.discountInr).toLocaleString('en-IN'),
+                      })
                     : num(form.discountInr) < 0
-                      ? ` + ${Math.abs(num(form.discountInr)).toLocaleString('en-IN')} surcharge`
+                      ? t('orderNew.surcharge', {
+                          discountInr: Math.abs(num(form.discountInr)).toLocaleString('en-IN'),
+                        })
                       : ''}
                   {` = ${computedCollectable.toLocaleString('en-IN')}`}
                 </p>
@@ -1170,12 +1179,14 @@ export function NewOrderForm(): ReactElement {
               <Notice
                 tone="neutral"
                 icon={<CreditCard size={16} />}
-                title="Nothing to collect at the door"
+                title={t('orderNew.nothingToCollectAt')}
               >
                 <span className="ord-faint">
-                  Prepaid — the driver hands it over and takes no money. The goods still come to{' '}
-                  <span className="sk-figure">₹{itemsTotal.toLocaleString('en-IN')}</span>, which is
-                  what the client is charged against.
+                  {richMessage(t('orderNew.prepaidNote'), {
+                    amount: (
+                      <span className="sk-figure">₹{itemsTotal.toLocaleString('en-IN')}</span>
+                    ),
+                  })}
                 </span>
               </Notice>
             )}
@@ -1183,11 +1194,13 @@ export function NewOrderForm(): ReactElement {
             <div className="ord-grid-2" style={{ marginTop: 'var(--sp-3)' }}>
               {showDeliveryFee ? (
                 <TextField
-                  label="Delivery fee (INR)"
+                  label={t('orderNew.deliveryFeeInr')}
                   hint={
                     feeDefault.data === undefined
-                      ? 'Added to the collectable amount.'
-                      : `Added to the collectable. Your default is ₹${feeDefault.data.amountInr}; change it in Settings.`
+                      ? t('orderNew.addedToTheCollectable')
+                      : t('orderNew.addedToTheCollectable2', {
+                          amountInr: feeDefault.data.amountInr,
+                        })
                   }
                   type="number"
                   min={0}
@@ -1198,8 +1211,8 @@ export function NewOrderForm(): ReactElement {
                 />
               ) : null}
               <TextField
-                label="Advance already paid (INR)"
-                hint="Deducted from the collectable."
+                label={t('orderNew.advanceAlreadyPaidInr')}
+                hint={t('orderNew.deductedFromTheCollectable')}
                 type="number"
                 min={0}
                 step="0.01"
@@ -1210,8 +1223,8 @@ export function NewOrderForm(): ReactElement {
               />
               {showDiscount ? (
                 <TextField
-                  label="Discount (INR)"
-                  hint="Deducted from the collectable."
+                  label={t('orderNew.discountInr')}
+                  hint={t('orderNew.deductedFromTheCollectable')}
                   type="number"
                   step="0.01"
                   value={form.discountInr}
@@ -1222,11 +1235,13 @@ export function NewOrderForm(): ReactElement {
               ) : null}
               {showDeclaredValue ? (
                 <TextField
-                  label="Declared value (INR)"
+                  label={t('orderNew.declaredValueInr')}
                   hint={
                     computedDeclaredValue > 0
-                      ? `For customs, not collection. Adds up to ₹${computedDeclaredValue.toLocaleString('en-IN')} from the catalogue.`
-                      : "The parcel's value for customs — not what is collected."
+                      ? t('orderNew.forCustomsNotCollection', {
+                          computedDeclaredValue: computedDeclaredValue.toLocaleString('en-IN'),
+                        })
+                      : t('orderNew.theParcelSValue')
                   }
                   type="number"
                   min={0}
@@ -1237,7 +1252,7 @@ export function NewOrderForm(): ReactElement {
                   placeholder={
                     computedDeclaredValue > 0
                       ? computedDeclaredValue.toLocaleString('en-IN')
-                      : 'Sum of the line values'
+                      : t('orderNew.sumOfTheLine')
                   }
                 />
               ) : null}
@@ -1245,11 +1260,13 @@ export function NewOrderForm(): ReactElement {
                 <TextField
                   // The unit is the suffix on the field itself; saying
                   // it twice reads as two different things being asked for.
-                  label="Total weight"
+                  label={t('orderNew.totalWeight')}
                   hint={
                     computedWeight > 0
-                      ? `Adds up to ${computedWeight.toLocaleString('en-IN')} g from the catalogue. Type a number to override it.`
-                      : 'None of these products has a recorded weight, so this stays 0 unless you set it.'
+                      ? t('orderNew.addsUpToG', {
+                          computedWeight: computedWeight.toLocaleString('en-IN'),
+                        })
+                      : t('orderNew.noneOfTheseProducts')
                   }
                   type="number"
                   min={0}
@@ -1293,17 +1310,19 @@ export function NewOrderForm(): ReactElement {
         {error === null ? (
           <p className="ord-bar__summary">
             {items.length === 0
-              ? 'No products yet'
+              ? t('orderNew.noProductsYet')
               : // "products", not "lines" — a line is what the order model
                 // calls it and nobody outside this codebase does.
-                `${items.length} ${items.length === 1 ? 'product' : 'products'}`}
+                t(items.length === 1 ? 'orderNew.productCountOne' : 'orderNew.productCountMany', {
+                  count: items.length,
+                })}
             {form.paymentMode === 'COD' && computedCollectable > 0 && (
               <>
                 {' · '}
                 <span className="ord-strong sk-figure">
                   ₹{computedCollectable.toLocaleString('en-IN')}
                 </span>{' '}
-                to collect
+                {t('orderNew.toCollect')}
               </>
             )}
           </p>
@@ -1316,19 +1335,24 @@ export function NewOrderForm(): ReactElement {
       <ConfirmDialog
         open={confirmSubmit}
         onOpenChange={setConfirmSubmit}
-        title="Submit this order for confirmation?"
+        title={t('orderNew.submitThisOrderFor')}
         entity={`${form.recipientName.trim()} · ${IN_DIAL} ${toLocalDigits(form.recipientPhoneE164)}`}
         amount={
           form.paymentMode === 'COD' && computedCollectable > 0 ? (
-            <>₹{computedCollectable.toLocaleString('en-IN')} to collect</>
+            <>
+              {richMessage(t('orderNew.toCollect2'), {
+                computedCollectable: computedCollectable.toLocaleString('en-IN'),
+              })}
+            </>
           ) : (
-            'Prepaid'
+            t('orderNew.prepaid')
           )
         }
-        consequence={`It is created and joins the call queue: the call centre phones this customer to confirm ${
-          items.length === 1 ? 'the product' : `the ${items.length} products`
-        }. Stock is held only when they confirm.`}
-        confirmLabel="Submit for confirmation"
+        consequence={t(
+          items.length === 1 ? 'orderNew.consequenceOne' : 'orderNew.consequenceMany',
+          { count: items.length },
+        )}
+        confirmLabel={t('orderNew.submitForConfirmation')}
         // Closes at once: the van on the page carries the busy state while
         // the order is created (go() never throws — it reports on the page).
         onConfirm={() => {

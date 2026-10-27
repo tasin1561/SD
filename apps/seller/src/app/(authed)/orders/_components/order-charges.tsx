@@ -3,13 +3,14 @@
 import type { ReactElement } from 'react';
 import type { OrderChargeView } from '@skydrop/api-client';
 import { useOrderCharges } from '@/lib/api-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { Money } from '@skydrop/ui/components';
 import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { Receipt } from 'lucide-react';
 import './orders.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Seller order-charges section (Module 17). Reads from
@@ -35,12 +36,13 @@ import './orders.css';
  * stack and the stamped column labels come for free.
  */
 export function OrderChargesSection({ orderId }: { orderId: string }): ReactElement {
+  const t = useT();
   const charges = useOrderCharges(orderId);
 
   if (charges.isLoading) {
     return (
       <div className="ord-card__pad">
-        <SkeletonRows rows={4} cols={2} label="Loading charges…" />
+        <SkeletonRows rows={4} cols={2} label={t('ordersParts.loadingCharges')} />
       </div>
     );
   }
@@ -48,7 +50,7 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
     return (
       <div className="ord-card__pad">
         <ErrorState
-          message={serverVerdict(charges.error, 'Failed to load charges.')}
+          message={verdict(charges.error, t, t('ordersParts.failedToLoadCharges'))}
           retry={() => void charges.refetch()}
         />
       </div>
@@ -60,8 +62,8 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
         <EmptyState
           bare
           icon={<Receipt size={20} />}
-          title="No charges persisted yet"
-          description="Pricing breakdowns appear here once charges are computed for the order."
+          title={t('ordersParts.noChargesPersistedYet')}
+          description={t('ordersParts.pricingBreakdownsAppearHere')}
         />
       </div>
     );
@@ -70,11 +72,11 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
   const total = charges.data.reduce((sum, c) => sum + Number(c.totalAmountInr), 0);
 
   return (
-    <Table caption="Charges">
+    <Table caption={t('ordersParts.charges')}>
       <THead>
         <Tr>
-          <Th>Charge</Th>
-          <Th align="right">Amount</Th>
+          <Th>{t('ordersParts.charge')}</Th>
+          <Th align="right">{t('ordersParts.amount')}</Th>
         </Tr>
       </THead>
       <TBody>
@@ -83,7 +85,7 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
         ))}
         <Tr>
           <Td>
-            <span className="ord-strong">Total</span>
+            <span className="ord-strong">{t('ordersParts.total')}</span>
           </Td>
           <Td align="right">
             <span className="ord-strong">

@@ -22,6 +22,10 @@ import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { useRouter } from 'next/navigation';
 import './tickets.css';
+import { useT, useLocale } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
 
 /**
  * The seller's ticket list.
@@ -45,14 +49,17 @@ import './tickets.css';
  */
 
 /** The three stages, in the order somebody works through them. */
-const STAGES = [
-  { value: '', label: 'All tickets' },
-  { value: 'OPEN', label: 'Open' },
-  { value: 'REVIEWING', label: 'Reviewing' },
-  { value: 'CLOSED', label: 'Closed' },
-] as const;
+const stagesOf = (t: Translate<MessageKey>) =>
+  [
+    { value: '', label: t('tickets.allTickets') },
+    { value: 'OPEN', label: t('tickets.open') },
+    { value: 'REVIEWING', label: t('tickets.reviewing') },
+    { value: 'CLOSED', label: t('tickets.closed2') },
+  ] as const;
 
 export function SellerTicketsIndex(): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const router = useRouter();
   const canWrite = can(useSellerIdentity(), 'tickets.create');
   const [status, setStatus] = useState<string>('');
@@ -89,15 +96,21 @@ export function SellerTicketsIndex(): ReactElement {
   return (
     <div className="tkt-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Client console' }, { label: 'Selling' }, { label: 'Tickets' }]}
+        breadcrumbs={[
+          { label: t('tickets.clientConsole') },
+          { label: t('tickets.selling') },
+          { label: t('tickets.tickets') },
+        ]}
         Link={Link}
-        title="Tickets"
-        subtitle="Damage we found on returns, and any issue you raise about a parcel. Settled tickets that end in a refund credit your wallet."
+        title={t('tickets.tickets')}
+        subtitle={t('tickets.damageWeFoundOn')}
         meta={
           !loaded ? undefined : (
             <span className="tkt-meta">
               <Fact tone={open > 0 ? 'warn' : 'good'} dot={open > 0}>
-                {open === 0 ? 'Nothing disputed' : `${open} awaiting a decision`}
+                {open === 0
+                  ? t('tickets.nothingDisputed')
+                  : t('tickets.awaitingADecision', { open })}
               </Fact>
               <Fact>
                 {rows.length} {rows.length === 1 ? 'ticket' : 'tickets'} shown
@@ -113,7 +126,7 @@ export function SellerTicketsIndex(): ReactElement {
               icon={<Plus size={15} />}
               onClick={() => setRaising(true)}
             >
-              Raise an issue
+              {t('tickets.raiseAnIssue')}
             </Button>
           ) : null
         }
@@ -129,25 +142,25 @@ export function SellerTicketsIndex(): ReactElement {
       <div className="tkt-kpis">
         {loaded ? (
           <KpiCard
-            label="Awaiting a decision"
+            label={t('tickets.awaitingADecision2')}
             icon={<CircleDot size={14} />}
             value={open}
             format={String}
             unit={open === 1 ? 'ticket' : 'tickets'}
             tone={open > 0 ? 'pending' : 'neutral'}
-            hint="Open or under discussion."
+            hint={t('tickets.openOrUnderDiscussion')}
           />
         ) : (
           <KpiCard
-            label="Awaiting a decision"
+            label={t('tickets.awaitingADecision2')}
             icon={<CircleDot size={14} />}
             figure={<span className="tkt-faint">—</span>}
             tone="neutral"
-            hint="Open or under discussion."
+            hint={t('tickets.openOrUnderDiscussion')}
           />
         )}
         <KpiCard
-          label="Refunded to you"
+          label={t('tickets.refundedToYou')}
           icon={<Wallet size={14} />}
           figure={
             !loaded || refundedCount === 0 ? (
@@ -161,34 +174,36 @@ export function SellerTicketsIndex(): ReactElement {
             !loaded
               ? undefined
               : refundedCount === 0
-                ? 'Nothing credited on the tickets shown.'
-                : `From ${refundedCount} settled ${refundedCount === 1 ? 'ticket' : 'tickets'}, already in your wallet.`
+                ? t('tickets.nothingCreditedOnThe')
+                : t(refundedCount === 1 ? 'tickets.fromSettledOne' : 'tickets.fromSettledMany', {
+                    refundedCount,
+                  })
           }
         />
         {loaded ? (
           <KpiCard
-            label="Tickets shown"
+            label={t('tickets.ticketsShown')}
             icon={<LifeBuoy size={14} />}
             value={rows.length}
             format={String}
             unit={rows.length === 1 ? 'ticket' : 'tickets'}
             tone="neutral"
-            hint={filtered ? 'Matching your filter and search.' : 'Every ticket on your account.'}
+            hint={filtered ? t('tickets.matchingYourFilterAnd') : t('tickets.everyTicketOnYour')}
           />
         ) : (
           <KpiCard
-            label="Tickets shown"
+            label={t('tickets.ticketsShown')}
             icon={<LifeBuoy size={14} />}
             figure={<span className="tkt-faint">—</span>}
             tone="neutral"
-            hint={filtered ? 'Matching your filter and search.' : 'Every ticket on your account.'}
+            hint={filtered ? t('tickets.matchingYourFilterAnd') : t('tickets.everyTicketOnYour')}
           />
         )}
       </div>
 
       <section className="tkt-section">
         <SectionHeading
-          title="Ticket register"
+          title={t('tickets.ticketRegister')}
           note={
             loaded
               ? `${rows.length} ${rows.length === 1 ? 'ticket' : 'tickets'}${filtered ? ' matching' : ''}`
@@ -199,14 +214,14 @@ export function SellerTicketsIndex(): ReactElement {
           search={{
             value: search,
             onChange: setSearch,
-            label: 'Search tickets',
-            placeholder: 'Ticket (TK-…), order, parcel or waybill',
+            label: t('tickets.searchTickets'),
+            placeholder: t('tickets.ticketTkOrderParcel'),
           }}
           filters={
             <Tabs
-              label="Ticket stage"
+              label={t('tickets.ticketStage')}
               size="sm"
-              items={STAGES.map((s) => ({ id: stageTabId(s.value), label: s.label }))}
+              items={stagesOf(t).map((s) => ({ id: stageTabId(s.value), label: s.label }))}
               value={stageTabId(status)}
               onChange={(id) => setStatus(id === ALL_STAGES ? '' : id)}
             />
@@ -221,25 +236,23 @@ export function SellerTicketsIndex(): ReactElement {
                 setStatus('');
               }}
             >
-              Reset
+              {t('tickets.reset')}
             </Button>
           )}
         </TableToolbar>
 
         {list.isError ? (
           <ErrorState
-            message={list.error?.message ?? 'Failed to load tickets.'}
+            message={list.error?.message ?? t('tickets.failedToLoadTickets')}
             retry={() => void list.refetch()}
           />
         ) : list.isLoading ? (
-          <SkeletonRows rows={4} cols={5} label="Loading your tickets…" />
+          <SkeletonRows rows={4} cols={5} label={t('tickets.loadingYourTickets')} />
         ) : rows.length === 0 ? (
           <EmptyState
-            title={filtered ? 'No tickets match' : 'No tickets'}
+            title={filtered ? t('tickets.noTicketsMatch') : t('tickets.noTickets')}
             description={
-              filtered
-                ? 'Try a different stage, or check the ticket number.'
-                : 'Nothing is disputed. If a parcel arrives damaged, goes missing, or something else looks wrong, raise it here and we will work it out.'
+              filtered ? t('tickets.tryADifferentStage') : t('tickets.nothingIsDisputedIf')
             }
             action={
               canWrite && !filtered ? (
@@ -249,41 +262,41 @@ export function SellerTicketsIndex(): ReactElement {
                   icon={<Plus size={14} />}
                   onClick={() => setRaising(true)}
                 >
-                  Raise an issue
+                  {t('tickets.raiseAnIssue')}
                 </Button>
               ) : undefined
             }
           />
         ) : (
-          <Table caption="Ticket register">
+          <Table caption={t('tickets.ticketRegister')}>
             <THead>
               <Tr>
-                <Th>Ticket</Th>
-                <Th>Raised by</Th>
-                <Th>Subject</Th>
-                <Th>Order</Th>
-                <Th>Status</Th>
-                <Th align="right">Refund</Th>
-                <Th>Date</Th>
-                <Th>Courier</Th>
+                <Th>{t('tickets.ticket')}</Th>
+                <Th>{t('tickets.raisedBy')}</Th>
+                <Th>{t('tickets.subject')}</Th>
+                <Th>{t('tickets.order')}</Th>
+                <Th>{t('tickets.status')}</Th>
+                <Th align="right">{t('tickets.refund')}</Th>
+                <Th>{t('tickets.date')}</Th>
+                <Th>{t('tickets.courier')}</Th>
               </Tr>
             </THead>
             <TBody>
-              {rows.map((t) => (
-                <Fragment key={t.id}>
+              {rows.map((ticket) => (
+                <Fragment key={ticket.id}>
                   {/* The row opens the ticket, not the order it is about:
                       a ticket with no order (a general parcel issue) was
                       sending the reader to /orders/null. */}
                   <Tr
-                    onActivate={() => router.push(`/tickets/${t.id}`)}
-                    selected={openThread === t.id}
+                    onActivate={() => router.push(`/tickets/${ticket.id}`)}
+                    selected={openThread === ticket.id}
                   >
                     <Td>
                       {/* A LINK, not a span — see the admin list: a row that
                           only responds to a mouse click is reachable by
                           nobody using a keyboard. */}
-                      <Link href={`/tickets/${t.id}`} className="tkt-number sk-ident">
-                        {t.ticketNumber}
+                      <Link href={`/tickets/${ticket.id}`} className="tkt-number sk-ident">
+                        {ticket.ticketNumber}
                       </Link>
                     </Td>
                     <Td>
@@ -292,10 +305,10 @@ export function SellerTicketsIndex(): ReactElement {
                           `=== 'SELLER' ? … : 'Skydrop'` said we had
                           raised it (2026-10-04). */}
                       <span className="tkt-muted">
-                        {t.openedBy === 'SELLER'
-                          ? 'You'
-                          : t.openedBy === 'STORE'
-                            ? (t.storeName ?? 'A member store')
+                        {ticket.openedBy === 'SELLER'
+                          ? t('tickets.you')
+                          : ticket.openedBy === 'STORE'
+                            ? (ticket.storeName ?? t('tickets.aMemberStore'))
                             : 'Skydrop'}
                       </span>
                     </Td>
@@ -303,42 +316,42 @@ export function SellerTicketsIndex(): ReactElement {
                       {/* The real link, in the primary cell — the row click
                           is a pointer convenience layered on top of it, and
                           a `<tr>` cannot be tabbed to. */}
-                      <Link href={`/tickets/${t.id}`} className="tkt-subject">
-                        {t.subject}
+                      <Link href={`/tickets/${ticket.id}`} className="tkt-subject">
+                        {ticket.subject}
                       </Link>
-                      {t.resolutionNotes !== null && t.resolutionNotes !== '' && (
-                        <span className="tkt-subject-note">{t.resolutionNotes}</span>
+                      {ticket.resolutionNotes !== null && ticket.resolutionNotes !== '' && (
+                        <span className="tkt-subject-note">{ticket.resolutionNotes}</span>
                       )}
                     </Td>
                     <Td>
-                      {t.orderId === null ? (
+                      {ticket.orderId === null ? (
                         <span className="tkt-faint">—</span>
                       ) : (
-                        <Link href={`/orders/${t.orderId}`} className="tkt-link sk-ident">
+                        <Link href={`/orders/${ticket.orderId}`} className="tkt-link sk-ident">
                           {/* The order NUMBER. A truncated uuid is not a
                               shorter name for something, it is a name
                               nobody has. */}
-                          {t.orderNumber ?? <Ident value={`${t.orderId.slice(0, 8)}…`} />}
+                          {ticket.orderNumber ?? <Ident value={`${ticket.orderId.slice(0, 8)}…`} />}
                         </Link>
                       )}
                     </Td>
                     <Td>
                       <StatusChip
-                        kind={ticketStatusKind(t.status)}
-                        label={ticketStatusLabel(t.status)}
+                        kind={ticketStatusKind(ticket.status)}
+                        label={ticketStatusLabel(ticket.status, locale)}
                         size="sm"
                       />
                     </Td>
                     <Td align="right">
-                      {t.resolutionAmountInr === null ? (
+                      {ticket.resolutionAmountInr === null ? (
                         <span className="tkt-faint">—</span>
                       ) : (
-                        <Money amount={t.resolutionAmountInr} direction="credit" />
+                        <Money amount={ticket.resolutionAmountInr} direction="credit" />
                       )}
                     </Td>
                     <Td>
                       <span className="tkt-muted sk-figure">
-                        {new Date(t.createdAt).toLocaleDateString()}
+                        {new Date(ticket.createdAt).toLocaleDateString(dateTag(locale))}
                       </span>
                     </Td>
                     <Td>
@@ -351,23 +364,23 @@ export function SellerTicketsIndex(): ReactElement {
                         icon={<MessageSquare size={13} />}
                         iconRight={<ChevronDown size={13} className="tkt-toggle__chev" />}
                         className="tkt-toggle"
-                        aria-expanded={openThread === t.id}
+                        aria-expanded={openThread === ticket.id}
                         onClick={(e) => {
                           // The row navigates to the ticket; this cell does not.
                           e.stopPropagation();
-                          setOpenThread(openThread === t.id ? null : t.id);
+                          setOpenThread(openThread === ticket.id ? null : ticket.id);
                         }}
                       >
-                        {openThread === t.id ? 'Hide' : 'View'}
+                        {openThread === ticket.id ? t('tickets.hide') : t('tickets.view')}
                       </Button>
                     </Td>
                   </Tr>
-                  {openThread === t.id ? (
+                  {openThread === ticket.id ? (
                     <Tr className="tkt-expanded">
                       <Td colSpan={8}>
                         <div className="tkt-well">
-                          <TicketTimeline ticketId={t.id} />
-                          <CourierThread ticketId={t.id} />
+                          <TicketTimeline ticketId={ticket.id} />
+                          <CourierThread ticketId={ticket.id} />
                         </div>
                       </Td>
                     </Tr>
@@ -380,27 +393,25 @@ export function SellerTicketsIndex(): ReactElement {
       </section>
 
       <section className="tkt-section">
-        <SectionHeading title="How a ticket closes" />
-        <p className="tkt-note">
-          A ticket closes in one of four ways: we refund you, we return the goods, you accept the
-          write-off, or the claim is not upheld. Whichever it is, the full discussion stays on the
-          ticket — it is never edited after the fact.
-        </p>
+        <SectionHeading title={t('tickets.howATicketCloses')} />
+        <p className="tkt-note">{t('tickets.aTicketClosesIn')}</p>
       </section>
 
       {loaded && rows.length > 0 && (
         <dl className="tkt-strip">
-          <StripItem label="Awaiting a decision" tone={open > 0 ? 'warn' : 'good'}>
+          <StripItem label={t('tickets.awaitingADecision2')} tone={open > 0 ? 'warn' : 'good'}>
             {open}
           </StripItem>
-          <StripItem label="Refunded">
+          <StripItem label={t('tickets.refunded')}>
             {refundedCount === 0 ? (
               '—'
             ) : (
               <Money amount={refunded} direction="credit" decimals={false} />
             )}
           </StripItem>
-          <StripItem label="Shown">{`${rows.length} tickets`}</StripItem>
+          <StripItem label={t('tickets.shown')}>
+            {t('tickets.tickets2', { rows: rows.length })}
+          </StripItem>
         </dl>
       )}
 

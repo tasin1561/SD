@@ -18,6 +18,7 @@ import type {
   BulkUploadStatus,
   DeliveryActionStatus,
   EarlyReservationReviewStatus,
+  InboundFreightMode,
   InboundFreightStatus,
   OrderStatus,
   ResellerCreditStatus,
@@ -28,6 +29,8 @@ import type {
   StoreOrderRequestStatus,
   StoreWalletEntryDirection,
   TicketStatus,
+  TopupRequestStatus,
+  WalletEntryDirection,
   WithdrawalRequestStatus,
 } from '@skydrop/db';
 
@@ -141,7 +144,9 @@ export const RESELLER_STORE_STATUS_BN: Record<ResellerStoreStatus, string> = {
 /** `resellerCreditStatusLabel` in Bangla. Deliberately NOT in the flat lookup. */
 export const RESELLER_CREDIT_STATUS_BN: Record<ResellerCreditStatus, string> = {
   WAITING: 'অপেক্ষায়',
-  DUE: 'প্রদেয়',
+  // "প্রাপ্য" (receivable), not "প্রদেয়" (payable): the store reads this
+  // label on its own order, so the money is owed TO the reader.
+  DUE: 'প্রাপ্য',
   CREDITED: 'জমা হয়েছে',
   REVERSED: 'ফেরত নেওয়া হয়েছে',
   SKIPPED: 'জমা হয়নি',
@@ -154,18 +159,18 @@ export const STORE_WALLET_DIRECTION_BN: Record<
   (seller: string) => string
 > = {
   SELLER_TOPUP: (s) => `${s} টপ-আপ করেছে`,
-  SELLER_PAYOUT: (s) => `${s} পরিশোধ করেছে (রেকর্ড করা)`,
-  TOPUP: () => 'টপ-আপ জমা হয়েছে',
-  WITHDRAWAL: () => 'উইথড্রয়াল পরিশোধিত',
+  SELLER_PAYOUT: (s) => `${s} পরিশোধ করেছে (নথিভুক্ত)`,
+  TOPUP: () => 'টপ-আপ পাওয়া গেছে',
+  WITHDRAWAL: () => 'উইথড্র পরিশোধ করা হয়েছে',
   ORDER_CREDIT: () => 'অর্ডারের মার্জিন',
   ORDER_CREDIT_REVERSAL: () => 'অর্ডারের মার্জিন ফেরত নেওয়া হয়েছে',
   FEE_SHARE: () => 'Skydrop ফি-র অংশ',
-  COD_TAX_SHARE: () => 'COD করের অংশ',
+  COD_TAX_SHARE: () => 'COD ট্যাক্সের অংশ',
   SHARE_REFUND: () => 'ফি-র অংশ ফেরত',
   PREPAID_DEBIT: () => 'প্রিপেইড অর্ডার',
   PREPAID_REFUND: () => 'প্রিপেইড অর্ডার ফেরত',
   TRANSFER_PRICE: (s) => `${s}-এর ট্রান্সফার প্রাইসে পণ্য`,
-  TRANSFER_PRICE_REFUND: () => 'ট্রান্সফার প্রাইস ফেরত দেওয়া হয়েছে',
+  TRANSFER_PRICE_REFUND: () => 'ট্রান্সফার প্রাইস ফেরত',
   DISPUTE_SETTLEMENT_IN: (s) => `বিরোধ নিষ্পত্তি — ${s} পরিশোধ করেছে`,
   DISPUTE_SETTLEMENT_OUT: (s) => `বিরোধ নিষ্পত্তি — ${s}-কে পরিশোধ করা হয়েছে`,
 };
@@ -252,4 +257,97 @@ export const DELIVERY_ACTION_STATUS_BN: Record<DeliveryActionStatus, string> = {
   EXECUTED: 'সম্পন্ন',
   FAILED: 'করা যায়নি',
   EXPIRED: 'সময়মতো উত্তর মেলেনি',
+};
+
+/*
+ * The seller console's money vocabularies. These are NOT folded into
+ * STATUS_LABEL_BN: they are not `statusLabel` enums, and several have a
+ * second reading by audience (a seller's "Payment in process" is staff's
+ * "Approved"), so each is its own `Record<Enum, string>` and the F2 rule
+ * holds — a new enum value fails to compile until it has a Bangla word.
+ * Latin script stays for terms the operations team says in English: COD,
+ * RTO, GST, FX, SWIFT.
+ */
+
+/** The ledger row label (`walletDirectionLabel`). Words only; the amount is never touched. */
+export const WALLET_DIRECTION_BN: Record<WalletEntryDirection, string> = {
+  COD_COLLECTION: 'COD আদায় হয়েছে',
+  ORDER_CHARGES: 'অর্ডারের চার্জ',
+  REMITTANCE_OUT: 'রেমিট্যান্স',
+  REMITTANCE_FX: 'FX রূপান্তর',
+  ADJUSTMENT_CREDIT: 'সমন্বয় (জমা)',
+  ADJUSTMENT_DEBIT: 'সমন্বয় (খরচ)',
+  OPENING_BALANCE: 'প্রারম্ভিক ব্যালেন্স',
+  SCRAP_REFUND: 'ক্ষতির নিষ্পত্তি',
+  INBOUND_FREIGHT: 'ইনবাউন্ড ফ্রেইট',
+  RTO_FEE: 'রিটার্ন ফি',
+  CUSTOMER_RETURN_FEE: 'গ্রাহকের রিটার্ন',
+  TOPUP: 'ওয়ালেট টপ-আপ',
+  INSTANT_PAY_FEE: 'Instant Pay ফি',
+  COD_COLLECTION_FEE: 'COD আদায় ফি',
+  ORDER_CHARGES_REFUND: 'বাতিল অর্ডারের ফেরত',
+  GST_WITHHOLDING: 'COD ট্যাক্স কর্তন',
+  COD_REVERSAL: 'কুরিয়ার COD ফেরত নিয়েছে',
+  COD_DEDUCTION_REFUND: 'ফেরত যাওয়া COD-তে কাটা টাকা ফেরত',
+  STAFF_CREDIT: 'Skydrop জমা দিয়েছে',
+  STAFF_DEBIT: 'Skydrop কেটে নিয়েছে',
+  STORE_TOPUP_OUT: 'মেম্বার স্টোরে সরানো হয়েছে',
+  STORE_PAYOUT_IN: 'মেম্বার স্টোর পরিশোধ করেছে (নথিভুক্ত)',
+  RESELLER_TRANSFER_CREDIT: 'মেম্বার স্টোরের অর্ডার — আপনার ট্রান্সফার প্রাইস',
+  RESELLER_TRANSFER_REVERSAL: 'মেম্বার স্টোরের অর্ডার — ট্রান্সফার প্রাইস ফেরত নেওয়া হয়েছে',
+  PREPAID_TRANSFER_CREDIT: 'প্রিপেইড মেম্বার স্টোরের অর্ডার — আপনার ট্রান্সফার প্রাইস',
+  PREPAID_TRANSFER_REVERSAL:
+    'প্রিপেইড মেম্বার স্টোরের অর্ডার — ট্রান্সফার প্রাইস ফেরত নেওয়া হয়েছে',
+  STORE_DISPUTE_IN: 'বিরোধ নিষ্পত্তি — মেম্বার স্টোর পরিশোধ করেছে',
+  STORE_DISPUTE_OUT: 'বিরোধ নিষ্পত্তি — মেম্বার স্টোরকে পরিশোধ করা হয়েছে',
+  INBOUND_FREIGHT_REFUND: 'ইনবাউন্ড ফ্রেইট বিল প্রত্যাহার',
+};
+
+/** A top-up claim: what the payer reads, and what staff read. */
+export const TOPUP_STATUS_BN: Record<'payer' | 'staff', Record<TopupRequestStatus, string>> = {
+  payer: {
+    PENDING: 'Skydrop-এর দেখার অপেক্ষায়',
+    ACCEPTED: 'জমা হয়েছে',
+    REJECTED: 'জমা হয়নি',
+  },
+  staff: {
+    PENDING: 'পর্যালোচনার অপেক্ষায়',
+    ACCEPTED: 'জমা হয়েছে',
+    REJECTED: 'প্রত্যাখ্যাত',
+  },
+};
+
+export const FREIGHT_MODE_WORDS_BN: Record<
+  'STAFF' | 'SELLER',
+  Record<InboundFreightMode, string>
+> = {
+  STAFF: { PAY_ADVANCE: 'আগাম পরিশোধ', PAY_NOW: 'এখন পরিশোধ', PAY_LATER: 'পরে পরিশোধ' },
+  SELLER: {
+    PAY_ADVANCE: 'উড়ে যাওয়ার আগে পরিশোধিত',
+    PAY_NOW: 'পৌঁছানোর সময় পরিশোধিত',
+    PAY_LATER: 'বিক্রি হওয়ার সাথে সাথে পরিশোধ',
+  },
+};
+
+export const FREIGHT_MODE_EXPLAINER_BN: Record<
+  'STAFF' | 'SELLER',
+  Record<InboundFreightMode, string>
+> = {
+  STAFF: {
+    PAY_ADVANCE: 'আগাম পরিশোধ — পণ্য উড়ে যাওয়ার আগে বাংলাদেশের গ্রহণের সময় বিল করা হয়',
+    PAY_NOW: 'এখন পরিশোধ — ভারতে পৌঁছানোর সময় বিল করা হয়, নথিতে ডেবিট',
+    PAY_LATER: 'পরে পরিশোধ — ভারতে পৌঁছানোর সময় বিল করা হয়, স্টক বিক্রির সাথে সাথে আদায়',
+  },
+  SELLER: {
+    PAY_ADVANCE: 'উড়ে যাওয়ার আগেই ঠিক করা, এবং ঢাকার গণনা অনুযায়ী চার্জ করা',
+    PAY_NOW: 'চালান পৌঁছানোর সময় পুরোটা চার্জ করা হয়',
+    PAY_LATER: 'স্টক বিক্রির সাথে সাথে প্রতি ইউনিটে চার্জ করা হয়',
+  },
+};
+
+export const JOURNEY_OWNER_BN: Record<'SKYDROP' | 'SELLER' | 'STORE' | 'COURIER', string> = {
+  SKYDROP: 'Skydrop',
+  SELLER: 'ক্লায়েন্ট',
+  STORE: 'স্টোর',
+  COURIER: 'কুরিয়ার',
 };

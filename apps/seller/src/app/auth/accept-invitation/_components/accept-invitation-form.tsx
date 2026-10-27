@@ -5,7 +5,11 @@ import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { PasswordField, type PasswordCriterion } from '@skydrop/ui/app/password-field';
 import { Button } from '@skydrop/ui/app/button';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Seller invitation acceptance form. Mirrors LoginForm's pattern
@@ -32,8 +36,8 @@ interface FormState {
  * rules themselves are unchanged and the server's verdict still wins
  * (FE-2).
  */
-const PASSWORD_CRITERIA: readonly PasswordCriterion[] = [
-  { id: 'length', label: 'At least 10 characters', test: (v) => v.length >= 10 },
+const passwordCriteriaOf = (t: Translate<MessageKey>): readonly PasswordCriterion[] => [
+  { id: 'length', label: t('authAccept.atLeast10Characters'), test: (v) => v.length >= 10 },
 ];
 
 const INITIAL: FormState = {
@@ -46,6 +50,7 @@ const INITIAL: FormState = {
 };
 
 export function AcceptInvitationForm({ token }: { readonly token: string }): ReactElement {
+  const t = useT();
   const [form, setForm] = useState<FormState>(INITIAL);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,11 +64,11 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
     if (submitting) return;
     setError(null);
     if (form.password.length < 10) {
-      setError('Password must be at least 10 characters.');
+      setError(t('authAccept.passwordMustBeAt'));
       return;
     }
     if (form.password !== form.confirmPassword) {
-      setError('Passwords do not match.');
+      setError(t('authAccept.passwordsDoNotMatch'));
       return;
     }
     setSubmitting(true);
@@ -91,13 +96,17 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
       // via cookie→/me, mounts AuthProvider.
       window.location.assign('/dashboard');
     } catch (err) {
-      setError(serverVerdict(err, 'Registration failed.'));
+      setError(verdict(err, t, t('authAccept.registrationFailed')));
       setSubmitting(false);
     }
   }
 
   const confirmCriteria: readonly PasswordCriterion[] = [
-    { id: 'match', label: 'Matches the password', test: (v) => v !== '' && v === form.password },
+    {
+      id: 'match',
+      label: t('authAccept.matchesThePassword'),
+      test: (v) => v !== '' && v === form.password,
+    },
   ];
 
   return (
@@ -111,11 +120,11 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
       <TextField
         id="company"
         type="text"
-        label="Company name"
+        label={t('authAccept.companyName')}
         required
         minLength={2}
         maxLength={120}
-        placeholder="Acme Trading Co."
+        placeholder={t('authAccept.acmeTradingCo')}
         value={form.companyName}
         onChange={(e) => set('companyName', e.target.value)}
         disabled={submitting}
@@ -123,14 +132,14 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
       <TextField
         id="contact"
         type="text"
-        label="Contact person"
+        label={t('authAccept.contactPerson')}
         required
         minLength={2}
         maxLength={120}
         // Not "your" — this is the company's contact person, who is
         // often not the person filling in the form (an owner sets the
         // account up and names whoever answers the phone).
-        placeholder="Contact person's full name"
+        placeholder={t('authAccept.contactPersonSFull')}
         value={form.contactPersonName}
         onChange={(e) => set('contactPersonName', e.target.value)}
         disabled={submitting}
@@ -138,7 +147,7 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
       <TextField
         id="phone"
         type="tel"
-        label="Phone (E.164)"
+        label={t('authAccept.phoneE164')}
         required
         placeholder="+8801712345678"
         value={form.phone}
@@ -150,7 +159,9 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
         type="tel"
         label={
           <>
-            WhatsApp <span className="text-text-faint">(optional)</span>
+            {richMessage(t('authAccept.whatsapp'), {
+              span: <span className="text-text-faint">(optional)</span>,
+            })}
           </>
         }
         placeholder="+8801712345678"
@@ -162,7 +173,9 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
         id="password"
         label={
           <>
-            Password <span className="text-text-faint">(min 10 characters)</span>
+            {richMessage(t('authAccept.password'), {
+              span: <span className="text-text-faint">{t('authAccept.min10Characters')}</span>,
+            })}
           </>
         }
         autoComplete="new-password"
@@ -173,12 +186,12 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
         onChange={(e) => set('password', e.target.value)}
         disabled={submitting}
         showStrength
-        criteria={PASSWORD_CRITERIA}
+        criteria={passwordCriteriaOf(t)}
       />
       <PasswordField
         id="confirm-password"
-        toggleLabel="Show confirm password"
-        label="Confirm password"
+        toggleLabel={t('authAccept.showConfirmPassword')}
+        label={t('authAccept.confirmPassword')}
         autoComplete="new-password"
         required
         minLength={10}
@@ -195,7 +208,7 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
         </div>
       )}
       <Button type="submit" fullWidth loading={submitting}>
-        {submitting ? 'Creating account…' : 'Create account'}
+        {submitting ? t('authAccept.creatingAccount') : t('authAccept.createAccount')}
       </Button>
     </form>
   );

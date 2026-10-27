@@ -29,6 +29,9 @@ import { EarlyReservationReviewStatus } from '@skydrop/db';
 import { HoldDecisionDialog } from '@/components/hold-decision-dialog';
 import { useHoldReviews, type ReviewView } from '@/lib/ops-hooks';
 import { useRouter } from 'next/navigation';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /**
  * Orders our agents could not confirm on the phone, waiting on the seller.
@@ -69,6 +72,8 @@ import { useRouter } from 'next/navigation';
  *                         column.
  */
 export function HoldReviewsIndex(): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const router = useRouter();
   const [status, setStatus] = useState<string>(EarlyReservationReviewStatus.OPEN);
   const [selected, setSelected] = useState<ReviewView | null>(null);
@@ -88,18 +93,18 @@ export function HoldReviewsIndex(): ReactElement {
     <AreaPage>
       <PageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Selling' },
-          { label: 'Unreachable customers' },
+          { label: t('holds.clientConsole') },
+          { label: t('holds.selling') },
+          { label: t('holds.unreachableCustomers') },
         ]}
         Link={Link}
-        title="Unreachable customers"
-        subtitle="Orders our agents rang without reaching anybody. Tell us to keep trying, or let the order go — nothing happens to these until you say."
+        title={t('holds.unreachableCustomers')}
+        subtitle={t('holds.ordersOurAgentsRang')}
         meta={
           !loaded ? undefined : openRows.length > 0 ? (
             <MetaFacts>
               <MetaFact tone="warn" dot>
-                {openRows.length} waiting on you
+                {richMessage(t('holds.waitingOnYou'), { openRows: openRows.length })}
               </MetaFact>
               {/* Only when something IS held. "0 units held" beside a
                   list of orders that need a decision reads as an empty
@@ -111,7 +116,7 @@ export function HoldReviewsIndex(): ReactElement {
               )}
             </MetaFacts>
           ) : (
-            <MetaFact tone="good">Nothing waiting on you</MetaFact>
+            <MetaFact tone="good">{t('holds.nothingWaitingOnYou')}</MetaFact>
           )
         }
       />
@@ -130,60 +135,60 @@ export function HoldReviewsIndex(): ReactElement {
       <KpiGrid>
         {loaded ? (
           <KpiCard
-            label="Waiting on your decision"
+            label={t('holds.waitingOnYourDecision')}
             icon={<PackageCheck size={14} />}
             value={openRows.length}
             format={rawCount}
             unit={openRows.length === 1 ? 'order' : 'orders'}
             tone={openRows.length > 0 ? 'pending' : 'neutral'}
-            hint="Each one needs another round of calls, or letting go."
+            hint={t('holds.eachOneNeedsAnother')}
           />
         ) : (
           <KpiCard
-            label="Waiting on your decision"
+            label={t('holds.waitingOnYourDecision')}
             icon={<PackageCheck size={14} />}
             figure={<Dash />}
             tone="neutral"
-            hint="Each one needs another round of calls, or letting go."
+            hint={t('holds.eachOneNeedsAnother')}
           />
         )}
         <KpiCard
-          label="Calls already made"
+          label={t('holds.callsAlreadyMade')}
           icon={<PhoneCall size={14} />}
           figure={loaded ? <Num value={callsMade} /> : <Dash />}
           {...(loaded ? { unit: 'attempts' } : {})}
           tone="neutral"
           hint={
             filtered
-              ? `Across the ${humanise(status).toLowerCase()} reviews shown.`
-              : 'Across every review shown.'
+              ? t('holds.acrossTheReviewsShown', { status: humanise(status).toLowerCase() })
+              : t('holds.acrossEveryReviewShown')
           }
         />
         {loaded && heldUnits > 0 && (
           <KpiCard
-            label="Units held pending your decision"
+            label={t('holds.unitsHeldPendingYour')}
             icon={<Lock size={14} />}
             figure={<Num value={heldUnits} />}
             unit={heldUnits === 1 ? 'unit' : 'units'}
             tone="pending"
-            hint="Unavailable to your other orders until you decide."
+            hint={t('holds.unavailableToYourOther')}
           />
         )}
       </KpiGrid>
 
       <AreaSection
-        title="Decision register"
+        title={t('holds.decisionRegister')}
         note={loaded ? `${rows.length} ${rows.length === 1 ? 'review' : 'reviews'}` : undefined}
       >
         <Panel flush>
           <PanelPad>
             <Tabs
-              label="Review status"
+              label={t('holds.reviewStatus')}
               size="sm"
               value={status === '' ? 'ALL' : status}
               onChange={(id) => setStatus(id === 'ALL' ? '' : id)}
               items={[
-                { id: 'ALL', label: 'All' },
+                { id: 'ALL', label: t('holds.all') },
                 ...Object.values(EarlyReservationReviewStatus).map((s) => ({
                   id: s,
                   label: humanise(s),
@@ -195,7 +200,7 @@ export function HoldReviewsIndex(): ReactElement {
           {list.isError ? (
             <PanelPad>
               <InlineError
-                message={list.error?.message ?? 'Failed to load these orders.'}
+                message={list.error?.message ?? t('holds.failedToLoadThese')}
                 retry={() => void list.refetch()}
               />
             </PanelPad>
@@ -210,13 +215,13 @@ export function HoldReviewsIndex(): ReactElement {
                 tone={status === EarlyReservationReviewStatus.OPEN ? 'positive' : 'neutral'}
                 title={
                   status === EarlyReservationReviewStatus.OPEN
-                    ? 'Nothing waiting on you'
-                    : 'No matching reviews'
+                    ? t('holds.nothingWaitingOnYou')
+                    : t('holds.noMatchingReviews')
                 }
                 description={
                   status === EarlyReservationReviewStatus.OPEN
-                    ? 'Every order our agents rang was answered. Nothing is waiting on a decision from you.'
-                    : 'Try a different status.'
+                    ? t('holds.everyOrderOurAgents')
+                    : t('holds.tryADifferentStatus')
                 }
                 action={
                   status === EarlyReservationReviewStatus.OPEN ? undefined : (
@@ -225,21 +230,21 @@ export function HoldReviewsIndex(): ReactElement {
                       size="md"
                       onClick={() => setStatus(EarlyReservationReviewStatus.OPEN)}
                     >
-                      Show open reviews
+                      {t('holds.showOpenReviews')}
                     </Button>
                   )
                 }
               />
             </PanelPad>
           ) : (
-            <Table caption="Unreachable-customer decisions">
+            <Table caption={t('holds.unreachableCustomerDecisions')}>
               <THead>
                 <Tr>
-                  <Th>Order</Th>
-                  <Th align="right">Units held</Th>
-                  <Th align="right">Calls made</Th>
-                  <Th>Status</Th>
-                  <Th align="right">Decision</Th>
+                  <Th>{t('holds.order')}</Th>
+                  <Th align="right">{t('holds.unitsHeld')}</Th>
+                  <Th align="right">{t('holds.callsMade')}</Th>
+                  <Th>{t('holds.status')}</Th>
+                  <Th align="right">{t('holds.decision')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -259,7 +264,7 @@ export function HoldReviewsIndex(): ReactElement {
                         <Ident value={r.orderNumber ?? `${r.orderId.slice(0, 8)}…`} />
                       </Link>
                       <span className="inv-sub sk-figure">
-                        {new Date(r.createdAt).toLocaleDateString()}
+                        {new Date(r.createdAt).toLocaleDateString(dateTag(locale))}
                       </span>
                     </Td>
                     {/* A dash, not a zero: the column is meaningful for
@@ -273,7 +278,7 @@ export function HoldReviewsIndex(): ReactElement {
                     <Td>
                       <StatusChip
                         kind={earlyReviewStatusKind(r.status)}
-                        label={statusLabel(r.status)}
+                        label={statusLabel(r.status, locale)}
                         size="sm"
                       />
                     </Td>
@@ -285,13 +290,13 @@ export function HoldReviewsIndex(): ReactElement {
                           icon={<Gavel size={14} />}
                           onClick={() => setSelected(r)}
                         >
-                          Decide
+                          {t('holds.decide')}
                         </Button>
                       ) : (
                         <span className="inv-faint sk-figure">
                           {r.resolvedAt === null
                             ? '—'
-                            : new Date(r.resolvedAt).toLocaleDateString()}
+                            : new Date(r.resolvedAt).toLocaleDateString(dateTag(locale))}
                         </span>
                       )}
                     </Td>
@@ -305,15 +310,17 @@ export function HoldReviewsIndex(): ReactElement {
         {loaded && rows.length > 0 && (
           <MetaFacts>
             <MetaFact tone={openRows.length > 0 ? 'warn' : 'good'}>
-              Awaiting you {openRows.length}
+              {richMessage(t('holds.awaitingYou'), { openRows: openRows.length })}
             </MetaFact>
             {heldUnits > 0 && (
               <MetaFact tone="warn">
-                Units held <Num value={heldUnits} />
+                {t('holds.unitsHeld2')} <Num value={heldUnits} />
               </MetaFact>
             )}
             <MetaFact>
-              Shown {`${rows.length} ${rows.length === 1 ? 'review' : 'reviews'}`}
+              {t(rows.length === 1 ? 'holds.shownReviewOne' : 'holds.shownReviewMany', {
+                count: rows.length,
+              })}
             </MetaFact>
           </MetaFacts>
         )}

@@ -4,6 +4,7 @@ import type { ReactElement } from 'react';
 import { KeyRound } from 'lucide-react';
 import type { WebhookEndpointWithSecret } from '@skydrop/api-client';
 import { RevealCard } from '../../_components/settings-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * One-shot secret reveal. Displays the plaintext `secretKey` returned
@@ -22,15 +23,16 @@ export function SecretRevealCard({
   readonly endpoint: WebhookEndpointWithSecret;
   readonly onDismiss: () => void;
 }): ReactElement {
+  const t = useT();
   return (
     <RevealCard
       icon={<KeyRound size={15} />}
-      title="New secret — copy it now"
+      title={t('settingsWebhooks.newSecretCopyIt')}
       note={endpoint.name ?? endpoint.url}
-      body="This is the only time we'll show this value. The previous secret (if any) remains valid for 24 hours so you can switch without dropping events."
+      body={t('settingsWebhooks.thisIsTheOnly')}
       value={endpoint.secretKey}
-      valueLabel="Webhook signing secret"
-      dismissLabel="I've copied it"
+      valueLabel={t('settingsWebhooks.webhookSigningSecret')}
+      dismissLabel={t('settingsWebhooks.iVeCopiedIt')}
       onDismiss={onDismiss}
     />
   );

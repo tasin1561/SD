@@ -7,6 +7,7 @@ import { PageHeader } from '@skydrop/ui/app/page-header';
 import { WithdrawalScheduleCard } from '../_components/withdrawal-schedule-card';
 import { WalletTermsCard } from '../_components/wallet-terms-card';
 import '../_components/wallet.css';
+import { useT } from '@/i18n/client';
 
 /**
  * The rules this wallet runs on, on their own page.
@@ -25,23 +26,24 @@ import '../_components/wallet.css';
  * sentence that says what it does.
  */
 export default function WalletLimitsPage(): ReactElement {
+  const t = useT();
   return (
     <div className="wal-page">
       <Link href="/wallet" className="wal-back">
         <ArrowLeft size={14} aria-hidden />
-        Back to wallet
+        {t('wallet.backToWallet')}
       </Link>
 
       <PageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Money' },
-          { label: 'Wallet', href: '/wallet' },
-          { label: 'Limits' },
+          { label: t('wallet.clientConsole') },
+          { label: t('wallet.money') },
+          { label: t('wallet.wallet'), href: '/wallet' },
+          { label: t('wallet.limits') },
         ]}
         Link={Link}
-        title="Wallet limits and settings"
-        subtitle="Every rule that decides what you can take out, when COD reaches you, and what is charged. Set by Skydrop — ask us if one looks wrong for your account."
+        title={t('wallet.walletLimitsAndSettings')}
+        subtitle={t('wallet.everyRuleThatDecides')}
       />
 
       {/* What you can change, then what you cannot. Mixing the two was

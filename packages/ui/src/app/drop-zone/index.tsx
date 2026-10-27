@@ -106,11 +106,13 @@ export const DropZone = forwardRef<HTMLInputElement, DropZoneProps>(function Dro
     const extra = ok.length - kept.length;
     const notes = [
       wrongType > 0
-        ? `${wrongType} ${wrongType === 1 ? 'file is' : 'files are'} not an accepted type`
+        ? t(wrongType === 1 ? 'ui.drop.fileNotAccepted' : 'ui.drop.filesNotAccepted', {
+            n: wrongType,
+          })
         : null,
-      extra > 0 ? `only one file can be added` : null,
+      extra > 0 ? t('ui.drop.onlyOne') : null,
     ].filter((x): x is string => x !== null);
-    setLeft(notes.length > 0 ? `Left out: ${notes.join('; ')}.` : null);
+    setLeft(notes.length > 0 ? t('ui.drop.leftOut', { notes: notes.join('; ') }) : null);
     if (kept.length === 0) return;
     setFiles(kept);
     onFiles(kept);

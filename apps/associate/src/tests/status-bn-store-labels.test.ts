@@ -72,7 +72,8 @@ describe('store status labels: Bangla', () => {
     );
     expect(storeOrderRequestStatusLabel(StoreOrderRequestStatus.EXECUTED, 'bn')).toBe('সম্পন্ন');
     expect(resellerStoreStatusLabel(ResellerStoreStatus.PAUSED, 'bn')).toBe('স্থগিত');
-    expect(resellerCreditStatusLabel(ResellerCreditStatus.DUE, 'bn')).toBe('প্রদেয়');
+    // Receivable, not payable: the store reads this on its own order.
+    expect(resellerCreditStatusLabel(ResellerCreditStatus.DUE, 'bn')).toBe('প্রাপ্য');
     expect(withdrawalStatusLabel(WithdrawalRequestStatus.PAID, 'seller', 'bn')).toBe('পরিশোধিত');
   });
 

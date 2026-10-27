@@ -22,8 +22,12 @@ import {
   type PlatformBankAccountView,
   type TopupBankAccountsResponse,
 } from '@/lib/api-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { WalCallout } from './wallet-parts';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Recording a bank transfer, one decision at a time.
@@ -49,10 +53,10 @@ import { WalCallout } from './wallet-parts';
  * Top-ups ("Waiting for Skydrop to see it"), so the seller sees the
  * state their money is in rather than a bare "done".
  */
-const STEPS: readonly StepperStep[] = [
-  { id: 'account', label: 'Choose account', icon: <Landmark size={16} /> },
-  { id: 'details', label: 'Payment details', icon: <ReceiptText size={16} /> },
-  { id: 'submitted', label: 'Submitted', icon: <Send size={16} /> },
+const stepsOf = (t: Translate<MessageKey>): readonly StepperStep[] => [
+  { id: 'account', label: t('wallet.chooseAccount'), icon: <Landmark size={16} /> },
+  { id: 'details', label: t('wallet.paymentDetails'), icon: <ReceiptText size={16} /> },
+  { id: 'submitted', label: t('wallet.submitted'), icon: <Send size={16} /> },
 ];
 
 export function TopupWizard({
@@ -66,6 +70,7 @@ export function TopupWizard({
   readonly banks: UseQueryResult<TopupBankAccountsResponse>;
   readonly onSubmitted: () => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const presign = usePresignTopupProof();
   const submit = useSubmitTopup();
@@ -128,7 +133,7 @@ export function TopupWizard({
           body: proof,
           headers: { 'Content-Type': proof.type },
         });
-        if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+        if (!put.ok) throw new Error(t('wallet.uploadFailedStatus', { status: put.status }));
         proofSpacesKey = signed.spacesKey;
         proofMimeType = proof.type;
       }
@@ -143,7 +148,7 @@ export function TopupWizard({
       onSubmitted();
       setStep(3);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     } finally {
       setBusy(false);
     }
@@ -159,12 +164,18 @@ export function TopupWizard({
         }
       }}
       size="lg"
-      title="Top up your wallet"
+      title={t('wallet.topUpYourWallet')}
       icon={<Landmark size={18} />}
     >
-      <Stepper mode="wizard" label="Top-up steps" steps={STEPS} current={step - 1} navigable="none">
+      <Stepper
+        mode="wizard"
+        label={t('wallet.topUpSteps')}
+        steps={stepsOf(t)}
+        current={step - 1}
+        navigable="none"
+      >
         <div className="wal-wizard">
-          {error !== null && <ErrorState title="Not recorded" message={error} />}
+          {error !== null && <ErrorState title={t('wallet.notRecorded')} message={error} />}
 
           {step === 1 && (
             <SelectBank
@@ -202,7 +213,7 @@ export function TopupWizard({
               onClose={() => {
                 onDone();
                 reset();
-                toast.success('Top-up recorded. We will email you when it is verified.');
+                toast.success(t('wallet.topUpRecordedWe'));
               }}
             />
           )}
@@ -221,10 +232,11 @@ function SelectBank({
   readonly loading: boolean;
   readonly onPick: (a: PlatformBankAccountView) => void;
 }): ReactElement {
+  const t = useT();
   if (loading) {
     return (
       <div className="wal-loading" role="status" aria-live="polite">
-        <p className="wal-muted">Loading accounts…</p>
+        <p className="wal-muted">{t('wallet.loadingAccounts')}</p>
         <div className="wal-banks">
           <Skeleton height={132} rounded="md" />
           <Skeleton height={132} rounded="md" />
@@ -235,36 +247,29 @@ function SelectBank({
   if (accounts.length === 0) {
     return (
       <WalCallout tone="warn" icon={<TriangleAlert size={16} />}>
-        <p>
-          We have not published a bank account yet, so there is nowhere to send money. Please
-          contact support before transferring anything — a payment we have not published an account
-          for is one we cannot match to you.
-        </p>
+        <p>{t('wallet.weHaveNotPublished')}</p>
       </WalCallout>
     );
   }
   return (
     <>
-      <p className="wal-muted">
-        Send the money to one of these accounts first, then come back and tell us. Nothing reaches
-        your balance until we match it against our statement.
-      </p>
+      <p className="wal-muted">{t('wallet.sendTheMoneyTo')}</p>
       <div className="wal-banks">
         {accounts.map((a) => (
           <button key={a.id} type="button" onClick={() => onPick(a)} className="wal-bank">
             <BankHead bank={a} />
             <dl className="wal-bank__details">
               <div className="wal-bank__line">
-                <dt>Account name</dt>
+                <dt>{t('wallet.accountName')}</dt>
                 <dd>{a.accountName}</dd>
               </div>
               <div className="wal-bank__line">
-                <dt>Account number</dt>
+                <dt>{t('wallet.accountNumber')}</dt>
                 <dd className="sk-ident">{a.accountNumber}</dd>
               </div>
               {a.routingNumber !== null && (
                 <div className="wal-bank__line">
-                  <dt>Routing</dt>
+                  <dt>{t('wallet.routing')}</dt>
                   <dd className="sk-ident">{a.routingNumber}</dd>
                 </div>
               )}
@@ -284,6 +289,7 @@ function BankHead({
   readonly bank: PlatformBankAccountView;
   readonly action?: ReactElement | undefined;
 }): ReactElement {
+  const t = useT();
   return (
     <div className="wal-bank__head">
       <span className="wal-bank__chip" aria-hidden>
@@ -296,7 +302,9 @@ function BankHead({
         </div>
       </div>
       {action ?? (
-        <span className="wal-bank__cur">{bank.currency === 'BDT' ? '৳ BDT' : '₹ INR'}</span>
+        <span className="wal-bank__cur">
+          {bank.currency === 'BDT' ? t('wallet.bdt') : t('wallet.inr')}
+        </span>
       )}
     </div>
   );
@@ -319,6 +327,7 @@ function PaymentDetails(props: {
   readonly onBack: () => void;
   readonly onSubmit: () => void;
 }): ReactElement {
+  const t = useT();
   const { bank } = props;
   const symbol = bank.currency === 'BDT' ? '৳' : '₹';
   return (
@@ -328,17 +337,17 @@ function PaymentDetails(props: {
           bank={bank}
           action={
             <Button variant="ghost" size="sm" onClick={props.onBack}>
-              Change
+              {t('wallet.change')}
             </Button>
           }
         />
         <dl className="wal-bank__details wal-bank__details--grid">
-          <Detail label="Account name" value={bank.accountName} />
-          <Detail label="Account number" value={bank.accountNumber} ident />
+          <Detail label={t('wallet.accountName')} value={bank.accountName} />
+          <Detail label={t('wallet.accountNumber')} value={bank.accountNumber} ident />
           {bank.routingNumber !== null && (
-            <Detail label="Routing number" value={bank.routingNumber} ident />
+            <Detail label={t('wallet.routingNumber')} value={bank.routingNumber} ident />
           )}
-          {bank.district !== null && <Detail label="District" value={bank.district} />}
+          {bank.district !== null && <Detail label={t('wallet.district')} value={bank.district} />}
         </dl>
         {bank.instructions !== null && bank.instructions !== '' && (
           <p className="wal-bank__note">{bank.instructions}</p>
@@ -351,7 +360,7 @@ function PaymentDetails(props: {
           a statement. */}
       <TextField
         id="tw-amount"
-        label={`Amount you paid (${symbol} ${bank.currency})`}
+        label={t('wallet.amountYouPaid', { symbol, currency: bank.currency })}
         required
         inputMode="decimal"
         value={props.amount}
@@ -363,34 +372,34 @@ function PaymentDetails(props: {
       {props.inrAmount !== null && (
         <div className="wal-credited">
           <div className="wal-credited__row">
-            <span>Credited to your wallet</span>
+            <span>{t('wallet.creditedToYourWallet')}</span>
             <strong>
               <Money amount={props.inrAmount.toFixed(2)} currency="INR" convert={false} />
             </strong>
           </div>
           {props.bdtAmount !== null && (
             <div className="wal-credited__row wal-credited__row--sub">
-              <span>Same amount in taka</span>
+              <span>{t('wallet.sameAmountInTaka')}</span>
               <span>
                 <Money amount={props.bdtAmount.toFixed(2)} currency="BDT" convert={false} />
               </span>
             </div>
           )}
-          <p>Your wallet is kept in rupees, so the rupee figure is what gets credited.</p>
+          <p>{t('wallet.yourWalletIsKept')}</p>
         </div>
       )}
 
       <TextField
         id="tw-ref"
-        label="Transaction ID / reference"
-        hint="From your bank's confirmation."
+        label={t('wallet.transactionIdReference')}
+        hint={t('wallet.fromYourBankS')}
         value={props.transactionRef}
         onChange={(e) => props.onTransactionRef(e.target.value)}
-        placeholder="e.g. TXN123456789"
+        placeholder={t('wallet.eGTxn123456789')}
       />
 
       <div className="wal-proof">
-        <span className="wal-proof__label">Payment proof</span>
+        <span className="wal-proof__label">{t('wallet.paymentProof')}</span>
         {/* The drop zone uploads nothing: it hands the file over and the
             submit uploads it, exactly as the file input did. It is
             REMOUNTED on clear so its own list and the native value reset
@@ -402,19 +411,22 @@ function PaymentDetails(props: {
           id="tw-proof"
           key={props.proof === null ? 'empty' : 'chosen'}
           accept="image/jpeg,image/png,image/webp,application/pdf"
-          label="Drop the receipt here"
-          buttonText="Choose file"
-          hint="A screenshot or PDF of the transfer (JPG, PNG, WEBP, PDF)."
+          label={t('wallet.dropTheReceiptHere')}
+          buttonText={t('wallet.chooseFile')}
+          hint={t('wallet.aScreenshotOrPdf')}
           showFiles={false}
           onFiles={(files) => props.onProof(files[0] ?? null)}
         />
         {props.proof !== null && (
           <div className="wal-proof__chosen">
             <span>
-              {props.proof.name} · {(props.proof.size / 1024).toFixed(0)} KB
+              {richMessage(t('wallet.kb'), {
+                proof: props.proof.name,
+                size: (props.proof.size / 1024).toFixed(0),
+              })}
             </span>
             <Button variant="ghost" size="sm" onClick={() => props.onProof(null)}>
-              Remove
+              {t('wallet.remove')}
             </Button>
           </div>
         )}
@@ -424,16 +436,13 @@ function PaymentDetails(props: {
           hunting an unnamed amount on a day. */}
       {!props.hasEvidence && (
         <WalCallout tone="warn" icon={<TriangleAlert size={16} />}>
-          <p>
-            Give a transaction ID or upload a receipt — either one lets us find your payment. Both
-            is better.
-          </p>
+          <p>{t('wallet.giveATransactionId')}</p>
         </WalCallout>
       )}
 
       <div className="wal-wizard__foot">
         <Button variant="ghost" size="md" icon={<ArrowLeft size={15} />} onClick={props.onBack}>
-          Back
+          {t('wallet.back')}
         </Button>
         {/* Controlled: the wizard owns the real request (upload, then
             submit), so the button reads its busy flag and its refusal
@@ -444,7 +453,7 @@ function PaymentDetails(props: {
           icon={<Send size={15} />}
           state={props.busy ? 'busy' : props.failed ? 'error' : 'idle'}
           disabled={!props.canSubmit}
-          labels={{ idle: 'Submit for verification', busy: 'Submitting…' }}
+          labels={{ idle: t('wallet.submitForVerification'), busy: t('wallet.submitting') }}
           onClick={props.onSubmit}
         />
       </div>
@@ -470,6 +479,8 @@ function Detail({
 }
 
 function Submitted({ onClose }: { readonly onClose: () => void }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   return (
     <div className="wal-done">
       <span className="wal-done__badge" aria-hidden>
@@ -484,23 +495,18 @@ function Submitted({ onClose }: { readonly onClose: () => void }): ReactElement 
           />
         </svg>
       </span>
-      <h3 className="wal-done__title">We have your top-up</h3>
-      <p className="wal-done__body">
-        We check every transfer against our bank statement by hand, which usually takes 24–48 hours.
-        Your wallet is credited the moment it is matched, and we will email you either way.
-      </p>
+      <h3 className="wal-done__title">{t('wallet.weHaveYourTop')}</h3>
+      <p className="wal-done__body">{t('wallet.weCheckEveryTransfer')}</p>
       {/* The state the claim is in now, in the same chip and the same
           words it carries in the Top-ups list. */}
       <StatusChip
         kind={topupStatusKind(TopupRequestStatus.PENDING)}
-        label={topupStatusLabel(TopupRequestStatus.PENDING, 'payer')}
+        label={topupStatusLabel(TopupRequestStatus.PENDING, 'payer', locale)}
         pulse
       />
-      <p className="wal-done__aside">
-        Nothing has been added to your balance yet. You can follow it under Top-ups.
-      </p>
+      <p className="wal-done__aside">{t('wallet.nothingHasBeenAdded')}</p>
       <Button variant="primary" size="md" onClick={onClose}>
-        Done
+        {t('wallet.done')}
       </Button>
     </div>
   );

@@ -16,7 +16,7 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { resellerStoreStatusKind, resellerStoreStatusLabel } from '@skydrop/ui/status';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import {
   useCreateResellerStore,
   useResellerStores,
@@ -33,9 +33,13 @@ import {
   RsStripFact,
   pendingPhase,
 } from './_components/rs-parts';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
-function day(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-IN', { dateStyle: 'medium' });
+function day(iso: string, locale: Locale = 'en'): string {
+  return new Date(iso).toLocaleDateString(dateTag(locale, 'en-IN'), { dateStyle: 'medium' });
 }
 
 /**
@@ -56,6 +60,7 @@ function day(iso: string): string {
  *       and `statusChangedAt` are what it does carry.
  */
 export default function ResellerStoresPage(): ReactElement {
+  const t = useT();
   const stores = useResellerStores();
   const [creating, setCreating] = useState(false);
 
@@ -69,17 +74,23 @@ export default function ResellerStoresPage(): ReactElement {
 
   const header = (
     <PageHeader
-      breadcrumbs={[{ label: 'Client console' }, { label: 'Reselling' }, { label: 'Stores' }]}
+      breadcrumbs={[
+        { label: t('resellerStores.clientConsole') },
+        { label: t('resellerStores.reselling') },
+        { label: t('resellerStores.stores') },
+      ]}
       Link={Link}
-      title="Member stores"
-      subtitle="Other businesses that sell your stock under their own name, with their own login."
+      title={t('resellerStores.memberStores')}
+      subtitle={t('resellerStores.otherBusinessesThatSell')}
       meta={
         !loaded ? undefined : (
           <RsFacts>
             <RsFact tone={active > 0 ? 'good' : undefined}>{active} active</RsFact>
             {pending.length > 0 && (
               <RsFact tone="warn" dot>
-                {pending.length} waiting for your approval
+                {richMessage(t('resellerStores.waitingForYourApproval'), {
+                  pending: pending.length,
+                })}
               </RsFact>
             )}
             {paused > 0 && <RsFact>{paused} paused</RsFact>}
@@ -93,7 +104,7 @@ export default function ResellerStoresPage(): ReactElement {
           icon={<Plus size={15} />}
           onClick={() => setCreating(true)}
         >
-          Open a member store
+          {t('resellerStores.openAMemberStore')}
         </Button>
       }
     />
@@ -108,7 +119,7 @@ export default function ResellerStoresPage(): ReactElement {
             <Skeleton key={i} className="rs-kpi-skel" height={104} rounded="md" />
           ))}
         </div>
-        <SkeletonRows rows={4} cols={6} label="Loading member stores" />
+        <SkeletonRows rows={4} cols={6} label={t('resellerStores.loadingMemberStores')} />
       </div>
     );
   }
@@ -116,7 +127,7 @@ export default function ResellerStoresPage(): ReactElement {
     return (
       <div className="rs-page">
         {header}
-        <ErrorState message={serverVerdict(stores.error)} retry={() => void stores.refetch()} />
+        <ErrorState message={verdict(stores.error, t)} retry={() => void stores.refetch()} />
       </div>
     );
   }
@@ -132,64 +143,64 @@ export default function ResellerStoresPage(): ReactElement {
              reports page. */}
       <div className="rs-kpis">
         <KpiCard
-          label="Stores"
+          label={t('resellerStores.stores')}
           icon={<Store size={14} />}
           value={all.length}
           unit={all.length === 1 ? 'store' : 'stores'}
           tone="neutral"
-          hint="Every store on your account, whatever its state."
+          hint={t('resellerStores.everyStoreOnYour')}
         />
         <KpiCard
-          label="Selling now"
+          label={t('resellerStores.sellingNow')}
           icon={<UserCheck size={14} />}
           value={active}
           unit="active"
           tone={active > 0 ? 'credit' : 'neutral'}
-          hint="Taking orders against your stock."
+          hint={t('resellerStores.takingOrdersAgainstYour')}
         />
         <KpiCard
-          label="Waiting for you"
+          label={t('resellerStores.waitingForYou')}
           icon={<Pause size={14} />}
           value={pending.length}
           unit={pending.length === 1 ? 'store' : 'stores'}
           tone={pending.length > 0 ? 'pending' : 'neutral'}
           hint={
             pending.length > 0
-              ? 'Skydrop opened these. Nothing is live until you decide.'
-              : 'Nothing needs approving.'
+              ? t('resellerStores.skydropOpenedTheseNothing')
+              : t('resellerStores.nothingNeedsApproving')
           }
         />
         <KpiCard
-          label="People with a login"
+          label={t('resellerStores.peopleWithALogin')}
           icon={<Users size={14} />}
           value={people}
           unit={people === 1 ? 'person' : 'people'}
           tone="neutral"
-          hint="Across every one of your stores."
+          hint={t('resellerStores.acrossEveryOneOf')}
         />
       </div>
 
       {pending.length > 0 ? (
         <RsSection
-          title="Waiting for your approval"
-          note="Skydrop opened these for you. Nothing about them is live until you decide."
+          title={t('resellerStores.waitingForYourApproval2')}
+          note={t('resellerStores.skydropOpenedTheseFor')}
           flush
         >
-          <StoreTable stores={pending} caption="Stores waiting for your approval" />
+          <StoreTable stores={pending} caption={t('resellerStores.storesWaitingForYour')} />
         </RsSection>
       ) : null}
 
       <RsSection
-        title="Your member stores"
+        title={t('resellerStores.yourMemberStores')}
         note={`${rest.length} ${rest.length === 1 ? 'store' : 'stores'}`}
-        action={<RsLink href="/reseller-stores/reports">Reports</RsLink>}
+        action={<RsLink href="/reseller-stores/reports">{t('resellerStores.reports')}</RsLink>}
         flush
       >
         {rest.length === 0 ? (
           <EmptyState
             bare
-            title="No member stores yet"
-            description="Open one for a business that will resell your stock, and invite its first user."
+            title={t('resellerStores.noMemberStoresYet')}
+            description={t('resellerStores.openOneForA')}
             action={
               <Button
                 variant="primary"
@@ -197,24 +208,28 @@ export default function ResellerStoresPage(): ReactElement {
                 icon={<Plus size={15} />}
                 onClick={() => setCreating(true)}
               >
-                Open a member store
+                {t('resellerStores.openAMemberStore')}
               </Button>
             }
           />
         ) : (
-          <StoreTable stores={rest} caption="Your member stores" />
+          <StoreTable stores={rest} caption={t('resellerStores.yourMemberStores')} />
         )}
       </RsSection>
 
       {all.length > 0 && (
         <RsStrip>
-          <RsStripFact label="Active" value={active} tone={active > 0 ? 'good' : 'neutral'} />
           <RsStripFact
-            label="Waiting on you"
+            label={t('resellerStores.active')}
+            value={active}
+            tone={active > 0 ? 'good' : 'neutral'}
+          />
+          <RsStripFact
+            label={t('resellerStores.waitingOnYou')}
             value={pending.length}
             tone={pending.length > 0 ? 'warn' : 'neutral'}
           />
-          <RsStripFact label="Team" value={`${people} people`} />
+          <RsStripFact label={t('resellerStores.team')} value={`${people} people`} />
         </RsStrip>
       )}
 
@@ -230,16 +245,18 @@ function StoreTable({
   stores: readonly ResellerStoreView[];
   caption: string;
 }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   return (
     <Table caption={caption}>
       <THead>
         <Tr>
-          <Th>Store</Th>
-          <Th>Status</Th>
-          <Th>Opened by</Th>
-          <Th>Wallet managed by</Th>
-          <Th align="right">Team</Th>
-          <Th>Created</Th>
+          <Th>{t('resellerStores.store')}</Th>
+          <Th>{t('resellerStores.status')}</Th>
+          <Th>{t('resellerStores.openedBy')}</Th>
+          <Th>{t('resellerStores.walletManagedBy')}</Th>
+          <Th align="right">{t('resellerStores.team')}</Th>
+          <Th>{t('resellerStores.created')}</Th>
         </Tr>
       </THead>
       <TBody>
@@ -250,22 +267,28 @@ function StoreTable({
                 {s.name}
               </Link>
               {s.displayName !== null ? (
-                <span className="rs-faint rs-block">Customers see {s.displayName}</span>
+                <span className="rs-faint rs-block">
+                  {richMessage(t('resellerStores.customersSee'), { displayName: s.displayName })}
+                </span>
               ) : null}
             </Td>
             <Td>
               <StatusChip
                 kind={resellerStoreStatusKind(s.status)}
-                label={resellerStoreStatusLabel(s.status)}
+                label={resellerStoreStatusLabel(s.status, locale)}
                 size="sm"
               />
             </Td>
-            <Td className="rs-small">{s.origin === 'ADMIN' ? 'Skydrop' : 'You'}</Td>
-            <Td className="rs-small">{s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'You'}</Td>
+            <Td className="rs-small">
+              {s.origin === 'ADMIN' ? 'Skydrop' : t('resellerStores.you')}
+            </Td>
+            <Td className="rs-small">
+              {s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : t('resellerStores.you')}
+            </Td>
             <Td align="right" className="sk-figure">
               {s.memberCount}
             </Td>
-            <Td className="rs-when sk-figure">{day(s.createdAt)}</Td>
+            <Td className="rs-when sk-figure">{day(s.createdAt, locale)}</Td>
           </Tr>
         ))}
       </TBody>
@@ -280,6 +303,7 @@ function CreateModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const create = useCreateResellerStore();
   const [name, setName] = useState('');
@@ -313,7 +337,7 @@ function CreateModal({
           roleKeys: ['owner' as const],
         },
       });
-      toast.success(`“${name.trim()}” is open.`);
+      toast.success(t('resellerStores.isOpen', { name: name.trim() }));
       onOpenChange(false);
       setName('');
       setDisplayName('');
@@ -323,7 +347,7 @@ function CreateModal({
       setInviteName('');
     } catch (err) {
       // Verbatim (FE-2): STORE_NAME_TAKEN, EMAIL_ALREADY_REGISTERED…
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -331,14 +355,14 @@ function CreateModal({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Open a member store"
-      description="It is active as soon as you create it."
+      title={t('resellerStores.openAMemberStore')}
+      description={t('resellerStores.itIsActiveAs')}
       icon={<Store size={18} />}
       size="lg"
       footer={
         <DialogFooter>
           <Button variant="secondary" size="md" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('resellerStores.cancel')}
           </Button>
           <AsyncButton
             type="submit"
@@ -346,7 +370,7 @@ function CreateModal({
             variant="primary"
             size="md"
             state={pendingPhase(create.isPending)}
-            labels={{ idle: 'Open the store', busy: 'Opening…' }}
+            labels={{ idle: t('resellerStores.openTheStore'), busy: t('resellerStores.opening') }}
           />
         </DialogFooter>
       }
@@ -357,8 +381,8 @@ function CreateModal({
       <form id="rs-create-form" onSubmit={submit} className="rs-form">
         <TextField
           id="rs-name"
-          label="Store name"
-          hint="Unique among your stores."
+          label={t('resellerStores.storeName')}
+          hint={t('resellerStores.uniqueAmongYourStores')}
           required
           maxLength={80}
           showCount
@@ -367,8 +391,8 @@ function CreateModal({
         />
         <TextField
           id="rs-display"
-          label="Name customers see"
-          hint="Leave empty to use the store name."
+          label={t('resellerStores.nameCustomersSee')}
+          hint={t('resellerStores.leaveEmptyToUse')}
           maxLength={80}
           showCount
           value={displayName}
@@ -376,7 +400,7 @@ function CreateModal({
         />
         <TextField
           id="rs-email"
-          label="Contact email"
+          label={t('resellerStores.contactEmail')}
           type="email"
           required
           value={contactEmail}
@@ -384,8 +408,8 @@ function CreateModal({
         />
         <TextField
           id="rs-phone"
-          label="Contact phone"
-          hint="With the country code — +8801712345678 for Bangladesh, +919812345678 for India."
+          label={t('resellerStores.contactPhone')}
+          hint={t('resellerStores.withTheCountryCode')}
           type="tel"
           required
           value={contactPhone}
@@ -393,22 +417,19 @@ function CreateModal({
         />
         <Select
           id="rs-wallet"
-          label="Who manages the store’s wallet"
+          label={t('resellerStores.whoManagesTheStore')}
           value={walletManagedBy}
           onChange={(e) => setWalletManagedBy(e.target.value as WalletManager)}
         >
-          <option value="SELLER">You — you top it up and pay it yourself</option>
-          <option value="SKYDROP">Skydrop — the store tops up and withdraws through us</option>
+          <option value="SELLER">{t('resellerStores.youYouTopIt')}</option>
+          <option value="SKYDROP">{t('resellerStores.skydropTheStoreTops')}</option>
         </Select>
         <fieldset className="rs-fieldset">
-          <legend>Invite its first user</legend>
-          <p className="rs-muted">
-            A store opens with somebody able to sign in to it. They get the invitation by email and
-            become the store’s owner.
-          </p>
+          <legend>{t('resellerStores.inviteItsFirstUser')}</legend>
+          <p className="rs-muted">{t('resellerStores.aStoreOpensWith')}</p>
           <TextField
             id="rs-invite-email"
-            label="Their email"
+            label={t('resellerStores.theirEmail')}
             type="email"
             required
             value={inviteEmail}
@@ -416,8 +437,8 @@ function CreateModal({
           />
           <TextField
             id="rs-invite-name"
-            label="Their name"
-            hint="They become the store’s owner."
+            label={t('resellerStores.theirName')}
+            hint={t('resellerStores.theyBecomeTheStore')}
             required
             value={inviteName}
             onChange={(e) => setInviteName(e.target.value)}

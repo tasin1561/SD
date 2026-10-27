@@ -12,7 +12,7 @@ import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import {
   ACTION_CAPABILITIES,
   useSetStoreActionPolicy,
@@ -21,6 +21,9 @@ import {
   type StoreActionMode,
 } from '@/lib/reseller-store-hooks';
 import { RsError, RsSection } from '../../_components/rs-parts';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * What a Reseller store may do about a live order, asked the way the owner
@@ -46,73 +49,66 @@ import { RsError, RsSection } from '../../_components/rs-parts';
 
 type How = 'DIRECT' | 'ASK_SELLER';
 
-const HOW_OPTIONS: ReadonlyArray<{ value: How; label: string }> = [
-  { value: 'DIRECT', label: 'Directly' },
-  { value: 'ASK_SELLER', label: 'Needs my approval' },
+const howOptionsOf = (t: Translate<MessageKey>): ReadonlyArray<{ value: How; label: string }> => [
+  { value: 'DIRECT', label: t('resellerStoreDetail.directly') },
+  { value: 'ASK_SELLER', label: t('resellerStoreDetail.needsMyApproval') },
 ];
 
 /**
  * What each task IS, and what "Directly" actually does — which differs by
  * task, and used to be described wrongly for sending a parcel back.
  */
-const CAPABILITIES: ReadonlyArray<{
+const capabilitiesOf = (
+  t: Translate<MessageKey>,
+): ReadonlyArray<{
   key: ActionCapability;
   label: string;
   what: string;
   direct: string;
-}> = [
+}> => [
   {
     key: 'recall',
-    label: 'Call the customer again',
-    what: 'Our call centre rings the customer back and writes down what they said.',
-    direct: 'Directly: the call is queued with our call centre the moment the store asks.',
+    label: t('resellerStoreDetail.callTheCustomerAgain'),
+    what: t('resellerStoreDetail.ourCallCentreRings'),
+    direct: t('resellerStoreDetail.directlyTheCallIs'),
   },
   {
     key: 'orderChange',
-    label: 'Change the order',
-    what:
-      'Correct the customer’s details, change what is in the parcel or the money the customer pays. ' +
-      'Once the order is confirmed only the customer’s details can change, and once it is with the ' +
-      'courier only they can accept it.',
-    direct: 'Directly: the change is written onto the order as soon as the store sends it.',
+    label: t('resellerStoreDetail.changeTheOrder'),
+    what: t('resellerStoreDetail.orderChangeWhat'),
+    direct: t('resellerStoreDetail.directlyTheChangeIs'),
   },
   {
     key: 'cancel',
-    label: 'Call the order off',
-    what: 'Cancel it before it is packed.',
-    direct: 'Directly: the order is cancelled as soon as the store asks.',
+    label: t('resellerStoreDetail.callTheOrderOff'),
+    what: t('resellerStoreDetail.cancelItBeforeIt'),
+    direct: t('resellerStoreDetail.directlyTheOrderIs'),
   },
   {
     key: 'callCapDecision',
-    label: 'Answer “keep trying?”',
-    what: 'When we cannot reach the customer after several attempts, decide whether to keep calling or give up.',
-    direct:
-      'Directly: the store’s answer is applied straight away — giving up releases the stock and rejects the order.',
+    label: t('resellerStoreDetail.answerKeepTrying'),
+    what: t('resellerStoreDetail.whenWeCannotReach'),
+    direct: t('resellerStoreDetail.directlyTheStoreS'),
   },
   {
     key: 'chaseSkydrop',
-    label: 'Raise it with Skydrop',
-    what: 'Tell Skydrop a parcel is damaged, lost or late in its hands.',
-    direct: 'Directly: the issue reaches Skydrop admin as soon as the store raises it.',
+    label: t('resellerStoreDetail.raiseItWithSkydrop'),
+    what: t('resellerStoreDetail.tellSkydropAParcel'),
+    direct: t('resellerStoreDetail.directlyTheIssueReaches'),
   },
   {
     key: 'reattempt',
-    label: 'Try delivering again',
-    what: 'Ask the courier for another delivery attempt.',
-    direct:
-      'Directly: a ticket opens straight away and Skydrop admin passes the request to the courier.',
+    label: t('resellerStoreDetail.tryDeliveringAgain'),
+    what: t('resellerStoreDetail.askTheCourierFor'),
+    direct: t('resellerStoreDetail.directlyATicketOpens'),
   },
   {
     key: 'sendBack',
-    label: 'Send the parcel back',
-    what: 'Turn a parcel round rather than keep trying. The return fee is split by your terms.',
-    direct:
-      'Directly: the courier is asked to return the parcel the moment the store clicks — nobody checks it first.',
+    label: t('resellerStoreDetail.sendTheParcelBack'),
+    what: t('resellerStoreDetail.turnAParcelRound'),
+    direct: t('resellerStoreDetail.directlyTheCourierIs'),
   },
 ];
-
-const APPROVAL_NOTE =
-  'Needs my approval: the request comes to Client staff to approve or reject, and nothing happens until then. A request nobody answers closes after a few days and the store is told.';
 
 type Draft = Record<ActionCapability, StoreActionMode>;
 
@@ -121,9 +117,13 @@ function howOf(mode: StoreActionMode): How {
 }
 
 /** One answer, in the screen's own words — for the confirmation's list of changes. */
-function answerWords(mode: StoreActionMode): string {
+function answerWords(t: Translate<MessageKey>, mode: StoreActionMode): string {
   if (mode === 'OFF') return 'No';
-  return `Yes, ${HOW_OPTIONS.find((o) => o.value === howOf(mode))?.label.toLowerCase() ?? ''}`;
+  return `Yes, ${
+    howOptionsOf(t)
+      .find((o) => o.value === howOf(mode))
+      ?.label.toLowerCase() ?? ''
+  }`;
 }
 
 export function StoreActionsSection({
@@ -135,6 +135,7 @@ export function StoreActionsSection({
   storeName: string;
   final: boolean;
 }): ReactElement {
+  const t = useT();
   const policy = useStoreActionPolicy(storeId);
   const save = useSetStoreActionPolicy();
   const identity = useSellerIdentity();
@@ -163,26 +164,27 @@ export function StoreActionsSection({
   // COSMETIC (FE-2): the API refuses a save without `stores.manage`.
   const canSave = can(identity, 'stores.manage') && !final;
 
-  if (policy.isPending) return <SkeletonRows rows={4} cols={3} label="Loading what they can do" />;
+  if (policy.isPending)
+    return <SkeletonRows rows={4} cols={3} label={t('resellerStoreDetail.loadingWhatTheyCan')} />;
   if (policy.isError) {
-    return <ErrorState message={serverVerdict(policy.error)} retry={() => void policy.refetch()} />;
+    return <ErrorState message={verdict(policy.error, t)} retry={() => void policy.refetch()} />;
   }
   if (draft === null || lastHow === null) {
-    return <SkeletonRows rows={4} cols={3} label="Loading what they can do" />;
+    return <SkeletonRows rows={4} cols={3} label={t('resellerStoreDetail.loadingWhatTheyCan')} />;
   }
 
   const dirty = ACTION_CAPABILITIES.some((c) => draft[c] !== policy.data[c]);
-  const changed = CAPABILITIES.filter((c) => draft[c.key] !== policy.data[c.key]);
+  const changed = capabilitiesOf(t).filter((c) => draft[c.key] !== policy.data[c.key]);
 
   async function submit(): Promise<void> {
     if (draft === null) return;
     setError(null);
     try {
       await save.mutateAsync({ storeId, policy: draft });
-      toast.success('Saved. The Member store sees this the next time it asks for something.');
+      toast.success(t('resellerStoreDetail.savedTheMemberStore'));
     } catch (err) {
       // Verbatim (FE-2): STORE_NOT_FOUND, and anything else the server says.
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       // Rethrown so the confirmation stays open with the verdict on it.
       throw err;
     }
@@ -190,32 +192,27 @@ export function StoreActionsSection({
 
   return (
     <RsSection
-      title="What they can do"
+      title={t('resellerStoreDetail.whatTheyCanDo')}
       note={
         policy.data.set
-          ? 'Your settings for this store.'
-          : 'Running on the defaults — you have not set this store yet.'
+          ? t('resellerStoreDetail.yourSettingsForThis')
+          : t('resellerStoreDetail.runningOnTheDefaults')
       }
       flush
     >
       <div className="rs-card__pad">
-        <p className="rs-muted">
-          For each task: can the Member store do it, and if so, does it happen directly or does it
-          need Client staff&apos;s approval first? Whatever you choose, the store is emailed what
-          happened — when Client staff approve something it is told whether it was carried out, and
-          when they turn it down it is sent the reason.
-        </p>
+        <p className="rs-muted">{t('resellerStoreDetail.forEachTaskCan')}</p>
       </div>
-      <Table caption="What the Member store can do">
+      <Table caption={t('resellerStoreDetail.whatTheMemberStore')}>
         <THead>
           <Tr>
-            <Th>Task</Th>
-            <Th>Can the Member store do this?</Th>
-            <Th>How?</Th>
+            <Th>{t('resellerStoreDetail.task')}</Th>
+            <Th>{t('resellerStoreDetail.canTheMemberStore')}</Th>
+            <Th>{t('resellerStoreDetail.how')}</Th>
           </Tr>
         </THead>
         <TBody>
-          {CAPABILITIES.map((c) => {
+          {capabilitiesOf(t).map((c) => {
             const mode = draft[c.key];
             const allowed = mode !== 'OFF';
             const how: How = allowed ? howOf(mode) : lastHow[c.key];
@@ -229,21 +226,21 @@ export function StoreActionsSection({
                     <span className="rs-task__what">{c.what}</span>
                     <span className="rs-task__note">
                       {!allowed
-                        ? 'No: the Member store is not offered this. Client staff do it instead.'
+                        ? t('resellerStoreDetail.noTheMemberStore')
                         : how === 'DIRECT'
                           ? c.direct
-                          : APPROVAL_NOTE}
+                          : t('resellerStoreDetail.approvalNote')}
                     </span>
                   </div>
                 </Td>
                 <Td>
                   <Switch
                     id={`can-${c.key}`}
-                    aria-label="Can the Member store do this?"
+                    aria-label={t('resellerStoreDetail.canTheMemberStore')}
                     aria-describedby={`task-${c.key}`}
                     checked={allowed}
-                    onText="Yes"
-                    offText="No"
+                    onText={t('resellerStoreDetail.yes')}
+                    offText={t('resellerStoreDetail.no')}
                     disabled={!canSave}
                     onCheckedChange={(yes) => {
                       if (!yes && allowed) setLastHow({ ...lastHow, [c.key]: howOf(mode) });
@@ -255,7 +252,7 @@ export function StoreActionsSection({
                   {allowed ? (
                     <Select
                       id={`how-${c.key}`}
-                      aria-label="How?"
+                      aria-label={t('resellerStoreDetail.how')}
                       className="rs-how"
                       value={how}
                       disabled={!canSave}
@@ -265,7 +262,7 @@ export function StoreActionsSection({
                         setDraft({ ...draft, [c.key]: next });
                       }}
                     >
-                      {HOW_OPTIONS.map((o) => (
+                      {howOptionsOf(t).map((o) => (
                         <option key={o.value} value={o.value}>
                           {o.label}
                         </option>
@@ -296,12 +293,12 @@ export function StoreActionsSection({
               setConfirming(true);
             }}
           >
-            Save
+            {t('resellerStoreDetail.save')}
           </Button>
           {dirty ? (
             <span className="rs-dirty">
               <CircleDot size={12} aria-hidden />
-              You have unsaved changes.
+              {t('resellerStoreDetail.youHaveUnsavedChanges')}
             </span>
           ) : null}
         </div>
@@ -312,10 +309,10 @@ export function StoreActionsSection({
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Save what this store can do?"
+        title={t('resellerStoreDetail.saveWhatThisStore')}
         entity={storeName}
-        consequence="The Member store sees this the next time it asks for something."
-        confirmLabel="Save"
+        consequence={t('resellerStoreDetail.theMemberStoreSees')}
+        confirmLabel={t('resellerStoreDetail.save')}
         onConfirm={submit}
         error={error}
       >
@@ -323,7 +320,8 @@ export function StoreActionsSection({
           <ul className="rs-confirm-list">
             {changed.map((c) => (
               <li key={c.key}>
-                <b>{c.label}:</b> {answerWords(policy.data[c.key])} → {answerWords(draft[c.key])}
+                <b>{c.label}:</b> {answerWords(t, policy.data[c.key])} →{' '}
+                {answerWords(t, draft[c.key])}
               </li>
             ))}
           </ul>

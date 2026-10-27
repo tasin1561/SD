@@ -1,0 +1,95 @@
+import { defineMessages } from '../define';
+
+/** Copy owned by the "teamRoles" feature. */
+export const teamRoles = defineMessages({
+  'teamRoles.created': ['{name} created', '{name} তৈরি হয়েছে'],
+  'teamRoles.updated': ['{name} updated', '{name} হালনাগাদ হয়েছে'],
+  'teamRoles.newRole': ['New role', 'নতুন ভূমিকা'],
+  'teamRoles.edit': ['Edit {role}', '{role} সম্পাদনা'],
+  'teamRoles.cancel': ['Cancel', 'বাতিল'],
+  'teamRoles.createRole': ['Create role', 'ভূমিকা তৈরি করুন'],
+  'teamRoles.saveChanges': ['Save changes', 'পরিবর্তন সংরক্ষণ করুন'],
+  'teamRoles.saving': ['Saving…', 'সংরক্ষণ হচ্ছে…'],
+  'teamRoles.name': ['Name', 'নাম'],
+  'teamRoles.warehouseManager': ['Warehouse manager', 'ওয়্যারহাউস ম্যানেজার'],
+  'teamRoles.whatThisRoleIs': ['What this role is for', 'এই ভূমিকা কীসের জন্য'],
+  'teamRoles.shownOnTheRoles': [
+    'Shown on the roles list. Helps whoever assigns it later.',
+    'ভূমিকার তালিকায় দেখানো হয়। পরে যিনি এটি দেবেন তাঁর সুবিধা হয়।',
+  ],
+  'teamRoles.searchPermissionsTryReturn': [
+    'Search permissions — try “return”, “wallet” or a key',
+    'অনুমতি খুঁজুন — “return”, “wallet” বা একটি কী লিখে দেখুন',
+  ],
+  'teamRoles.searchPermissions': ['Search permissions', 'অনুমতি খুঁজুন'],
+  'teamRoles.match': [' · {matches} match{plural}', ' · {matches}টি মিলেছে'],
+  'teamRoles.selectedNotShown': [
+    ' · {hiddenSelected} selected not shown',
+    ' · {hiddenSelected}টি নির্বাচিত কিন্তু দেখানো হচ্ছে না',
+  ],
+  'teamRoles.nothingMatchesTheSearch': [
+    'Nothing matches “{query}”. The search covers the name, the explanation and the permission key.',
+    '“{query}” এর সাথে কিছু মেলেনি। খোঁজা হয় নাম, ব্যাখ্যা ও অনুমতির কী-তে।',
+  ],
+  'teamRoles.canMoveMoneyOr': ['Can move money or stock', 'টাকা বা স্টক নাড়াতে পারে'],
+  'teamRoles.removePermissionsFromThis': [
+    'Remove permissions from this role?',
+    'এই ভূমিকা থেকে অনুমতি সরাবেন?',
+  ],
+  'teamRoles.removeAndSave': ['Remove and save', 'সরিয়ে সংরক্ষণ করুন'],
+  'teamRoles.deleted': ['{role} deleted', '{role} মুছে ফেলা হয়েছে'],
+  'teamRoles.roles': ['Roles', 'ভূমিকা'],
+  'teamRoles.aRoleIsA': [
+    'A role is a set of permissions. Create as many as your team needs — the permissions themselves are fixed by the system. One person can hold several roles, and what they can do is everything those roles cover between them.',
+    'ভূমিকা হলো অনুমতির একটি সেট। আপনার টিমের যতগুলো দরকার ততগুলো তৈরি করুন — অনুমতিগুলো নিজে সিস্টেম ঠিক করে। একজন ব্যক্তির একাধিক ভূমিকা থাকতে পারে, আর তিনি সেগুলো মিলিয়ে যা কিছু কভার করে সবই করতে পারেন।',
+  ],
+  'teamRoles.heldByNobody': ['{unused} held by nobody', '{unused}টি কারও নেই'],
+  'teamRoles.yourRoles': ['Your roles', 'আপনার ভূমিকা'],
+  'teamRoles.loadingRoles': ['Loading roles…', 'ভূমিকা লোড হচ্ছে…'],
+  'teamRoles.couldNotLoadRoles': ['Could not load roles.', 'ভূমিকা লোড করা যায়নি।'],
+  'teamRoles.role': ['Role', 'ভূমিকা'],
+  'teamRoles.covers': ['Covers', 'যা কভার করে'],
+  'teamRoles.heldBy': ['Held by', 'যাঁদের আছে'],
+  'teamRoles.actions': ['Actions', 'কাজ'],
+  'teamRoles.noRolesYet': ['No roles yet.', 'এখনো কোনো ভূমিকা নেই।'],
+  'teamRoles.cannotBeEdited': ['Cannot be edited', 'সম্পাদনা করা যায় না'],
+  'teamRoles.everythingIncludingPermissionsAdded': [
+    'Everything, including permissions added later',
+    'সবকিছু, পরে যোগ হওয়া অনুমতিসহ',
+  ],
+  'teamRoles.permission': ['{permissions} permission{plural}', '{permissions}টি অনুমতি'],
+  'teamRoles.edit2': ['Edit', 'সম্পাদনা'],
+  'teamRoles.delete': ['Delete', 'মুছুন'],
+  'teamRoles.deleteThisRole': ['Delete this role?', 'এই ভূমিকা মুছবেন?'],
+  'teamRoles.theRoleIsRemoved': [
+    'The role is removed for good. This cannot be undone.',
+    'ভূমিকাটি চিরতরে সরে যাবে। এটি আর ফেরানো যাবে না।',
+  ],
+  'teamRoles.deleteRole': ['Delete role', 'ভূমিকা মুছুন'],
+  'teamRoles.notSaved': ['Not saved', 'সংরক্ষণ হয়নি'],
+  'teamRoles.clientConsole': ['Client console', 'ক্লায়েন্ট কনসোল'],
+  'teamRoles.account': ['Account', 'অ্যাকাউন্ট'],
+  'teamRoles.team': ['Team', 'টিম'],
+  'teamRoles.canMoveMoneyOrStock': [
+    '{count} can move money or stock',
+    '{count}টি টাকা বা স্টক নাড়াতে পারে',
+  ],
+  'teamRoles.thisRole': ['this role', 'এই ভূমিকা'],
+  'teamRoles.removalOnePersonOnePermission': [
+    '{members} person holds {role}, and this permission stop coming from it as soon as it saves. Anyone who also holds another role covering it keeps it.',
+    '{members}জন ব্যক্তির কাছে {role} ভূমিকা আছে; সংরক্ষণ করার সাথে সাথে এই অনুমতিটি এই ভূমিকা থেকে আসা বন্ধ হয়ে যাবে। অন্য কোনো ভূমিকার মাধ্যমে একই অনুমতি যাঁদের আছে, তাঁরা সেটি রেখে দেবেন।',
+  ],
+  'teamRoles.removalOnePersonManyPermissions': [
+    '{members} person holds {role}, and these {count} permissions stop coming from it as soon as it saves. Anyone who also holds another role covering them keeps them.',
+    '{members}জন ব্যক্তির কাছে {role} ভূমিকা আছে; সংরক্ষণ করার সাথে সাথে এই {count}টি অনুমতি এই ভূমিকা থেকে আসা বন্ধ হয়ে যাবে। অন্য কোনো ভূমিকার মাধ্যমে একই অনুমতি যাঁদের আছে, তাঁরা সেটি রেখে দেবেন।',
+  ],
+  'teamRoles.removalManyPeopleOnePermission': [
+    '{members} people hold {role}, and this permission stop coming from it as soon as it saves. Anyone who also holds another role covering it keeps it.',
+    '{members}জন ব্যক্তির কাছে {role} ভূমিকা আছে; সংরক্ষণ করার সাথে সাথে এই অনুমতিটি এই ভূমিকা থেকে আসা বন্ধ হয়ে যাবে। অন্য কোনো ভূমিকার মাধ্যমে একই অনুমতি যাঁদের আছে, তাঁরা সেটি রেখে দেবেন।',
+  ],
+  'teamRoles.removalManyPeopleManyPermissions': [
+    '{members} people hold {role}, and these {count} permissions stop coming from it as soon as it saves. Anyone who also holds another role covering them keeps them.',
+    '{members}জন ব্যক্তির কাছে {role} ভূমিকা আছে; সংরক্ষণ করার সাথে সাথে এই {count}টি অনুমতি এই ভূমিকা থেকে আসা বন্ধ হয়ে যাবে। অন্য কোনো ভূমিকার মাধ্যমে একই অনুমতি যাঁদের আছে, তাঁরা সেটি রেখে দেবেন।',
+  ],
+  'teamRoles.metaTitle': ['Roles · Skydrop', 'ভূমিকা · Skydrop'],
+});

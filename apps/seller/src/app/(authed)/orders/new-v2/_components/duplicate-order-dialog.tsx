@@ -8,6 +8,8 @@ import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Checkbox } from '@skydrop/ui/app/checkbox';
 import '../../_components/orders.css';
+import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
 
 /**
  * "You already have an order to this customer that hasn't shipped."
@@ -46,6 +48,8 @@ export function DuplicateOrderDialog({
   readonly onCancel: () => void;
   readonly onConfirm: () => void;
 }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const [acknowledged, setAcknowledged] = useState(false);
   const anySharedItems = candidates.some((c) => c.sharesItems);
 
@@ -58,7 +62,7 @@ export function DuplicateOrderDialog({
           onCancel();
         }
       }}
-      title="This customer already has an order waiting"
+      title={t('orderNew.thisCustomerAlreadyHas')}
       icon={<CopyCheck size={18} />}
       tone="critical"
       footer={
@@ -70,12 +74,12 @@ export function DuplicateOrderDialog({
               onCancel();
             }}
           >
-            Cancel and check
+            {t('orderNew.cancelAndCheck')}
           </Button>
           <AsyncButton
             variant="destructive"
             state={busy ? 'busy' : undefined}
-            labels={{ idle: 'Place it anyway', busy: 'Placing…' }}
+            labels={{ idle: t('orderNew.placeItAnyway'), busy: t('orderNew.placing') }}
             disabled={!acknowledged || busy}
             onClick={onConfirm}
           />
@@ -84,10 +88,16 @@ export function DuplicateOrderDialog({
     >
       <div className="ord-stack ord-stack--tight">
         <p className="ord-p">
-          {candidates.length === 1 ? 'An order' : `${candidates.length} orders`} to this number
-          {anySharedItems ? ' — including the same items — ' : ' '}
-          {candidates.length === 1 ? 'has' : 'have'} not been packed yet. If this is the same order
-          entered twice, cancel and check.
+          {t(
+            candidates.length === 1
+              ? anySharedItems
+                ? 'orderNew.dupOneShared'
+                : 'orderNew.dupOne'
+              : anySharedItems
+                ? 'orderNew.dupManyShared'
+                : 'orderNew.dupMany',
+            { count: candidates.length },
+          )}
         </p>
 
         <ul className="ord-mini-list">
@@ -98,13 +108,18 @@ export function DuplicateOrderDialog({
                   {c.orderNumber}
                 </Link>
                 <span className="ord-sub">
-                  {c.recipientName} · {c.itemCount} item{c.itemCount === 1 ? '' : 's'} ·{' '}
-                  {new Date(c.placedAt).toLocaleDateString()}
+                  {c.recipientName} ·{' '}
+                  {t(c.itemCount === 1 ? 'orderNew.itemCountOne' : 'orderNew.itemCountMany', {
+                    count: c.itemCount,
+                  })}{' '}
+                  · {new Date(c.placedAt).toLocaleDateString(dateTag(locale))}
                 </span>
               </div>
               <div>
                 <span className="ord-faint">{c.status.replaceAll('_', ' ').toLowerCase()}</span>
-                {c.sharesItems && <span className="ord-sub ord-tone-warn">same items</span>}
+                {c.sharesItems && (
+                  <span className="ord-sub ord-tone-warn">{t('orderNew.sameItems')}</span>
+                )}
               </div>
             </li>
           ))}
@@ -113,7 +128,7 @@ export function DuplicateOrderDialog({
         <Checkbox
           checked={acknowledged}
           onChange={(e) => setAcknowledged(e.target.checked)}
-          label="I have checked — this is a separate order and should ship as its own parcel."
+          label={t('orderNew.iHaveCheckedThis')}
         />
       </div>
     </Dialog>

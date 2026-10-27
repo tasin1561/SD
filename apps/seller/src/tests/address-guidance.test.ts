@@ -1,4 +1,7 @@
 import { readFileSync } from 'node:fs';
+import { CATALOGS } from '@/i18n/catalog';
+import { IN_DIAL, IN_LOCAL_LENGTH, IN_PHONE_ERROR } from '@/lib/phone';
+import { readEnglish } from './english-source';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -82,24 +85,39 @@ describe('both order forms read the same copy', () => {
   ];
 
   it.each(forms)('%s imports the shared module rather than inlining strings', (rel) => {
-    const src = readFileSync(join(__dirname, '../', rel), 'utf8');
+    const src = readEnglish(join(__dirname, '../', rel));
     expect(src).toContain("from '@/lib/address-guidance'");
-    expect(src).toContain('ADDRESS_LINE_1_HINT');
-    expect(src).toContain('ADDRESS_LINE_2_HINT');
+    // The hints and the duplicate-lines error are catalogue keys now (so Bangla
+    // can follow); the English behind each key is pinned to the lib constants
+    // by the parity spec below, so the two cannot drift.
+    const raw = readFileSync(join(__dirname, '../', rel), 'utf8');
+    expect(raw).toContain("'guidance.addressLine1Hint'");
+    expect(raw).toContain("'guidance.addressLine2Hint'");
     // The rule must gate submission, not merely be displayed.
     expect(src).toContain('linesAreDuplicated');
-    expect(src).toContain('DUPLICATE_LINES_ERROR');
+    expect(raw).toContain("'guidance.duplicateLines'");
+  });
+
+  it('the catalogue says exactly what the shared constants say, in English', () => {
+    expect(CATALOGS.en['guidance.addressLine1Hint']).toBe(ADDRESS_LINE_1_HINT);
+    expect(CATALOGS.en['guidance.addressLine2Hint']).toBe(ADDRESS_LINE_2_HINT);
+    expect(CATALOGS.en['guidance.duplicateLines']).toBe(DUPLICATE_LINES_ERROR);
+    expect(
+      CATALOGS.en['guidance.phoneError']
+        .replace('{len}', String(IN_LOCAL_LENGTH))
+        .replace('{dial}', IN_DIAL),
+    ).toBe(IN_PHONE_ERROR);
   });
 
   it.each(forms)('%s no longer collects a separate landmark', (rel) => {
-    const src = readFileSync(join(__dirname, '../', rel), 'utf8');
+    const src = readEnglish(join(__dirname, '../', rel));
     expect(src).not.toContain('recipientLandmark');
     expect(src).not.toMatch(/label="Landmark"/);
   });
 
   it.each(forms)('%s no longer asks for city or state', (rel) => {
     // Delhivery routes on the PIN and resolves the locality itself.
-    const src = readFileSync(join(__dirname, '../', rel), 'utf8');
+    const src = readEnglish(join(__dirname, '../', rel));
     expect(src).not.toContain('recipientCity');
     expect(src).not.toContain('recipientStateProvince');
     expect(src).not.toContain('INDIAN_STATES');
@@ -108,14 +126,14 @@ describe('both order forms read the same copy', () => {
   it.each(forms)('%s requires the landmark before it will submit', (rel) => {
     // Marked required in the markup AND gated in code — a red asterisk
     // that nothing enforces is decoration.
-    const src = readFileSync(join(__dirname, '../', rel), 'utf8');
+    const src = readEnglish(join(__dirname, '../', rel));
     expect(src).toContain('the landmark) is required');
   });
 
   it('the edit form gates BOTH of its submit paths', () => {
     // "Save + submit" ran no validation at all, so it was a way around
     // the phone and address rules that "Save" enforces.
-    const src = readFileSync(join(__dirname, '../', forms[1]!), 'utf8');
+    const src = readEnglish(join(__dirname, '../', forms[1]!));
     const guards = src.match(/phoneProblem\(\) \?\? addressProblem\(\)/g) ?? [];
     expect(guards.length).toBe(2);
   });

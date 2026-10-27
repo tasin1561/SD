@@ -13,8 +13,10 @@ import {
   Panel,
   StockUnitStatusBadge,
 } from '@/app/(authed)/inventory/_components/stock-ui';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { useUnitTrace } from '@/lib/ops-hooks';
+import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
 
 /**
  * Where one of your units has been.
@@ -30,6 +32,8 @@ import { useUnitTrace } from '@/lib/ops-hooks';
  * companies may legitimately print the same number.
  */
 export function UnitTracePanel(): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const [typed, setTyped] = useState('');
   const [serial, setSerial] = useState('');
   const trace = useUnitTrace(serial);
@@ -39,14 +43,14 @@ export function UnitTracePanel(): ReactElement {
 
   return (
     <AreaSection
-      title="Trace a serial"
-      note="The number printed on a single unit. Its whole history, in the order it happened."
+      title={t('inventoryUnits.traceASerial')}
+      note={t('inventoryUnits.theNumberPrintedOn')}
     >
       <Panel>
         <div className="inv-stack">
           <div className="inv-lookup">
             <TextField
-              label="Serial"
+              label={t('inventoryUnits.serial')}
               icon={<Search size={16} />}
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
@@ -57,13 +61,13 @@ export function UnitTracePanel(): ReactElement {
                   setSerial(typed.trim());
                 }
               }}
-              placeholder="Scan or type"
+              placeholder={t('inventoryUnits.scanOrType')}
               inputClassName="sk-ident"
             />
             <AsyncButton
               variant="primary"
               size="lg"
-              labels={{ idle: 'Trace', busy: 'Tracing…' }}
+              labels={{ idle: t('inventoryUnits.trace'), busy: t('inventoryUnits.tracing') }}
               state={serial !== '' && trace.isFetching ? 'busy' : 'idle'}
               disabled={typed.trim() === ''}
               onClick={() => setSerial(typed.trim())}
@@ -71,16 +75,13 @@ export function UnitTracePanel(): ReactElement {
           </div>
 
           {trace.isError && (
-            <InlineError message={serverVerdict(trace.error)} retry={() => void trace.refetch()} />
+            <InlineError message={verdict(trace.error, t)} retry={() => void trace.refetch()} />
           )}
 
           {trace.isLoading && serial !== '' && <SkeletonRows rows={3} />}
 
           {serial !== '' && !trace.isLoading && !trace.isError && unit === null && (
-            <Note>
-              No unit of yours carries that serial. Either the number belongs to something we never
-              received, or this SKU is not tracked per unit.
-            </Note>
+            <Note>{t('inventoryUnits.noUnitOfYours')}</Note>
           )}
 
           {unit !== null && (
@@ -91,13 +92,13 @@ export function UnitTracePanel(): ReactElement {
                 <StockUnitStatusBadge status={unit.status} />
               </div>
 
-              <Table caption={`History of ${unit.serialBarcode}`}>
+              <Table caption={t('inventoryUnits.historyOf', { serialBarcode: unit.serialBarcode })}>
                 <THead>
                   <Tr>
-                    <Th>When</Th>
-                    <Th>Moved</Th>
-                    <Th>Step</Th>
-                    <Th>Note</Th>
+                    <Th>{t('inventoryUnits.when')}</Th>
+                    <Th>{t('inventoryUnits.moved')}</Th>
+                    <Th>{t('inventoryUnits.step')}</Th>
+                    <Th>{t('inventoryUnits.note')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -105,7 +106,7 @@ export function UnitTracePanel(): ReactElement {
                     <Tr key={`${e.at}-${i}`}>
                       <Td>
                         <span className="sk-figure inv-muted" style={{ whiteSpace: 'nowrap' }}>
-                          {new Date(e.at).toLocaleString('en-IN')}
+                          {new Date(e.at).toLocaleString(dateTag(locale, 'en-IN'))}
                         </span>
                       </Td>
                       <Td>

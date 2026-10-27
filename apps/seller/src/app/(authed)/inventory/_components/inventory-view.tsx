@@ -26,6 +26,8 @@ import {
   PanelPad,
   rawCount,
 } from './stock-ui';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 const PAGE_SIZE = 25;
 
@@ -58,6 +60,7 @@ const PAGE_SIZE = 25;
  * looks complete.
  */
 export function InventoryView(): ReactElement {
+  const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pageParam = Number(searchParams?.get('page') ?? '1');
@@ -81,24 +84,38 @@ export function InventoryView(): ReactElement {
   return (
     <AreaPage>
       <PageHeader
-        breadcrumbs={[{ label: 'Client console' }, { label: 'Stock' }, { label: 'Inventory' }]}
+        breadcrumbs={[
+          { label: t('inventory.clientConsole') },
+          { label: t('inventory.stock') },
+          { label: t('inventory.inventory') },
+        ]}
         Link={Link}
-        title="Inventory"
-        subtitle="Stock available for orders. Receiving happens at the warehouse — speak to ops to add inventory."
+        title={t('inventory.inventory')}
+        subtitle={t('inventory.stockAvailableForOrders')}
         meta={
           s === undefined ? undefined : (
             <MetaFacts>
-              <MetaFact tone="accent">{s.totalSkus} SKUs</MetaFact>
-              {s.lowStockSkus > 0 && <MetaFact tone="warn">{s.lowStockSkus} low on stock</MetaFact>}
+              <MetaFact tone="accent">
+                {richMessage(t('inventory.skus'), { totalSkus: s.totalSkus })}
+              </MetaFact>
+              {s.lowStockSkus > 0 && (
+                <MetaFact tone="warn">
+                  {richMessage(t('inventory.lowOnStock'), { lowStockSkus: s.lowStockSkus })}
+                </MetaFact>
+              )}
               {s.totalQtyInTransit > 0 && (
-                <MetaFact dot>{s.totalQtyInTransit} units in transit</MetaFact>
+                <MetaFact dot>
+                  {richMessage(t('inventory.unitsInTransit'), {
+                    totalQtyInTransit: s.totalQtyInTransit,
+                  })}
+                </MetaFact>
               )}
             </MetaFacts>
           )
         }
         action={
           <LinkButton href="/inventory/units" variant="ghost" icon={<ScanLine size={15} />}>
-            Unit discrepancies →
+            {t('inventory.unitDiscrepancies')}
           </LinkButton>
         }
       />
@@ -110,33 +127,41 @@ export function InventoryView(): ReactElement {
           to the same string the old tiles printed. */}
       {s === undefined ? (
         <KpiGrid>
-          <KpiCard label="India stock" icon={<Boxes size={14} />} figure={<Dash />} />
-          <KpiCard label="In transit" icon={<Plane size={14} />} figure={<Dash />} />
-          <KpiCard label="Low on stock" icon={<TriangleAlert size={14} />} figure={<Dash />} />
-          <KpiCard label="Stock value at cost" icon={<Wallet size={14} />} figure={<Dash />} />
+          <KpiCard label={t('inventory.indiaStock')} icon={<Boxes size={14} />} figure={<Dash />} />
+          <KpiCard label={t('inventory.inTransit')} icon={<Plane size={14} />} figure={<Dash />} />
+          <KpiCard
+            label={t('inventory.lowOnStock2')}
+            icon={<TriangleAlert size={14} />}
+            figure={<Dash />}
+          />
+          <KpiCard
+            label={t('inventory.stockValueAtCost')}
+            icon={<Wallet size={14} />}
+            figure={<Dash />}
+          />
         </KpiGrid>
       ) : (
         <KpiGrid>
           <KpiCard
-            label="India stock"
+            label={t('inventory.indiaStock')}
             icon={<Boxes size={14} />}
             value={s.totalQtyOnHand}
             format={rawCount}
             unit="units"
             tone="neutral"
             foot={[
-              { label: 'Sellable now', value: s.totalQtyAvailable },
-              { label: 'Held for orders', value: s.totalQtyReserved },
+              { label: t('inventory.sellableNow'), value: s.totalQtyAvailable },
+              { label: t('inventory.heldForOrders'), value: s.totalQtyReserved },
             ]}
           />
           <KpiCard
             label={
               <GlossaryTerm
-                title="In transit"
+                title={t('inventory.inTransit')}
                 icon={<Plane size={16} />}
-                description="Goods that have left you but are not on our Indian shelf yet — in Dhaka or in the air. They are counted, and they cannot be sold until they arrive."
+                description={t('inventory.goodsThatHaveLeft')}
               >
-                In transit
+                {t('inventory.inTransit')}
               </GlossaryTerm>
             }
             icon={<Plane size={14} />}
@@ -154,26 +179,20 @@ export function InventoryView(): ReactElement {
               deciding whether to ship more reads the sentence.
             */
             hint={
-              s.totalQtyInTransit > 0
-                ? 'In Dhaka or in the air — not sellable yet.'
-                : 'Nothing is on its way in.'
+              s.totalQtyInTransit > 0 ? t('inventory.inDhakaOrIn') : t('inventory.nothingIsOnIts')
             }
           />
           <KpiCard
-            label="Low on stock"
+            label={t('inventory.lowOnStock2')}
             icon={<TriangleAlert size={14} />}
             value={s.lowStockSkus}
             format={rawCount}
-            unit="SKUs"
+            unit={t('inventory.skus2')}
             tone={s.lowStockSkus > 0 ? 'pending' : 'neutral'}
-            hint={
-              s.lowStockSkus > 0
-                ? 'At or under the threshold you set.'
-                : 'Every SKU is above its threshold.'
-            }
+            hint={s.lowStockSkus > 0 ? t('inventory.atOrUnderThe') : t('inventory.everySkuIsAbove')}
           />
           <KpiCard
-            label="Stock value at cost"
+            label={t('inventory.stockValueAtCost')}
             icon={<Wallet size={14} />}
             figure={
               <Money
@@ -183,12 +202,12 @@ export function InventoryView(): ReactElement {
             tone="neutral"
             foot={[
               {
-                label: 'On the shelf in India',
+                label: t('inventory.onTheShelfIn'),
                 value: <Money amount={s.valueAtWarehouseInr} />,
               },
-              { label: 'In transit', value: <Money amount={s.valueInTransitInr} /> },
+              { label: t('inventory.inTransit'), value: <Money amount={s.valueInTransitInr} /> },
               ...(s.valueUnknownUnits > 0
-                ? [{ label: 'Units with no cost — excluded', value: s.valueUnknownUnits }]
+                ? [{ label: t('inventory.unitsWithNoCost'), value: s.valueUnknownUnits }]
                 : []),
             ]}
           />
@@ -196,7 +215,7 @@ export function InventoryView(): ReactElement {
       )}
 
       <AreaSection
-        title="Stock register"
+        title={t('inventory.stockRegister')}
         note={
           list.data === undefined
             ? undefined
@@ -206,40 +225,40 @@ export function InventoryView(): ReactElement {
         <Panel flush>
           {list.isLoading ? (
             <PanelPad>
-              <SkeletonRows rows={6} cols={7} label="Loading inventory…" />
+              <SkeletonRows rows={6} cols={7} label={t('inventory.loadingInventory')} />
             </PanelPad>
           ) : list.isError ? (
             <PanelPad>
               <ErrorState
-                message={list.error?.message ?? 'Failed to load inventory.'}
+                message={list.error?.message ?? t('inventory.failedToLoadInventory')}
                 retry={() => void list.refetch()}
               />
             </PanelPad>
           ) : !list.data || list.data.items.length === 0 ? (
             <PanelPad>
               <EmptyState
-                title="No stock yet"
-                description="Once your shipment is received at our Indian warehouse, your variants will show up here with on-hand qty."
+                title={t('inventory.noStockYet')}
+                description={t('inventory.onceYourShipmentIs')}
                 bare
                 action={
                   <LinkButton href="/inbound" variant="secondary">
-                    Inbound
+                    {t('inventory.inbound')}
                   </LinkButton>
                 }
               />
             </PanelPad>
           ) : (
             <>
-              <Table caption="Stock register">
+              <Table caption={t('inventory.stockRegister')}>
                 <THead>
                   <Tr>
-                    <Th>SKU</Th>
-                    <Th>Variant</Th>
-                    <Th align="right">India stock</Th>
-                    <Th align="right">Reserved</Th>
-                    <Th align="right">Available</Th>
-                    <Th align="right">In transit</Th>
-                    <Th align="right">Low-stock</Th>
+                    <Th>{t('inventory.sku')}</Th>
+                    <Th>{t('inventory.variant')}</Th>
+                    <Th align="right">{t('inventory.indiaStock')}</Th>
+                    <Th align="right">{t('inventory.reserved')}</Th>
+                    <Th align="right">{t('inventory.available')}</Th>
+                    <Th align="right">{t('inventory.inTransit')}</Th>
+                    <Th align="right">{t('inventory.lowStock')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -301,7 +320,12 @@ export function InventoryView(): ReactElement {
                           {/* The warning chip rings ONCE when it appears —
                               a word and an icon, never colour alone. */}
                           {row.isLowStock && (
-                            <StatusChip kind="pending" label="Low on stock" size="sm" pulse />
+                            <StatusChip
+                              kind="pending"
+                              label={t('inventory.lowOnStock2')}
+                              size="sm"
+                              pulse
+                            />
                           )}
                         </span>
                       </Td>
@@ -315,7 +339,7 @@ export function InventoryView(): ReactElement {
                   pageSize={PAGE_SIZE}
                   total={list.data.total}
                   onPageChange={updateUrl}
-                  label="Stock register pages"
+                  label={t('inventory.stockRegisterPages')}
                 />
               </PanelPad>
             </>

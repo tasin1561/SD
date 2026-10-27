@@ -35,6 +35,9 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { LinkButton, MetaFact } from './orders-parts';
 import { useStores } from '@/lib/store-hooks';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Seller order list — URL-driven filter state so a deep-linked filter
@@ -94,18 +97,18 @@ const PAGE_SIZES = [15, 20, 50, 100] as const;
  */
 const RANGES: ReadonlyArray<{
   readonly key: string;
-  readonly label: string;
+  readonly labelKey: MessageKey;
   readonly days: number | null;
 }> = [
-  { key: '', label: 'Any time', days: null },
-  { key: '1', label: 'Today', days: 1 },
-  { key: '7', label: 'Last 7 days', days: 7 },
-  { key: '30', label: 'Last 30 days', days: 30 },
-  { key: '90', label: 'Last 90 days', days: 90 },
+  { key: '', labelKey: 'orderList.anyTime', days: null },
+  { key: '1', labelKey: 'orderList.today', days: 1 },
+  { key: '7', labelKey: 'orderList.last7Days', days: 7 },
+  { key: '30', labelKey: 'orderList.last30Days', days: 30 },
+  { key: '90', labelKey: 'orderList.last90Days', days: 90 },
   // `days: null` like "Any time", but the presence of `from`/`to` in
   // the URL is what makes it a filter. Kept last: it is the answer for
   // "that week in August", which is a rarer question than "recently".
-  { key: 'custom', label: 'Custom range…', days: null },
+  { key: 'custom', labelKey: 'orderList.customRange', days: null },
 ];
 const DEFAULT_PAGE_SIZE = 20;
 /** The status tab that means "no status filter". Not an OrderStatus value. */
@@ -188,6 +191,8 @@ function parseParams(sp: URLSearchParams): QueryParams {
 }
 
 export function OrdersIndex(): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const identity = useSellerIdentity();
   const router = useRouter();
   const sp = useSearchParams();
@@ -207,7 +212,7 @@ export function OrdersIndex(): ReactElement {
     ...channelStores.map((s) => ({ id: s.id, name: s.name })),
     ...resellerStores.map((s) => ({
       id: s.id,
-      name: `${s.displayName ?? s.name} (member store)`,
+      name: t('orderList.memberStoreName', { name: s.displayName ?? s.name }),
     })),
   ];
   const pendingCount = usePendingRows().data?.length ?? 0;
@@ -293,26 +298,34 @@ export function OrdersIndex(): ReactElement {
   // status this seller has never had is not offered, one they have had
   // stays even at zero, and the active one always stays.
   const statusTabs: TabItem[] = [
-    { id: ALL_TAB, label: 'All', count: summary.data?.total },
+    { id: ALL_TAB, label: t('orderList.all'), count: summary.data?.total },
     ...CHIP_STATUSES.flatMap((s): TabItem[] => {
       const n = counts.get(s)?.count ?? 0;
       if (n === 0 && params.status !== s) return [];
-      return [{ id: s, label: chipWords(statusLabel(s)), count: n }];
+      return [{ id: s, label: chipWords(statusLabel(s, locale)), count: n }];
     }),
   ];
 
   return (
     <div className="ord-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Client console' }, { label: 'Fulfilment' }, { label: 'Orders' }]}
+        breadcrumbs={[
+          { label: t('orderList.clientConsole') },
+          { label: t('orderList.fulfilment') },
+          { label: t('orderList.orders') },
+        ]}
         Link={Link}
-        title="Orders"
-        subtitle="Everything you have sent us, and where each one has got to."
+        title={t('orderList.orders')}
+        subtitle={t('orderList.everythingYouHaveSent')}
         meta={
           summary.data === undefined ? undefined : (
             <span className="ord-meta">
               <MetaFact tone="accent">{summary.data.total} placed</MetaFact>
-              {countOf(MOVING) > 0 && <MetaFact dot>{countOf(MOVING)} on the road</MetaFact>}
+              {countOf(MOVING) > 0 && (
+                <MetaFact dot>
+                  {richMessage(t('orderList.onTheRoad'), { moving: countOf(MOVING) })}
+                </MetaFact>
+              )}
               {pendingCount > 0 && <MetaFact tone="warn">{pendingCount} pending</MetaFact>}
             </span>
           )
@@ -329,12 +342,12 @@ export function OrdersIndex(): ReactElement {
             )}
             {canSeePath(identity, '/orders/import') && (
               <LinkButton href="/orders/import" variant="ghost" icon={<Upload size={15} />}>
-                CSV import
+                {t('orderList.csvImport')}
               </LinkButton>
             )}
             {canSeePath(identity, '/orders/new') && (
               <LinkButton href="/orders/new" variant="primary" icon={<Plus size={15} />}>
-                New order
+                {t('orderList.newOrder')}
               </LinkButton>
             )}
           </div>
@@ -348,7 +361,7 @@ export function OrdersIndex(): ReactElement {
              refetch. */}
       <div className="ord-kpis">
         <KpiCard
-          label="Total orders"
+          label={t('orderList.totalOrders')}
           icon={<ShoppingCart size={14} />}
           tone="neutral"
           {...(summary.data === undefined
@@ -357,11 +370,16 @@ export function OrdersIndex(): ReactElement {
           {...(summary.data === undefined
             ? {}
             : {
-                foot: [{ label: 'COD placed', value: <Money amount={summary.data.totalCodInr} /> }],
+                foot: [
+                  {
+                    label: t('orderList.codPlaced'),
+                    value: <Money amount={summary.data.totalCodInr} />,
+                  },
+                ],
               })}
         />
         <KpiCard
-          label="Being processed"
+          label={t('orderList.beingProcessed')}
           icon={<PhoneCall size={14} />}
           tone={countOf(PROCESSING) > 0 ? 'pending' : 'neutral'}
           {...(summary.data === undefined
@@ -372,14 +390,14 @@ export function OrdersIndex(): ReactElement {
             : {
                 foot: [
                   {
-                    label: 'Awaiting the call',
+                    label: t('orderList.awaitingTheCall'),
                     value: counts.get(OrderStatus.PENDING_CONFIRMATION)?.count ?? 0,
                   },
                 ],
               })}
         />
         <KpiCard
-          label="On the road"
+          label={t('orderList.onTheRoad2')}
           icon={<Truck size={14} />}
           tone="info"
           {...(summary.data === undefined
@@ -390,14 +408,14 @@ export function OrdersIndex(): ReactElement {
             : {
                 foot: [
                   {
-                    label: 'Still to collect',
+                    label: t('orderList.stillToCollect'),
                     value: <Money amount={String(codOf(MOVING))} />,
                   },
                 ],
               })}
         />
         <KpiCard
-          label="Delivered"
+          label={t('orderList.delivered')}
           icon={<CheckCircle2 size={14} />}
           tone="credit"
           {...(summary.data === undefined
@@ -408,10 +426,10 @@ export function OrdersIndex(): ReactElement {
             : {
                 foot: [
                   {
-                    label: 'Collected',
+                    label: t('orderList.collected'),
                     value: <Money amount={String(counts.get(OrderStatus.DELIVERED)?.cod ?? 0)} />,
                   },
-                  { label: 'Coming back', value: countOf(RETURNING) },
+                  { label: t('orderList.comingBack'), value: countOf(RETURNING) },
                 ],
               })}
         />
@@ -421,11 +439,11 @@ export function OrdersIndex(): ReactElement {
              status tabs say what is in it, and the table is it. ───── */}
       <section className="ord-section">
         <SectionHeading
-          title="Consignment monitor"
+          title={t('orderList.consignmentMonitor')}
           note={
             list.data === undefined
               ? undefined
-              : `${list.data.items.length} of ${list.data.total} shown`
+              : t('orderList.ofShown', { items: list.data.items.length, total: list.data.total })
           }
         />
 
@@ -462,16 +480,16 @@ export function OrdersIndex(): ReactElement {
                 hears "Search".
               */}
               <TextField
-                label="Search"
-                aria-label="Search orders"
-                placeholder="Order number, ref, AWB, recipient name or phone…"
+                label={t('orderList.search')}
+                aria-label={t('orderList.searchOrders')}
+                placeholder={t('orderList.orderNumberRefAwb')}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 trail={
                   <button
                     type="submit"
-                    aria-label="Search"
-                    title="Search"
+                    aria-label={t('orderList.search')}
+                    title={t('orderList.search')}
                     className="ord-search-btn"
                   >
                     <Search size={16} aria-hidden />
@@ -483,14 +501,14 @@ export function OrdersIndex(): ReactElement {
 
           <FilterField>
             <Select
-              label="Placed when"
-              aria-label="Placed when"
+              label={t('orderList.placedWhen')}
+              aria-label={t('orderList.placedWhen')}
               value={params.range}
               onChange={(e) => updateUrl({ range: e.target.value, from: '', to: '', page: 1 })}
             >
               {RANGES.map((r) => (
                 <option key={r.key} value={r.key}>
-                  {r.label}
+                  {t(r.labelKey)}
                 </option>
               ))}
             </Select>
@@ -500,15 +518,15 @@ export function OrdersIndex(): ReactElement {
             <FilterField wide>
               <div className="ord-dates">
                 <DateField
-                  label="From"
-                  aria-label="Placed from"
+                  label={t('orderList.from')}
+                  aria-label={t('orderList.placedFrom')}
                   value={params.from}
                   max={params.to === '' ? undefined : params.to}
                   onChange={(e) => updateUrl({ from: e.target.value, page: 1 })}
                 />
                 <DateField
-                  label="To"
-                  aria-label="Placed to"
+                  label={t('orderList.to')}
+                  aria-label={t('orderList.placedTo')}
                   value={params.to}
                   min={params.from === '' ? undefined : params.from}
                   onChange={(e) => updateUrl({ to: e.target.value, page: 1 })}
@@ -523,12 +541,12 @@ export function OrdersIndex(): ReactElement {
           {stores.length > 1 && (
             <FilterField>
               <Select
-                label="Store"
-                aria-label="Filter by store"
+                label={t('orderList.store')}
+                aria-label={t('orderList.filterByStore')}
                 value={params.storeId}
                 onChange={(e) => updateUrl({ storeId: e.target.value, page: 1 })}
               >
-                <option value="">All stores</option>
+                <option value="">{t('orderList.allStores')}</option>
                 {stores.map((st) => (
                   <option key={st.id} value={st.id}>
                     {st.name}
@@ -540,17 +558,17 @@ export function OrdersIndex(): ReactElement {
 
           <FilterField>
             <Select
-              label="Status"
-              aria-label="Filter by status"
+              label={t('orderList.status')}
+              aria-label={t('orderList.filterByStatus')}
               value={params.status}
               onChange={(e) =>
                 updateUrl({ status: (e.target.value as OrderStatus | '') || '', page: 1 })
               }
             >
-              <option value="">All statuses</option>
+              <option value="">{t('orderList.allStatuses')}</option>
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
-                  {chipWords(statusLabel(s))}
+                  {chipWords(statusLabel(s, locale))}
                 </option>
               ))}
             </Select>
@@ -561,7 +579,7 @@ export function OrdersIndex(): ReactElement {
                because "how many are stuck at the call" is the question
                this page is opened to answer. ───────────────────────── */}
         <Tabs
-          label="Filter by status"
+          label={t('orderList.filterByStatus')}
           size="sm"
           items={statusTabs}
           value={params.status === '' ? ALL_TAB : params.status}
@@ -571,40 +589,38 @@ export function OrdersIndex(): ReactElement {
         />
 
         {list.isLoading ? (
-          <SkeletonRows rows={6} cols={6} label="Loading orders…" />
+          <SkeletonRows rows={6} cols={6} label={t('orderList.loadingOrders')} />
         ) : list.isError ? (
           <ErrorState
-            message={list.error?.message ?? 'Failed to load orders.'}
+            message={list.error?.message ?? t('orderList.failedToLoadOrders')}
             retry={() => void list.refetch()}
           />
         ) : !list.data || list.data.items.length === 0 ? (
           <EmptyState
             icon={<Package size={20} />}
-            title={filtered ? 'No orders match that' : 'No orders yet'}
+            title={filtered ? t('orderList.noOrdersMatchThat') : t('orderList.noOrdersYet')}
             description={
-              filtered
-                ? 'Try clearing the filters — the counts on the tabs above show what you do have.'
-                : 'Orders appear here as you create them or your CSVs import.'
+              filtered ? t('orderList.tryClearingTheFilters') : t('orderList.ordersAppearHereAs')
             }
             action={
               !filtered && canSeePath(identity, '/orders/new') ? (
                 <LinkButton href="/orders/new" variant="primary" icon={<Plus size={15} />}>
-                  New order
+                  {t('orderList.newOrder')}
                 </LinkButton>
               ) : undefined
             }
           />
         ) : (
           <div className="ord-card" data-flush="1">
-            <Table caption="Orders">
+            <Table caption={t('orderList.orders')}>
               <THead>
                 <Tr>
-                  <Th>Order</Th>
-                  <Th>Recipient</Th>
-                  <Th>Phone</Th>
-                  <Th>Status</Th>
-                  <Th align="right">COD</Th>
-                  <Th>Placed</Th>
+                  <Th>{t('orderList.order')}</Th>
+                  <Th>{t('orderList.recipient')}</Th>
+                  <Th>{t('orderList.phone')}</Th>
+                  <Th>{t('orderList.status')}</Th>
+                  <Th align="right">{t('orderList.cod')}</Th>
+                  <Th>{t('orderList.placed')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -625,10 +641,10 @@ export function OrdersIndex(): ReactElement {
                           via{' '}
                           {o.storeId !== undefined ? (
                             <Link href={`/reseller-stores/${o.storeId}`} className="ord-link">
-                              {o.storeNameSnapshot ?? 'a member store'}
+                              {o.storeNameSnapshot ?? t('orderList.aMemberStore')}
                             </Link>
                           ) : (
-                            (o.storeNameSnapshot ?? 'a member store')
+                            (o.storeNameSnapshot ?? t('orderList.aMemberStore'))
                           )}
                         </span>
                       )}
@@ -650,13 +666,13 @@ export function OrdersIndex(): ReactElement {
                     <Td>
                       <StatusChip
                         kind={orderStatusKind(o.status)}
-                        label={statusLabel(o.status)}
+                        label={statusLabel(o.status, locale)}
                         size="sm"
                       />
                     </Td>
                     <Td align="right">
                       {o.codAmountInr === null ? (
-                        <span className="ord-prepaid">Prepaid</span>
+                        <span className="ord-prepaid">{t('orderList.prepaid')}</span>
                       ) : (
                         <Money amount={o.codAmountInr} />
                       )}
@@ -678,7 +694,7 @@ export function OrdersIndex(): ReactElement {
                 pageSizes={PAGE_SIZES}
                 onPageChange={(next) => updateUrl({ page: next })}
                 onPageSizeChange={(n) => updateUrl({ pageSize: n, page: 1 })}
-                label="Orders pages"
+                label={t('orderList.ordersPages')}
               />
             </div>
           </div>

@@ -14,8 +14,10 @@ import { useToast } from '@skydrop/ui/app/toast';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { useCustomer, useDeleteCustomer, useUpdateCustomer } from '@/lib/account-hooks';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import './customers.css';
+import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
 
 /**
  * One customer record, and the two things you can do to it.
@@ -49,6 +51,8 @@ export function CustomerDetailPanel({
   /** Let the parent drop this panel — the record it is showing is gone. */
   readonly onDeleted?: () => void;
 }): ReactElement | null {
+  const locale = useLocale();
+  const t = useT();
   // COSMETIC (FE-2), and TWO permissions rather than one: the server
   // guards the read on `customers.view` and both writes on
   // `customers.manage`. They were the same key until the write was split
@@ -122,9 +126,9 @@ export function CustomerDetailPanel({
       }
       await update.mutateAsync({ id: customerId, body });
       setEditing(false);
-      toast.success('Customer updated.');
+      toast.success(t('customers.customerUpdated'));
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       throw err;
     }
   }
@@ -135,10 +139,10 @@ export function CustomerDetailPanel({
     try {
       await remove.mutateAsync({ id: customerId });
       setRemoving(false);
-      toast.success('Customer removed.');
+      toast.success(t('customers.customerRemoved'));
       onDeleted?.();
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       throw err;
     }
   }
@@ -151,7 +155,7 @@ export function CustomerDetailPanel({
     <div className="cst-card">
       <div className="cst-card__head">
         <div>
-          <h3 className="cst-card__title">{c?.name ?? c?.phoneE164 ?? 'Customer'}</h3>
+          <h3 className="cst-card__title">{c?.name ?? c?.phoneE164 ?? t('customers.customer')}</h3>
           {c !== undefined && <p className="cst-card__sub sk-ident">{c.phoneE164}</p>}
         </div>
         {mayManage ? (
@@ -163,7 +167,7 @@ export function CustomerDetailPanel({
               disabled={c === undefined}
               onClick={() => openEditor()}
             >
-              Correct details
+              {t('customers.correctDetails')}
             </Button>
             <Button
               variant="destructive"
@@ -175,53 +179,61 @@ export function CustomerDetailPanel({
                 setRemoving(true);
               }}
             >
-              Remove
+              {t('customers.remove')}
             </Button>
           </div>
         ) : null}
       </div>
 
       {detail.isLoading ? (
-        <SkeletonRows rows={3} cols={2} label="Loading this customer…" />
+        <SkeletonRows rows={3} cols={2} label={t('customers.loadingThisCustomer')} />
       ) : detail.isError ? (
-        <ErrorState message={serverVerdict(detail.error)} retry={() => void detail.refetch()} />
+        <ErrorState message={verdict(detail.error, t)} retry={() => void detail.refetch()} />
       ) : c === undefined ? null : (
         <dl className="cst-facts">
-          <Fact label="Phone">
+          <Fact label={t('customers.phone')}>
             <span className="sk-ident">{c.phoneE164}</span>
             <span className="cst-fixed">fixed</span>
           </Fact>
-          <Fact label="Name">{c.name ?? '—'}</Fact>
-          <Fact label="Email">{c.email ?? '—'}</Fact>
-          <Fact label="Alternate phone">
+          <Fact label={t('customers.name')}>{c.name ?? '—'}</Fact>
+          <Fact label={t('customers.email')}>{c.email ?? '—'}</Fact>
+          <Fact label={t('customers.alternatePhone')}>
             {c.altPhoneE164 === null ? '—' : <span className="sk-ident">{c.altPhoneE164}</span>}
           </Fact>
-          <Fact label="Call language">{c.preferredLanguage === 'hi' ? 'Hindi' : 'English'}</Fact>
-          <Fact label="Risk">{c.riskLevel === null ? '—' : c.riskLevel.toLowerCase()}</Fact>
-          <Fact label="Orders">
+          <Fact label={t('customers.callLanguage')}>
+            {c.preferredLanguage === 'hi' ? t('customers.hindi') : t('customers.english')}
+          </Fact>
+          <Fact label={t('customers.risk')}>
+            {c.riskLevel === null ? '—' : c.riskLevel.toLowerCase()}
+          </Fact>
+          <Fact label={t('customers.orders')}>
             <Num value={c.totalOrdersCount} />
           </Fact>
-          <Fact label="Delivered">
+          <Fact label={t('customers.delivered')}>
             <Num value={c.successfulOrdersCount} />
           </Fact>
-          <Fact label="Returned">
+          <Fact label={t('customers.returned')}>
             {c.rtoCount === 0 ? (
               <span className="cst-faint sk-figure">0</span>
             ) : (
               <span className="cst-bad sk-figure">{c.rtoCount}</span>
             )}
           </Fact>
-          <Fact label="First order">
+          <Fact label={t('customers.firstOrder')}>
             <span className="sk-figure">
-              {c.firstOrderAt === null ? '—' : new Date(c.firstOrderAt).toLocaleDateString('en-IN')}
+              {c.firstOrderAt === null
+                ? '—'
+                : new Date(c.firstOrderAt).toLocaleDateString(dateTag(locale, 'en-IN'))}
             </span>
           </Fact>
-          <Fact label="Last order">
+          <Fact label={t('customers.lastOrder')}>
             <span className="sk-figure">
-              {c.lastOrderAt === null ? '—' : new Date(c.lastOrderAt).toLocaleDateString('en-IN')}
+              {c.lastOrderAt === null
+                ? '—'
+                : new Date(c.lastOrderAt).toLocaleDateString(dateTag(locale, 'en-IN'))}
             </span>
           </Fact>
-          <Fact label="Notes">{c.riskNotes ?? '—'}</Fact>
+          <Fact label={t('customers.notes')}>{c.riskNotes ?? '—'}</Fact>
         </dl>
       )}
 
@@ -234,23 +246,23 @@ export function CustomerDetailPanel({
             setError(null);
           }
         }}
-        title="Correct customer details"
+        title={t('customers.correctCustomerDetails')}
         description={c?.phoneE164}
         icon={<PencilLine size={18} />}
         footer={
           <DialogFooter>
             <Button variant="secondary" size="md" onClick={() => setEditing(false)}>
-              Cancel
+              {t('customers.cancel')}
             </Button>
             <AsyncButton
               variant="primary"
               size="md"
               disabled={altPhoneMalformed || update.isPending}
               labels={{
-                idle: 'Save corrections',
-                busy: 'Saving…',
-                done: 'Saved',
-                error: 'Not saved',
+                idle: t('customers.saveCorrections'),
+                busy: t('customers.saving'),
+                done: t('customers.saved'),
+                error: t('customers.notSaved'),
               }}
               onAction={onSave}
             />
@@ -258,11 +270,7 @@ export function CustomerDetailPanel({
         }
       >
         <div className="cst-form">
-          <p className="cst-lede">
-            These are the details used when we call to confirm an order and when we email this
-            customer. The phone number is their identity here and cannot be changed — a different
-            number is a different customer.
-          </p>
+          <p className="cst-lede">{t('customers.theseAreTheDetails')}</p>
 
           {error !== null && (
             <p className="cst-error" role="alert">
@@ -271,40 +279,40 @@ export function CustomerDetailPanel({
           )}
 
           <TextField
-            label="Name"
-            hint="What the call centre will greet them by."
+            label={t('customers.name')}
+            hint={t('customers.whatTheCallCentre')}
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={160}
           />
           <TextField
-            label="Email"
-            hint="Where order updates go. Leave blank if you do not have it."
+            label={t('customers.email')}
+            hint={t('customers.whereOrderUpdatesGo')}
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             maxLength={254}
           />
           <TextField
-            label="Alternate phone"
-            hint="Full international form, e.g. +919812345678. Tried when the main number does not answer."
-            error={altPhoneMalformed ? 'Must start with + and the country code.' : undefined}
+            label={t('customers.alternatePhone')}
+            hint={t('customers.fullInternationalFormE')}
+            error={altPhoneMalformed ? t('customers.mustStartWithAnd') : undefined}
             value={altPhone}
             onChange={(e) => setAltPhone(e.target.value)}
             placeholder="+919812345678"
             maxLength={16}
           />
           <Select
-            label="Call language"
+            label={t('customers.callLanguage')}
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
           >
-            <option value="en">English</option>
-            <option value="hi">Hindi</option>
+            <option value="en">{t('customers.english')}</option>
+            <option value="hi">{t('customers.hindi')}</option>
           </Select>
           <TextArea
-            label="Notes"
-            hint="Anything the agent should know before dialling. Visible to Skydrop staff handling your orders."
+            label={t('customers.notes')}
+            hint={t('customers.anythingTheAgentShould')}
             value={riskNotes}
             onChange={(e) => setRiskNotes(e.target.value)}
             maxLength={2000}
@@ -323,12 +331,12 @@ export function CustomerDetailPanel({
             setError(null);
           }
         }}
-        title="Remove this customer?"
-        entity={c?.phoneE164 ?? 'This customer'}
+        title={t('customers.removeThisCustomer')}
+        entity={c?.phoneE164 ?? t('customers.thisCustomer')}
         entityIsIdentifier={c !== undefined}
-        consequence="The record disappears from your customer list. Their past orders are untouched, and if you ship to this number again the record comes back with its history intact — so this hides a contact, it does not erase what happened."
-        confirmLabel="Remove customer"
-        cancelLabel="Keep it"
+        consequence={t('customers.theRecordDisappearsFrom')}
+        confirmLabel={t('customers.removeCustomer')}
+        cancelLabel={t('customers.keepIt')}
         destructive
         onConfirm={onRemove}
         error={error ?? undefined}

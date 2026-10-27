@@ -1,6 +1,5 @@
 import type { ReactNode, ReactElement } from 'react';
-import { SignInFrame } from '@skydrop/ui/app/sign-in';
-import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
+import { SellerSignInFrame } from '@/components/auth-frame';
 
 /**
  * Every /auth page (accept an invitation, set or reset a password, verify
@@ -8,9 +7,5 @@ import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
  * forms carry more fields than the sign-in card.
  */
 export default function SellerAuthLayout({ children }: { children: ReactNode }): ReactElement {
-  return (
-    <SignInFrame portal="client portal" themeControl={<ThemeSwitch />} wide>
-      {children}
-    </SignInFrame>
-  );
+  return <SellerSignInFrame wide>{children}</SellerSignInFrame>;
 }

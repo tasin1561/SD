@@ -21,8 +21,11 @@ import {
   usePendingRows,
   type StagedRow,
 } from '@/lib/api-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { LinkButton, MetaFact, Notice, OrdSection } from '../../_components/orders-parts';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * The rows your upload could not turn into orders.
@@ -37,20 +40,20 @@ import { LinkButton, MetaFact, Notice, OrdSection } from '../../_components/orde
  */
 
 /** The fields a CSV row maps to, in the order a person reads an address. */
-const FIELDS: ReadonlyArray<{ key: string; label: string; hint?: string }> = [
-  { key: 'externalRef', label: 'Your order ref' },
-  { key: 'productSku', label: 'SKU' },
-  { key: 'quantity', label: 'Qty' },
-  { key: 'customerName', label: 'Customer name' },
-  { key: 'customerPhone', label: 'Phone', hint: '+91…' },
-  { key: 'customerEmail', label: 'Email' },
-  { key: 'addressLine1', label: 'Address line 1' },
-  { key: 'addressLine2', label: 'Address line 2' },
-  { key: 'landmark', label: 'Landmark' },
-  { key: 'city', label: 'City' },
-  { key: 'state', label: 'State' },
-  { key: 'pinCode', label: 'PIN' },
-  { key: 'codAmount', label: 'COD amount' },
+const FIELDS: ReadonlyArray<{ key: string; labelKey: MessageKey; hint?: string }> = [
+  { key: 'externalRef', labelKey: 'orderPending.fieldOrderRef' },
+  { key: 'productSku', labelKey: 'orderPending.fieldSku' },
+  { key: 'quantity', labelKey: 'orderPending.fieldQty' },
+  { key: 'customerName', labelKey: 'orderPending.fieldCustomerName' },
+  { key: 'customerPhone', labelKey: 'orderPending.fieldPhone', hint: '+91…' },
+  { key: 'customerEmail', labelKey: 'orderPending.fieldEmail' },
+  { key: 'addressLine1', labelKey: 'orderPending.fieldAddressLine1' },
+  { key: 'addressLine2', labelKey: 'orderPending.fieldAddressLine2' },
+  { key: 'landmark', labelKey: 'orderPending.fieldLandmark' },
+  { key: 'city', labelKey: 'orderPending.fieldCity' },
+  { key: 'state', labelKey: 'orderPending.fieldState' },
+  { key: 'pinCode', labelKey: 'orderPending.fieldPin' },
+  { key: 'codAmount', labelKey: 'orderPending.fieldCodAmount' },
 ];
 
 /**
@@ -63,6 +66,7 @@ const FIELDS: ReadonlyArray<{ key: string; label: string; hint?: string }> = [
  * section on the console puts it.
  */
 function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const patch = usePatchPendingRow();
   const importRow = useImportPendingRow();
@@ -84,9 +88,9 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
     setError(null);
     try {
       await patch.mutateAsync({ rowId: row.id, data: draft });
-      toast.success(`Row ${row.rowNumber} updated`);
+      toast.success(t('orderPending.rowUpdated', { rowNumber: row.rowNumber }));
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       // Re-thrown so the button's rolling label ends on the failure it
       // really was; the verdict above is what the seller reads.
       throw err;
@@ -100,29 +104,32 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
       // corrections to a second button press is its own small betrayal.
       if (dirty) await patch.mutateAsync({ rowId: row.id, data: draft });
       const res = await importRow.mutateAsync(row.id);
-      toast.success(`Row ${row.rowNumber} is now an order`);
+      toast.success(t('orderPending.rowIsNowAn', { rowNumber: row.rowNumber }));
       void res;
     } catch (err) {
       // Verbatim — "no variant with SKU X" is the useful part.
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
   // The row as the seller knows it — the number in their spreadsheet and
   // their own reference — restated in both confirmations below.
   const rowName = draft['externalRef']
-    ? `Row ${row.rowNumber} · ${draft['externalRef']}`
-    : `Row ${row.rowNumber}`;
+    ? t('orderPending.rowWithRef', { rowNumber: row.rowNumber, ref: draft['externalRef'] })
+    : t('orderPending.rowNumber', { rowNumber: row.rowNumber });
 
   return (
     <OrdSection
       title={rowName}
       note={
         isDuplicate ? (
-          <span className="ord-tone-warn">Possible duplicate</span>
+          <span className="ord-tone-warn">{t('orderPending.possibleDuplicate')}</span>
         ) : (
           <span className="ord-tone-bad">
-            {row.problems.length} value{row.problems.length === 1 ? '' : 's'} to fix
+            {richMessage(t('orderPending.valueToFix'), {
+              problems: row.problems.length,
+              plural: row.problems.length === 1 ? '' : 's',
+            })}
           </span>
         )
       }
@@ -131,9 +138,10 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
         {isDuplicate && row.duplicateOf !== null && row.duplicateOf.length > 0 && (
           <Notice tone="warn" icon={<CopyCheck size={16} />}>
             <span>
-              This customer already has {row.duplicateOf.length} order
-              {row.duplicateOf.length === 1 ? '' : 's'} not yet packed. Import only if this is a
-              separate parcel.
+              {richMessage(t('orderPending.thisCustomerAlreadyHas'), {
+                duplicateOf: row.duplicateOf.length,
+                plural: row.duplicateOf.length === 1 ? '' : 's',
+              })}
             </span>
             <ul className="ord-mini-list">
               {row.duplicateOf.map((o) => (
@@ -160,7 +168,7 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
             return (
               <TextField
                 key={f.key}
-                label={f.label}
+                label={t(f.labelKey)}
                 value={draft[f.key] ?? ''}
                 onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
                 {...(problem !== undefined ? { error: problem } : {})}
@@ -176,15 +184,19 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
             state={importRow.isPending ? 'busy' : undefined}
             disabled={importRow.isPending || patch.isPending}
             labels={{
-              idle: isDuplicate ? 'Import anyway' : 'Import as order',
-              busy: 'Importing…',
+              idle: isDuplicate ? t('orderPending.importAnyway') : t('orderPending.importAsOrder'),
+              busy: t('orderPending.importing'),
             }}
             onClick={() => setConfirm('import')}
           />
           <AsyncButton
             variant="ghost"
             disabled={!dirty || patch.isPending}
-            labels={{ idle: 'Save without importing', busy: 'Saving…', done: 'Saved' }}
+            labels={{
+              idle: t('orderPending.saveWithoutImporting'),
+              busy: t('orderPending.saving'),
+              done: t('orderPending.saved'),
+            }}
             onAction={() => save()}
           />
           <Button
@@ -195,7 +207,7 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
               setConfirm('discard');
             }}
           >
-            Discard
+            {t('orderPending.discard')}
           </Button>
         </div>
       </div>
@@ -203,23 +215,27 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
       <ConfirmDialog
         open={confirm === 'import'}
         onOpenChange={(next) => setConfirm(next ? 'import' : null)}
-        title={isDuplicate ? 'Import this row anyway?' : 'Import this row as an order?'}
+        title={
+          isDuplicate ? t('orderPending.importThisRowAnyway') : t('orderPending.importThisRowAs')
+        }
         entity={rowName}
         consequence={
           isDuplicate
-            ? 'It becomes a new order even though this customer already has one waiting. Any changes you typed are saved first.'
-            : 'It becomes an order and leaves this list. Any changes you typed are saved first.'
+            ? t('orderPending.importDuplicateConsequence')
+            : t('orderPending.importConsequence')
         }
-        confirmLabel={isDuplicate ? 'Import anyway' : 'Import as order'}
+        confirmLabel={
+          isDuplicate ? t('orderPending.importAnyway') : t('orderPending.importAsOrder')
+        }
         onConfirm={() => doImport()}
       />
       <ConfirmDialog
         open={confirm === 'discard'}
         onOpenChange={(next) => setConfirm(next ? 'discard' : null)}
-        title="Discard this row?"
+        title={t('orderPending.discardThisRow')}
         entity={rowName}
-        consequence="It is removed from this list and no order is made from it."
-        confirmLabel="Discard"
+        consequence={t('orderPending.itIsRemovedFrom')}
+        confirmLabel={t('orderPending.discard')}
         destructive
         error={discardError}
         onConfirm={async () => {
@@ -227,7 +243,7 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
           try {
             await discard.mutateAsync(row.id);
           } catch (err) {
-            setDiscardError(serverVerdict(err));
+            setDiscardError(verdict(err, t));
             throw err;
           }
         }}
@@ -237,6 +253,7 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
 }
 
 export function PendingOrdersIndex(): ReactElement {
+  const t = useT();
   const identity = useSellerIdentity();
   const rows = usePendingRows();
 
@@ -248,30 +265,34 @@ export function PendingOrdersIndex(): ReactElement {
     <div className="ord-page">
       <PageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Fulfilment' },
-          { label: 'Orders', href: '/orders' },
-          { label: 'Pending' },
+          { label: t('orderPending.clientConsole') },
+          { label: t('orderPending.fulfilment') },
+          { label: t('orderPending.orders'), href: '/orders' },
+          { label: t('orderPending.pending') },
         ]}
         Link={Link}
-        title="Pending orders"
-        subtitle="Rows from a CSV upload that need a decision before they can become orders. Everything else in your upload has already imported."
+        title={t('orderPending.pendingOrders')}
+        subtitle={t('orderPending.rowsFromACsv')}
         meta={
           rows.isLoading ? undefined : list.length === 0 ? (
             <span className="ord-meta">
-              <MetaFact>Nothing waiting</MetaFact>
+              <MetaFact>{t('orderPending.nothingWaiting')}</MetaFact>
             </span>
           ) : (
             <span className="ord-meta">
               <MetaFact tone="warn">{list.length} waiting</MetaFact>
-              {duplicates > 0 && <MetaFact dot>{duplicates} look like duplicates</MetaFact>}
+              {duplicates > 0 && (
+                <MetaFact dot>
+                  {richMessage(t('orderPending.lookLikeDuplicates'), { duplicates })}
+                </MetaFact>
+              )}
             </span>
           )
         }
         action={
           canSeePath(identity, '/orders/import') ? (
             <LinkButton href="/orders/import" variant="ghost" icon={<Upload size={15} />}>
-              Upload a CSV
+              {t('orderPending.uploadACsv')}
             </LinkButton>
           ) : undefined
         }
@@ -284,44 +305,44 @@ export function PendingOrdersIndex(): ReactElement {
       {!rows.isLoading && list.length > 0 && (
         <div className="ord-kpis">
           <KpiCard
-            label="Waiting on you"
+            label={t('orderPending.waitingOnYou')}
             icon={<ListChecks size={14} />}
             value={list.length}
             unit={list.length === 1 ? 'row' : 'rows'}
             tone="pending"
-            hint="None of these is an order yet."
+            hint={t('orderPending.noneOfTheseIs')}
           />
           <KpiCard
-            label="Values to fix"
+            label={t('orderPending.valuesToFix')}
             icon={<FileWarning size={14} />}
             value={broken}
             unit={broken === 1 ? 'row' : 'rows'}
             tone={broken > 0 ? 'debit' : 'neutral'}
-            hint="Something is missing or unreadable."
+            hint={t('orderPending.somethingIsMissingOr')}
           />
           <KpiCard
-            label="Look like duplicates"
+            label={t('orderPending.lookLikeDuplicates2')}
             icon={<CopyCheck size={14} />}
             value={duplicates}
             unit={duplicates === 1 ? 'row' : 'rows'}
             tone={duplicates > 0 ? 'pending' : 'neutral'}
-            hint="This customer already has a parcel on the way."
+            hint={t('orderPending.thisCustomerAlreadyHas2')}
           />
         </div>
       )}
 
       {rows.isLoading ? (
-        <SkeletonRows rows={4} cols={3} label="Loading pending rows" />
+        <SkeletonRows rows={4} cols={3} label={t('orderPending.loadingPendingRows')} />
       ) : list.length === 0 ? (
         <EmptyState
           tone="positive"
           icon={<Inbox size={20} />}
-          title="Nothing waiting"
-          description="Every row from your uploads became an order. New uploads only land here if something is missing or looks like a duplicate."
+          title={t('orderPending.nothingWaiting')}
+          description={t('orderPending.everyRowFromYour')}
           action={
             canSeePath(identity, '/orders/import') ? (
               <LinkButton href="/orders/import" variant="primary" icon={<Upload size={15} />}>
-                Upload a CSV
+                {t('orderPending.uploadACsv')}
               </LinkButton>
             ) : undefined
           }

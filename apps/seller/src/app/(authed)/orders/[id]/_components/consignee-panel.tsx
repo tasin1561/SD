@@ -11,8 +11,11 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { Notice, OrdSection } from '../../_components/orders-parts';
 import { useChangeConsignee, useConsignee, useConsigneeHistory } from '@/lib/ops-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { RaiseTicketModal } from '../../../tickets/_components/raise-ticket-modal';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /**
  * Correcting who the parcel is going to, while the courier still allows
@@ -39,6 +42,8 @@ export function ConsigneePanel({
   /** Put it away again. The Recipient card is what opens it. */
   readonly onClose?: () => void;
 }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const toast = useToast();
   const info = useConsignee(orderId);
   const history = useConsigneeHistory(orderId);
@@ -54,7 +59,7 @@ export function ConsigneePanel({
   const [confirming, setConfirming] = useState(false);
 
   if (info.isLoading)
-    return <SkeletonRows rows={3} cols={1} label="Loading the customer details…" />;
+    return <SkeletonRows rows={3} cols={1} label={t('orderConsignee.loadingTheCustomerDetails')} />;
   if (info.isError) {
     // An order with no parcel yet is not an error, it is Tuesday: the
     // shipment is provisioned when the order is CONFIRMED, so every
@@ -62,7 +67,7 @@ export function ConsigneePanel({
     // being at a perfectly normal stage of its life.
     const code = (info.error as { body?: { code?: string } } | undefined)?.body?.code;
     if (code === 'NO_LIVE_PARCEL') return <div />;
-    return <ErrorState message={serverVerdict(info.error)} retry={() => void info.refetch()} />;
+    return <ErrorState message={verdict(info.error, t)} retry={() => void info.refetch()} />;
   }
   const d = info.data;
   if (d === undefined) return <div />;
@@ -89,12 +94,12 @@ export function ConsigneePanel({
       // Sent is not landed. Saying "changed" here would be a claim we
       // have not checked — the portal confirms it within the hour.
       if (r.accepted) {
-        toast.success('Sent to the courier. We confirm it on their system shortly.');
+        toast.success(t('orderConsignee.sentToTheCourier'));
       } else {
-        toast.error(r.message ?? 'The courier would not take the change.');
+        toast.error(r.message ?? t('orderConsignee.theCourierWouldNot'));
       }
     } catch (err) {
-      toast.error(serverVerdict(err));
+      toast.error(verdict(err, t));
     }
   };
 
@@ -109,7 +114,7 @@ export function ConsigneePanel({
 
   return (
     <OrdSection
-      title="Customer details"
+      title={t('orderConsignee.customerDetails')}
       note={
         d.editable ? (
           d.reason
@@ -128,14 +133,14 @@ export function ConsigneePanel({
             className="ord-lock"
           >
             <Info size={12} aria-hidden />
-            Locked by the courier
+            {t('orderConsignee.lockedByTheCourier')}
           </button>
         )
       }
       action={
         onClose !== undefined ? (
           <Button variant="ghost" size="sm" icon={<X size={14} />} onClick={onClose}>
-            Close
+            {t('orderConsignee.close')}
           </Button>
         ) : undefined
       }
@@ -145,16 +150,13 @@ export function ConsigneePanel({
           <Notice
             tone="warn"
             icon={<Info size={16} />}
-            title="These can no longer be changed through the courier"
+            title={t('orderConsignee.theseCanNoLonger')}
           >
             <span className="ord-p">{d.reason}</span>
-            <span className="ord-faint">
-              If something here is wrong, tell us and we will take it up with them directly —
-              sometimes they can still reach the driver.
-            </span>
+            <span className="ord-faint">{t('orderConsignee.ifSomethingHereIs')}</span>
             <div>
               <Button variant="secondary" size="sm" onClick={() => setRaising(true)}>
-                Raise an issue
+                {t('orderConsignee.raiseAnIssue')}
               </Button>
             </div>
           </Notice>
@@ -163,14 +165,14 @@ export function ConsigneePanel({
         <div className="ord-grid-2">
           <TextField
             id="cons-name"
-            label="Name"
+            label={t('orderConsignee.name')}
             value={name ?? d.currentName}
             disabled={!d.editable}
             onChange={(e) => setName(e.target.value)}
           />
           <TextField
             id="cons-phone"
-            label="Phone"
+            label={t('orderConsignee.phone')}
             value={phone ?? d.currentPhone}
             disabled={!d.editable}
             onChange={(e) => setPhone(e.target.value)}
@@ -179,17 +181,19 @@ export function ConsigneePanel({
 
         <TextField
           id="cons-address"
-          label="Address"
-          hint="The street address only — see below for why the rest cannot move."
+          label={t('orderConsignee.address')}
+          hint={t('orderConsignee.theStreetAddressOnly')}
           value={address ?? d.currentAddressLine1}
           disabled={!d.editable}
           onChange={(e) => setAddress(e.target.value)}
         />
 
         <p className="ord-faint">
-          {d.city} · {d.stateProvince} · {d.postalCode} — fixed. The parcel is already sorted and
-          routed on this pincode, so it cannot be sent somewhere else; only the street address can
-          be corrected.
+          {richMessage(t('orderConsignee.fixedTheParcelIs'), {
+            city: d.city,
+            stateProvince: d.stateProvince,
+            postalCode: d.postalCode,
+          })}
         </p>
 
         {d.editable ? (
@@ -199,7 +203,10 @@ export function ConsigneePanel({
               size="sm"
               icon={<Send size={14} />}
               state={change.isPending ? 'busy' : undefined}
-              labels={{ idle: 'Send to the courier', busy: 'Sending…' }}
+              labels={{
+                idle: t('orderConsignee.sendToTheCourier'),
+                busy: t('orderConsignee.sending'),
+              }}
               disabled={!dirty || change.isPending}
               onClick={() => setConfirming(true)}
             />
@@ -208,12 +215,12 @@ export function ConsigneePanel({
 
         {rows.length > 0 ? (
           <div>
-            <h3 className="ord-h3">Changes made</h3>
+            <h3 className="ord-h3">{t('orderConsignee.changesMade')}</h3>
             <ol className="ord-log">
               {rows.map((r) => (
                 <li key={r.id}>
                   <span className="ord-log__when sk-figure">
-                    {new Date(r.createdAt).toLocaleString('en-IN', {
+                    {new Date(r.createdAt).toLocaleString(dateTag(locale, 'en-IN'), {
                       day: 'numeric',
                       month: 'short',
                       hour: '2-digit',
@@ -230,14 +237,16 @@ export function ConsigneePanel({
                     .filter((x) => x !== null)
                     .join(' · ')}{' '}
                   {r.courierAcceptedAt === null ? (
-                    <span className="ord-tone-bad">the courier did not take it</span>
+                    <span className="ord-tone-bad">{t('orderConsignee.theCourierDidNot')}</span>
                   ) : r.verifiedAt === null ? (
-                    <span className="ord-faint">sent — confirming</span>
+                    <span className="ord-faint">{t('orderConsignee.sentConfirming')}</span>
                   ) : r.verifiedMatch === true ? (
-                    <span className="ord-tone-good">confirmed on their system</span>
+                    <span className="ord-tone-good">
+                      {t('orderConsignee.confirmedOnTheirSystem')}
+                    </span>
                   ) : (
                     <span className="ord-tone-bad">
-                      their system still shows the old value — we are on it
+                      {t('orderConsignee.theirSystemStillShows')}
                     </span>
                   )}
                 </li>
@@ -250,11 +259,11 @@ export function ConsigneePanel({
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Send this change to the courier?"
-        entity={orderNumber ?? 'This order'}
+        title={t('orderConsignee.sendThisChangeTo')}
+        entity={orderNumber ?? t('orderConsignee.thisOrder')}
         entityIsIdentifier={orderNumber !== undefined}
-        consequence="The courier is asked to update the parcel straight away. It is confirmed on their system within the hour."
-        confirmLabel="Send to the courier"
+        consequence={t('orderConsignee.courierAsked')}
+        confirmLabel={t('orderConsignee.sendToTheCourier')}
         onConfirm={() => send()}
       >
         <ul className="ord-mini-list">

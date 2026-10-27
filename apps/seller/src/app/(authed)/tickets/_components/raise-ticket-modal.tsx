@@ -13,8 +13,9 @@ import { useCreateTicket, useIssueCategories } from '@/lib/ops-hooks';
 import { OrderPicker } from '@/components/order-picker';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import './tickets.css';
+import { useT } from '@/i18n/client';
 
 const MIN_DESCRIPTION = 3;
 /** Their form's own limit. Matching it means nothing is truncated on the way. */
@@ -48,6 +49,7 @@ export function RaiseTicketModal({
   /** Supplied when raised FROM an order — then the field is not asked for. */
   readonly orderId?: string;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const create = useCreateTicket();
   const categories = useIssueCategories();
@@ -96,11 +98,11 @@ export function RaiseTicketModal({
         ...(chosen === undefined ? {} : { issueCategoryExternalId: chosen.externalId }),
         ...(chosenSub === undefined ? {} : { issueSubcategoryExternalId: chosenSub.externalId }),
       });
-      toast.success('Issue raised. We will come back to you on the ticket.');
+      toast.success(t('tickets.issueRaisedWeWill'));
       reset();
       onOpenChange(false);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       throw err;
     }
   }
@@ -114,22 +116,22 @@ export function RaiseTicketModal({
       }}
       size="md"
       icon={<LifeBuoy size={18} />}
-      title="Raise an issue"
-      description="Tell us what is wrong. We take it up with the courier and reply on the ticket."
+      title={t('tickets.raiseAnIssue')}
+      description={t('tickets.tellUsWhatIs')}
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('tickets.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
             disabled={!ready || create.isPending}
             labels={{
-              idle: 'Raise issue',
-              busy: 'Raising…',
-              done: 'Raised',
-              error: 'Not raised',
+              idle: t('tickets.raiseIssue'),
+              busy: t('tickets.raising'),
+              done: t('tickets.raised'),
+              error: t('tickets.notRaised'),
             }}
             onAction={submit}
           />
@@ -139,7 +141,7 @@ export function RaiseTicketModal({
       <div className="tkt-form">
         <Select
           id="ticket-category"
-          label="What is the problem"
+          label={t('tickets.whatIsTheProblem')}
           required
           value={categoryId}
           onChange={(e) => {
@@ -149,7 +151,7 @@ export function RaiseTicketModal({
             setSubcategoryId('');
           }}
         >
-          <option value="">Choose…</option>
+          <option value="">{t('tickets.choose')}</option>
           {(categories.data ?? []).map((c) => (
             <option key={c.externalId} value={c.externalId}>
               {c.label}
@@ -160,12 +162,12 @@ export function RaiseTicketModal({
         {needsSub ? (
           <Select
             id="ticket-subcategory"
-            label="Which one"
+            label={t('tickets.whichOne')}
             required
             value={subcategoryId}
             onChange={(e) => setSubcategoryId(e.target.value)}
           >
-            <option value="">Choose…</option>
+            <option value="">{t('tickets.choose')}</option>
             {subs.map((sc) => (
               <option key={sc.externalId} value={sc.externalId}>
                 {sc.label}
@@ -192,7 +194,7 @@ export function RaiseTicketModal({
           <OrderPicker
             value={orderId === '' ? null : orderId}
             onChange={(next) => setOrderId(next ?? '')}
-            hint="Optional, but including it gets you an answer far faster."
+            hint={t('tickets.optionalButIncludingIt')}
           />
         ) : null}
 
@@ -200,9 +202,9 @@ export function RaiseTicketModal({
             to spell out, drawn by the field itself. */}
         <TextArea
           id="ticket-description"
-          label="What happened"
+          label={t('tickets.whatHappened')}
           required
-          hint="What you expected, what actually happened, and anything the customer told you."
+          hint={t('tickets.whatYouExpectedWhat')}
           rows={4}
           maxLength={MAX_DESCRIPTION}
           showCount
@@ -212,7 +214,7 @@ export function RaiseTicketModal({
 
         {categories.isError ? (
           <ErrorState
-            message={serverVerdict(categories.error)}
+            message={verdict(categories.error, t)}
             retry={() => void categories.refetch()}
           />
         ) : null}

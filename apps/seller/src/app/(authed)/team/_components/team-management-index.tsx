@@ -36,10 +36,15 @@ import { InviteLinkRevealCard } from './invite-link-reveal-card';
 import { useRoles } from '@/lib/rbac-hooks';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { roleChangeConsequence, roleLine, roleNamesOf } from '@/lib/role-words';
 import { SetCallout, SetFact, SetPageHeader } from '../../settings/_components/settings-parts';
 import './team.css';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
 
 // The hardcoded six are gone: roles are rows now, so the options come
 // from the server and include anything created under Team → Roles.
@@ -57,7 +62,11 @@ import './team.css';
 // most needs to be right about custom roles would have been blank for
 // exactly the people who have them.
 
-const CRUMBS = [{ label: 'Client console' }, { label: 'Account' }, { label: 'Team' }];
+const crumbsOf = (t: Translate<MessageKey>) => [
+  { label: t('team.clientConsole') },
+  { label: t('team.account') },
+  { label: t('team.team') },
+];
 
 /** PENDING / USED / EXPIRED, decided once and read in two places. */
 type InviteState = 'PENDING' | 'USED' | 'EXPIRED';
@@ -86,6 +95,8 @@ function inviteKind(state: InviteState): 'delivered' | 'pending' | 'cancelled' {
 }
 
 export function TeamManagementIndex(): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const canWrite = can(useSellerIdentity(), 'team.manage');
   const roles = useRoles();
   const members = useTeamMembersList();
@@ -121,7 +132,7 @@ export function TeamManagementIndex(): ReactElement {
   const [roleError, setRoleError] = useState<string | null>(null);
 
   function fmtError(e: unknown): string {
-    return serverVerdict(e, 'Action failed');
+    return verdict(e, t, t('team.actionFailed'));
   }
 
   /**
@@ -147,8 +158,8 @@ export function TeamManagementIndex(): ReactElement {
       const result = await updateRoles.mutateAsync({ id, roleIds });
       toast.success(
         result.roleNames.length === 1
-          ? `Now holds ${result.roleNames[0]}.`
-          : `Now holds ${result.roleNames.join(', ')}.`,
+          ? t('team.nowHolds', { roleNames: result.roleNames[0] ?? '' })
+          : t('team.nowHolds', { roleNames: result.roleNames.join(', ') }),
       );
     } catch (e) {
       setRoleError(fmtError(e));
@@ -160,7 +171,7 @@ export function TeamManagementIndex(): ReactElement {
     setError(null);
     try {
       await deactivate.mutateAsync({ id });
-      toast.success('Team member deactivated.');
+      toast.success(t('team.teamMemberDeactivated'));
       setPendingDelete(null);
     } catch (e) {
       setError(fmtError(e));
@@ -172,7 +183,7 @@ export function TeamManagementIndex(): ReactElement {
     try {
       const reveal = await resend.mutateAsync({ id });
       setRevealed(reveal);
-      toast.success('Invitation re-issued — copy the new link below.');
+      toast.success(t('team.invitationReIssuedCopy'));
     } catch (e) {
       setError(fmtError(e));
       // Rethrown so the Resend button shows the failure on itself.
@@ -184,7 +195,7 @@ export function TeamManagementIndex(): ReactElement {
     setError(null);
     try {
       await revoke.mutateAsync({ id });
-      toast.success('Invitation revoked.');
+      toast.success(t('team.invitationRevoked'));
       setPendingRevoke(null);
     } catch (e) {
       setError(fmtError(e));
@@ -200,9 +211,12 @@ export function TeamManagementIndex(): ReactElement {
     value: r.id,
     label: r.name,
     description: r.isOwner
-      ? 'Everything, including permissions added later'
+      ? t('team.everythingIncludingPermissionsAdded')
       : (r.description ??
-        `${r.permissions.length} permission${r.permissions.length === 1 ? '' : 's'}`),
+        t('team.permission', {
+          permissions: r.permissions.length,
+          plural: r.permissions.length === 1 ? '' : 's',
+        })),
   }));
 
   /** The chosen ids as NAMES, for the sentence above the confirm button. */
@@ -215,9 +229,9 @@ export function TeamManagementIndex(): ReactElement {
   return (
     <div className="set-page">
       <SetPageHeader
-        crumbs={CRUMBS}
-        title="Team"
-        subtitle="Invite + manage your team. Owners and admins can change roles or remove members."
+        crumbs={crumbsOf(t)}
+        title={t('team.team')}
+        subtitle={t('team.inviteManageYourTeam')}
         meta={
           members.data === undefined ? undefined : (
             <span className="set-meta">
@@ -240,7 +254,7 @@ export function TeamManagementIndex(): ReactElement {
               icon={<UserPlus size={15} />}
               onClick={() => setInviting(true)}
             >
-              Invite member
+              {t('team.inviteMember')}
             </Button>
           ) : null
         }
@@ -255,15 +269,15 @@ export function TeamManagementIndex(): ReactElement {
       <div className="set-kpis">
         {members.data === undefined ? (
           <KpiCard
-            label="Active members"
+            label={t('team.activeMembers')}
             icon={<Users size={14} />}
             figure="—"
             tone="neutral"
-            hint="Nobody deactivated."
+            hint={t('team.nobodyDeactivated')}
           />
         ) : (
           <KpiCard
-            label="Active members"
+            label={t('team.activeMembers')}
             icon={<Users size={14} />}
             value={activeMembers.length}
             format={String}
@@ -271,47 +285,47 @@ export function TeamManagementIndex(): ReactElement {
             tone="neutral"
             hint={
               memberRows.length === activeMembers.length
-                ? 'Nobody deactivated.'
-                : `${memberRows.length - activeMembers.length} deactivated.`
+                ? t('team.nobodyDeactivated')
+                : t('team.deactivated', { activeMembers: memberRows.length - activeMembers.length })
             }
           />
         )}
         {invitations.data === undefined ? (
           <KpiCard
-            label="Invitations outstanding"
+            label={t('team.invitationsOutstanding')}
             icon={<MailPlus size={14} />}
             figure="—"
             tone="neutral"
-            hint="Sent, not yet accepted, not yet expired."
+            hint={t('team.sentNotYetAccepted')}
           />
         ) : (
           <KpiCard
-            label="Invitations outstanding"
+            label={t('team.invitationsOutstanding')}
             icon={<MailPlus size={14} />}
             value={openInvites.length}
             format={String}
             unit={openInvites.length === 1 ? 'invite' : 'invites'}
             tone={openInvites.length > 0 ? 'pending' : 'neutral'}
-            hint="Sent, not yet accepted, not yet expired."
+            hint={t('team.sentNotYetAccepted')}
           />
         )}
         {roles.data === undefined ? (
           <KpiCard
-            label="Roles defined"
+            label={t('team.rolesDefined')}
             icon={<ShieldCheck size={14} />}
             figure="—"
             tone="neutral"
-            hint="Edit what each one covers under Roles."
+            hint={t('team.editWhatEachOne')}
           />
         ) : (
           <KpiCard
-            label="Roles defined"
+            label={t('team.rolesDefined')}
             icon={<ShieldCheck size={14} />}
             value={roles.data.length}
             format={String}
             unit={roles.data.length === 1 ? 'role' : 'roles'}
             tone="neutral"
-            hint="Edit what each one covers under Roles."
+            hint={t('team.editWhatEachOne')}
           />
         )}
       </div>
@@ -328,7 +342,7 @@ export function TeamManagementIndex(): ReactElement {
 
       <section className="set-section">
         <SectionHeading
-          title="Members"
+          title={t('team.members')}
           note={
             members.data === undefined
               ? undefined
@@ -337,16 +351,16 @@ export function TeamManagementIndex(): ReactElement {
         />
         <div className="set-card" data-flush>
           {members.isLoading ? (
-            <SkeletonRows rows={3} cols={3} label="Loading members…" />
+            <SkeletonRows rows={3} cols={3} label={t('team.loadingMembers')} />
           ) : members.isError ? (
             <ErrorState
-              message={members.error?.message ?? 'Failed.'}
+              message={members.error?.message ?? t('team.failed')}
               retry={() => void members.refetch()}
             />
           ) : memberRows.length === 0 ? (
-            <EmptyState bare title="No members yet." />
+            <EmptyState bare title={t('team.noMembersYet')} />
           ) : (
-            <ul className="team-members" aria-label="Team members">
+            <ul className="team-members" aria-label={t('team.teamMembers')}>
               {memberRows.map((m) => {
                 // Nobody may change their own roles, and a deactivated
                 // member has none to change. `canWrite` joins them
@@ -369,9 +383,9 @@ export function TeamManagementIndex(): ReactElement {
                     <div className="team-member__text">
                       <div className="team-member__name">
                         <span>{m.fullName}</span>
-                        {m.isYou && <StatusChip kind="confirmed" label="You" size="sm" />}
+                        {m.isYou && <StatusChip kind="confirmed" label={t('team.you')} size="sm" />}
                         {m.deletedAt !== null && (
-                          <StatusChip kind="cancelled" label="Deactivated" size="sm" />
+                          <StatusChip kind="cancelled" label={t('team.deactivated2')} size="sm" />
                         )}
                       </div>
                       <span className="team-member__email sk-ident sk-ident--wrap">
@@ -379,18 +393,21 @@ export function TeamManagementIndex(): ReactElement {
                       </span>
                       <span className="team-member__times">
                         <span>
-                          Last login{' '}
+                          {t('team.lastLogin')}{' '}
                           <span className="sk-figure">
                             {m.lastLoginAt !== null
-                              ? new Date(m.lastLoginAt).toLocaleString()
+                              ? new Date(m.lastLoginAt).toLocaleString(dateTag(locale))
                               : '—'}
                           </span>
                         </span>
                         <span>
-                          Joined{' '}
-                          <span className="sk-figure">
-                            {new Date(m.createdAt).toLocaleDateString()}
-                          </span>
+                          {richMessage(t('team.joined'), {
+                            span: (
+                              <span className="sk-figure">
+                                {new Date(m.createdAt).toLocaleDateString(dateTag(locale))}
+                              </span>
+                            ),
+                          })}
                         </span>
                       </span>
                     </div>
@@ -402,13 +419,13 @@ export function TeamManagementIndex(): ReactElement {
                           page. */}
                       <span
                         className="team-member__roles"
-                        title={m.isYou ? 'You cannot change your own roles.' : undefined}
+                        title={m.isYou ? t('team.youCannotChangeYour') : undefined}
                       >
                         {held.length === 0 ? (
                           // A role can be deleted from under its holders.
                           // Saying so beats an empty cell that reads as a
                           // rendering fault.
-                          <StatusChip kind="failed" label="No role" size="sm" />
+                          <StatusChip kind="failed" label={t('team.noRole')} size="sm" />
                         ) : (
                           held.map((name) => (
                             <StatusChip key={name} kind="neutral" label={name} size="sm" />
@@ -422,14 +439,14 @@ export function TeamManagementIndex(): ReactElement {
                             size="sm"
                             icon={<ShieldCheck size={14} />}
                             disabled={roles.data === undefined}
-                            aria-label={`Change roles for ${m.fullName}`}
+                            aria-label={t('team.changeRolesFor', { fullName: m.fullName })}
                             onClick={() => {
                               setError(null);
                               setRoleError(null);
                               setEditingRoles({ member: m, roleIds: m.roleIds });
                             }}
                           >
-                            Change roles
+                            {t('team.changeRoles')}
                           </Button>
                           <Button
                             variant="ghost"
@@ -437,7 +454,7 @@ export function TeamManagementIndex(): ReactElement {
                             icon={<UserMinus size={14} />}
                             onClick={() => setPendingDelete(m)}
                           >
-                            Deactivate
+                            {t('team.deactivate')}
                           </Button>
                         </>
                       )}
@@ -452,35 +469,38 @@ export function TeamManagementIndex(): ReactElement {
 
       <section className="set-section">
         <SectionHeading
-          title="Invitations"
+          title={t('team.invitations')}
           note={
             invitations.data === undefined
               ? undefined
-              : `${openInvites.length} outstanding of ${inviteRows.length}`
+              : t('team.outstandingOf', {
+                  openInvites: openInvites.length,
+                  inviteRows: inviteRows.length,
+                })
           }
         />
         <div className="set-card" data-flush>
           {invitations.isLoading ? (
-            <SkeletonRows rows={3} cols={5} label="Loading…" />
+            <SkeletonRows rows={3} cols={5} label={t('team.loading')} />
           ) : invitations.isError ? (
             <ErrorState
-              message={invitations.error?.message ?? 'Failed.'}
+              message={invitations.error?.message ?? t('team.failed')}
               retry={() => void invitations.refetch()}
             />
           ) : (
-            <Table caption="Invitations">
+            <Table caption={t('team.invitations')}>
               <THead>
                 <Tr>
-                  <Th>Email</Th>
-                  <Th>Roles</Th>
-                  <Th>State</Th>
-                  <Th>Expires</Th>
-                  <Th align="right">Actions</Th>
+                  <Th>{t('team.email')}</Th>
+                  <Th>{t('team.roles')}</Th>
+                  <Th>{t('team.state')}</Th>
+                  <Th>{t('team.expires')}</Th>
+                  <Th align="right">{t('team.actions')}</Th>
                 </Tr>
               </THead>
               <TBody>
                 {inviteRows.length === 0 ? (
-                  <TableEmpty colSpan={5}>No invitations yet.</TableEmpty>
+                  <TableEmpty colSpan={5}>{t('team.noInvitationsYet')}</TableEmpty>
                 ) : (
                   inviteRows.map((inv) => {
                     const state = inviteState(inv);
@@ -498,7 +518,7 @@ export function TeamManagementIndex(): ReactElement {
                               a role it built itself. */}
                           <span className="team-member__roles">
                             {offered.length === 0 ? (
-                              <StatusChip kind="failed" label="No role" size="sm" />
+                              <StatusChip kind="failed" label={t('team.noRole')} size="sm" />
                             ) : (
                               offered.map((name) => (
                                 <StatusChip key={name} kind="neutral" label={name} size="sm" />
@@ -514,7 +534,7 @@ export function TeamManagementIndex(): ReactElement {
                           />
                         </Td>
                         <Td className="set-cell-muted">
-                          {new Date(inv.expiresAt).toLocaleDateString()}
+                          {new Date(inv.expiresAt).toLocaleDateString(dateTag(locale))}
                         </Td>
                         <Td align="right">
                           {state !== 'USED' && (
@@ -524,12 +544,12 @@ export function TeamManagementIndex(): ReactElement {
                                 size="sm"
                                 icon={<RefreshCw size={13} />}
                                 labels={{
-                                  idle: 'Resend',
-                                  busy: 'Resending…',
-                                  done: 'Resent',
-                                  error: 'Not resent',
+                                  idle: t('team.resend'),
+                                  busy: t('team.resending'),
+                                  done: t('team.resent'),
+                                  error: t('team.notResent'),
                                 }}
-                                aria-label={`Resend invitation to ${inv.email}`}
+                                aria-label={t('team.resendInvitationTo', { email: inv.email })}
                                 onAction={() => onResend(inv.id)}
                               />
                               <Button
@@ -539,11 +559,14 @@ export function TeamManagementIndex(): ReactElement {
                                   setPendingRevoke({
                                     id: inv.id,
                                     email: inv.email,
-                                    roles: roleLine({ roleNames: inv.roleNames }),
+                                    roles: roleLine(
+                                      { roleNames: inv.roleNames },
+                                      t('roleWords.noRole'),
+                                    ),
                                   })
                                 }
                               >
-                                Revoke
+                                {t('team.revoke')}
                               </Button>
                             </div>
                           )}
@@ -564,7 +587,7 @@ export function TeamManagementIndex(): ReactElement {
           onSuccess={(reveal) => {
             setInviting(false);
             setRevealed(reveal);
-            toast.success('Invitation created — share the link below.');
+            toast.success(t('team.invitationCreatedShareThe'));
           }}
         />
       )}
@@ -582,7 +605,7 @@ export function TeamManagementIndex(): ReactElement {
             setRoleError(null);
           }
         }}
-        title="Which roles should this person hold?"
+        title={t('team.whichRolesShouldThis')}
         entity={
           editingRoles === null
             ? ''
@@ -595,9 +618,10 @@ export function TeamManagementIndex(): ReactElement {
                 editingRoles.member.fullName,
                 roleNamesOf(editingRoles.member),
                 namesFor(editingRoles.roleIds),
+                t,
               )
         }
-        confirmLabel="Save roles"
+        confirmLabel={t('team.saveRoles')}
         error={roleError}
         onConfirm={async () => {
           if (editingRoles === null) return;
@@ -605,7 +629,7 @@ export function TeamManagementIndex(): ReactElement {
         }}
       >
         <MultiSelect
-          label="Roles"
+          label={t('team.roles')}
           icon={<ShieldCheck size={15} />}
           required
           options={roleOptions}
@@ -616,11 +640,11 @@ export function TeamManagementIndex(): ReactElement {
           }}
           placeholder={
             (editingRoles?.roleIds.length ?? 0) === 0
-              ? 'Choose one or more roles'
-              : 'Add another role'
+              ? t('team.chooseOneOrMore')
+              : t('team.addAnotherRole')
           }
-          hint="They can do everything their roles cover between them."
-          emptyText="No matching role"
+          hint={t('team.theyCanDoEverything2')}
+          emptyText={t('team.noMatchingRole')}
         />
       </ConfirmDialog>
 
@@ -629,12 +653,12 @@ export function TeamManagementIndex(): ReactElement {
         onOpenChange={(next) => {
           if (!next) setPendingDelete(null);
         }}
-        title="Deactivate this team member?"
+        title={t('team.deactivateThisTeamMember')}
         entity={
           pendingDelete === null ? '' : `${pendingDelete.fullName} · ${pendingDelete.emailDisplay}`
         }
-        consequence="They lose access to this company's console."
-        confirmLabel="Deactivate"
+        consequence={t('team.theyLoseAccessTo')}
+        confirmLabel={t('team.deactivate')}
         destructive
         onConfirm={() => (pendingDelete === null ? undefined : onDeactivate(pendingDelete.id))}
       />
@@ -644,10 +668,10 @@ export function TeamManagementIndex(): ReactElement {
         onOpenChange={(next) => {
           if (!next) setPendingRevoke(null);
         }}
-        title="Revoke this invitation?"
+        title={t('team.revokeThisInvitation')}
         entity={pendingRevoke === null ? '' : `${pendingRevoke.email} · ${pendingRevoke.roles}`}
-        consequence="The invitation link stops working."
-        confirmLabel="Revoke invitation"
+        consequence={t('team.theInvitationLinkStops')}
+        confirmLabel={t('team.revokeInvitation')}
         destructive
         onConfirm={() => (pendingRevoke === null ? undefined : onRevoke(pendingRevoke.id))}
       />

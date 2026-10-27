@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@skydrop/ui/app/page-header';
 import { CsvImportPanel } from '../_components/csv-import-panel';
+import { getT } from '@/i18n/server';
 
 /**
  * Bulk import orders from a CSV. The flow:
@@ -17,19 +18,20 @@ import { CsvImportPanel } from '../_components/csv-import-panel';
  * lines of one order (ORD-9). Delhivery's own bulk template imports as
  * it comes — see ORD-9b.
  */
-export default function OrderImportPage(): ReactElement {
+export default async function OrderImportPage(): Promise<ReactElement> {
+  const { t } = await getT();
   return (
     <div className="ord-page">
       <PageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Fulfilment' },
-          { label: 'Orders', href: '/orders' },
-          { label: 'CSV import' },
+          { label: t('orderImport.clientConsole') },
+          { label: t('orderImport.fulfilment') },
+          { label: t('orderImport.orders'), href: '/orders' },
+          { label: t('orderImport.csvImport') },
         ]}
         Link={Link}
-        title="Bulk order import"
-        subtitle="Upload a CSV of orders. One row is one product line — give two rows the same reference and they become one order with two items. Re-uploading a reference you have already sent updates that order rather than placing it twice."
+        title={t('orderImport.bulkOrderImport')}
+        subtitle={t('orderImport.uploadACsvOf')}
       />
       <CsvImportPanel
         kind="orders"

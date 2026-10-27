@@ -9,6 +9,9 @@ import { EmptyState } from '@skydrop/ui/app/empty-state';
 import { MotionSwitch } from '@skydrop/ui/app/motion-switch';
 import { canSeePath } from '@/lib/page-access';
 import './settings.css';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * The settings tiles, filtered to what this person can actually open.
@@ -39,23 +42,26 @@ export type SettingsTile = {
   readonly description: string;
 };
 
-const GROUPS: ReadonlyArray<{ readonly id: SettingsGroup; readonly title: string }> = [
-  { id: 'account', title: 'Account' },
-  { id: 'defaults', title: 'Order and stock defaults' },
-  { id: 'money', title: 'Money' },
-  { id: 'notifications', title: 'Notifications' },
-  { id: 'integrations', title: 'Integrations' },
+const groupsOf = (
+  t: Translate<MessageKey>,
+): ReadonlyArray<{ readonly id: SettingsGroup; readonly title: string }> => [
+  { id: 'account', title: t('settingsHub.account') },
+  { id: 'defaults', title: t('settingsHub.orderAndStockDefaults') },
+  { id: 'money', title: t('settingsHub.money') },
+  { id: 'notifications', title: t('settingsHub.notifications') },
+  { id: 'integrations', title: t('settingsHub.integrations') },
 ];
 
 export function SettingsHub({ items }: { readonly items: readonly SettingsTile[] }): ReactElement {
+  const t = useT();
   const identity = useSellerIdentity();
   const visible = items.filter((item) => canSeePath(identity, item.href));
 
   const preferences = (
     <section className="set-section">
       <SectionHeading
-        title="This browser"
-        note="How the console moves in this browser — saved here only, so another device keeps its own choice."
+        title={t('settingsHub.thisBrowser')}
+        note={t('settingsHub.howTheConsoleMoves')}
       />
       <div className="set-card">
         <MotionSwitch />
@@ -67,8 +73,8 @@ export function SettingsHub({ items }: { readonly items: readonly SettingsTile[]
     return (
       <div className="set-hub">
         <EmptyState
-          title="Nothing to configure"
-          description="None of these settings are part of your access. An owner or admin on your team can change that."
+          title={t('settingsHub.nothingToConfigure')}
+          description={t('settingsHub.noneOfTheseSettings')}
         />
         {preferences}
       </div>
@@ -77,7 +83,7 @@ export function SettingsHub({ items }: { readonly items: readonly SettingsTile[]
 
   return (
     <div className="set-hub">
-      {GROUPS.map((group, index) => {
+      {groupsOf(t).map((group, index) => {
         const rows = visible.filter((it) => it.group === group.id);
         if (rows.length === 0) return null;
         return (
@@ -85,7 +91,12 @@ export function SettingsHub({ items }: { readonly items: readonly SettingsTile[]
             <section className="set-section">
               <SectionHeading
                 title={group.title}
-                note={`${rows.length} ${rows.length === 1 ? 'area' : 'areas'} open to you`}
+                note={t(
+                  rows.length === 1 ? 'settingsHub.areaOpenOne' : 'settingsHub.areaOpenMany',
+                  {
+                    count: rows.length,
+                  },
+                )}
               />
               <ListRows label={group.title}>
                 {rows.map((it) => (

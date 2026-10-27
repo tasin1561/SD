@@ -19,14 +19,19 @@ import {
 } from '@/lib/api-hooks';
 import { WebhookFormModal } from './webhook-form-modal';
 import { SecretRevealCard } from './secret-reveal-card';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { SetCallout, SetFact, SetPageHeader } from '../../_components/settings-parts';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
 
-const CRUMBS = [
-  { label: 'Client console' },
-  { label: 'Account' },
-  { label: 'Settings', href: '/settings' },
-  { label: 'Webhooks' },
+const crumbsOf = (t: Translate<MessageKey>) => [
+  { label: t('settingsWebhooks.clientConsole') },
+  { label: t('settingsWebhooks.account') },
+  { label: t('settingsWebhooks.settings'), href: '/settings' },
+  { label: t('settingsWebhooks.webhooks') },
 ];
 
 /**
@@ -41,6 +46,7 @@ const CRUMBS = [
  * surfaces `[code] message` verbatim from ApiError.body.
  */
 export function WebhooksIndex(): ReactElement {
+  const t = useT();
   const list = useWebhookEndpointsList();
   const del = useDeleteWebhookEndpoint();
   const toast = useToast();
@@ -52,14 +58,14 @@ export function WebhooksIndex(): ReactElement {
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(e: unknown): string {
-    return serverVerdict(e, 'Action failed');
+    return verdict(e, t, t('settingsWebhooks.actionFailed'));
   }
 
   async function onDelete(id: string): Promise<void> {
     setError(null);
     try {
       await del.mutateAsync(id);
-      toast.success('Endpoint deleted.');
+      toast.success(t('settingsWebhooks.endpointDeleted'));
       setPendingDelete(null);
     } catch (e) {
       setError(fmtError(e));
@@ -73,9 +79,9 @@ export function WebhooksIndex(): ReactElement {
   return (
     <div className="set-page">
       <SetPageHeader
-        crumbs={CRUMBS}
-        title="Outbound webhooks"
-        subtitle="Wire Skydrop events into your own systems via HMAC-signed HTTPS POSTs. Each endpoint gets its own secret, and every delivery is signed with it."
+        crumbs={crumbsOf(t)}
+        title={t('settingsWebhooks.outboundWebhooks')}
+        subtitle={t('settingsWebhooks.wireSkydropEventsInto')}
         /*
           The comps show a delivery success rate and a p95 latency. We
           store neither — `consecutiveFailureCount` and the two last-*
@@ -102,7 +108,7 @@ export function WebhooksIndex(): ReactElement {
             icon={<Plus size={15} />}
             onClick={() => setCreating(true)}
           >
-            New endpoint
+            {t('settingsWebhooks.newEndpoint')}
           </Button>
         }
       />
@@ -119,26 +125,28 @@ export function WebhooksIndex(): ReactElement {
 
       <section className="set-section">
         <SectionHeading
-          title="Your endpoints"
-          note={rows.length === 0 ? undefined : `${rows.length} configured`}
+          title={t('settingsWebhooks.yourEndpoints')}
+          note={
+            rows.length === 0 ? undefined : t('settingsWebhooks.configured', { rows: rows.length })
+          }
         />
         {list.isLoading ? (
           <div className="set-card" aria-busy="true">
-            <span className="set-sr">Loading endpoints…</span>
+            <span className="set-sr">{t('settingsWebhooks.loadingEndpoints')}</span>
             <Skeleton width="40%" height={16} />
             <Skeleton width="70%" height={12} />
             <Skeleton width="100%" height={48} />
           </div>
         ) : list.isError ? (
           <ErrorState
-            message={list.error?.message ?? 'Failed to load.'}
+            message={list.error?.message ?? t('settingsWebhooks.failedToLoad')}
             retry={() => void list.refetch()}
           />
         ) : rows.length === 0 ? (
           <EmptyState
             icon={<Webhook size={22} />}
-            title="No endpoints yet"
-            description="Add an HTTPS URL we should POST events to. Each endpoint gets a unique HMAC secret you verify on receipt."
+            title={t('settingsWebhooks.noEndpointsYet')}
+            description={t('settingsWebhooks.addAnHttpsUrl')}
             action={
               <Button
                 variant="primary"
@@ -146,7 +154,7 @@ export function WebhooksIndex(): ReactElement {
                 icon={<Plus size={14} />}
                 onClick={() => setCreating(true)}
               >
-                New endpoint
+                {t('settingsWebhooks.newEndpoint')}
               </Button>
             }
           />
@@ -191,10 +199,12 @@ export function WebhooksIndex(): ReactElement {
         onOpenChange={(next) => {
           if (!next) setPendingDelete(null);
         }}
-        title="Delete this endpoint?"
+        title={t('settingsWebhooks.deleteThisEndpoint')}
         entity={pendingDelete === null ? '' : (pendingDelete.name ?? pendingDelete.url)}
-        consequence={`We stop sending events to ${pendingDelete?.url ?? 'this URL'}, and its signing secret stops working. This cannot be undone — you would add the endpoint again and get a new secret.`}
-        confirmLabel="Delete endpoint"
+        consequence={t('settingsWebhooks.deleteConsequence', {
+          url: pendingDelete?.url ?? t('settingsWebhooks.thisUrl'),
+        })}
+        confirmLabel={t('settingsWebhooks.deleteEndpoint')}
         destructive
         onConfirm={() => (pendingDelete === null ? undefined : onDelete(pendingDelete.id))}
       />
@@ -215,6 +225,8 @@ function EndpointRow({
   readonly onDeleteIntent: () => void;
   readonly onError: (s: string) => void;
 }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const rotate = useRotateWebhookSecret(endpoint.id);
   const update = useUpdateWebhookEndpoint(endpoint.id);
   const [busy, setBusy] = useState<'rotate' | 'toggle' | null>(null);
@@ -222,7 +234,7 @@ function EndpointRow({
   const toast = useToast();
 
   function fmtError(e: unknown): string {
-    return serverVerdict(e, 'Action failed');
+    return verdict(e, t, t('settingsWebhooks.actionFailed'));
   }
 
   async function onRotate(): Promise<void> {
@@ -230,7 +242,7 @@ function EndpointRow({
     try {
       const reveal = await rotate.mutateAsync();
       onRevealSecret(reveal);
-      toast.success('Secret rotated. The previous one stays valid for 24h.');
+      toast.success(t('settingsWebhooks.secretRotatedThePrevious'));
     } catch (e) {
       onError(fmtError(e));
     } finally {
@@ -242,7 +254,11 @@ function EndpointRow({
     setBusy('toggle');
     try {
       await update.mutateAsync({ isActive: !endpoint.isActive });
-      toast.success(endpoint.isActive ? 'Endpoint disabled.' : 'Endpoint enabled.');
+      toast.success(
+        endpoint.isActive
+          ? t('settingsWebhooks.endpointDisabled')
+          : t('settingsWebhooks.endpointEnabled'),
+      );
     } catch (e) {
       onError(fmtError(e));
     } finally {
@@ -250,7 +266,7 @@ function EndpointRow({
     }
   }
 
-  const displayName = endpoint.name ?? 'Untitled endpoint';
+  const displayName = endpoint.name ?? t('settingsWebhooks.untitledEndpoint');
 
   return (
     <li className="set-endpoint">
@@ -259,11 +275,11 @@ function EndpointRow({
           <div className="set-endpoint__name">
             <span>{displayName}</span>
             {endpoint.autoDisabledAt !== null ? (
-              <StatusChip kind="failed" label="Auto-disabled" size="sm" />
+              <StatusChip kind="failed" label={t('settingsWebhooks.autoDisabled')} size="sm" />
             ) : endpoint.isActive ? (
-              <StatusChip kind="delivered" label="Active" size="sm" />
+              <StatusChip kind="delivered" label={t('settingsWebhooks.active')} size="sm" />
             ) : (
-              <StatusChip kind="cancelled" label="Disabled" size="sm" />
+              <StatusChip kind="cancelled" label={t('settingsWebhooks.disabled')} size="sm" />
             )}
           </div>
           <span className="set-endpoint__url sk-ident">{endpoint.url}</span>
@@ -275,11 +291,14 @@ function EndpointRow({
           <Switch
             checked={endpoint.isActive}
             disabled={busy !== null}
-            aria-label={`${endpoint.isActive ? 'Disable' : 'Enable'} ${displayName}`}
+            aria-label={t(
+              endpoint.isActive ? 'settingsWebhooks.disableName' : 'settingsWebhooks.enableName',
+              { name: displayName },
+            )}
             onCheckedChange={() => void onToggle()}
           />
           <Button variant="ghost" size="sm" icon={<Pencil size={13} />} onClick={onEdit}>
-            Edit
+            {t('settingsWebhooks.edit')}
           </Button>
           <Button
             variant="ghost"
@@ -289,17 +308,19 @@ function EndpointRow({
             disabled={busy !== null}
             onClick={() => setConfirmRotate(true)}
           >
-            {busy === 'rotate' ? 'Rotating…' : 'Rotate secret'}
+            {busy === 'rotate'
+              ? t('settingsWebhooks.rotating')
+              : t('settingsWebhooks.rotateSecret')}
           </Button>
           <Button variant="ghost" size="sm" icon={<Trash2 size={13} />} onClick={onDeleteIntent}>
-            Delete
+            {t('settingsWebhooks.delete')}
           </Button>
         </div>
       </div>
 
       <dl className="set-endpoint__facts">
         <div>
-          <dt>Subscribed events</dt>
+          <dt>{t('settingsWebhooks.subscribedEvents')}</dt>
           {/* A LIST of event names, not one id — so it wraps. */}
           <dd className="sk-ident sk-ident--wrap">
             {endpoint.subscribedEvents.length === 0 ? (
@@ -310,27 +331,27 @@ function EndpointRow({
           </dd>
         </div>
         <div>
-          <dt>Last success</dt>
+          <dt>{t('settingsWebhooks.lastSuccess')}</dt>
           <dd className="sk-figure">
             {endpoint.lastSuccessAt !== null ? (
-              new Date(endpoint.lastSuccessAt).toLocaleString()
+              new Date(endpoint.lastSuccessAt).toLocaleString(dateTag(locale))
             ) : (
               <span className="set-faint">—</span>
             )}
           </dd>
         </div>
         <div>
-          <dt>Last failure</dt>
+          <dt>{t('settingsWebhooks.lastFailure')}</dt>
           <dd className="sk-figure">
             {endpoint.lastFailureAt !== null ? (
-              new Date(endpoint.lastFailureAt).toLocaleString()
+              new Date(endpoint.lastFailureAt).toLocaleString(dateTag(locale))
             ) : (
               <span className="set-faint">—</span>
             )}
           </dd>
         </div>
         <div>
-          <dt>Failures (consec.)</dt>
+          <dt>{t('settingsWebhooks.failuresConsec')}</dt>
           <dd
             className="sk-figure"
             data-tone={endpoint.consecutiveFailureCount > 0 ? 'bad' : undefined}
@@ -341,17 +362,21 @@ function EndpointRow({
       </dl>
 
       {endpoint.autoDisabledReason !== null && endpoint.autoDisabledReason !== '' && (
-        <p className="set-endpoint__warn">Auto-disabled: {endpoint.autoDisabledReason}</p>
+        <p className="set-endpoint__warn">
+          {richMessage(t('settingsWebhooks.autoDisabled2'), {
+            autoDisabledReason: endpoint.autoDisabledReason,
+          })}
+        </p>
       )}
 
       <ConfirmDialog
         open={confirmRotate}
         onOpenChange={setConfirmRotate}
-        title="Rotate this signing secret?"
+        title={t('settingsWebhooks.rotateThisSigningSecret')}
         entity={endpoint.url}
         entityIsIdentifier
-        consequence={`We issue a new HMAC secret for ${displayName} and show it once. The current secret keeps working for 24 hours, so switch your integration over before then.`}
-        confirmLabel="Rotate secret"
+        consequence={t('settingsWebhooks.weIssueANew', { displayName })}
+        confirmLabel={t('settingsWebhooks.rotateSecret')}
         onConfirm={onRotate}
       />
     </li>

@@ -13,8 +13,9 @@ import {
   Note,
   busyPhase,
 } from '@/app/(authed)/inventory/_components/stock-ui';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { useCreateVariant } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
 
 /**
  * Add another variant to a product that already exists.
@@ -37,6 +38,7 @@ export function AddVariantPanel({
   readonly productId: string;
   readonly onDone: () => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const createVariant = useCreateVariant();
   const [skuCode, setSkuCode] = useState('');
@@ -47,7 +49,7 @@ export function AddVariantPanel({
   async function onSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
     if (!skuCode.trim()) {
-      setError('SKU is required.');
+      setError(t('productDetail.skuIsRequired'));
       return;
     }
     setError(null);
@@ -60,14 +62,14 @@ export function AddVariantPanel({
           ...(variantLabel.trim() ? { variantLabel: variantLabel.trim() } : {}),
         },
       });
-      toast.success('Variant added.');
+      toast.success(t('productDetail.variantAdded'));
       setSkuCode('');
       setVariantLabel('');
       onDone();
     } catch (err) {
       // FE-2: the server's verdict verbatim — a duplicate SKU is its
       // call to make, not something guessed at from a stale list here.
-      setError(serverVerdict(err, 'Something went wrong.'));
+      setError(verdict(err, t, t('productDetail.somethingWentWrong')));
     } finally {
       setBusy(false);
     }
@@ -80,8 +82,8 @@ export function AddVariantPanel({
       {error !== null && <InlineError message={error} />}
       <FieldGrid columns={2}>
         <TextField
-          label="SKU"
-          hint="Unique across your catalogue, and permanent."
+          label={t('productDetail.sku')}
+          hint={t('productDetail.uniqueAcrossYourCatalogue')}
           value={skuCode}
           onChange={(e) => setSkuCode(e.target.value)}
           maxLength={120}
@@ -89,28 +91,25 @@ export function AddVariantPanel({
           inputClassName="sk-ident"
         />
         <TextField
-          label="Variant label"
-          hint="e.g. Blue / L"
+          label={t('productDetail.variantLabel')}
+          hint={t('productDetail.eGBlueL')}
           value={variantLabel}
           onChange={(e) => setVariantLabel(e.target.value)}
           maxLength={120}
         />
       </FieldGrid>
-      <Note>
-        Weight, dimensions and value are set on the variant once it exists — a second size usually
-        shares the first one&rsquo;s.
-      </Note>
+      <Note>{t('productDetail.weightDimensionsAndValue')}</Note>
       <Actions>
         <AsyncButton
           type="submit"
           variant="primary"
           size="md"
           icon={<Plus size={15} />}
-          labels={{ idle: 'Add variant', busy: 'Adding…' }}
+          labels={{ idle: t('productDetail.addVariant'), busy: t('productDetail.adding') }}
           state={busyPhase(busy)}
         />
         <Button type="button" variant="secondary" size="md" disabled={busy} onClick={onDone}>
-          Cancel
+          {t('productDetail.cancel')}
         </Button>
       </Actions>
     </form>

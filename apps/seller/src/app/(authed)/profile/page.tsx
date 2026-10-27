@@ -47,7 +47,7 @@ import {
   type SellerProfileWithBankChange,
 } from '@/lib/api-hooks';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import {
   SetCallout,
@@ -55,8 +55,18 @@ import {
   SetPageHeader,
   phaseOf,
 } from '../settings/_components/settings-parts';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
-const CRUMBS = [{ label: 'Client console' }, { label: 'Account' }, { label: 'Profile' }];
+const crumbsOf = (t: Translate<MessageKey>) => [
+  { label: t('profile.clientConsole') },
+  { label: t('profile.account') },
+  { label: t('profile.profile') },
+];
 
 /**
  * Seller profile — Phase 1B M19+M20.
@@ -72,14 +82,20 @@ const CRUMBS = [{ label: 'Client console' }, { label: 'Account' }, { label: 'Pro
  * does removing the logo.
  */
 export default function ProfilePage(): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const detail = useSellerProfile();
 
   if (detail.isLoading) {
     return (
       <div className="set-page">
-        <SetPageHeader crumbs={CRUMBS} title="Profile" subtitle="Company info + bank details." />
+        <SetPageHeader
+          crumbs={crumbsOf(t)}
+          title={t('profile.profile')}
+          subtitle={t('profile.companyInfoBankDetails')}
+        />
         <div className="set-kpis" aria-busy="true">
-          <span className="set-sr">Loading profile…</span>
+          <span className="set-sr">{t('profile.loadingProfile')}</span>
           {Array.from({ length: 4 }, (_, i) => (
             <Skeleton key={i} height={112} />
           ))}
@@ -95,9 +111,13 @@ export default function ProfilePage(): ReactElement {
   if (detail.isError) {
     return (
       <div className="set-page">
-        <SetPageHeader crumbs={CRUMBS} title="Profile" subtitle="Company info + bank details." />
+        <SetPageHeader
+          crumbs={crumbsOf(t)}
+          title={t('profile.profile')}
+          subtitle={t('profile.companyInfoBankDetails')}
+        />
         <ErrorState
-          message={detail.error?.message ?? 'Failed to load profile.'}
+          message={detail.error?.message ?? t('profile.failedToLoadProfile')}
           retry={() => void detail.refetch()}
         />
       </div>
@@ -106,8 +126,12 @@ export default function ProfilePage(): ReactElement {
   if (!detail.data) {
     return (
       <div className="set-page">
-        <SetPageHeader crumbs={CRUMBS} title="Profile" subtitle="Company info + bank details." />
-        <ErrorState message="Profile not loaded." />
+        <SetPageHeader
+          crumbs={crumbsOf(t)}
+          title={t('profile.profile')}
+          subtitle={t('profile.companyInfoBankDetails')}
+        />
+        <ErrorState message={t('profile.profileNotLoaded')} />
       </div>
     );
   }
@@ -115,9 +139,9 @@ export default function ProfilePage(): ReactElement {
   return (
     <div className="set-page">
       <SetPageHeader
-        crumbs={CRUMBS}
-        title="Profile"
-        subtitle="Your company as we hold it, and where your money goes."
+        crumbs={crumbsOf(t)}
+        title={t('profile.profile')}
+        subtitle={t('profile.yourCompanyAsWe')}
         /*
           The comp's chip row here reads VERIFIED ENTITY, L-4
           INSTITUTIONAL VERIFIED, SOC-2 TYPE II, FEMA/BB COMPLIANT and a
@@ -130,11 +154,13 @@ export default function ProfilePage(): ReactElement {
         meta={
           <span className="set-meta">
             <SetFact tone={detail.data.status === 'APPROVED' ? 'good' : 'warn'}>
-              {humaniseStatus(detail.data.status)}
+              {humaniseStatus(t, detail.data.status)}
             </SetFact>
-            <SetFact>Reads in {detail.data.displayCurrency}</SetFact>
+            <SetFact>
+              {richMessage(t('profile.readsIn'), { displayCurrency: detail.data.displayCurrency })}
+            </SetFact>
             {detail.data.emailVerifiedAt === null && (
-              <SetFact tone="warn">Email not verified</SetFact>
+              <SetFact tone="warn">{t('profile.emailNotVerified')}</SetFact>
             )}
           </span>
         }
@@ -147,18 +173,20 @@ export default function ProfilePage(): ReactElement {
              are the four that do. */}
       <div className="set-kpis">
         <KpiCard
-          label="Account status"
+          label={t('profile.accountStatus')}
           icon={<BadgeCheck size={14} />}
-          figure={<span className="set-kpi-text">{humaniseStatus(detail.data.status)}</span>}
+          figure={<span className="set-kpi-text">{humaniseStatus(t, detail.data.status)}</span>}
           tone={kpiTone(statusTone(detail.data.status))}
           hint={
             detail.data.approvedAt === null
-              ? 'Not approved yet.'
-              : `Approved ${new Date(detail.data.approvedAt).toLocaleDateString()}.`
+              ? t('profile.notApprovedYet')
+              : t('profile.approved', {
+                  approvedAt: new Date(detail.data.approvedAt).toLocaleDateString(dateTag(locale)),
+                })
           }
         />
         <KpiCard
-          label="You read amounts in"
+          label={t('profile.youReadAmountsIn')}
           icon={<Coins size={14} />}
           figure={<span className="set-kpi-text">{detail.data.displayCurrency}</span>}
           tone="neutral"
@@ -167,16 +195,16 @@ export default function ProfilePage(): ReactElement {
           // in taka" becoming a belief about where the money sits.
           hint={
             detail.data.displayCurrency === 'INR'
-              ? 'Balances are held in rupees.'
-              : 'Converted for display; balances are held in rupees.'
+              ? t('profile.balancesAreHeldIn')
+              : t('profile.convertedForDisplayBalances')
           }
         />
         <KpiCard
-          label="Payouts go to"
+          label={t('profile.payoutsGoTo')}
           icon={<Banknote size={14} />}
           figure={
             detail.data.bankName === null || detail.data.bankName === '' ? (
-              <span className="set-kpi-text set-kpi-faint">Not set</span>
+              <span className="set-kpi-text set-kpi-faint">{t('profile.notSet')}</span>
             ) : (
               <span className="set-kpi-text">{detail.data.bankName}</span>
             )
@@ -186,19 +214,20 @@ export default function ProfilePage(): ReactElement {
           }
           // Last four only. The full number is on the card below, where
           // you went looking for it — a tile is read over a shoulder.
-          hint={
-            maskedAccount(detail.data.bankAccountNumber) ??
-            'Add one so withdrawals have somewhere to land.'
-          }
+          hint={maskedAccount(detail.data.bankAccountNumber) ?? t('profile.addOneSoWithdrawals')}
         />
         <KpiCard
-          label="Sign-in email"
+          label={t('profile.signInEmail')}
           icon={<Mail size={14} />}
           figure={
             <span className="set-kpi-text sk-ident sk-ident--wrap">{detail.data.emailDisplay}</span>
           }
           tone={detail.data.emailVerifiedAt === null ? 'pending' : 'neutral'}
-          hint={detail.data.emailVerifiedAt === null ? 'Not verified yet.' : 'Verified.'}
+          hint={
+            detail.data.emailVerifiedAt === null
+              ? t('profile.notVerifiedYet')
+              : t('profile.verified')
+          }
         />
       </div>
 
@@ -209,8 +238,8 @@ export default function ProfilePage(): ReactElement {
   );
 }
 
-function fmtError(e: unknown): string {
-  return serverVerdict(e, 'Action failed');
+function fmtError(t: Translate<MessageKey>, e: unknown): string {
+  return verdict(e, t, t('profile.actionFailed'));
 }
 
 /** The status tone, as the glow a figure card takes. Display only. */
@@ -238,16 +267,16 @@ function kpiTone(tone: 'neutral' | 'warn' | 'bad' | 'good'): KpiTone {
  * status cannot quietly render as raw SCREAMING_SNAKE on the one screen
  * that tells a seller whether their account works.
  */
-function humaniseStatus(status: SellerStatusValue): string {
+function humaniseStatus(t: Translate<MessageKey>, status: SellerStatusValue): string {
   switch (status) {
     case 'APPROVED':
-      return 'Approved';
+      return t('profile.approved2');
     case 'PENDING':
-      return 'Awaiting approval';
+      return t('profile.awaitingApproval');
     case 'REJECTED':
-      return 'Rejected';
+      return t('profile.rejected');
     case 'SUSPENDED':
-      return 'Suspended';
+      return t('profile.suspended');
     default: {
       const exhaustive: never = status;
       return exhaustive;
@@ -287,6 +316,7 @@ function maskedAccount(value: string | null): string | undefined {
 }
 
 function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }): ReactElement {
+  const t = useT();
   const canManage = can(useSellerIdentity(), 'profile.manage');
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -337,10 +367,10 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
         return;
       }
       await update.mutateAsync(body as UpdateSellerProfileRequest);
-      toast.success('Profile updated.');
+      toast.success(t('profile.profileUpdated'));
       setEditing(false);
     } catch (err) {
-      setError(fmtError(err));
+      setError(fmtError(t, err));
     } finally {
       setBusy(false);
     }
@@ -349,8 +379,8 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
   return (
     <section className="set-section">
       <SectionHeading
-        title="Company info"
-        note="What we call you, and who we ring."
+        title={t('profile.companyInfo')}
+        note={t('profile.whatWeCallYou')}
         action={
           canManage &&
           !editing && (
@@ -363,7 +393,7 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
                 setEditing(true);
               }}
             >
-              Edit
+              {t('profile.edit')}
             </Button>
           )
         }
@@ -371,21 +401,21 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
       <div className="set-card">
         {!editing ? (
           <dl className="set-dl">
-            <dt>Company</dt>
+            <dt>{t('profile.company')}</dt>
             <dd>{profile.companyName}</dd>
-            <dt>Contact person</dt>
+            <dt>{t('profile.contactPerson')}</dt>
             <dd>{profile.contactPersonName}</dd>
-            <dt>Email</dt>
+            <dt>{t('profile.email')}</dt>
             <dd className="sk-ident sk-ident--wrap">{profile.emailDisplay}</dd>
-            <dt>Phone</dt>
+            <dt>{t('profile.phone')}</dt>
             <dd className="sk-ident">{profile.phone}</dd>
-            <dt>WhatsApp</dt>
+            <dt>{t('profile.whatsapp')}</dt>
             <dd className="sk-ident">{profile.whatsapp ?? '—'}</dd>
-            <dt>Country</dt>
+            <dt>{t('profile.country')}</dt>
             <dd>{profile.countryCode}</dd>
-            <dt>Display currency</dt>
+            <dt>{t('profile.displayCurrency')}</dt>
             <dd>{profile.displayCurrency}</dd>
-            <dt>Display language</dt>
+            <dt>{t('profile.displayLanguage')}</dt>
             <dd>{profile.displayLanguage.toUpperCase()}</dd>
           </dl>
         ) : (
@@ -398,15 +428,15 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
              * an editable box would only ever produce a refusal.
              */}
             <TextField
-              label="Company name"
+              label={t('profile.companyName')}
               icon={<Building2 size={15} />}
-              hint="Fixed — contact support to change it."
+              hint={t('profile.fixedContactSupportTo')}
               value={profile.companyName}
               disabled
               readOnly
             />
             <TextField
-              label="Contact person"
+              label={t('profile.contactPerson')}
               icon={<User size={15} />}
               value={form.contactPersonName}
               onChange={(e) => setForm({ ...form, contactPersonName: e.target.value })}
@@ -416,18 +446,18 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
               required
             />
             <TextField
-              label="Phone (E.164 BD)"
+              label={t('profile.phoneE164Bd')}
               icon={<Phone size={15} />}
-              hint="Fixed — it is how the call centre reaches you. Contact support to change it."
+              hint={t('profile.fixedItIsHow')}
               value={profile.phone}
               disabled
               readOnly
               inputClassName="sk-ident"
             />
             <TextField
-              label="WhatsApp"
+              label={t('profile.whatsapp')}
               icon={<MessageCircle size={15} />}
-              hint="Leave blank to remove"
+              hint={t('profile.leaveBlankToRemove')}
               value={form.whatsapp}
               onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
               placeholder="+8801712345678"
@@ -435,7 +465,7 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
             />
             <div className="set-form-grid" data-cols="2">
               <Select
-                label="Display currency"
+                label={t('profile.displayCurrency')}
                 icon={<Coins size={15} />}
                 value={form.displayCurrency}
                 onChange={(e) =>
@@ -445,11 +475,11 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
                   })
                 }
               >
-                <option value="INR">INR</option>
-                <option value="BDT">BDT</option>
+                <option value="INR">{t('profile.inr')}</option>
+                <option value="BDT">{t('profile.bdt')}</option>
               </Select>
               <Select
-                label="Display language"
+                label={t('profile.displayLanguage')}
                 icon={<Languages size={15} />}
                 value={form.displayLanguage}
                 onChange={(e) =>
@@ -459,7 +489,7 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
                   })
                 }
               >
-                <option value="en">English</option>
+                <option value="en">{t('profile.english')}</option>
                 <option value="bn">বাংলা</option>
               </Select>
             </div>
@@ -478,13 +508,17 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
                 disabled={busy}
                 onClick={() => setEditing(false)}
               >
-                Cancel
+                {t('profile.cancel')}
               </Button>
               <AsyncButton
                 type="submit"
                 variant="primary"
                 size="md"
-                labels={{ idle: 'Save changes', busy: 'Saving…', error: 'Not saved' }}
+                labels={{
+                  idle: t('profile.saveChanges'),
+                  busy: t('profile.saving'),
+                  error: t('profile.notSaved'),
+                }}
                 state={phaseOf(busy, error)}
                 disabled={busy}
               />
@@ -505,22 +539,37 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
  * things. `label` is the display wording.
  */
 const BANK_FIELDS = [
-  { key: 'bankName', serverLabel: 'bank name', label: 'Bank name', mono: false },
-  { key: 'bankBranchName', serverLabel: 'branch name', label: 'Branch', mono: false },
+  { key: 'bankName', serverLabel: 'bank name', labelKey: 'profile.bankNameLabel', mono: false },
+  {
+    key: 'bankBranchName',
+    serverLabel: 'branch name',
+    labelKey: 'profile.branchLabel',
+    mono: false,
+  },
   {
     key: 'bankAccountName',
     serverLabel: 'account holder name',
-    label: 'Account holder',
+    labelKey: 'profile.accountHolderLabel',
     mono: false,
   },
   {
     key: 'bankAccountNumber',
     serverLabel: 'account number',
-    label: 'Account number',
+    labelKey: 'profile.accountNumberLabel',
     mono: true,
   },
-  { key: 'bankRoutingNumber', serverLabel: 'routing number', label: 'Routing number', mono: true },
-  { key: 'bankSwiftCode', serverLabel: 'SWIFT code', label: 'SWIFT code', mono: true },
+  {
+    key: 'bankRoutingNumber',
+    serverLabel: 'routing number',
+    labelKey: 'profile.routingNumberLabel',
+    mono: true,
+  },
+  {
+    key: 'bankSwiftCode',
+    serverLabel: 'SWIFT code',
+    labelKey: 'profile.swiftCodeLabel',
+    mono: true,
+  },
 ] as const;
 
 type BankFieldKey = (typeof BANK_FIELDS)[number]['key'];
@@ -557,8 +606,11 @@ function liveBankValues(profile: SellerProfileView): BankValues {
   };
 }
 
-function whenLabel(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+function whenLabel(iso: string, locale: Locale = 'en'): string {
+  return new Date(iso).toLocaleString(dateTag(locale, undefined), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
 }
 
 /**
@@ -574,6 +626,7 @@ function BankValuesList({
   readonly values: BankValues;
   readonly compareTo?: BankValues;
 }): ReactElement {
+  const t = useT();
   return (
     <dl className="set-dl">
       {BANK_FIELDS.map((f) => {
@@ -581,12 +634,12 @@ function BankValuesList({
         const changed = compareTo !== undefined && (compareTo[f.key] ?? '') !== (value ?? '');
         return (
           <Fragment key={f.key}>
-            <dt>{f.label}</dt>
+            <dt>{t(f.labelKey)}</dt>
             <dd>
               <span className={f.mono ? 'sk-ident' : undefined}>
                 {value === null || value === '' ? '—' : value}
               </span>
-              {changed && <span className="set-changed">Changed</span>}
+              {changed && <span className="set-changed">{t('profile.changed')}</span>}
             </dd>
           </Fragment>
         );
@@ -600,6 +653,8 @@ function BankDetailsSection({
 }: {
   readonly profile: SellerProfileWithBankChange;
 }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const canManage = can(useSellerIdentity(), 'profile.manage');
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -670,12 +725,12 @@ function BankDetailsSection({
       // off what came back — never a client-side re-derivation of the
       // first-add-vs-edit rule.
       if (result.latestBankChange?.status === 'PENDING') {
-        toast.info('Sent for approval. Your current account is unchanged.');
+        toast.info(t('profile.sentForApprovalYour'));
       } else {
-        toast.success('Bank details saved.');
+        toast.success(t('profile.bankDetailsSaved'));
       }
     } catch (err) {
-      setError(serverVerdict(err, 'Could not update bank details.'));
+      setError(verdict(err, t, t('profile.couldNotUpdateBank')));
     } finally {
       setBusy(false);
     }
@@ -687,13 +742,15 @@ function BankDetailsSection({
   const nextNumber =
     form.bankAccountNumber.trim() === '' ? live.bankAccountNumber : form.bankAccountNumber.trim();
   const changedLabels =
-    pendingBody === null ? [] : BANK_FIELDS.filter((f) => f.key in pendingBody).map((f) => f.label);
+    pendingBody === null
+      ? []
+      : BANK_FIELDS.filter((f) => f.key in pendingBody).map((f) => t(f.labelKey));
 
   return (
     <section className="set-section">
       <SectionHeading
-        title="Bank details"
-        note="Where a withdrawal actually lands."
+        title={t('profile.bankDetails')}
+        note={t('profile.whereAWithdrawalActually')}
         action={
           canManage &&
           !editing &&
@@ -709,7 +766,7 @@ function BankDetailsSection({
                 setEditing(true);
               }}
             >
-              Edit
+              {t('profile.edit')}
             </Button>
           )
         }
@@ -717,10 +774,7 @@ function BankDetailsSection({
       <div className="set-card">
         {!editing ? (
           !hasAccountOnFile && !pending ? (
-            <p className="set-text">
-              No bank details captured yet. Remittance requires this; add them before your first
-              delivered order.
-            </p>
+            <p className="set-text">{t('profile.noBankDetailsCaptured')}</p>
           ) : (
             <div className="set-form-grid">
               {change !== null && change.status === 'REJECTED' && (
@@ -730,25 +784,28 @@ function BankDetailsSection({
                   role="status"
                   title={
                     <span className="set-chips">
-                      <StatusChip kind="failed" label="Change rejected" size="sm" />
+                      <StatusChip kind="failed" label={t('profile.changeRejected')} size="sm" />
                       {change.decidedAt !== null && (
-                        <span className="set-callout__aside">{whenLabel(change.decidedAt)}</span>
+                        <span className="set-callout__aside">
+                          {whenLabel(change.decidedAt, locale)}
+                        </span>
                       )}
                     </span>
                   }
                 >
                   {/* The admin's own words, verbatim — it is the whole
                       point of asking them for a reason. */}
-                  <p>{change.decisionReason ?? 'No reason was recorded with the rejection.'}</p>
+                  <p>{change.decisionReason ?? t('profile.noReasonWasRecorded')}</p>
                   <p className="set-callout__aside">
-                    Nothing changed — withdrawals still go to the account below. Edit it to send a
-                    new request.
+                    {t('profile.nothingChangedWithdrawalsStill')}
                   </p>
                 </SetCallout>
               )}
 
               <div className="set-form-grid">
-                {pending && <h3 className="set-heading">Current account · withdrawals go here</h3>}
+                {pending && (
+                  <h3 className="set-heading">{t('profile.currentAccountWithdrawalsGo')}</h3>
+                )}
                 <BankValuesList values={live} />
               </div>
 
@@ -758,25 +815,22 @@ function BankDetailsSection({
                   icon={<Clock size={15} />}
                   title={
                     <span className="set-chips">
-                      <StatusChip kind="pending" label="Awaiting approval" size="sm" />
+                      <StatusChip kind="pending" label={t('profile.awaitingApproval')} size="sm" />
                       <span className="set-callout__aside">
-                        Sent {whenLabel(change.submittedAt)}
+                        {richMessage(t('profile.sent'), {
+                          submittedAt: whenLabel(change.submittedAt, locale),
+                        })}
                       </span>
                     </span>
                   }
                 >
                   <p>
-                    These are the details you asked us to switch to. They are not live yet — an
-                    admin has to approve them, and{' '}
-                    <strong>withdrawals continue to the current account above until they do</strong>
-                    .
+                    {richMessage(t('profile.theseAreTheDetails'), {
+                      strong: <strong>{t('profile.withdrawalsContinueToThe')}</strong>,
+                    })}
                   </p>
                   <BankValuesList values={change.proposed} compareTo={live} />
-                  <p className="set-callout__aside">
-                    Account numbers are only ever shown as their last four digits. One change can be
-                    in review at a time, so these fields stay locked until this one is approved or
-                    rejected.
-                  </p>
+                  <p className="set-callout__aside">{t('profile.accountNumbersAreOnly')}</p>
                 </SetCallout>
               )}
             </div>
@@ -785,75 +839,64 @@ function BankDetailsSection({
           <form className="set-form-grid" onSubmit={onSubmit}>
             <p className="set-muted">
               {hasAccountOnFile ? (
-                <>
-                  Changing a payable account does not take effect on save — it goes to an admin for
-                  approval, and withdrawals keep going to your current account until then. All six
-                  fields are needed together.
-                </>
+                <>{t('profile.changingAPayableAccount')}</>
               ) : (
-                <>
-                  Used for remittance withdrawals. All six fields are needed together — a withdrawal
-                  missing one is rejected at the bank, not here.
-                </>
+                <>{t('profile.usedForRemittanceWithdrawals')}</>
               )}
             </p>
             <TextField
-              label="Bank name"
+              label={t('profile.bankName')}
               icon={<Landmark size={15} />}
               value={form.bankName}
               onChange={(e) => setForm({ ...form, bankName: e.target.value })}
               maxLength={120}
-              placeholder="e.g. Dutch-Bangla Bank Ltd."
+              placeholder={t('profile.eGDutchBangla')}
             />
             <TextField
-              label="Branch name"
+              label={t('profile.branchName')}
               icon={<Building2 size={15} />}
               value={form.bankBranchName}
               onChange={(e) => setForm({ ...form, bankBranchName: e.target.value })}
               maxLength={120}
-              placeholder="e.g. Gulshan Circle-1 Branch"
+              placeholder={t('profile.eGGulshanCircle')}
             />
             <TextField
-              label="Account holder name"
+              label={t('profile.accountHolderName')}
               icon={<User size={15} />}
               value={form.bankAccountName}
               onChange={(e) => setForm({ ...form, bankAccountName: e.target.value })}
               maxLength={120}
-              placeholder="As it appears on the bank statement"
+              placeholder={t('profile.asItAppearsOn')}
             />
             <TextField
-              label="Account number"
+              label={t('profile.accountNumber')}
               icon={<Hash size={15} />}
-              hint={
-                storedAccountNumber
-                  ? 'The account your withdrawals are sent to. Changing it goes to an admin for approval.'
-                  : undefined
-              }
+              hint={storedAccountNumber ? t('profile.theAccountYourWithdrawals') : undefined}
               value={form.bankAccountNumber}
               onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })}
               maxLength={64}
               placeholder={
-                storedAccountNumber ? 'Blank keeps the current number' : '123-4567-890123'
+                storedAccountNumber ? t('profile.blankKeepsTheCurrent') : '123-4567-890123'
               }
               inputClassName="sk-ident"
             />
             <div className="set-form-grid" data-cols="2">
               <TextField
-                label="Routing number"
+                label={t('profile.routingNumber')}
                 icon={<Hash size={15} />}
                 value={form.bankRoutingNumber}
                 onChange={(e) => setForm({ ...form, bankRoutingNumber: e.target.value })}
                 maxLength={32}
-                placeholder="9-digit routing"
+                placeholder={t('profile.9DigitRouting')}
                 inputClassName="sk-ident"
               />
               <TextField
-                label="SWIFT code"
+                label={t('profile.swiftCode')}
                 icon={<Hash size={15} />}
                 value={form.bankSwiftCode}
                 onChange={(e) => setForm({ ...form, bankSwiftCode: e.target.value })}
                 maxLength={16}
-                placeholder="DBBLBDDH"
+                placeholder={t('profile.dbblbddh')}
                 inputClassName="sk-ident"
               />
             </div>
@@ -863,8 +906,9 @@ function BankDetailsSection({
               // server's refusal is what the seller is finally shown.
               <SetCallout tone="warn" icon={<CircleAlert size={15} />} role="status">
                 <p>
-                  Still needed: {missing.map((f) => f.serverLabel).join(', ')}. Submitting without
-                  these will be refused — a withdrawal needs the whole account.
+                  {richMessage(t('profile.stillNeededSubmittingWithout'), {
+                    serverLabel: missing.map((f) => f.serverLabel).join(', '),
+                  })}
                 </p>
               </SetCallout>
             )}
@@ -883,7 +927,7 @@ function BankDetailsSection({
                 disabled={busy}
                 onClick={() => setEditing(false)}
               >
-                Cancel
+                {t('profile.cancel')}
               </Button>
               {/* The button says what the click actually does: an edit
                   raises a request for review, it does not save. */}
@@ -893,8 +937,16 @@ function BankDetailsSection({
                 size="md"
                 labels={
                   hasAccountOnFile
-                    ? { idle: 'Send for approval', busy: 'Sending…', error: 'Not sent' }
-                    : { idle: 'Save details', busy: 'Saving…', error: 'Not saved' }
+                    ? {
+                        idle: t('profile.sendForApproval'),
+                        busy: t('profile.sending'),
+                        error: t('profile.notSent'),
+                      }
+                    : {
+                        idle: t('profile.saveDetails'),
+                        busy: t('profile.saving'),
+                        error: t('profile.notSaved'),
+                      }
                 }
                 state={phaseOf(busy, error)}
                 disabled={busy}
@@ -910,20 +962,20 @@ function BankDetailsSection({
           if (!next) setPendingBody(null);
         }}
         title={
-          hasAccountOnFile ? 'Send this bank change for approval?' : 'Save these bank details?'
+          hasAccountOnFile ? t('profile.sendThisBankChange') : t('profile.saveTheseBankDetails')
         }
-        entity={`${nextName ?? 'Bank not named'} · ${maskedAccount(nextNumber) ?? 'no account number'}`}
+        entity={`${nextName ?? t('profile.bankNotNamed')} · ${maskedAccount(nextNumber) ?? t('profile.noAccountNumber')}`}
         entityIsIdentifier
         consequence={
-          hasAccountOnFile
-            ? 'An admin checks it before it goes live. Withdrawals keep going to your current account until it is approved.'
-            : 'Your withdrawals will be paid into this account.'
+          hasAccountOnFile ? t('profile.anAdminChecksIt') : t('profile.yourWithdrawalsWillBe')
         }
-        confirmLabel={hasAccountOnFile ? 'Send for approval' : 'Save details'}
+        confirmLabel={hasAccountOnFile ? t('profile.sendForApproval') : t('profile.saveDetails')}
         onConfirm={() => (pendingBody === null ? undefined : send(pendingBody))}
       >
         {changedLabels.length > 0 && (
-          <p className="set-muted">Changing: {changedLabels.join(', ')}.</p>
+          <p className="set-muted">
+            {richMessage(t('profile.changing'), { changedLabels: changedLabels.join(', ') })}
+          </p>
         )}
       </ConfirmDialog>
     </section>
@@ -931,6 +983,7 @@ function BankDetailsSection({
 }
 
 function LogoSection({ profile }: { readonly profile: SellerProfileView }): ReactElement {
+  const t = useT();
   const canManage = can(useSellerIdentity(), 'profile.manage');
   const presign = usePresignLogo();
   const register = useRegisterLogo();
@@ -942,7 +995,7 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
   const upload = useAsyncState();
 
   function fmtErr(e: unknown): string {
-    return serverVerdict(e, 'Action failed');
+    return verdict(e, t, t('profile.actionFailed'));
   }
 
   async function onPick(file: File): Promise<void> {
@@ -950,12 +1003,12 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
     // A refusal here is thrown after it is shown, so the upload control
     // reports the failure on itself rather than a success.
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setError('Logo must be JPG, PNG, or WEBP');
-      throw new Error('Logo must be JPG, PNG, or WEBP');
+      setError(t('profile.logoMustBeJpg'));
+      throw new Error(t('profile.logoMustBeJpg'));
     }
     if (file.size > 1_048_576) {
-      setError('Logo must be under 1 MB');
-      throw new Error('Logo must be under 1 MB');
+      setError(t('profile.logoMustBeUnder'));
+      throw new Error(t('profile.logoMustBeUnder'));
     }
     setBusy(true);
     try {
@@ -970,13 +1023,13 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
         body: file,
       });
       if (!put.ok) {
-        throw new Error(`Spaces upload failed: ${put.status}`);
+        throw new Error(t('profile.spacesUploadFailed', { status: put.status }));
       }
       await register.mutateAsync({
         storageKey: ps.storageKey,
         mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp',
       });
-      toast.success('Logo updated.');
+      toast.success(t('profile.logoUpdated'));
     } catch (e) {
       setError(fmtErr(e));
       // Rethrown so the upload control shows the failure on itself.
@@ -991,7 +1044,7 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
     setError(null);
     try {
       await remove.mutateAsync();
-      toast.success('Logo removed.');
+      toast.success(t('profile.logoRemoved'));
       setConfirmRemove(false);
     } catch (e) {
       setError(fmtErr(e));
@@ -1002,18 +1055,18 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
 
   const uploadLabel =
     upload.phase === 'busy'
-      ? 'Uploading…'
+      ? t('profile.uploading')
       : upload.phase === 'success'
-        ? 'Logo updated'
+        ? t('profile.logoUpdatedShort')
         : upload.phase === 'error'
-          ? 'Not uploaded'
+          ? t('profile.notUploaded')
           : busy
-            ? 'Uploading…'
-            : 'Choose file';
+            ? t('profile.uploading')
+            : t('profile.chooseFile');
 
   return (
     <section className="set-section">
-      <SectionHeading title="Company logo" note="Shown to your customers." />
+      <SectionHeading title={t('profile.companyLogo')} note={t('profile.shownToYourCustomers')} />
       <div className="set-card">
         {canManage ? (
           // Uploading or removing a logo is `profile.manage`; without it
@@ -1023,18 +1076,16 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
             {profile.logoUrl ? (
               <div className="set-logo__frame">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={profile.logoUrl} alt="Logo" />
+                <img src={profile.logoUrl} alt={t('profile.logo')} />
               </div>
             ) : (
               <div className="set-logo__frame" data-empty="1">
-                No logo
+                {t('profile.noLogo')}
               </div>
             )}
 
             <div className="set-logo__body">
-              <p className="set-muted">
-                JPG, PNG, or WEBP. Up to 1 MB. Recommended 256×256, square.
-              </p>
+              <p className="set-muted">{t('profile.jpgPngOrWebp')}</p>
               <div className="set-buttons" data-align="start">
                 <label
                   className={`set-file ${buttonClassName('primary', 'md')}`}
@@ -1065,15 +1116,15 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
                     disabled={busy}
                     onClick={() => setConfirmRemove(true)}
                   >
-                    Remove
+                    {t('profile.remove')}
                   </Button>
                 )}
               </div>
               <span className="set-sr" aria-live="polite">
                 {upload.phase === 'busy'
-                  ? 'Uploading…'
+                  ? t('profile.uploading')
                   : upload.phase === 'success'
-                    ? 'Logo updated.'
+                    ? t('profile.logoUpdatedShort')
                     : ''}
               </span>
               {error && (
@@ -1084,17 +1135,17 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
             </div>
           </div>
         ) : (
-          <p className="set-muted">Your role cannot change the company logo.</p>
+          <p className="set-muted">{t('profile.yourRoleCannotChange')}</p>
         )}
       </div>
 
       <ConfirmDialog
         open={confirmRemove}
         onOpenChange={setConfirmRemove}
-        title="Remove the company logo?"
+        title={t('profile.removeTheCompanyLogo')}
         entity={profile.companyName}
-        consequence="Your customers stop seeing it. You can upload a logo again at any time."
-        confirmLabel="Confirm remove"
+        consequence={t('profile.yourCustomersStopSeeing')}
+        confirmLabel={t('profile.confirmRemove')}
         destructive
         onConfirm={onRemove}
       />

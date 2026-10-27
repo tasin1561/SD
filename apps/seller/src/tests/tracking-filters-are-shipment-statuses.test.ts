@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readEnglish } from './english-source';
 import { join } from 'node:path';
 import { ShipmentStatus } from '@skydrop/db';
 
@@ -20,10 +20,10 @@ import { ShipmentStatus } from '@skydrop/db';
 const SOURCE = join(process.cwd(), 'src/app/(authed)/tracking/_components/tracking-index.tsx');
 
 describe('the tracking screen’s status filters', () => {
-  const src = readFileSync(SOURCE, 'utf8');
+  const src = readEnglish(SOURCE);
 
   it('names only values the ShipmentStatus enum has', () => {
-    const block = /const FILTERS[^=]*=\s*\[([\s\S]*?)\];/.exec(src);
+    const block = /const filtersOf\s*=[\s\S]*?=>\s*\[([\s\S]*?)\n\];/.exec(src);
     expect(block, 'FILTERS list not found — has it been renamed?').not.toBeNull();
 
     const values = [...(block?.[1] ?? '').matchAll(/\[\s*'([^']*)'/g)]

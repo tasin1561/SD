@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { SettingsHub, type SettingsTile } from './_components/settings-hub';
 import { SetPageHeader } from './_components/settings-parts';
+import { getT } from '@/i18n/server';
 
 /**
  * Settings hub — links into each settings sub-area.
@@ -19,7 +20,8 @@ import { SetPageHeader } from './_components/settings-parts';
  * webhooks, notifications and API keys each need their own permission,
  * so this list is not the same for everyone.
  */
-export default function SettingsPage(): ReactElement {
+export default async function SettingsPage(): Promise<ReactElement> {
+  const { t } = await getT();
   const items: SettingsTile[] = [
     {
       // First, and deliberately: it is the tile somebody comes looking
@@ -27,33 +29,29 @@ export default function SettingsPage(): ReactElement {
       href: '/settings/security',
       group: 'account',
       icon: <ShieldCheck size={16} />,
-      title: 'Sign-in & sessions',
-      description:
-        'Who this browser is signed in as, and a way to end every session for the account at once — for a device you no longer control.',
+      title: t('settingsHub.signInSessions'),
+      description: t('settingsHub.whoThisBrowserIs'),
     },
     {
       href: '/settings/stores',
       group: 'account',
       icon: <Store size={16} />,
-      title: 'Stores',
-      description:
-        'The shops you sell under. A store decides which brand an order belongs to — products, stock, wallet and couriers are shared across all of them.',
+      title: t('settingsHub.stores'),
+      description: t('settingsHub.theShopsYouSell'),
     },
     {
       href: '/settings/orders',
       group: 'defaults',
       icon: <ReceiptText size={16} />,
-      title: 'Order defaults',
-      description:
-        'What a new order starts with — the delivery fee you charge your customer, pre-filled into the collectable amount.',
+      title: t('settingsHub.orderDefaults'),
+      description: t('settingsHub.whatANewOrder'),
     },
     {
       href: '/settings/stock',
       group: 'defaults',
       icon: <PackageSearch size={16} />,
-      title: 'Stock alerts',
-      description:
-        'The quantity at which we warn you a SKU is running out. A SKU with its own threshold ignores it.',
+      title: t('settingsHub.stockAlerts'),
+      description: t('settingsHub.theQuantityAtWhich'),
     },
     {
       // Lives under /wallet rather than /settings, so it is gated on
@@ -67,17 +65,15 @@ export default function SettingsPage(): ReactElement {
       href: '/wallet/limits',
       group: 'money',
       icon: <Wallet size={16} />,
-      title: 'Wallet limits and settings',
-      description:
-        'Withdrawal limits, when COD reaches you, and what is charged. Set by Skydrop and shown read-only, so a limit is never a surprise.',
+      title: t('settingsHub.walletLimitsAndSettings'),
+      description: t('settingsHub.withdrawalLimitsWhenCod'),
     },
     {
       href: '/settings/webhooks',
       group: 'integrations',
       icon: <Webhook size={16} />,
-      title: 'Outbound webhooks',
-      description:
-        'Configure HTTPS endpoints to receive event POSTs from Skydrop. Each gets a unique HMAC secret.',
+      title: t('settingsHub.outboundWebhooks'),
+      description: t('settingsHub.configureHttpsEndpointsTo'),
     },
     {
       // ONE tile. It was two, both called notifications, distinguishable
@@ -88,24 +84,27 @@ export default function SettingsPage(): ReactElement {
       href: '/notifications/settings',
       group: 'notifications',
       icon: <Bell size={16} />,
-      title: 'Notification settings',
-      description:
-        'What reaches YOUR inbox, topic by topic — and, if it is yours to set, what this COMPANY is emailed about.',
+      title: t('settingsHub.notificationSettings'),
+      description: t('settingsHub.whatReachesYourInbox'),
     },
     {
       href: '/settings/api-keys',
       group: 'integrations',
       icon: <Key size={16} />,
-      title: 'API keys',
-      description: 'Programmatic access to the Skydrop API. Create, label, and revoke keys.',
+      title: t('settingsHub.apiKeys'),
+      description: t('settingsHub.programmaticAccessToThe'),
     },
   ];
   return (
     <div className="set-page">
       <SetPageHeader
-        crumbs={[{ label: 'Client console' }, { label: 'Account' }, { label: 'Settings' }]}
-        title="Settings"
-        subtitle="Sign-in and sessions, order and stock defaults, wallet limits, webhooks, notifications, API keys."
+        crumbs={[
+          { label: t('settingsHub.clientConsole') },
+          { label: t('settingsHub.account') },
+          { label: t('settingsHub.settings') },
+        ]}
+        title={t('settingsHub.settings')}
+        subtitle={t('settingsHub.signInAndSessions')}
       />
       <SettingsHub items={items} />
     </div>

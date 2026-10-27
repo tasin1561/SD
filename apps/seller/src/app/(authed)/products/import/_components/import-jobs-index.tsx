@@ -19,8 +19,11 @@ import {
   PanelPad,
 } from '@/app/(authed)/inventory/_components/stock-ui';
 import { useCsvImports, type CsvImportView } from '@/lib/csv-import-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { ImportStatusBadge } from './import-status';
+import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 /**
  * Every catalog import this seller has sent.
@@ -39,6 +42,8 @@ import { ImportStatusBadge } from './import-status';
 const PAGE_SIZE = 20;
 
 export function ImportJobsIndex(): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const router = useRouter();
   const sp = useSearchParams();
   const page = useMemo(() => Math.max(1, Number(sp.get('page')) || 1), [sp]);
@@ -53,20 +58,20 @@ export function ImportJobsIndex(): ReactElement {
     <AreaPage>
       <BackLink href="/products/import">
         <ArrowLeft size={14} />
-        Bulk catalog import
+        {t('productImport.bulkCatalogImport')}
       </BackLink>
 
       <PageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Stock & WMS' },
-          { label: 'Products', href: '/products' },
-          { label: 'CSV import', href: '/products/import' },
-          { label: 'History' },
+          { label: t('productImport.clientConsole') },
+          { label: t('productImport.stockWms') },
+          { label: t('productImport.products'), href: '/products' },
+          { label: t('productImport.csvImport'), href: '/products/import' },
+          { label: t('productImport.history') },
         ]}
         Link={Link}
-        title="Import history"
-        subtitle="Every CSV you have sent, newest first. Open one to see what it wrote and what it refused."
+        title={t('productImport.importHistory')}
+        subtitle={t('productImport.everyCsvYouHave')}
         meta={
           list.data === undefined ? undefined : (
             <MetaFact tone="accent">
@@ -76,24 +81,28 @@ export function ImportJobsIndex(): ReactElement {
         }
         action={
           <LinkButton href="/products/import" variant="ghost" icon={<Upload size={15} />}>
-            New import
+            {t('productImport.newImport')}
           </LinkButton>
         }
       />
 
       <AreaSection
-        title="Uploads"
-        note={list.data === undefined ? undefined : `${list.data.total} in total, newest first`}
+        title={t('productImport.uploads')}
+        note={
+          list.data === undefined
+            ? undefined
+            : t('productImport.inTotalNewestFirst', { total: list.data.total })
+        }
       >
         <Panel flush>
           {list.isLoading ? (
             <PanelPad>
-              <SkeletonRows rows={6} cols={7} label="Loading imports…" />
+              <SkeletonRows rows={6} cols={7} label={t('productImport.loadingImports')} />
             </PanelPad>
           ) : list.isError ? (
             <PanelPad>
               <ErrorState
-                message={serverVerdict(list.error, 'Could not load your imports.')}
+                message={verdict(list.error, t, t('productImport.couldNotLoadYour'))}
                 retry={() => void list.refetch()}
               />
             </PanelPad>
@@ -101,27 +110,27 @@ export function ImportJobsIndex(): ReactElement {
             <PanelPad>
               <EmptyState
                 bare
-                title="No imports yet"
-                description="Nothing has been uploaded from this account. The import screen has the template to start from."
+                title={t('productImport.noImportsYet')}
+                description={t('productImport.nothingHasBeenUploaded')}
                 action={
                   <LinkButton href="/products/import" variant="primary" icon={<Upload size={15} />}>
-                    Import a CSV
+                    {t('productImport.importACsv')}
                   </LinkButton>
                 }
               />
             </PanelPad>
           ) : (
             <>
-              <Table caption="Uploads">
+              <Table caption={t('productImport.uploads')}>
                 <THead>
                   <Tr>
-                    <Th>File</Th>
-                    <Th>Status</Th>
-                    <Th align="right">Rows</Th>
-                    <Th align="right">Products</Th>
-                    <Th align="right">Variants</Th>
-                    <Th align="right">Refused</Th>
-                    <Th>Uploaded</Th>
+                    <Th>{t('productImport.file')}</Th>
+                    <Th>{t('productImport.status')}</Th>
+                    <Th align="right">{t('productImport.rows')}</Th>
+                    <Th align="right">{t('productImport.products')}</Th>
+                    <Th align="right">{t('productImport.variants')}</Th>
+                    <Th align="right">{t('productImport.refused')}</Th>
+                    <Th>{t('productImport.uploaded2')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -167,7 +176,9 @@ export function ImportJobsIndex(): ReactElement {
                         </span>
                       </Td>
                       <Td>
-                        <span className="sk-figure inv-faint">{formatDate(job.createdAt)}</span>
+                        <span className="sk-figure inv-faint">
+                          {formatDate(job.createdAt, locale)}
+                        </span>
                       </Td>
                     </Tr>
                   ))}
@@ -179,7 +190,7 @@ export function ImportJobsIndex(): ReactElement {
                   pageSize={PAGE_SIZE}
                   total={list.data.total}
                   onPageChange={goToPage}
-                  label="Import pages"
+                  label={t('productImport.importPages')}
                 />
               </PanelPad>
             </>
@@ -194,6 +205,6 @@ function written(created: number, updated: number): string {
   return updated === 0 ? String(created) : `${created} + ${updated}`;
 }
 
-function formatDate(value: CsvImportView['createdAt']): string {
-  return new Date(value).toLocaleString('en-IN');
+function formatDate(value: CsvImportView['createdAt'], locale: Locale = 'en'): string {
+  return new Date(value).toLocaleString(dateTag(locale, 'en-IN'));
 }

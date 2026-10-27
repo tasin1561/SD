@@ -5,6 +5,11 @@ import {
   ConsignmentStatus,
 } from '@skydrop/db';
 import type { ConsignmentLegView, ConsignmentView } from '@skydrop/api-client';
+import { englishT } from '@/i18n/english';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 /**
  * The consignment vocabulary, in the seller's words rather than the
@@ -28,7 +33,10 @@ import type { ConsignmentLegView, ConsignmentView } from '@skydrop/api-client';
  * because a form that explains everything up front is a form nobody
  * reads.
  */
-export function routeWords(route: ConsignmentRoute): {
+export function routeWords(
+  route: ConsignmentRoute,
+  t: Translate<MessageKey> = englishT,
+): {
   title: string;
   hint: string;
   blurb: string;
@@ -36,17 +44,15 @@ export function routeWords(route: ConsignmentRoute): {
   switch (route) {
     case ConsignmentRoute.DIRECT_IN:
       return {
-        title: 'Straight to India',
-        hint: 'You ship it there yourself',
-        blurb:
-          'You ship to our Indian warehouse yourself. One arrival, one count, and no inbound freight from us.',
+        title: t('consignmentWords.straightToIndia'),
+        hint: t('consignmentWords.youShipItThere'),
+        blurb: t('consignmentWords.youShipToOur'),
       };
     case ConsignmentRoute.VIA_BD:
       return {
-        title: 'Via our Bangladesh warehouse',
-        hint: 'We move it on, and bill the freight',
-        blurb:
-          'You ship to Dhaka and we move it to India for you. This is the option we charge inbound freight for — the bill is raised once the forwarder invoices us.',
+        title: t('consignmentWords.viaOurBangladeshWarehouse'),
+        hint: t('consignmentWords.weMoveItOn'),
+        blurb: t('consignmentWords.youShipToDhaka'),
       };
     default: {
       const exhaustive: never = route;
@@ -62,18 +68,21 @@ export function routeWords(route: ConsignmentRoute): {
  * not the same as sellable, and a seller reading "received" would
  * reasonably start taking orders against it.
  */
-export function statusWords(status: ConsignmentStatus): string {
+export function statusWords(
+  status: ConsignmentStatus,
+  t: Translate<MessageKey> = englishT,
+): string {
   switch (status) {
     case ConsignmentStatus.PENDING:
-      return 'Announced';
+      return t('consignmentWords.announced');
     case ConsignmentStatus.AT_BD:
-      return 'At our Dhaka warehouse';
+      return t('consignmentWords.atOurDhakaWarehouse');
     case ConsignmentStatus.IN_TRANSIT:
-      return 'On the way to India';
+      return t('consignmentWords.onTheWayTo');
     case ConsignmentStatus.COMPLETED:
-      return 'Arrived in India';
+      return t('consignmentWords.arrivedInIndia');
     case ConsignmentStatus.CANCELLED:
-      return 'Cancelled';
+      return t('consignmentWords.cancelled');
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled ConsignmentStatus: ${String(exhaustive)}`);
@@ -92,11 +101,13 @@ export function legTitle(
   leg: ConsignmentLegView,
   route: ConsignmentRoute,
   indiaLegs: readonly ConsignmentLegView[],
+  t: Translate<MessageKey> = englishT,
 ): string {
-  if (leg.leg === ConsignmentLeg.BD_INTAKE) return 'Counted at our Bangladesh warehouse';
-  if (route === ConsignmentRoute.DIRECT_IN || indiaLegs.length <= 1) return 'Arrival in India';
+  if (leg.leg === ConsignmentLeg.BD_INTAKE) return t('consignmentWords.countedAtOurBangladesh');
+  if (route === ConsignmentRoute.DIRECT_IN || indiaLegs.length <= 1)
+    return t('consignmentWords.arrivalInIndia');
   const n = indiaLegs.findIndex((r) => r.id === leg.id) + 1;
-  return `Shipment ${n} of ${indiaLegs.length} to India`;
+  return t('consignmentWords.shipmentOfToIndia', { n, indiaLegs: indiaLegs.length });
 }
 
 /** The India-bound legs, in the order they were created. */
@@ -167,35 +178,40 @@ export function countingInProgress(leg: ConsignmentLegView): boolean {
  * status alone answers none of them — `ARRIVING` means "we have it", and
  * nobody outside a warehouse reads it that way.
  */
-export function legProgress(leg: ConsignmentLegView): { headline: string; detail: string } {
+export function legProgress(
+  leg: ConsignmentLegView,
+  t: Translate<MessageKey> = englishT,
+): { headline: string; detail: string } {
   if (leg.forwardedWithoutCount) {
     return {
-      headline: 'Received and sent straight on',
-      detail:
-        'We had it and forwarded it without opening it, so it travels on the quantities you ' +
-        'declared. It gets counted once, when it lands.',
+      headline: t('consignmentWords.receivedAndSentStraight'),
+      detail: t('consignmentWords.weHadItAnd'),
     };
   }
   if (leg.status === 'COMPLETED') {
-    return { headline: 'Counted', detail: 'This is what we found when we opened it.' };
+    return { headline: t('consignmentWords.counted'), detail: t('consignmentWords.thisIsWhatWe') };
   }
   if (leg.status === 'CANCELLED') {
-    return { headline: 'Cancelled', detail: 'This stop was called off.' };
+    return {
+      headline: t('consignmentWords.cancelled'),
+      detail: t('consignmentWords.thisStopWasCalled'),
+    };
   }
   if (leg.status === 'ARRIVING') {
     return countingInProgress(leg)
       ? {
-          headline: 'Being counted now',
-          detail:
-            'We have it and we are going through it. The numbers below are what we have reached ' +
-            'so far, not the final answer.',
+          headline: t('consignmentWords.beingCountedNow'),
+          detail: t('consignmentWords.weHaveItAnd'),
         }
       : {
-          headline: 'Received — not opened yet',
-          detail: 'It has arrived and we have it. Counting has not started.',
+          headline: t('consignmentWords.receivedNotOpenedYet'),
+          detail: t('consignmentWords.itHasArrivedAnd'),
         };
   }
-  return { headline: 'Not arrived yet', detail: 'We are expecting it.' };
+  return {
+    headline: t('consignmentWords.notArrivedYet'),
+    detail: t('consignmentWords.weAreExpectingIt'),
+  };
 }
 
 /**
@@ -225,16 +241,16 @@ export function lineLabel(line: {
 }
 
 /** A date, or an em dash. Dates are read, not sorted, on these screens. */
-export function shortDate(iso: string | null): string {
-  return iso === null ? '—' : new Date(iso).toLocaleDateString('en-IN');
+export function shortDate(iso: string | null, locale: Locale = 'en'): string {
+  return iso === null ? '—' : new Date(iso).toLocaleDateString(dateTag(locale, 'en-IN'));
 }
 
 /**
  * A timeline stamp. Date AND time, because two events on the same day
  * with no time between them read as one event.
  */
-export function stamp(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
+export function stamp(iso: string, locale: Locale = 'en'): string {
+  return new Date(iso).toLocaleString(dateTag(locale, 'en-IN'), {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -248,24 +264,27 @@ export function stamp(iso: string): string {
  * is the two or three words above it, so the column scans without
  * reading every sentence.
  */
-export function eventWords(type: ConsignmentEventType): string {
+export function eventWords(
+  type: ConsignmentEventType,
+  t: Translate<MessageKey> = englishT,
+): string {
   switch (type) {
     case ConsignmentEventType.DECLARED:
-      return 'Announced';
+      return t('consignmentWords.announced');
     case ConsignmentEventType.BD_RECEIVED:
-      return 'Counted in Bangladesh';
+      return t('consignmentWords.countedInBangladesh');
     case ConsignmentEventType.LABELS_PRINTED:
-      return 'Labels printed';
+      return t('consignmentWords.labelsPrinted');
     case ConsignmentEventType.DISPATCHED_TO_IN:
-      return 'Left for India';
+      return t('consignmentWords.leftForIndia');
     case ConsignmentEventType.IN_RECEIVED:
-      return 'Arrived in India';
+      return t('consignmentWords.arrivedInIndia');
     case ConsignmentEventType.VARIANCE_RECORDED:
-      return 'Count difference';
+      return t('consignmentWords.countDifference');
     case ConsignmentEventType.FREIGHT_RECORDED:
-      return 'Freight billed';
+      return t('consignmentWords.freightBilled');
     case ConsignmentEventType.CANCELLED:
-      return 'Cancelled';
+      return t('consignmentWords.cancelled');
     default: {
       const exhaustive: never = type;
       throw new Error(`Unhandled ConsignmentEventType: ${String(exhaustive)}`);

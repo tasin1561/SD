@@ -1,6 +1,8 @@
 import type { ReactElement } from 'react';
 import { OtherPortals, SignInCard } from '@skydrop/ui/app/sign-in';
 import { PasswordResetRequestForm } from './_components/request-form';
+import { getT } from '@/i18n/server';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * Step 1 of the seller password-reset flow — the "request" page.
@@ -16,20 +18,18 @@ import { PasswordResetRequestForm } from './_components/request-form';
  * and the recovery pages read as one product. This page renders only
  * its card.
  */
-export default function PasswordResetPage(): ReactElement {
+export default async function PasswordResetPage(): Promise<ReactElement> {
+  const { t, locale } = await getT();
   return (
     <SignInCard
-      title="Reset your password"
-      note={
-        <>
-          Enter your client account email. If we recognize it, you&apos;ll get a reset link by email
-          within a few minutes.
-        </>
-      }
+      title={t('passwordReset.resetYourPassword')}
+      note={<>{t('passwordReset.enterYourClientAccount')}</>}
       footer={
         <>
           <p>
-            Remembered it? <a href="/login">Sign in</a>
+            {richMessage(t('passwordReset.rememberedIt'), {
+              a: <a href="/login">{t('passwordReset.signIn')}</a>,
+            })}
           </p>
           {/*
            * The chooser belongs on THIS page as much as on /login, and
@@ -42,7 +42,11 @@ export default function PasswordResetPage(): ReactElement {
            * page, or a store user on this one, needs the way out before
            * they submit, not a reassuring message afterwards.
            */}
-          <OtherPortals self="client" title="Reset it somewhere else?" />
+          <OtherPortals
+            self="client"
+            locale={locale}
+            title={t('passwordReset.resetItSomewhereElse')}
+          />
         </>
       }
     >

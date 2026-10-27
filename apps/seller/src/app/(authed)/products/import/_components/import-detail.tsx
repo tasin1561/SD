@@ -30,8 +30,14 @@ import {
   isImportInFlight,
   type CsvImportView,
 } from '@/lib/csv-import-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { ImportStatusBadge, humaniseStatus } from './import-status';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 /**
  * One catalog import, opened.
@@ -48,6 +54,8 @@ import { ImportStatusBadge, humaniseStatus } from './import-status';
  * correct import would conclude rows went missing.
  */
 export function ImportDetail({ importId }: { readonly importId: string }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const query = useCsvImport(importId);
 
   if (query.isLoading) return <DetailSkeleton />;
@@ -56,20 +64,17 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
     return (
       <AreaPage>
         <BackLink />
-        <PageHeader title="Import" />
+        <PageHeader title={t('productImport.import')} />
         <Panel>
           <div className="inv-stack">
             {/* FE-2 — the server's verdict verbatim. A wrong id and
                 another seller's import both come back UPLOAD_NOT_FOUND,
                 which is the whole message worth showing. */}
             <InlineError
-              message={serverVerdict(query.error, 'Could not load this import.')}
+              message={verdict(query.error, t, t('productImport.couldNotLoadThis'))}
               retry={() => void query.refetch()}
             />
-            <Note>
-              Imports are scoped to the account that uploaded them. If a colleague sent this file
-              from their own login, it is on their history, not yours.
-            </Note>
+            <Note>{t('productImport.importsAreScopedTo')}</Note>
           </div>
         </Panel>
       </AreaPage>
@@ -85,21 +90,21 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
 
       <PageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Stock & WMS' },
-          { label: 'Products', href: '/products' },
-          { label: 'History', href: '/products/import/jobs' },
+          { label: t('productImport.clientConsole') },
+          { label: t('productImport.stockWms') },
+          { label: t('productImport.products'), href: '/products' },
+          { label: t('productImport.history'), href: '/products/import/jobs' },
           { label: job.fileName },
         ]}
         Link={Link}
         title={<span className="sk-ident">{job.fileName}</span>}
-        subtitle={`Uploaded ${formatDateTime(job.createdAt)}`}
+        subtitle={t('productImport.uploaded', { createdAt: formatDateTime(job.createdAt, locale) })}
         meta={
           <MetaFacts>
             <MetaFact tone="accent">
               {job.rowCount ?? '—'} {job.rowCount === 1 ? 'row' : 'rows'}
             </MetaFact>
-            {inFlight && <MetaFact dot>Running now</MetaFact>}
+            {inFlight && <MetaFact dot>{t('productImport.runningNow')}</MetaFact>}
             {job.rowsFailed > 0 && <MetaFact tone="bad">{job.rowsFailed} refused</MetaFact>}
           </MetaFacts>
         }
@@ -113,14 +118,14 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
       <KpiGrid>
         {job.rowCount === null ? (
           <KpiCard
-            label="Rows in file"
+            label={t('productImport.rowsInFile')}
             icon={<FileSpreadsheet size={14} />}
             figure={<span className="inv-faint">—</span>}
             tone="neutral"
           />
         ) : (
           <KpiCard
-            label="Rows in file"
+            label={t('productImport.rowsInFile')}
             icon={<FileSpreadsheet size={14} />}
             value={job.rowCount}
             format={rawCount}
@@ -129,30 +134,30 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
           />
         )}
         <KpiCard
-          label="Products"
+          label={t('productImport.products')}
           icon={<Boxes size={14} />}
           value={job.productsCreated + job.productsUpdated}
           format={rawCount}
           tone="neutral"
           foot={[
-            { label: 'New', value: job.productsCreated },
-            { label: 'Updated', value: job.productsUpdated },
+            { label: t('productImport.new'), value: job.productsCreated },
+            { label: t('productImport.updated'), value: job.productsUpdated },
           ]}
         />
         <KpiCard
-          label="Variants"
+          label={t('productImport.variants')}
           icon={<Layers size={14} />}
           value={job.variantsCreated + job.variantsUpdated}
           format={rawCount}
-          unit="SKUs"
+          unit={t('productImport.skus')}
           tone="neutral"
           foot={[
-            { label: 'New', value: job.variantsCreated },
-            { label: 'Updated', value: job.variantsUpdated },
+            { label: t('productImport.new'), value: job.variantsCreated },
+            { label: t('productImport.updated'), value: job.variantsUpdated },
           ]}
         />
         <KpiCard
-          label="Refused"
+          label={t('productImport.refused')}
           icon={<XCircle size={14} />}
           value={job.rowsFailed}
           format={rawCount}
@@ -160,13 +165,16 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
           tone={job.rowsFailed > 0 ? 'debit' : 'neutral'}
           hint={
             job.rowsSkipped > 0
-              ? `${job.rowsSkipped} row${job.rowsSkipped === 1 ? '' : 's'} also skipped as unchanged.`
-              : 'Rows we could not write.'
+              ? t('productImport.rowAlsoSkippedAs', {
+                  rowsSkipped: job.rowsSkipped,
+                  plural: job.rowsSkipped === 1 ? '' : 's',
+                })
+              : t('productImport.rowsWeCouldNot')
           }
         />
       </KpiGrid>
 
-      <AreaSection title="Outcome" note="What this upload did to your catalogue.">
+      <AreaSection title={t('productImport.outcome')} note={t('productImport.whatThisUploadDid')}>
         <Panel>
           <div className="inv-stack">
             {/* The run itself. The file's row progress is not reported
@@ -174,42 +182,48 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
                 about not knowing (no percentage); it lands on the
                 status the server reports, in the status's own words. */}
             <ParachuteProgress
-              label={`Importing ${job.fileName}`}
+              label={t('productImport.importing', { fileName: job.fileName })}
               state={runState(job.status)}
               doneLabel={humaniseStatus(job.status)}
               failedLabel={humaniseStatus(job.status)}
               detail={
                 job.rowCount === null
                   ? undefined
-                  : `${job.rowCount} ${job.rowCount === 1 ? 'row' : 'rows'} in the file`
+                  : t(
+                      job.rowCount === 1 ? 'productImport.rowInFile' : 'productImport.rowsInFile2',
+                      {
+                        count: job.rowCount,
+                      },
+                    )
               }
             />
             <p className="inv-note" style={{ color: 'var(--fg-body)' }}>
-              {OUTCOME_COPY[job.status]}
+              {outcomeCopyOf(t)[job.status]}
             </p>
-            {inFlight && <Note>This page refreshes itself while it runs — nothing to reload.</Note>}
+            {inFlight && <Note>{t('productImport.thisPageRefreshesItself')}</Note>}
           </div>
         </Panel>
       </AreaSection>
 
       {job.errorReportKey !== null && <ErrorReport job={job} />}
 
-      <AreaSection title="Timing" note="When it ran.">
+      <AreaSection title={t('productImport.timing')} note={t('productImport.whenItRan')}>
         <Panel>
           <Facts
             columns={3}
             items={[
-              { label: 'Uploaded', value: formatDateTime(job.createdAt) },
+              { label: t('productImport.uploaded2'), value: formatDateTime(job.createdAt, locale) },
               {
-                label: 'Started',
-                value: job.startedAt === null ? <Waiting /> : formatDateTime(job.startedAt),
+                label: t('productImport.started'),
+                value: job.startedAt === null ? <Waiting /> : formatDateTime(job.startedAt, locale),
               },
               {
-                label: 'Finished',
-                value: job.completedAt === null ? <Waiting /> : formatDateTime(job.completedAt),
+                label: t('productImport.finished'),
+                value:
+                  job.completedAt === null ? <Waiting /> : formatDateTime(job.completedAt, locale),
               },
-              { label: 'Took', value: duration(job) },
-              { label: 'Import id', value: <Ident value={job.id} /> },
+              { label: t('productImport.took'), value: duration(job) },
+              { label: t('productImport.importId'), value: <Ident value={job.id} /> },
             ]}
           />
         </Panel>
@@ -242,29 +256,37 @@ function runState(status: BulkUploadStatus): ParachuteState {
  * variants, so sending the corrected rows again touches only them.
  */
 function ErrorReport({ job }: { readonly job: CsvImportView }): ReactElement {
+  const t = useT();
   const download = useErrorReportDownload();
 
   return (
-    <AreaSection title="Refused rows" note={`${job.rowsFailed} to fix`}>
+    <AreaSection
+      title={t('productImport.refusedRows')}
+      note={t('productImport.toFix', { rowsFailed: job.rowsFailed })}
+    >
       <Panel>
         <div className="inv-stack">
           <p className="inv-note" style={{ color: 'var(--fg-body)' }}>
-            {job.rowsFailed} row{job.rowsFailed === 1 ? '' : 's'} could not be written. The report
-            below carries each one with the reason it was refused — fix those rows and upload the
-            file again; re-importing updates what already exists rather than duplicating it.
+            {richMessage(t('productImport.rowCouldNotBe'), {
+              rowsFailed: job.rowsFailed,
+              plural: job.rowsFailed === 1 ? '' : 's',
+            })}
           </p>
           <div>
             <AsyncButton
               variant="secondary"
               size="md"
               icon={<Download size={15} />}
-              labels={{ idle: 'Download the report', busy: 'Preparing…' }}
+              labels={{
+                idle: t('productImport.downloadTheReport'),
+                busy: t('productImport.preparing'),
+              }}
               state={mutationPhase(download)}
               disabled={download.isPending}
               onClick={() => download.mutate({ id: job.id, fileName: job.fileName })}
             />
           </div>
-          {download.error !== null && <InlineError message={serverVerdict(download.error)} />}
+          {download.error !== null && <InlineError message={verdict(download.error, t)} />}
         </div>
       </Panel>
     </AreaSection>
@@ -277,28 +299,28 @@ function ErrorReport({ job }: { readonly job: CsvImportView }): ReactElement {
  * Describes what already happened; it does not predict what the server
  * would allow (FE-2) — nothing on this page writes.
  */
-const OUTCOME_COPY: Readonly<Record<BulkUploadStatus, string>> = {
-  [BulkUploadStatus.PENDING]: 'Queued. The file is with us and nothing has been read from it yet.',
-  [BulkUploadStatus.PROCESSING]: 'Running now. The counts below climb as rows are written.',
-  [BulkUploadStatus.COMPLETED]: 'Every row was written. Your catalogue matches this file.',
-  [BulkUploadStatus.COMPLETED_WITH_ERRORS]:
-    'The rows we could write are in your catalogue; the rest were refused and are listed in the error report below. Nothing that was written needs undoing.',
-  [BulkUploadStatus.FAILED]:
-    'The import stopped before it finished. Anything counted below was already written and stands — re-uploading the file updates those rows rather than duplicating them.',
-  [BulkUploadStatus.CANCELLED]: 'This import was cancelled. Anything counted below was written.',
-};
+const outcomeCopyOf = (t: Translate<MessageKey>): Readonly<Record<BulkUploadStatus, string>> => ({
+  [BulkUploadStatus.PENDING]: t('productImport.queuedTheFileIs'),
+  [BulkUploadStatus.PROCESSING]: t('productImport.runningNowTheCounts'),
+  [BulkUploadStatus.COMPLETED]: t('productImport.everyRowWasWritten'),
+  [BulkUploadStatus.COMPLETED_WITH_ERRORS]: t('productImport.theRowsWeCould'),
+  [BulkUploadStatus.FAILED]: t('productImport.theImportStoppedBefore'),
+  [BulkUploadStatus.CANCELLED]: t('productImport.thisImportWasCancelled'),
+});
 
 function BackLink(): ReactElement {
+  const t = useT();
   return (
     <AreaBackLink href="/products/import/jobs">
       <ArrowLeft size={14} />
-      Import history
+      {t('productImport.importHistory')}
     </AreaBackLink>
   );
 }
 
 function Waiting(): ReactElement {
-  return <span className="inv-faint">not yet</span>;
+  const t = useT();
+  return <span className="inv-faint">{t('productImport.notYet')}</span>;
 }
 
 /** Wall-clock time the worker held the file. Unknown until both ends
@@ -313,8 +335,8 @@ function duration(job: CsvImportView): string {
   return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString('en-IN');
+function formatDateTime(value: string, locale: Locale = 'en'): string {
+  return new Date(value).toLocaleString(dateTag(locale, 'en-IN'));
 }
 
 function DetailSkeleton(): ReactElement {

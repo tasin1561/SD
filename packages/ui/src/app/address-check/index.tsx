@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
 import { ComboSelect } from '../combo-select';
+import { useUiT } from '../i18n-client';
+import type { UiMessageKey } from '../i18n/ui-messages';
 import './address-check.css';
 
 /**
@@ -150,10 +152,10 @@ const ACTION_ICON: Record<AddressCheckAction, LucideIcon> = {
   reject: XCircle,
 };
 
-const ACTION_WORD: Record<AddressCheckAction, string> = {
-  approve: 'Looks deliverable',
-  confirm_with_customer: 'Confirm with the customer',
-  reject: 'Do not ship as written',
+const ACTION_WORD: Record<AddressCheckAction, UiMessageKey> = {
+  approve: 'ui.ac.action.approve',
+  confirm_with_customer: 'ui.ac.action.confirm',
+  reject: 'ui.ac.action.reject',
 };
 
 /**
@@ -172,24 +174,24 @@ const ACTION_WORD: Record<AddressCheckAction, string> = {
 const CONFIRM_ONLY_FIELDS: ReadonlySet<string> = new Set(['district', 'city', 'state']);
 
 /** `customer` / `pincode` / `inferred`, said the way a person would. */
-const SOURCE_WORD: Readonly<Record<string, string>> = {
-  customer: 'from customer',
-  pincode: 'from pincode',
-  inferred: 'inferred',
+const SOURCE_WORD: Readonly<Record<string, UiMessageKey>> = {
+  customer: 'ui.ac.src.customer',
+  pincode: 'ui.ac.src.pincode',
+  inferred: 'ui.ac.src.inferred',
 };
 
-const FIELD_WORD: Readonly<Record<string, string>> = {
-  house: 'House',
-  street: 'Street',
-  locality: 'Locality',
-  village_city: 'Village / city',
-  landmark: 'Landmark',
-  post_office: 'Post office',
-  police_station: 'Police station',
-  sub_district: 'Sub-district',
-  district: 'District',
-  state: 'State',
-  pincode: 'PIN code',
+const FIELD_WORD: Readonly<Record<string, UiMessageKey>> = {
+  house: 'ui.ac.field.house',
+  street: 'ui.ac.field.street',
+  locality: 'ui.ac.field.locality',
+  village_city: 'ui.ac.field.village_city',
+  landmark: 'ui.ac.field.landmark',
+  post_office: 'ui.ac.field.post_office',
+  police_station: 'ui.ac.field.police_station',
+  sub_district: 'ui.ac.field.sub_district',
+  district: 'ui.ac.field.district',
+  state: 'ui.ac.field.state',
+  pincode: 'ui.ac.field.pincode',
 };
 
 export function AddressCheckPanel({
@@ -203,6 +205,7 @@ export function AddressCheckPanel({
   onConfirmedWithCustomerChange,
   className,
 }: AddressCheckPanelProps): ReactElement {
+  const t = useUiT();
   const kind = result === null ? 'neutral' : result.available ? ACTION_KIND[result.action] : 'held';
   const style = {
     '--ac-fg': `var(--st-${kind}-fg)`,
@@ -211,11 +214,11 @@ export function AddressCheckPanel({
   } as CSSProperties;
 
   return (
-    <section className={clsx('sk-ac', className)} style={style} aria-label="Address check">
+    <section className={clsx('sk-ac', className)} style={style} aria-label={t('ui.ac.title')}>
       <header className="sk-ac__head">
         <span className="sk-ac__title">
           <MapPin size={15} aria-hidden="true" />
-          Address check
+          {t('ui.ac.title')}
         </span>
         {result !== null && result.available && result.score !== null ? (
           <Score value={result.score} />
@@ -229,7 +232,7 @@ export function AddressCheckPanel({
             aria-busy={busy}
           >
             <RefreshCw size={14} aria-hidden="true" className={busy ? 'sk-ac__spin' : undefined} />
-            {busy ? 'Checking…' : result === null ? 'Check address' : 'Check again'}
+            {busy ? t('ui.ac.checking') : result === null ? t('ui.ac.go') : t('ui.ac.again')}
           </button>
         ) : null}
       </header>
@@ -240,7 +243,7 @@ export function AddressCheckPanel({
         {result === null ? (
           <p className="sk-ac__hint">
             <CircleHelp size={14} aria-hidden="true" />
-            Fill in the address and PIN code, then check it. The customer sees nothing of this.
+            {t('ui.ac.hint')}
           </p>
         ) : !result.available ? (
           <Unavailable confirmed={confirmedWithCustomer} onChange={onConfirmedWithCustomerChange} />
@@ -258,10 +261,23 @@ export function AddressCheckPanel({
   );
 }
 
+/** A looked-up word (field, source) in the reader's language; an unknown key reads as itself. */
+function wordOf(
+  table: Readonly<Record<string, UiMessageKey>>,
+  key: string,
+  t: (k: UiMessageKey, params?: Record<string, string | number>) => string,
+  fallbackKey?: UiMessageKey,
+): string {
+  const k = table[key];
+  if (k !== undefined) return t(k);
+  return fallbackKey === undefined ? key : t(fallbackKey);
+}
+
 /** 0-100, with the bar filling from the left. Transform only. */
 function Score({ value }: { value: number }): ReactElement {
+  const t = useUiT();
   return (
-    <span className="sk-ac__score" title={`Validity score ${value} out of 100`}>
+    <span className="sk-ac__score" title={t('ui.ac.score', { n: value })}>
       <span className="sk-ac__score-num">{value}</span>
       <span className="sk-ac__score-track" aria-hidden="true">
         <span
@@ -280,17 +296,14 @@ function Unavailable({
   confirmed: boolean;
   onChange?: ((next: boolean) => void) | undefined;
 }): ReactElement {
+  const t = useUiT();
   return (
     <>
       <p className="sk-ac__verdict">
         <AlertTriangle size={15} aria-hidden="true" />
-        Address check unavailable
+        {t('ui.ac.unavailable')}
       </p>
-      <p className="sk-ac__hint">
-        We could not check this address just now, so nothing is known about it either way. The order
-        saves exactly as it always has — ring the customer if anything about the address looks thin.
-        We will check it again in the background.
-      </p>
+      <p className="sk-ac__hint">{t('ui.ac.unavailableBody')}</p>
       {onChange !== undefined ? <ConfirmBox confirmed={confirmed} onChange={onChange} /> : null}
     </>
   );
@@ -309,6 +322,7 @@ function Verdict({
   confirmed: boolean;
   onConfirmedChange?: ((next: boolean) => void) | undefined;
 }): ReactElement {
+  const t = useUiT();
   const Icon = ACTION_ICON[result.action];
   const extracted = Object.entries(result.extracted).filter(([, v]) => v !== null && v !== '');
 
@@ -316,8 +330,8 @@ function Verdict({
     <>
       <p className="sk-ac__verdict">
         <Icon size={15} aria-hidden="true" />
-        {ACTION_WORD[result.action]}
-        {result.rechecked ? <span className="sk-ac__re">re-checked</span> : null}
+        {t(ACTION_WORD[result.action])}
+        {result.rechecked ? <span className="sk-ac__re">{t('ui.ac.rechecked')}</span> : null}
       </p>
 
       {result.issues.length > 0 ? (
@@ -333,10 +347,12 @@ function Verdict({
           <div className="sk-ac__sugg sk-ac__sugg--confirm" key={s.field}>
             <span className="sk-ac__sugg-label">
               <AlertTriangle size={13} aria-hidden="true" />
-              {FIELD_WORD[s.field] ?? s.field} — confirm with the customer
+              {t('ui.ac.confirmOnly', {
+                field: wordOf(FIELD_WORD, s.field, t),
+              })}
             </span>
             <span className="sk-ac__sugg-why">
-              {s.reason ?? `The pincode says ${s.candidates.join(', ')}.`}
+              {s.reason ?? t('ui.ac.pincodeSays', { candidates: s.candidates.join(', ') })}
             </span>
             {/* Deliberately NOT buttons. Either half of the
                 disagreement may be the wrong one, and only the
@@ -353,7 +369,7 @@ function Verdict({
           <div className="sk-ac__sugg" key={s.field}>
             <span className="sk-ac__sugg-label">
               <Lightbulb size={13} aria-hidden="true" />
-              {FIELD_WORD[s.field] ?? s.field}
+              {wordOf(FIELD_WORD, s.field, t)}
               {s.reason === undefined ? null : <em> — {s.reason}</em>}
             </span>
             {/* Every candidate is offered and none is pre-chosen: the
@@ -389,11 +405,11 @@ function Verdict({
         <dl className="sk-ac__fields">
           {extracted.map(([k, v]) => (
             <div className="sk-ac__field" key={k}>
-              <dt>{FIELD_WORD[k] ?? k}</dt>
+              <dt>{wordOf(FIELD_WORD, k, t)}</dt>
               <dd>
                 {v}
                 <span className="sk-ac__src">
-                  {SOURCE_WORD[result.fieldSource[k] ?? ''] ?? 'unknown source'}
+                  {wordOf(SOURCE_WORD, result.fieldSource[k] ?? '', t, 'ui.ac.src.unknown')}
                 </span>
               </dd>
             </div>
@@ -408,7 +424,7 @@ function Verdict({
         <p className="sk-ac__label-addr">
           <ShieldCheck size={14} aria-hidden="true" />
           <span>
-            <strong>Suggested label address</strong>
+            <strong>{t('ui.ac.labelAddress')}</strong>
             {result.completedAddress}
           </span>
         </p>
@@ -416,8 +432,8 @@ function Verdict({
 
       <p className="sk-ac__rto">
         {result.rtoRiskStatus === 'shown' && result.rtoRisk !== null
-          ? `Return risk: ${Math.round(result.rtoRisk * 100)}%`
-          : 'Return risk: not enough data yet'}
+          ? t('ui.ac.rto', { pct: Math.round(result.rtoRisk * 100) })
+          : t('ui.ac.rtoNone')}
       </p>
 
       {result.action === 'confirm_with_customer' && onConfirmedChange !== undefined ? (
@@ -453,14 +469,15 @@ function OtherOffices({
   onPick: (name: string) => void;
   disabled: boolean;
 }): ReactElement | null {
+  const t = useUiT();
   const shown = new Set(offered.map((c) => c.toLowerCase()));
   const rest = (all ?? []).filter((o) => !shown.has(o.name.toLowerCase()));
   if (rest.length === 0) return null;
   return (
     <ComboSelect
       className="sk-ac__others"
-      label={`Other offices of this pincode (${rest.length})`}
-      placeholder="Type to search…"
+      label={t('ui.ac.others', { n: rest.length })}
+      placeholder={t('ui.ac.typeToSearch')}
       disabled={disabled}
       value={null}
       options={rest.map((o) => ({
@@ -471,7 +488,7 @@ function OtherOffices({
         // empty line under every name.
         ...(o.type === null || o.type === '' ? {} : { description: o.type }),
       }))}
-      emptyText="No office of this pincode matches that."
+      emptyText={t('ui.ac.noOffice')}
       onChange={(value) => {
         if (value !== null && value !== '') onPick(value);
       }}
@@ -486,10 +503,11 @@ function ConfirmBox({
   confirmed: boolean;
   onChange: (next: boolean) => void;
 }): ReactElement {
+  const t = useUiT();
   return (
     <label className="sk-ac__confirm">
-      <input type="checkbox" checked={confirmed} onChange={(e) => onChange(e.target.checked)} />I
-      confirmed this address with the customer
+      <input type="checkbox" checked={confirmed} onChange={(e) => onChange(e.target.checked)} />
+      {t('ui.ac.confirmed')}
     </label>
   );
 }

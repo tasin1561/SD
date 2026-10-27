@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { SetPageHeader } from '../_components/settings-parts';
 import { AlertConfigPanel } from './_components/alert-config-panel';
+import { getT } from '@/i18n/server';
 
 /**
  * Stock alerts, in Settings.
@@ -15,18 +16,19 @@ import { AlertConfigPanel } from './_components/alert-config-panel';
  * The per-SKU override stays on the variant page, next to the SKU it
  * applies to.
  */
-export default function StockSettingsPage(): ReactElement {
+export default async function StockSettingsPage(): Promise<ReactElement> {
+  const { t } = await getT();
   return (
     <div className="set-page">
       <SetPageHeader
         crumbs={[
-          { label: 'Client console' },
-          { label: 'Account' },
-          { label: 'Settings', href: '/settings' },
-          { label: 'Stock alerts' },
+          { label: t('settingsStock.clientConsole') },
+          { label: t('settingsStock.account') },
+          { label: t('settingsStock.settings'), href: '/settings' },
+          { label: t('settingsStock.stockAlerts') },
         ]}
-        title="Stock alerts"
-        subtitle="When we warn you that a SKU is running out. A SKU with its own threshold ignores this one."
+        title={t('settingsStock.stockAlerts')}
+        subtitle={t('settingsStock.whenWeWarnYou')}
       />
       <AlertConfigPanel />
     </div>

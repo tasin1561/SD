@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { AccessTokenStore, ApiClient, type ImpersonationSessionView } from '@skydrop/api-client';
 import { ButtonLink } from '@skydrop/ui/app/button';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * Spends the handoff token for a session cookie, then leaves.
@@ -28,6 +29,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  * not return to a URL whose fragment still carries it.
  */
 export function HandoffPanel(): ReactElement {
+  const t = useT();
   const [error, setError] = useState<string | null>(null);
   const fired = useRef(false);
 
@@ -37,9 +39,7 @@ export function HandoffPanel(): ReactElement {
 
     const token = tokenFromFragment(window.location.hash);
     if (token === null) {
-      setError(
-        'This link has no handoff token in it. Links are single-use and good for one minute, so open the session again from the staff console rather than re-using this address.',
-      );
+      setError(t('impersonation.thisLinkHasNo'));
       return;
     }
     window.history.replaceState(null, '', window.location.pathname);
@@ -62,15 +62,15 @@ export function HandoffPanel(): ReactElement {
         });
         window.location.replace('/dashboard');
       } catch (err) {
-        setError(serverVerdict(err, 'The support session could not be opened.'));
+        setError(verdict(err, t, t('impersonation.theSupportSessionCould')));
       }
     })();
-  }, []);
+  }, [t]);
 
   if (error === null) {
     return (
       <p className="text-text-muted text-xs" role="status">
-        Opening… do not reload this page.
+        {t('impersonation.openingDoNotReload')}
       </p>
     );
   }
@@ -83,13 +83,9 @@ export function HandoffPanel(): ReactElement {
       >
         {error}
       </div>
-      <p className="text-text-muted text-xs">
-        Nothing has been opened in anybody&rsquo;s account. Go back to the staff console and start
-        the session again — the reason you typed is already recorded, so a reviewer will see the
-        attempt either way.
-      </p>
+      <p className="text-text-muted text-xs">{t('impersonation.nothingHasBeenOpened')}</p>
       <ButtonLink href="/login" variant="secondary" fullWidth>
-        Client sign-in
+        {t('impersonation.clientSignIn')}
       </ButtonLink>
     </div>
   );

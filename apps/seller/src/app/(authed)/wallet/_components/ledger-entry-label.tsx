@@ -1,6 +1,9 @@
+'use client';
+
 import type { ReactElement } from 'react';
 import type { WalletEntryDirection } from '@skydrop/db';
 import { walletDirectionLabel } from '@skydrop/ui/status';
+import { useLocale } from '@/i18n/client';
 
 /**
  * What a ledger row says it is: the direction's label and, beneath it, the
@@ -18,9 +21,10 @@ export function LedgerEntryLabel({
   readonly direction: WalletEntryDirection;
   readonly note: string | null;
 }): ReactElement {
+  const locale = useLocale();
   return (
     <>
-      {walletDirectionLabel(direction)}
+      {walletDirectionLabel(direction, locale)}
       {note && <div className="wal-type__note">{note}</div>}
     </>
   );

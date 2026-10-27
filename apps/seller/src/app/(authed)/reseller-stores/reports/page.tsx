@@ -27,8 +27,10 @@ import {
   useSetAutoPause,
   type StoreScoreRow,
 } from '@/lib/reseller-report-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { RsFact, RsFacts, RsLink, RsSection, RsStrip, RsStripFact } from '../_components/rs-parts';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 const pct = (v: string | null): string => (v === null ? '—' : `${v}%`);
 
@@ -50,6 +52,8 @@ const pct = (v: string | null): string => (v === null ? '—' : `${v}%`);
  *       would read as complete when it is not (TRE-6's rule).
  */
 export default function ResellerReportsPage(): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const identity = useSellerIdentity();
   const mayManage = can(identity, 'stores.manage');
   const initial = lastDays(30);
@@ -73,10 +77,14 @@ export default function ResellerReportsPage(): ReactElement {
   return (
     <div className="rs-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Client console' }, { label: 'Reselling' }, { label: 'Reports' }]}
+        breadcrumbs={[
+          { label: t('resellerReports.clientConsole') },
+          { label: t('resellerReports.reselling') },
+          { label: t('resellerReports.reports') },
+        ]}
         Link={Link}
-        title="Member store reports"
-        subtitle="How each of your member stores is doing, what it earned you, and when one pauses itself for too many returns."
+        title={t('resellerReports.memberStoreReports')}
+        subtitle={t('resellerReports.howEachOfYour')}
         meta={
           !loaded ? undefined : (
             <RsFacts>
@@ -84,13 +92,21 @@ export default function ResellerReportsPage(): ReactElement {
                 {stores.length} {stores.length === 1 ? 'store' : 'stores'}
               </RsFact>
               <RsFact>
-                {istDateLabel(window.from)} – {istDateLabel(window.to)}
+                {istDateLabel(window.from, locale)} – {istDateLabel(window.to, locale)}
               </RsFact>
-              {autoPaused > 0 && <RsFact tone="warn">{autoPaused} auto-pause on</RsFact>}
+              {autoPaused > 0 && (
+                <RsFact tone="warn">
+                  {richMessage(t('resellerReports.autoPauseOn'), { autoPaused })}
+                </RsFact>
+              )}
             </RsFacts>
           )
         }
-        action={<RsLink href="/reseller-stores/stock-forecast">Stock forecast</RsLink>}
+        action={
+          <RsLink href="/reseller-stores/stock-forecast">
+            {t('resellerReports.stockForecast')}
+          </RsLink>
+        }
       />
 
       {/* ── The window, across every store ──────────────────────────
@@ -109,23 +125,23 @@ export default function ResellerReportsPage(): ReactElement {
       ) : (
         <div className="rs-kpis">
           <KpiCard
-            label="Orders placed"
+            label={t('resellerReports.ordersPlaced')}
             icon={<Package size={14} />}
             figure={loaded ? <Num value={placed} /> : dash}
             unit={loaded ? (placed === 1 ? 'order' : 'orders') : undefined}
             tone="neutral"
-            hint="By your member stores, in this window."
+            hint={t('resellerReports.byYourMemberStores')}
           />
           <KpiCard
-            label="Units delivered"
+            label={t('resellerReports.unitsDelivered')}
             icon={<TrendingUp size={14} />}
             figure={loaded ? <Num value={units} /> : dash}
             unit={loaded ? 'units' : undefined}
             tone="neutral"
-            hint="Reached a customer and stayed there."
+            hint={t('resellerReports.reachedACustomerAnd')}
           />
           <KpiCard
-            label="Margin on what shipped"
+            label={t('resellerReports.marginOnWhatShipped')}
             icon={<PercentCircle size={14} />}
             figure={loaded ? <Money amount={margin} decimals={false} /> : dash}
             tone="neutral"
@@ -133,71 +149,80 @@ export default function ResellerReportsPage(): ReactElement {
               ? {
                   foot: [
                     {
-                      label: 'Lines we could price',
+                      label: t('resellerReports.linesWeCouldPrice'),
                       value: `${marginPriced} / ${marginLines}`,
                     },
                   ],
                 }
               : {})}
-            hint="Transfer price less your unit cost, where the cost is recorded."
+            hint={t('resellerReports.transferPriceLessYour')}
           />
           <KpiCard
-            label="Auto-pause armed"
+            label={t('resellerReports.autoPauseArmed')}
             icon={<Undo2 size={14} />}
             figure={loaded ? <Num value={autoPaused} /> : dash}
             unit={loaded ? `of ${stores.length}` : undefined}
             tone={loaded && autoPaused > 0 ? 'pending' : 'neutral'}
-            hint="Stores that stop themselves when too many parcels come back."
+            hint={t('resellerReports.storesThatStopThemselves')}
           />
         </div>
       )}
 
       <RsSection
-        title="The window"
-        note="Days are counted in IST, the same as everything else on your account."
+        title={t('resellerReports.theWindow')}
+        note={t('resellerReports.daysAreCountedIn')}
       >
         <div className="rs-dates">
           <DateField
             id="from"
-            label="From"
+            label={t('resellerReports.from')}
             value={from}
             onChange={(e) => setFrom(e.target.value)}
           />
-          <DateField id="to" label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DateField
+            id="to"
+            label={t('resellerReports.to')}
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+          />
         </div>
       </RsSection>
 
-      {cards.isPending && <SkeletonRows rows={5} cols={10} label="Loading the scorecards" />}
+      {cards.isPending && (
+        <SkeletonRows rows={5} cols={10} label={t('resellerReports.loadingTheScorecards')} />
+      )}
       {cards.isError && (
-        <ErrorState message={serverVerdict(cards.error)} retry={() => void cards.refetch()} />
+        <ErrorState message={verdict(cards.error, t)} retry={() => void cards.refetch()} />
       )}
       {cards.data !== undefined &&
         (stores.length === 0 ? (
           <EmptyState
-            title="No member stores yet"
-            description="Open one for a business that will resell your stock, and its numbers appear here."
-            action={<RsLink href="/reseller-stores">Open a member store</RsLink>}
+            title={t('resellerReports.noMemberStoresYet')}
+            description={t('resellerReports.openOneForA')}
+            action={
+              <RsLink href="/reseller-stores">{t('resellerReports.openAMemberStore')}</RsLink>
+            }
           />
         ) : (
           <>
             <RsSection
-              title="Scorecards"
-              note="Rates leave out orders whose outcome is not known yet."
+              title={t('resellerReports.scorecards')}
+              note={t('resellerReports.ratesLeaveOutOrders')}
               flush
             >
-              <Table caption="Scorecards">
+              <Table caption={t('resellerReports.scorecards')}>
                 <THead>
                   <Tr>
-                    <Th>Store</Th>
-                    <Th align="right">Placed</Th>
-                    <Th align="right">Confirmed</Th>
-                    <Th align="right">Cancelled</Th>
-                    <Th align="right">Delivered</Th>
-                    <Th align="right">Returned</Th>
-                    <Th align="right">Units</Th>
-                    <Th align="right">Margin</Th>
-                    <Th align="right">Balance</Th>
-                    <Th>Auto-pause</Th>
+                    <Th>{t('resellerReports.store')}</Th>
+                    <Th align="right">{t('resellerReports.placed')}</Th>
+                    <Th align="right">{t('resellerReports.confirmed')}</Th>
+                    <Th align="right">{t('resellerReports.cancelled')}</Th>
+                    <Th align="right">{t('resellerReports.delivered')}</Th>
+                    <Th align="right">{t('resellerReports.returned')}</Th>
+                    <Th align="right">{t('resellerReports.units')}</Th>
+                    <Th align="right">{t('resellerReports.margin')}</Th>
+                    <Th align="right">{t('resellerReports.balance')}</Th>
+                    <Th>{t('resellerReports.autoPause')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -211,7 +236,7 @@ export default function ResellerReportsPage(): ReactElement {
                           <div className="rs-block">
                             <StatusChip
                               kind={resellerStoreStatusKind(s.status)}
-                              label={resellerStoreStatusLabel(s.status)}
+                              label={resellerStoreStatusLabel(s.status, locale)}
                               size="sm"
                             />
                           </div>
@@ -241,8 +266,10 @@ export default function ResellerReportsPage(): ReactElement {
                             priced from half the lines is not the same
                             claim as one priced from all of them. */}
                         <span className="rs-faint rs-block">
-                          cost known {s.scorecard.marginCoverage.linesWithCost}/
-                          {s.scorecard.marginCoverage.lines}
+                          {richMessage(t('resellerReports.costKnown'), {
+                            linesWithCost: s.scorecard.marginCoverage.linesWithCost,
+                            lines: s.scorecard.marginCoverage.lines,
+                          })}
                         </span>
                       </Td>
                       <Td align="right">
@@ -251,8 +278,11 @@ export default function ResellerReportsPage(): ReactElement {
                       <Td>
                         <span className="rs-small rs-block">
                           {s.autoPause !== null && s.autoPause.enabled
-                            ? `> ${s.autoPause.returnRatePercent}% over ${s.autoPause.windowDays}d`
-                            : 'Off'}
+                            ? t('resellerReports.overD', {
+                                returnRatePercent: s.autoPause.returnRatePercent,
+                                windowDays: s.autoPause.windowDays,
+                              })
+                            : t('resellerReports.off')}
                         </span>
                         {mayManage && (
                           <Button
@@ -261,7 +291,7 @@ export default function ResellerReportsPage(): ReactElement {
                             icon={<Settings2 size={13} />}
                             onClick={() => setEditing(s)}
                           >
-                            Change
+                            {t('resellerReports.change')}
                           </Button>
                         )}
                       </Td>
@@ -272,17 +302,17 @@ export default function ResellerReportsPage(): ReactElement {
             </RsSection>
 
             <RsSection
-              title="Stores ranked by what they made you"
-              note="Wallet credits less charges, less the cost of the goods delivered where a cost is recorded."
+              title={t('resellerReports.storesRankedByWhat')}
+              note={t('resellerReports.walletCreditsLessCharges')}
               flush
             >
-              <Table caption="Stores ranked by what they made you">
+              <Table caption={t('resellerReports.storesRankedByWhat')}>
                 <THead>
                   <Tr>
                     <Th>#</Th>
-                    <Th>Store</Th>
-                    <Th align="right">Profit</Th>
-                    <Th align="right">Cost known</Th>
+                    <Th>{t('resellerReports.store')}</Th>
+                    <Th align="right">{t('resellerReports.profit')}</Th>
+                    <Th align="right">{t('resellerReports.costKnown2')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -309,35 +339,34 @@ export default function ResellerReportsPage(): ReactElement {
         ))}
 
       <RsSection
-        title="Transfer revenue by store"
-        note="Every wallet entry in the window naming one of that store's orders."
+        title={t('resellerReports.transferRevenueByStore')}
+        note={t('resellerReports.everyWalletEntryIn')}
         flush
       >
-        {revenue.isPending && <SkeletonRows rows={3} cols={5} label="Loading transfer revenue" />}
+        {revenue.isPending && (
+          <SkeletonRows rows={3} cols={5} label={t('resellerReports.loadingTransferRevenue')} />
+        )}
         {revenue.isError && (
           <div className="rs-card__pad">
-            <ErrorState
-              message={serverVerdict(revenue.error)}
-              retry={() => void revenue.refetch()}
-            />
+            <ErrorState message={verdict(revenue.error, t)} retry={() => void revenue.refetch()} />
           </div>
         )}
         {revenue.data !== undefined &&
           (revenue.data.stores.length === 0 ? (
             <EmptyState
               bare
-              title="Nothing on your wallet from a store in this window"
-              description="Credits and charges appear here once a store's orders reach the point they are paid."
+              title={t('resellerReports.nothingOnYourWallet')}
+              description={t('resellerReports.creditsAndChargesAppear')}
             />
           ) : (
-            <Table caption="Transfer revenue by store">
+            <Table caption={t('resellerReports.transferRevenueByStore')}>
               <THead>
                 <Tr>
-                  <Th>Store</Th>
-                  <Th align="right">Credited</Th>
-                  <Th align="right">Charged</Th>
-                  <Th align="right">Net</Th>
-                  <Th align="right">Delivered (transfer value)</Th>
+                  <Th>{t('resellerReports.store')}</Th>
+                  <Th align="right">{t('resellerReports.credited')}</Th>
+                  <Th align="right">{t('resellerReports.charged')}</Th>
+                  <Th align="right">{t('resellerReports.net')}</Th>
+                  <Th align="right">{t('resellerReports.deliveredTransferValue')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -353,7 +382,12 @@ export default function ResellerReportsPage(): ReactElement {
                           {s.rows.length} entries
                           {s.rows[0] === undefined
                             ? ''
-                            : `, latest ${istDateLabel(s.rows[s.rows.length - 1]?.at ?? s.rows[0].at)}`}
+                            : t('resellerReports.latest', {
+                                at: istDateLabel(
+                                  s.rows[s.rows.length - 1]?.at ?? s.rows[0].at,
+                                  locale,
+                                ),
+                              })}
                         </span>
                       </Td>
                       <Td align="right">
@@ -379,14 +413,17 @@ export default function ResellerReportsPage(): ReactElement {
 
       {loaded && stores.length > 0 && (
         <RsStrip>
-          <RsStripFact label="Orders placed" value={<Num value={placed} />} />
-          <RsStripFact label="Units delivered" value={<Num value={units} />} />
+          <RsStripFact label={t('resellerReports.ordersPlaced')} value={<Num value={placed} />} />
+          <RsStripFact label={t('resellerReports.unitsDelivered')} value={<Num value={units} />} />
           <RsStripFact
-            label="Margin"
+            label={t('resellerReports.margin')}
             value={<Money amount={margin} decimals={false} />}
             tone={margin > 0 ? 'good' : 'neutral'}
           />
-          <RsStripFact label="Cost known" value={`${marginPriced} / ${marginLines} lines`} />
+          <RsStripFact
+            label={t('resellerReports.costKnown2')}
+            value={`${marginPriced} / ${marginLines} lines`}
+          />
         </RsStrip>
       )}
 
@@ -402,6 +439,7 @@ function AutoPauseModal({
   store: StoreScoreRow;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const save = useSetAutoPause();
   const rule = store.autoPause;
@@ -422,10 +460,10 @@ function AutoPauseModal({
         windowDays: Number(days),
       });
     } catch (err) {
-      toast.error(serverVerdict(err));
+      toast.error(verdict(err, t));
       throw err;
     }
-    toast.success('Saved.');
+    toast.success(t('resellerReports.saved'));
     onClose();
   }
 
@@ -435,28 +473,36 @@ function AutoPauseModal({
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
-      title={`Auto-pause “${store.name}”`}
-      description="Pause this store automatically — no new orders — when more of its parcels come back than you allow. Orders already placed carry on; you resume it yourself. After you resume, only parcels that come back afterwards count."
+      title={t('resellerReports.autoPause2', { store: store.name })}
+      description={t('resellerReports.pauseThisStoreAutomatically')}
       icon={<Undo2 size={18} />}
       footer={
         <DialogFooter>
           <Button variant="secondary" size="md" onClick={onClose}>
-            Cancel
+            {t('resellerReports.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
-            labels={{ idle: 'Save', busy: 'Saving…', done: 'Saved' }}
+            labels={{
+              idle: t('resellerReports.save'),
+              busy: t('resellerReports.saving'),
+              done: t('resellerReports.saved2'),
+            }}
             onAction={doSave}
           />
         </DialogFooter>
       }
     >
       <div className="rs-form">
-        <Switch checked={enabled} onCheckedChange={setEnabled} label="Pause automatically" />
+        <Switch
+          checked={enabled}
+          onCheckedChange={setEnabled}
+          label={t('resellerReports.pauseAutomatically')}
+        />
         <TextField
           id="rate"
-          label="Return rate above (%)"
+          label={t('resellerReports.returnRateAbove')}
           inputMode="decimal"
           inputClassName="sk-figure"
           value={rate}
@@ -464,7 +510,7 @@ function AutoPauseModal({
         />
         <TextField
           id="min"
-          label="Once at least this many parcels have an outcome"
+          label={t('resellerReports.onceAtLeastThis')}
           inputMode="numeric"
           inputClassName="sk-figure"
           value={min}
@@ -472,7 +518,7 @@ function AutoPauseModal({
         />
         <TextField
           id="days"
-          label="Over the last N days"
+          label={t('resellerReports.overTheLastN')}
           inputMode="numeric"
           inputClassName="sk-figure"
           value={days}

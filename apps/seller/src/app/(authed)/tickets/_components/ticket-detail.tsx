@@ -13,9 +13,12 @@ import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { Skeleton } from '@skydrop/ui/app/skeleton';
 import type { TicketView } from '@/lib/ops-hooks';
 import { useSellerTicket } from '@/lib/ticket-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { TicketConversation } from './ticket-conversation';
 import './tickets.css';
+import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 /**
  * One ticket, opened.
@@ -36,6 +39,8 @@ import './tickets.css';
  * tell them they were paid.
  */
 export function TicketDetail({ ticketId }: { readonly ticketId: string }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const query = useSellerTicket(ticketId);
 
   if (query.isLoading) return <DetailSkeleton />;
@@ -45,20 +50,17 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
       <div className="tkt-page">
         <div>
           <BackLink />
-          <PageHeader title="Ticket" />
+          <PageHeader title={t('tickets.ticket')} />
         </div>
         <div className="tkt-card">
           {/* FE-2 — the server's verdict verbatim. A wrong id and
               another seller's ticket both come back TICKET_NOT_FOUND,
               which is the whole message worth showing. */}
           <ErrorState
-            message={serverVerdict(query.error, 'Could not load this ticket.')}
+            message={verdict(query.error, t, t('tickets.couldNotLoadThis'))}
             retry={() => void query.refetch()}
           />
-          <p className="tkt-help">
-            If this ticket was raised from another account in your company, ask them to open it —
-            tickets are scoped to the client they belong to.
-          </p>
+          <p className="tkt-help">{t('tickets.ifThisTicketWas')}</p>
         </div>
       </div>
     );
@@ -74,10 +76,10 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
   const openedByStore = ticket.openedBy === 'STORE';
   const raisedByUs = ticket.openedBy !== 'SELLER' && !openedByStore;
   const raisedBy = openedByStore
-    ? `Raised by ${ticket.storeName ?? 'a member store'}`
+    ? t('tickets.raisedByStoreName', { name: ticket.storeName ?? t('tickets.aMemberStore') })
     : raisedByUs
-      ? 'Raised by Skydrop'
-      : 'Raised by you';
+      ? t('tickets.raisedBySkydrop')
+      : t('tickets.raisedByYou');
 
   return (
     <div className="tkt-page">
@@ -86,8 +88,8 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
 
         <PageHeader
           breadcrumbs={[
-            { label: 'Client console' },
-            { label: 'Support', href: '/tickets' },
+            { label: t('tickets.clientConsole') },
+            { label: t('tickets.support'), href: '/tickets' },
             { label: ticket.ticketNumber },
           ]}
           Link={Link}
@@ -99,7 +101,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
               {ticket.subject}
             </span>
           }
-          subtitle={`${raisedBy} on ${formatDateTime(ticket.createdAt)}`}
+          subtitle={`${raisedBy} on ${formatDateTime(ticket.createdAt, locale)}`}
           /*
             Standing facts about THIS ticket, under its number.
 
@@ -114,13 +116,13 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
             <span className="tkt-meta">
               <Fact tone="accent">{humanise(ticket.ticketType)}</Fact>
               {ticket.courierCode !== null && <Fact>{ticket.courierCode}</Fact>}
-              {raisedByUs && <Fact dot>Opened for you</Fact>}
+              {raisedByUs && <Fact dot>{t('tickets.openedForYou')}</Fact>}
             </span>
           }
           action={
             <StatusChip
               kind={ticketStatusKind(ticket.status)}
-              label={ticketStatusLabel(ticket.status)}
+              label={ticketStatusLabel(ticket.status, locale)}
             />
           }
         />
@@ -134,7 +136,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
              and nothing being owed look the same at a glance otherwise. */}
       <div className="tkt-kpis">
         <KpiCard
-          label="Status"
+          label={t('tickets.status')}
           icon={<CircleDot size={14} />}
           /*
             `ticketStatusLabel`, NOT a local `humanise` of the enum.
@@ -145,11 +147,11 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
             live in `@skydrop/ui/status` (FE-6) — a second vocabulary
             here is the drift that rule exists to prevent.
           */
-          figure={<span className="tkt-tile-text">{ticketStatusLabel(ticket.status)}</span>}
+          figure={<span className="tkt-tile-text">{ticketStatusLabel(ticket.status, locale)}</span>}
           tone={kpiTone(statTone(ticket.status))}
         />
         <KpiCard
-          label="Refunded to you"
+          label={t('tickets.refundedToYou')}
           icon={<Wallet size={14} />}
           figure={
             ticket.resolutionAmountInr === null ? (
@@ -161,21 +163,23 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
           tone={ticket.resolutionAmountInr === null ? 'neutral' : 'credit'}
           hint={
             ticket.resolutionAmountInr === null
-              ? 'Nothing credited yet.'
-              : 'In your wallet balance.'
+              ? t('tickets.nothingCreditedYet')
+              : t('tickets.inYourWalletBalance')
           }
         />
         <KpiCard
-          label="Raised"
+          label={t('tickets.raised')}
           icon={<CalendarClock size={14} />}
-          figure={<span className="tkt-tile-text">{formatDate(ticket.createdAt)}</span>}
+          figure={<span className="tkt-tile-text">{formatDate(ticket.createdAt, locale)}</span>}
           tone="neutral"
           hint={
-            ticket.resolvedAt === null ? 'Still open.' : `Closed ${formatDate(ticket.resolvedAt)}.`
+            ticket.resolvedAt === null
+              ? t('tickets.stillOpen')
+              : t('tickets.closed', { resolvedAt: formatDate(ticket.resolvedAt, locale) })
           }
         />
         <KpiCard
-          label="About"
+          label={t('tickets.about')}
           icon={<PackageSearch size={14} />}
           figure={
             ticket.orderNumber !== null ? (
@@ -194,9 +198,9 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
           tone="neutral"
           hint={
             ticket.orderNumber !== null
-              ? 'The order this is about.'
+              ? t('tickets.theOrderThisIs')
               : ticket.receiptNumber !== null
-                ? 'The goods receipt this is about.'
+                ? t('tickets.theGoodsReceiptThis')
                 : undefined
           }
         />
@@ -205,10 +209,10 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
       {ticket.resolutionAmountInr !== null && <RefundBanner ticket={ticket} />}
 
       <section className="tkt-section">
-        <SectionHeading title="Ticket" note="The facts we hold about it." />
+        <SectionHeading title={t('tickets.ticket')} note={t('tickets.theFactsWeHold')} />
         <div className="tkt-card">
           <dl className="tkt-facts">
-            <FactItem label="Type">
+            <FactItem label={t('tickets.type')}>
               {/* Who is asking, then what about. The category the
                   seller picked is the fastest thing on the page for
                   recognising their own ticket in a list of four. */}
@@ -220,25 +224,25 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
                 />
               </span>
             </FactItem>
-            <FactItem label="Status">
+            <FactItem label={t('tickets.status')}>
               <StatusChip
                 kind={ticketStatusKind(ticket.status)}
-                label={ticketStatusLabel(ticket.status)}
+                label={ticketStatusLabel(ticket.status, locale)}
                 size="sm"
               />
             </FactItem>
-            <FactItem label="Courier">{ticket.courierCode ?? <Dash />}</FactItem>
+            <FactItem label={t('tickets.courier')}>{ticket.courierCode ?? <Dash />}</FactItem>
             {ticket.receiptNumber == null ? null : (
               // A short count at the warehouse (TKT-3): the receipt and
               // the consignment it belongs to.
-              <FactItem label="Goods receipt">
+              <FactItem label={t('tickets.goodsReceipt')}>
                 <span className="tkt-small sk-ident">
                   {ticket.receiptNumber}
                   {ticket.consignmentNumber == null ? '' : ` · ${ticket.consignmentNumber}`}
                 </span>
               </FactItem>
             )}
-            <FactItem label="Order">
+            <FactItem label={t('tickets.order')}>
               {/* The NUMBER, not the uuid. A uuid cannot be read aloud,
                   repeated down a phone, or matched against the order
                   list; the id is still what the link uses. */}
@@ -250,7 +254,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
                 </Link>
               )}
             </FactItem>
-            <FactItem label="Parcel">
+            <FactItem label={t('tickets.parcel')}>
               {/* A seller has no shipment page — parcels are shown on the
                   order — so the id is evidence to quote at us, not a link
                   to nowhere. */}
@@ -262,8 +266,8 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
                 <Ident value={ticket.shipmentId} />
               )}
             </FactItem>
-            <FactItem label="Closed">
-              {ticket.resolvedAt === null ? <Dash /> : formatDateTime(ticket.resolvedAt)}
+            <FactItem label={t('tickets.closed2')}>
+              {ticket.resolvedAt === null ? <Dash /> : formatDateTime(ticket.resolvedAt, locale)}
             </FactItem>
           </dl>
 
@@ -289,10 +293,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
         messages harder to find rather than the history clearer.
       */}
       <section className="tkt-section">
-        <SectionHeading
-          title="Conversation"
-          note="What you told us, what we found out, and anything the courier said."
-        />
+        <SectionHeading title={t('tickets.conversation')} note={t('tickets.whatYouToldUs')} />
         <div className="tkt-card">
           <TicketConversation ticket={ticket} />
         </div>
@@ -311,10 +312,12 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
  * ticket provably the same event.
  */
 function RefundBanner({ ticket }: { readonly ticket: TicketView }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   return (
     <div className="tkt-refund">
       <div>
-        <p className="tkt-refund__label">Refunded to you</p>
+        <p className="tkt-refund__label">{t('tickets.refundedToYou')}</p>
         <Money
           amount={ticket.resolutionAmountInr ?? '0'}
           direction="credit"
@@ -323,29 +326,32 @@ function RefundBanner({ ticket }: { readonly ticket: TicketView }): ReactElement
         />
         <p className="tkt-refund__body">
           {ticket.resolvedAt === null
-            ? 'Credited to your Skydrop wallet.'
-            : `Credited to your Skydrop wallet on ${formatDateTime(ticket.resolvedAt)}.`}{' '}
-          It is part of your balance now and goes out with your next withdrawal.
+            ? t('tickets.creditedToYourSkydrop')
+            : t('tickets.creditedToYourSkydrop2', {
+                resolvedAt: formatDateTime(ticket.resolvedAt, locale),
+              })}{' '}
+          {t('tickets.itIsPartOf')}
         </p>
         {ticket.resolutionWalletEntryId !== null && (
           <p className="tkt-refund__entry">
-            Ledger entry <Ident value={ticket.resolutionWalletEntryId} />
+            {t('tickets.ledgerEntry')} <Ident value={ticket.resolutionWalletEntryId} />
           </p>
         )}
       </div>
       <Link href="/wallet" className="tkt-refund__link">
         <Wallet size={14} aria-hidden />
-        View it in your wallet
+        {t('tickets.viewItInYour')}
       </Link>
     </div>
   );
 }
 
 function BackLink(): ReactElement {
+  const t = useT();
   return (
     <Link href="/tickets" className="tkt-back">
       <ArrowLeft size={13} aria-hidden />
-      All tickets
+      {t('tickets.allTickets')}
     </Link>
   );
 }
@@ -434,13 +440,13 @@ function kpiTone(tone: 'neutral' | 'warn' | 'bad' | 'good'): KpiTone {
   }
 }
 
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString('en-IN');
+function formatDateTime(value: string, locale: Locale = 'en'): string {
+  return new Date(value).toLocaleString(dateTag(locale, 'en-IN'));
 }
 
 /** Day and month only — a tile is a glance, not a timestamp. */
-function formatDate(value: string): string {
-  return new Date(value).toLocaleDateString('en-IN', {
+function formatDate(value: string, locale: Locale = 'en'): string {
+  return new Date(value).toLocaleDateString(dateTag(locale, 'en-IN'), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
