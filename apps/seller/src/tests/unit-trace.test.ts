@@ -1,4 +1,4 @@
-import { readEnglish } from './english-source';
+import { readEnglish, readForeignEnglish } from './english-source';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -31,7 +31,16 @@ const flat = (src: string): string => src.replace(/\s+/g, ' ');
 const SELLER = R('../app/(authed)/inventory/units/_components/unit-trace-panel.tsx');
 const SELLER_INDEX = R('../app/(authed)/inventory/units/_components/unit-discrepancies-index.tsx');
 const SELLER_HOOKS = R('../lib/ops-hooks.ts');
-const ADMIN = R('../../../admin/src/app/(authed)/inventory-units/_components/unit-trace-panel.tsx');
+// Admin's twin of this panel, read with ADMIN's catalogue: the copy
+// asserted below moved there when that console was translated, and this
+// console's catalogue cannot resolve another one's keys.
+const ADMIN = readForeignEnglish(
+  join(
+    __dirname,
+    '../../../admin/src/app/(authed)/inventory-units/_components/unit-trace-panel.tsx',
+  ),
+  'admin',
+);
 const ADMIN_INDEX = R(
   '../../../admin/src/app/(authed)/inventory-units/_components/unit-triage-index.tsx',
 );
@@ -109,11 +118,15 @@ describe('what it shows', () => {
 
   it('a miss says which of the two things happened', () => {
     // "Not found" leaves the holder unsure whether they mistyped or are
-    // holding something that was never ours. Asserted on phrases with no
-    // apostrophe: JSX escapes one to &apos;, so matching the plain form
-    // fails on prose that is actually there.
+    // holding something that was never ours.
+    //
+    // The apostrophe is why these two lines differ. Copy still in JSX is
+    // escaped to &apos;; copy that has moved into a catalogue is a plain
+    // `'` in a .ts string. So admin's half, which is now catalogue-backed,
+    // is asserted on the plain form — matching the escaped one would fail
+    // on prose that is genuinely on screen.
     expect(flat(SELLER)).toContain('we never received');
     expect(flat(ADMIN)).toContain('never received as a tracked unit');
-    expect(flat(ADMIN)).toContain('another company&apos;s');
+    expect(flat(ADMIN)).toContain("another company's");
   });
 });

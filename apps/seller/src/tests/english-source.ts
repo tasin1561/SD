@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { CATALOGS } from '@/i18n/catalog';
 
 /**
@@ -53,4 +54,25 @@ function expandKeys(src: string): string {
 
 export function readEnglish(path: string): string {
   return expandKeys(expandCalls(readFileSync(path, 'utf8')));
+}
+
+/**
+ * The same, for a file in ANOTHER app. Several specs here read admin's
+ * source, because a pair of screens meant to say the same thing is only
+ * checkable from one side of the pair.
+ *
+ * `CATALOGS` above is this console's, so it cannot resolve another
+ * app's keys; that app's message files are appended as text instead.
+ * One consequence to know when writing an assertion: a sentence found
+ * this way comes from a `.ts` STRING, not from JSX, so an apostrophe is
+ * a plain `'` rather than `&apos;`.
+ */
+export function readForeignEnglish(path: string, app: string): string {
+  const dir = join(__dirname, '..', '..', '..', app, 'src', 'i18n', 'messages');
+  if (!existsSync(dir)) throw new Error(`No message catalogue for apps/${app} at ${dir}`);
+  const files = readdirSync(dir).filter((f) => f.endsWith('.ts'));
+  if (files.length === 0) throw new Error(`apps/${app}'s catalogue is empty at ${dir}`);
+  return [readFileSync(path, 'utf8'), ...files.map((f) => readFileSync(join(dir, f), 'utf8'))].join(
+    '\n',
+  );
 }
