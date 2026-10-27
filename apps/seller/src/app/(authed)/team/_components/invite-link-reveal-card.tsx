@@ -5,6 +5,7 @@ import { Link2 } from 'lucide-react';
 import type { CreatedTeamInvitation } from '@skydrop/api-client';
 import { RevealCard } from '../../settings/_components/settings-parts';
 import { roleLine } from '@/lib/role-words';
+import { useT } from '@/i18n/client';
 
 /**
  * One-shot invitation-link reveal. The plaintext token is only
@@ -27,15 +28,16 @@ export function InviteLinkRevealCard({
   readonly invitation: CreatedTeamInvitation;
   readonly onDismiss: () => void;
 }): ReactElement {
+  const t = useT();
   return (
     <RevealCard
       icon={<Link2 size={15} />}
-      title="Invitation link — copy and share"
+      title={t('team.invitationLinkCopyAnd')}
       note={`${invitation.email} · ${roleLine({ roleNames: invitation.roleNames })}`}
-      body={`This is the only time we'll show this URL. Expires ${new Date(invitation.expiresAt).toLocaleString()}.`}
+      body={t('team.thisIsTheOnly', { expiresAt: new Date(invitation.expiresAt).toLocaleString() })}
       value={invitation.inviteUrl}
-      valueLabel="Invitation link"
-      dismissLabel="Dismiss"
+      valueLabel={t('team.invitationLink')}
+      dismissLabel={t('team.dismiss')}
       onDismiss={onDismiss}
     />
   );

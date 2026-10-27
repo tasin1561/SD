@@ -16,8 +16,12 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { useApiClient } from '@skydrop/auth/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { Notice, OrdSection } from './orders-parts';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Shared CSV import widget — drives:
@@ -97,10 +101,11 @@ interface CsvPreview {
 }
 
 /** "12 orders" for the order importer, "12 rows" for the catalogue one. */
-function importLabel(kind: Kind, preview: CsvPreview): string {
+function importLabel(t: Translate<MessageKey>, kind: Kind, preview: CsvPreview): string {
   const n = kind === 'orders' ? (preview.orderCount ?? preview.rowCount) : preview.rowCount;
-  const noun = kind === 'orders' ? 'order' : 'row';
-  return `Import ${n} ${noun}${n === 1 ? '' : 's'}`;
+  if (kind === 'orders')
+    return t(n === 1 ? 'orderImport.importOrderOne' : 'orderImport.importOrderMany', { count: n });
+  return t(n === 1 ? 'orderImport.importRowOne' : 'orderImport.importRowMany', { count: n });
 }
 
 export function CsvImportPanel({
@@ -131,6 +136,7 @@ export function CsvImportPanel({
    */
   readonly detailHrefBase?: string;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const client = useApiClient();
   const queryClient = useQueryClient();
@@ -193,7 +199,7 @@ export function CsvImportPanel({
   }, [newest]);
 
   function fmtError(err: unknown): string {
-    return serverVerdict(err, 'Upload failed');
+    return verdict(err, t, t('orderImport.uploadFailed'));
   }
 
   /** The template download for the rolling-label button: it records the
@@ -255,11 +261,11 @@ export function CsvImportPanel({
     setError(null);
     const f = pickedFile.current ?? fileRef.current?.files?.[0];
     if (!f) {
-      setError('Pick a CSV file first.');
+      setError(t('orderImport.pickACsvFile'));
       return;
     }
     if (!f.name.toLowerCase().endsWith('.csv')) {
-      setError('File must be a .csv');
+      setError(t('orderImport.fileMustBeA'));
       return;
     }
     setBusy('uploading');
@@ -308,7 +314,7 @@ export function CsvImportPanel({
         method: 'POST',
         body: { spacesKey: pending.spacesKey, fileName: pending.fileName },
       });
-      toast.success('Import queued — refresh to track progress.');
+      toast.success(t('orderImport.importQueuedRefreshTo'));
       setPending(null);
       void queryClient.invalidateQueries({
         queryKey: ['seller-csv-uploads', kind],
@@ -336,38 +342,37 @@ export function CsvImportPanel({
   return (
     <div className="ord-stack">
       <OrdSection
-        title="Upload"
+        title={t('orderImport.upload')}
         note={
           // A row is a LINE on the orders importer since 2026-09-29
           // (ORD-9 widened) — the product importer is still one row per
           // thing, so the two say different words rather than one
           // sentence that is half true.
-          kind === 'orders'
-            ? 'One row is one product line. Rows sharing a reference are one order.'
-            : 'One row is one product or variant.'
+          kind === 'orders' ? t('orderImport.oneRowIsOne') : t('orderImport.oneRowIsOne2')
         }
         action={
           <AsyncButton
             variant="ghost"
             size="sm"
             icon={<Download size={14} />}
-            labels={{ idle: 'Download template', busy: 'Downloading…', done: 'Downloaded' }}
+            labels={{
+              idle: t('orderImport.downloadTemplate'),
+              busy: t('orderImport.downloading'),
+              done: t('orderImport.downloaded'),
+            }}
             onAction={() => downloadTemplateOrThrow()}
           />
         }
       >
         <div className="ord-stack ord-stack--tight">
-          <p className="ord-p">
-            Download the template, fill it in, then upload here. Nothing is imported until you have
-            seen what we matched.
-          </p>
+          <p className="ord-p">{t('orderImport.downloadTheTemplateFill')}</p>
 
           <DropZone
             key={zoneKey}
             ref={fileRef}
             accept=".csv,text/csv"
-            label={selectedName || 'Drop your CSV here'}
-            buttonText="Choose CSV…"
+            label={selectedName || t('orderImport.dropYourCsvHere')}
+            buttonText={t('orderImport.chooseCsv')}
             showFiles={false}
             onFiles={onPickFiles}
             disabled={busy !== null}
@@ -378,7 +383,7 @@ export function CsvImportPanel({
               variant="primary"
               icon={<Upload size={15} />}
               state={busy === 'uploading' ? 'busy' : undefined}
-              labels={{ idle: 'Upload and check', busy: 'Checking…' }}
+              labels={{ idle: t('orderImport.uploadAndCheck'), busy: t('orderImport.checking') }}
               onClick={() => void upload()}
               disabled={busy !== null || !selectedName}
             />
@@ -398,28 +403,34 @@ export function CsvImportPanel({
           error report read afterwards. */}
       {pending !== null && (
         <OrdSection
-          title="Check before importing"
+          title={t('orderImport.checkBeforeImporting')}
           note={
             <span>
               <span className="sk-ident">{pending.fileName}</span> · {pending.preview.rowCount} row
               {pending.preview.rowCount === 1 ? '' : 's'}
               {pending.preview.orderCount !== undefined &&
               pending.preview.orderCount !== pending.preview.rowCount
-                ? ` · ${pending.preview.orderCount} order${pending.preview.orderCount === 1 ? '' : 's'}`
+                ? t('orderImport.order', {
+                    orderCount: pending.preview.orderCount,
+                    plural: pending.preview.orderCount === 1 ? '' : 's',
+                  })
                 : ''}
             </span>
           }
         >
           <div className="ord-stack ord-stack--tight">
-            <p className="ord-p">
-              Nothing has been imported yet. Check what we matched, then import.
-            </p>
+            <p className="ord-p">{t('orderImport.nothingHasBeenImported')}</p>
 
             {pending.preview.missingRequired.length > 0 && (
-              <Notice tone="bad" icon={<FileWarning size={16} />} title="Missing columns">
+              <Notice
+                tone="bad"
+                icon={<FileWarning size={16} />}
+                title={t('orderImport.missingColumns')}
+              >
                 <span>
-                  {pending.preview.missingRequired.join(', ')}. Add them to your file and upload
-                  again — every row would fail without them.
+                  {richMessage(t('orderImport.addThemToYour'), {
+                    missingRequired: pending.preview.missingRequired.join(', '),
+                  })}
                 </span>
               </Notice>
             )}
@@ -427,7 +438,9 @@ export function CsvImportPanel({
             {pending.preview.exceedsRowLimit && (
               <Notice tone="bad" icon={<FileWarning size={16} />}>
                 <span>
-                  Too many rows — the limit is {pending.preview.rowLimit}. Split the file.
+                  {richMessage(t('orderImport.tooManyRowsThe'), {
+                    rowLimit: pending.preview.rowLimit,
+                  })}
                 </span>
               </Notice>
             )}
@@ -441,16 +454,25 @@ export function CsvImportPanel({
               <Notice
                 tone="warn"
                 icon={<FileWarning size={16} />}
-                title={`${pending.preview.rowsWithProblems} row${pending.preview.rowsWithProblems === 1 ? '' : 's'} will not import`}
+                title={t('orderImport.rowWillNotImport', {
+                  rowsWithProblems: pending.preview.rowsWithProblems ?? 0,
+                  plural: pending.preview.rowsWithProblems === 1 ? '' : 's',
+                })}
               >
                 <span>
                   {(pending.preview.problems ?? [])
-                    .map((p) => `Row ${p.rowNumber}: ${p.reason}`)
+                    .map((p) =>
+                      t('orderImport.rowProblem', { rowNumber: p.rowNumber, reason: p.reason }),
+                    )
                     .join(' · ')}
                   {(pending.preview.rowsWithProblems ?? 0) > (pending.preview.problems ?? []).length
-                    ? ` · and ${(pending.preview.rowsWithProblems ?? 0) - (pending.preview.problems ?? []).length} more`
+                    ? t('orderImport.andMore', {
+                        problems:
+                          (pending.preview.rowsWithProblems ?? 0) -
+                          (pending.preview.problems ?? []).length,
+                      })
                     : ''}
-                  . The rest will import; you can fix these afterwards from the import’s own page.
+                  {t('orderImport.theRestWillImport')}
                 </span>
               </Notice>
             )}
@@ -461,7 +483,7 @@ export function CsvImportPanel({
                     from one we have never seen, and saying so stops
                     somebody mapping "Pickup Location Name" onto a name
                     field because a guess sat next to it. */}
-                <strong className="ord-strong">Columns we recognise and do not need:</strong>{' '}
+                <strong className="ord-strong">{t('orderImport.columnsWeRecogniseAnd')}</strong>{' '}
                 {(pending.preview.ignoredHeaders ?? [])
                   .map((u) => `${u.header} — ${u.reason}`)
                   .join(' · ')}
@@ -470,14 +492,14 @@ export function CsvImportPanel({
 
             {pending.preview.unmatchedHeaders.length > 0 && (
               <p className="ord-p">
-                <strong className="ord-strong">Columns we will ignore:</strong>{' '}
+                <strong className="ord-strong">{t('orderImport.columnsWeWillIgnore')}</strong>{' '}
                 {pending.preview.unmatchedHeaders
                   .map((u) =>
                     // The suggestion is the useful half — "Phone No is
                     // ignored" is a shrug; "did you mean customerPhone"
                     // is a fix.
                     u.suggestion !== null
-                      ? `${u.header} (did you mean ${u.suggestion}?)`
+                      ? t('orderImport.didYouMean', { header: u.header, suggestion: u.suggestion })
                       : u.header,
                   )
                   .join(', ')}
@@ -485,7 +507,7 @@ export function CsvImportPanel({
             )}
 
             <div className="ord-stack ord-stack--tight">
-              <span className="ord-strong">What we matched</span>
+              <span className="ord-strong">{t('orderImport.whatWeMatched')}</span>
               <div className="ord-mapping">
                 {Object.entries(pending.preview.mapping).map(([field, header]) => (
                   <span key={field}>
@@ -501,7 +523,10 @@ export function CsvImportPanel({
                 variant="primary"
                 icon={<FileSpreadsheet size={15} />}
                 state={busy === 'processing' ? 'busy' : undefined}
-                labels={{ idle: importLabel(kind, pending.preview), busy: 'Queuing…' }}
+                labels={{
+                  idle: importLabel(t, kind, pending.preview),
+                  busy: t('orderImport.queuing'),
+                }}
                 disabled={
                   busy !== null ||
                   pending.preview.missingRequired.length > 0 ||
@@ -510,7 +535,7 @@ export function CsvImportPanel({
                 onClick={() => void confirmImport()}
               />
               <Button variant="secondary" disabled={busy !== null} onClick={() => setPending(null)}>
-                Discard
+                {t('orderImport.discard')}
               </Button>
             </div>
           </div>
@@ -522,35 +547,39 @@ export function CsvImportPanel({
       )}
 
       <OrdSection
-        title="Recent imports"
-        note={list.data === undefined ? undefined : `${list.data.items.length} shown, newest first`}
+        title={t('orderImport.recentImports')}
+        note={
+          list.data === undefined
+            ? undefined
+            : t('orderImport.shownNewestFirst', { items: list.data.items.length })
+        }
         flush={list.data !== undefined && list.data.items.length > 0}
       >
         {list.isLoading ? (
-          <SkeletonRows rows={3} cols={4} label="Loading recent imports…" />
+          <SkeletonRows rows={3} cols={4} label={t('orderImport.loadingRecentImports')} />
         ) : list.isError ? (
           <ErrorState
-            message={serverVerdict(list.error, 'Failed to load uploads.')}
+            message={verdict(list.error, t, t('orderImport.failedToLoadUploads'))}
             retry={() => void list.refetch()}
           />
         ) : !list.data || list.data.items.length === 0 ? (
           <EmptyState
             bare
             icon={<FileSpreadsheet size={20} />}
-            title="No imports yet"
-            description="Upload a CSV above to start your first import."
+            title={t('orderImport.noImportsYet')}
+            description={t('orderImport.uploadACsvAbove')}
           />
         ) : (
-          <Table caption="Recent imports">
+          <Table caption={t('orderImport.recentImports')}>
             <THead>
               <Tr>
-                <Th>File</Th>
-                <Th>Status</Th>
-                <Th align="right">Rows</Th>
-                <Th align="right">Created</Th>
-                <Th align="right">Failed</Th>
-                <Th>When</Th>
-                <Th aria-label="Error report" />
+                <Th>{t('orderImport.file')}</Th>
+                <Th>{t('orderImport.status')}</Th>
+                <Th align="right">{t('orderImport.rows')}</Th>
+                <Th align="right">{t('orderImport.created')}</Th>
+                <Th align="right">{t('orderImport.failed')}</Th>
+                <Th>{t('orderImport.when')}</Th>
+                <Th aria-label={t('orderImport.errorReport')} />
               </Tr>
             </THead>
             <TBody>
@@ -599,7 +628,7 @@ export function CsvImportPanel({
                           className="ord-expand"
                         >
                           <Download size={14} aria-hidden />
-                          Errors CSV
+                          {t('orderImport.errorsCsv')}
                         </button>
                       )}
                     </Td>
@@ -648,6 +677,7 @@ function ImportRunProgress({
   readonly job: CsvUploadJob;
   readonly kind: Kind;
 }): ReactElement {
+  const t = useT();
   const handled =
     kind === 'orders' && job.ordersCreated !== undefined
       ? job.ordersCreated + (job.rowsFailed ?? 0) + (job.rowsSkipped ?? 0)
@@ -664,15 +694,20 @@ function ImportRunProgress({
   return (
     <div className="ord-card">
       <ParachuteProgress
-        label={`Importing ${job.fileName}`}
+        label={t('orderImport.importing', { fileName: job.fileName })}
         value={state === 'running' ? value : 100}
         state={state}
-        doneLabel="Import finished"
-        failedLabel="Import stopped"
+        doneLabel={t('orderImport.importFinished')}
+        failedLabel={t('orderImport.importStopped')}
         detail={
           handled === null
-            ? `${job.rowCount} ${job.rowCount === 1 ? 'row' : 'rows'} in the file`
-            : `${handled} of ${job.rowCount} ${job.rowCount === 1 ? 'row' : 'rows'} handled`
+            ? t(job.rowCount === 1 ? 'orderImport.rowInFile' : 'orderImport.rowsInTheFile', {
+                count: job.rowCount,
+              })
+            : t(job.rowCount === 1 ? 'orderImport.rowHandled' : 'orderImport.rowsHandled', {
+                handled,
+                count: job.rowCount,
+              })
         }
       />
     </div>

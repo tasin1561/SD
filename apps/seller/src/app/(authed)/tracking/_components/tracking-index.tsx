@@ -17,6 +17,10 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useTrackedShipment, useTrackedShipments } from '@/lib/api-hooks';
 import { MetaFact, OrdSection } from '../../orders/_components/orders-parts';
 import { ParcelTimeline } from './parcel-timeline';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 /**
  * Every parcel that has left, and where it got to.
  *
@@ -53,16 +57,17 @@ import { ParcelTimeline } from './parcel-timeline';
  * Keep the LABEL: "delivery attempted" is the courier's word for it and
  * "delivery failed" is the seller's, and the seller is who is reading.
  */
-const FILTERS: ReadonlyArray<readonly [string, string]> = [
-  ['', 'All parcels'],
-  ['DELIVERY_ATTEMPTED', 'Delivery failed'],
-  ['RTO_IN_TRANSIT', 'Coming back'],
-  ['IN_TRANSIT', 'In transit'],
-  ['OUT_FOR_DELIVERY', 'Out for delivery'],
-  ['DELIVERED', 'Delivered'],
+const filtersOf = (t: Translate<MessageKey>): ReadonlyArray<readonly [string, string]> => [
+  ['', t('tracking.allParcels')],
+  ['DELIVERY_ATTEMPTED', t('tracking.deliveryFailed')],
+  ['RTO_IN_TRANSIT', t('tracking.comingBack2')],
+  ['IN_TRANSIT', t('tracking.inTransit')],
+  ['OUT_FOR_DELIVERY', t('tracking.outForDelivery')],
+  ['DELIVERED', t('tracking.delivered')],
 ];
 
 export function TrackingIndex(): ReactElement {
+  const t = useT();
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState<string | null>(null);
@@ -82,16 +87,28 @@ export function TrackingIndex(): ReactElement {
   return (
     <div className="ord-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Client console' }, { label: 'Selling' }, { label: 'Tracking' }]}
+        breadcrumbs={[
+          { label: t('tracking.clientConsole') },
+          { label: t('tracking.selling') },
+          { label: t('tracking.tracking') },
+        ]}
         Link={Link}
-        title="Tracking"
-        subtitle="Where your parcels are, and why any of them have not arrived."
+        title={t('tracking.tracking')}
+        subtitle={t('tracking.whereYourParcelsAre')}
         meta={
           list.data === undefined ? undefined : (
             <span className="ord-meta">
               <MetaFact tone="accent">{rows.length} shown</MetaFact>
-              {failed > 0 && <MetaFact tone="bad">{failed} failed delivery</MetaFact>}
-              {comingBack > 0 && <MetaFact tone="warn">{comingBack} coming back</MetaFact>}
+              {failed > 0 && (
+                <MetaFact tone="bad">
+                  {richMessage(t('tracking.failedDelivery'), { failed })}
+                </MetaFact>
+              )}
+              {comingBack > 0 && (
+                <MetaFact tone="warn">
+                  {richMessage(t('tracking.comingBack'), { comingBack })}
+                </MetaFact>
+              )}
             </span>
           )
         }
@@ -100,35 +117,31 @@ export function TrackingIndex(): ReactElement {
       {unfiltered && rows.length > 0 && (
         <div className="ord-kpis">
           <KpiCard
-            label="On the move"
+            label={t('tracking.onTheMove')}
             icon={<Truck size={14} />}
             value={moving}
             unit="parcels"
             tone="info"
-            hint="In transit or out for delivery, of the parcels shown."
+            hint={t('tracking.inTransitOrOut')}
           />
           <KpiCard
-            label="Delivery failed"
+            label={t('tracking.deliveryFailed')}
             icon={<PackageX size={14} />}
             value={failed}
             unit="parcels"
             tone={failed > 0 ? 'debit' : 'neutral'}
             hint={
-              failed > 0
-                ? 'The courier tried and could not hand it over.'
-                : 'Nothing shown has failed a delivery.'
+              failed > 0 ? t('tracking.theCourierTriedAnd') : t('tracking.nothingShownHasFailed')
             }
           />
           <KpiCard
-            label="Coming back"
+            label={t('tracking.comingBack2')}
             icon={<RotateCcw size={14} />}
             value={comingBack}
             unit="parcels"
             tone={comingBack > 0 ? 'pending' : 'neutral'}
             hint={
-              comingBack > 0
-                ? 'On their way to our warehouse. You pay the leg home.'
-                : 'Nothing shown is returning.'
+              comingBack > 0 ? t('tracking.onTheirWayTo') : t('tracking.nothingShownIsReturning')
             }
           />
         </div>
@@ -136,7 +149,7 @@ export function TrackingIndex(): ReactElement {
 
       <section className="ord-section">
         <SectionHeading
-          title="Parcel register"
+          title={t('tracking.parcelRegister')}
           note={
             list.data === undefined
               ? undefined
@@ -144,10 +157,10 @@ export function TrackingIndex(): ReactElement {
           }
         />
         <TextField
-          label="Search parcels"
+          label={t('tracking.searchParcels')}
           icon={<Search size={16} />}
-          placeholder="AWB, parcel number or recipient…"
-          aria-label="Search parcels by waybill, number or recipient"
+          placeholder={t('tracking.awbParcelNumberOr')}
+          aria-label={t('tracking.searchParcelsByWaybill')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -155,9 +168,12 @@ export function TrackingIndex(): ReactElement {
             comes here for are worth being visible without opening
             anything. */}
         <Tabs
-          label="Filter parcels by status"
+          label={t('tracking.filterParcelsByStatus')}
           size="sm"
-          items={FILTERS.map(([value, label]) => ({ id: value === '' ? 'all' : value, label }))}
+          items={filtersOf(t).map(([value, label]) => ({
+            id: value === '' ? 'all' : value,
+            label,
+          }))}
           value={status === '' ? 'all' : status}
           onChange={(id) => {
             setStatus(id === 'all' ? '' : id);
@@ -166,30 +182,30 @@ export function TrackingIndex(): ReactElement {
         />
 
         {list.isLoading ? (
-          <SkeletonRows rows={6} cols={5} label="Loading parcels…" />
+          <SkeletonRows rows={6} cols={5} label={t('tracking.loadingParcels')} />
         ) : list.isError ? (
           <ErrorState
-            message={list.error?.message ?? 'Failed to load.'}
+            message={list.error?.message ?? t('tracking.failedToLoad')}
             retry={() => void list.refetch()}
           />
         ) : (
           <div className="ord-card" data-flush="1">
-            <Table caption="Parcels">
+            <Table caption={t('tracking.parcels')}>
               <THead>
                 <Tr>
-                  <Th>Parcel</Th>
-                  <Th>Going to</Th>
-                  <Th>Status</Th>
-                  <Th>Last update</Th>
-                  <Th align="right" aria-label="History" />
+                  <Th>{t('tracking.parcel')}</Th>
+                  <Th>{t('tracking.goingTo')}</Th>
+                  <Th>{t('tracking.status')}</Th>
+                  <Th>{t('tracking.lastUpdate')}</Th>
+                  <Th align="right" aria-label={t('tracking.history')} />
                 </Tr>
               </THead>
               <TBody>
                 {rows.length === 0 ? (
                   <TableEmpty colSpan={5}>
                     {status === '' && search.trim() === ''
-                      ? 'Nothing on its way yet. A parcel appears here once it has been handed to the courier.'
-                      : 'No parcel matches that. Try another filter, or clear the search.'}
+                      ? t('tracking.nothingOnItsWay')
+                      : t('tracking.noParcelMatchesThat')}
                   </TableEmpty>
                 ) : (
                   rows.map((r) => (
@@ -217,14 +233,16 @@ export function TrackingIndex(): ReactElement {
                         />
                         {r.failedAttempts > 0 && (
                           <span className="ord-sub">
-                            {r.failedAttempts} failed attempt
-                            {r.failedAttempts === 1 ? '' : 's'}
+                            {richMessage(t('tracking.failedAttempt'), {
+                              failedAttempts: r.failedAttempts,
+                              plural: r.failedAttempts === 1 ? '' : 's',
+                            })}
                           </span>
                         )}
                       </Td>
                       <Td>
                         {r.lastScanAt === null ? (
-                          <span className="ord-faint">No scans yet</span>
+                          <span className="ord-faint">{t('tracking.noScansYet')}</span>
                         ) : (
                           <>
                             <div>{r.lastScanDescription ?? r.lastScanStatus}</div>
@@ -242,7 +260,7 @@ export function TrackingIndex(): ReactElement {
                           className="ord-expand"
                           onClick={() => setOpen(open === r.shipmentId ? null : r.shipmentId)}
                         >
-                          {open === r.shipmentId ? 'Hide' : 'History'}
+                          {open === r.shipmentId ? t('tracking.hide') : t('tracking.history')}
                           <ChevronDown size={14} aria-hidden />
                         </button>
                       </Td>
@@ -268,10 +286,11 @@ export function TrackingIndex(): ReactElement {
  * is all the table shows.
  */
 function ExpandedParcel({ shipmentId }: { readonly shipmentId: string }): ReactElement {
+  const t = useT();
   const detail = useTrackedShipment(shipmentId);
   return (
     <OrdSection
-      title="Parcel history"
+      title={t('tracking.parcelHistory')}
       note={
         detail.data === undefined
           ? undefined
@@ -279,10 +298,10 @@ function ExpandedParcel({ shipmentId }: { readonly shipmentId: string }): ReactE
       }
     >
       {detail.isLoading ? (
-        <SkeletonRows rows={4} cols={1} label="Loading the parcel history…" />
+        <SkeletonRows rows={4} cols={1} label={t('tracking.loadingTheParcelHistory')} />
       ) : detail.isError || detail.data === undefined ? (
         <ErrorState
-          message={detail.error?.message ?? 'Failed to load.'}
+          message={detail.error?.message ?? t('tracking.failedToLoad')}
           retry={() => void detail.refetch()}
         />
       ) : (
@@ -290,7 +309,7 @@ function ExpandedParcel({ shipmentId }: { readonly shipmentId: string }): ReactE
           parcel={detail.data}
           header={{
             icon: <PackageSearch size={16} />,
-            title: 'Parcel',
+            title: t('tracking.parcel'),
             id: detail.data.awbNumber ?? detail.data.shipmentNumber,
           }}
         />

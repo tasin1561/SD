@@ -9,6 +9,7 @@ import { KpiCard, type KpiTone } from '@skydrop/ui/app/kpi-card';
 import { SectionHeading } from '@skydrop/ui/app/page-header';
 import { Skeleton } from '@skydrop/ui/app/skeleton';
 import './dashboard.css';
+import { useT } from '@/i18n/client';
 
 /**
  * The dashboard's presentational pieces. Nothing here fetches, decides
@@ -36,13 +37,14 @@ export function MetaFact({
 
 /** The page's one primary action, drawn as the app button on a Next link. */
 export function CreateOrderLink(): ReactElement {
+  const t = useT();
   return (
     <Link href="/orders/new" className={buttonClassName('primary', 'md')}>
       <span className="sk-btn__fx" aria-hidden />
       <span className="sk-btn__icon" aria-hidden>
         <Plus size={15} />
       </span>
-      <span className="sk-btn__label">Create order</span>
+      <span className="sk-btn__label">{t('dashboard.createOrder')}</span>
     </Link>
   );
 }
@@ -181,6 +183,7 @@ export function ShortcutCard({
   readonly body: string;
   readonly foot?: string | undefined;
 }): ReactElement {
+  const t = useT();
   return (
     <li>
       <Link href={href} className="db-shortcut">
@@ -192,7 +195,7 @@ export function ShortcutCard({
         <span className="db-shortcut__foot">
           <span className="db-shortcut__foot-text sk-figure">{foot ?? ''}</span>
           <span className="db-shortcut__go">
-            Go <ArrowRight size={14} aria-hidden />
+            {t('dashboard.go')} <ArrowRight size={14} aria-hidden />
           </span>
         </span>
       </Link>

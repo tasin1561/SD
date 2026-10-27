@@ -15,8 +15,12 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useCustomers, type CustomerView } from '@/lib/account-hooks';
 import { AddressHistory } from './address-history';
 import { CustomerDetailPanel } from './customer-detail-panel';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import './customers.css';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 const PAGE_SIZE = 25;
 
@@ -49,6 +53,7 @@ const PAGE_SIZE = 25;
  * is risky is how the badge and the number come to disagree.
  */
 export function CustomersIndex(): ReactElement {
+  const t = useT();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   // Expanded inline rather than in a modal: you are comparing this
@@ -89,18 +94,26 @@ export function CustomersIndex(): ReactElement {
   return (
     <div className="cst-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Client console' }, { label: 'Selling' }, { label: 'Customers' }]}
+        breadcrumbs={[
+          { label: t('customers.clientConsole') },
+          { label: t('customers.selling') },
+          { label: t('customers.customers') },
+        ]}
         Link={Link}
-        title="Customers"
-        subtitle="Everyone you have shipped to, and how those orders ended."
+        title={t('customers.customers')}
+        subtitle={t('customers.everyoneYouHaveShipped')}
         meta={
           list.data === undefined ? undefined : (
             <span className="cst-meta">
               <Fact tone="accent">
                 {total} {total === 1 ? 'customer' : 'customers'}
               </Fact>
-              {flagged.length > 0 && <Fact tone="warn">{flagged.length} flagged on this page</Fact>}
-              <Fact dot>Scoped to you</Fact>
+              {flagged.length > 0 && (
+                <Fact tone="warn">
+                  {richMessage(t('customers.flaggedOnThisPage'), { flagged: flagged.length })}
+                </Fact>
+              )}
+              <Fact dot>{t('customers.scopedToYou')}</Fact>
             </span>
           )
         }
@@ -111,39 +124,39 @@ export function CustomersIndex(): ReactElement {
             always showed (`String`, no digit grouping). */}
         {list.data === undefined ? (
           <KpiCard
-            label="Customers"
+            label={t('customers.customers')}
             icon={<Users size={14} />}
             figure={<span className="cst-faint">—</span>}
             tone="neutral"
-            hint="Every phone number you have ever shipped to."
+            hint={t('customers.everyPhoneNumberYou')}
           />
         ) : (
           <KpiCard
-            label="Customers"
+            label={t('customers.customers')}
             icon={<Users size={14} />}
             value={total}
             format={String}
             unit="people"
             tone="neutral"
-            hint="Every phone number you have ever shipped to."
+            hint={t('customers.everyPhoneNumberYou')}
           />
         )}
         {loaded ? (
           <KpiCard
-            label="Orders on this page"
+            label={t('customers.ordersOnThisPage')}
             icon={<PackageCheck size={14} />}
             value={orderTotal}
             format={String}
             unit="orders"
             tone="neutral"
             foot={[
-              { label: 'Delivered', value: deliveredTotal },
-              { label: 'Customers shown', value: items.length },
+              { label: t('customers.delivered'), value: deliveredTotal },
+              { label: t('customers.customersShown'), value: items.length },
             ]}
           />
         ) : (
           <KpiCard
-            label="Orders on this page"
+            label={t('customers.ordersOnThisPage')}
             icon={<PackageCheck size={14} />}
             figure={<span className="cst-faint">—</span>}
             tone="neutral"
@@ -151,50 +164,52 @@ export function CustomersIndex(): ReactElement {
         )}
         {loaded ? (
           <KpiCard
-            label="Came back on this page"
+            label={t('customers.cameBackOnThis')}
             icon={<RotateCcw size={14} />}
             value={rtoTotal}
             format={String}
             unit="orders"
             tone={rtoTotal > 0 ? 'pending' : 'neutral'}
-            hint={answered ? rtoHint(rtoTotal) : undefined}
+            hint={answered ? rtoHint(t, rtoTotal) : undefined}
             foot={
-              refusedTotal > 0 ? [{ label: 'Refused at the door', value: refusedTotal }] : undefined
+              refusedTotal > 0
+                ? [{ label: t('customers.refusedAtTheDoor'), value: refusedTotal }]
+                : undefined
             }
           />
         ) : (
           <KpiCard
-            label="Came back on this page"
+            label={t('customers.cameBackOnThis')}
             icon={<RotateCcw size={14} />}
             figure={<span className="cst-faint">—</span>}
             tone={rtoTotal > 0 ? 'pending' : 'neutral'}
-            hint={answered ? rtoHint(rtoTotal) : undefined}
+            hint={answered ? rtoHint(t, rtoTotal) : undefined}
           />
         )}
         {loaded ? (
           <KpiCard
-            label="Flagged on this page"
+            label={t('customers.flaggedOnThisPage2')}
             icon={<ShieldAlert size={14} />}
             value={flagged.length}
             format={String}
             unit="people"
             tone={flagged.length > 0 ? 'debit' : 'neutral'}
-            hint={answered ? flaggedHint(flagged.length) : undefined}
+            hint={answered ? flaggedHint(t, flagged.length) : undefined}
           />
         ) : (
           <KpiCard
-            label="Flagged on this page"
+            label={t('customers.flaggedOnThisPage2')}
             icon={<ShieldAlert size={14} />}
             figure={<span className="cst-faint">—</span>}
             tone={flagged.length > 0 ? 'debit' : 'neutral'}
-            hint={answered ? flaggedHint(flagged.length) : undefined}
+            hint={answered ? flaggedHint(t, flagged.length) : undefined}
           />
         )}
       </div>
 
       <section className="cst-section">
         <SectionHeading
-          title="Customer register"
+          title={t('customers.customerRegister')}
           note={
             list.data === undefined
               ? undefined
@@ -208,51 +223,49 @@ export function CustomersIndex(): ReactElement {
               setSearch(next);
               setPage(1);
             },
-            label: 'Search customers',
-            placeholder: 'Phone or name…',
+            label: t('customers.searchCustomers'),
+            placeholder: t('customers.phoneOrName'),
           }}
         >
           {searching && (
             <Button variant="ghost" size="sm" className="cst-reset" onClick={clearSearch}>
-              Reset
+              {t('customers.reset')}
             </Button>
           )}
         </TableToolbar>
 
         {list.isLoading ? (
-          <SkeletonRows rows={6} label="Loading your customers…" />
+          <SkeletonRows rows={6} label={t('customers.loadingYourCustomers')} />
         ) : list.isError ? (
-          <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+          <ErrorState message={verdict(list.error, t)} retry={() => void list.refetch()} />
         ) : items.length === 0 ? (
           <EmptyState
-            title={searching ? 'Nobody matches that' : 'No customers yet'}
+            title={searching ? t('customers.nobodyMatchesThat') : t('customers.noCustomersYet')}
             description={
-              searching
-                ? 'Try the full phone number including the country code.'
-                : 'A customer record appears the first time you place an order for a phone number.'
+              searching ? t('customers.tryTheFullPhone') : t('customers.aCustomerRecordAppears')
             }
             action={
               searching ? (
                 <Button variant="secondary" size="md" onClick={clearSearch}>
-                  Clear search
+                  {t('customers.clearSearch')}
                 </Button>
               ) : undefined
             }
           />
         ) : (
           <>
-            <Table caption="Customer register">
+            <Table caption={t('customers.customerRegister')}>
               <THead>
                 <Tr>
-                  <Th>Phone</Th>
-                  <Th>Name</Th>
-                  <Th align="right">Orders</Th>
-                  <Th align="right">Delivered</Th>
-                  <Th align="right">RTO</Th>
-                  <Th align="right">Refused</Th>
-                  <Th>Risk</Th>
-                  <Th>Last order</Th>
-                  <Th align="right" aria-label="Open" />
+                  <Th>{t('customers.phone')}</Th>
+                  <Th>{t('customers.name')}</Th>
+                  <Th align="right">{t('customers.orders')}</Th>
+                  <Th align="right">{t('customers.delivered')}</Th>
+                  <Th align="right">{t('customers.rto')}</Th>
+                  <Th align="right">{t('customers.refused')}</Th>
+                  <Th>{t('customers.risk')}</Th>
+                  <Th>{t('customers.lastOrder')}</Th>
+                  <Th align="right" aria-label={t('customers.open')} />
                 </Tr>
               </THead>
               <TBody>
@@ -310,7 +323,7 @@ export function CustomersIndex(): ReactElement {
                           iconRight={<ChevronDown size={14} className="cst-toggle__chev" />}
                           onClick={() => setExpanded(expanded === c.id ? null : c.id)}
                         >
-                          {expanded === c.id ? 'Hide' : 'Open'}
+                          {expanded === c.id ? t('customers.hide') : t('customers.open')}
                         </Button>
                       </Td>
                     </Tr>
@@ -336,7 +349,7 @@ export function CustomersIndex(): ReactElement {
               pageSize={PAGE_SIZE}
               total={total}
               onPageChange={setPage}
-              label="Customer pages"
+              label={t('customers.customerPages')}
             />
           </>
         )}
@@ -345,16 +358,12 @@ export function CustomersIndex(): ReactElement {
   );
 }
 
-function rtoHint(rtoTotal: number): string {
-  return rtoTotal > 0
-    ? 'You pay the courier both ways on each of these.'
-    : 'Nothing from these customers has been returned.';
+function rtoHint(t: Translate<MessageKey>, rtoTotal: number): string {
+  return rtoTotal > 0 ? t('customers.youPayTheCourier') : t('customers.nothingFromTheseCustomers');
 }
 
-function flaggedHint(flaggedCount: number): string {
-  return flaggedCount > 0
-    ? 'Rated medium risk or worse. Worth a call before you ship again.'
-    : 'Nobody on this page has been rated a risk.';
+function flaggedHint(t: Translate<MessageKey>, flaggedCount: number): string {
+  return flaggedCount > 0 ? t('customers.ratedMediumRiskOr') : t('customers.nobodyOnThisPage');
 }
 
 /** A standing fact under the page title — never an action. */

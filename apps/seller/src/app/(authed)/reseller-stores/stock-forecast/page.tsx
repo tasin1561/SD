@@ -11,7 +11,7 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useResellerStockForecast } from '@/lib/reseller-report-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import {
   RsFact,
   RsFacts,
@@ -21,6 +21,8 @@ import {
   RsStrip,
   RsStripFact,
 } from '../_components/rs-parts';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * How long the stock your reseller stores sell will last (RS-9), at the
@@ -38,6 +40,7 @@ import {
  *       A rupee figure here would have to be invented.
  */
 export default function ResellerStockForecastPage(): ReactElement {
+  const t = useT();
   const forecast = useResellerStockForecast();
 
   const rows = useMemo(() => forecast.data?.rows ?? [], [forecast.data]);
@@ -51,21 +54,31 @@ export default function ResellerStockForecastPage(): ReactElement {
     <div className="rs-page">
       <PageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Reselling' },
-          { label: 'Stock forecast' },
+          { label: t('resellerForecast.clientConsole') },
+          { label: t('resellerForecast.reselling') },
+          { label: t('resellerForecast.stockForecast') },
         ]}
         Link={Link}
-        title="Stock forecast"
-        subtitle="Days of stock left for every product your member stores may sell, at the rate it sold recently."
+        title={t('resellerForecast.stockForecast')}
+        subtitle={t('resellerForecast.daysOfStockLeft')}
         meta={
           !loaded ? undefined : (
             <RsFacts>
               <RsFact tone={reorder > 0 ? 'bad' : 'good'} dot={reorder > 0}>
-                {reorder === 0 ? 'Nothing to reorder' : `${reorder} to reorder`}
+                {reorder === 0
+                  ? t('resellerForecast.nothingToReorder')
+                  : t('resellerForecast.toReorder', { reorder })}
               </RsFact>
-              <RsFact>Last {forecast.data.windowDays} days</RsFact>
-              <RsFact>Flagged under {forecast.data.reorderDays} days</RsFact>
+              <RsFact>
+                {richMessage(t('resellerForecast.lastDays'), {
+                  windowDays: forecast.data.windowDays,
+                })}
+              </RsFact>
+              <RsFact>
+                {richMessage(t('resellerForecast.flaggedUnderDays'), {
+                  reorderDays: forecast.data.reorderDays,
+                })}
+              </RsFact>
             </RsFacts>
           )
         }
@@ -87,16 +100,18 @@ export default function ResellerStockForecastPage(): ReactElement {
         <div className="rs-kpis">
           {loaded ? (
             <KpiCard
-              label="To reorder"
+              label={t('resellerForecast.toReorder2')}
               icon={<TriangleAlert size={14} />}
               value={reorder}
               unit={reorder === 1 ? 'product' : 'products'}
               tone={reorder > 0 ? 'debit' : 'neutral'}
-              hint={`Fewer than ${forecast.data.reorderDays} days of stock left at the recent rate.`}
+              hint={t('resellerForecast.fewerThanDaysOf', {
+                reorderDays: forecast.data.reorderDays,
+              })}
             />
           ) : (
             <KpiCard
-              label="To reorder"
+              label={t('resellerForecast.toReorder2')}
               icon={<TriangleAlert size={14} />}
               figure={dash}
               tone="neutral"
@@ -104,61 +119,67 @@ export default function ResellerStockForecastPage(): ReactElement {
           )}
           {loaded ? (
             <KpiCard
-              label="Selling"
+              label={t('resellerForecast.selling')}
               icon={<CalendarClock size={14} />}
               value={selling}
               unit={`of ${rows.length}`}
               tone="neutral"
-              hint="A product with no recent sales has no days-left figure at all."
+              hint={t('resellerForecast.aProductWithNo')}
             />
           ) : (
             <KpiCard
-              label="Selling"
+              label={t('resellerForecast.selling')}
               icon={<CalendarClock size={14} />}
               figure={dash}
               tone="neutral"
-              hint="A product with no recent sales has no days-left figure at all."
+              hint={t('resellerForecast.aProductWithNo')}
             />
           )}
           <KpiCard
-            label="Units available"
+            label={t('resellerForecast.unitsAvailable')}
             icon={<Boxes size={14} />}
             figure={loaded ? <Num value={available} /> : dash}
             unit={loaded ? 'units' : undefined}
             tone="neutral"
-            hint="Across every product a member store may sell."
+            hint={t('resellerForecast.acrossEveryProductA')}
           />
         </div>
       )}
 
-      {forecast.isPending && <SkeletonRows rows={6} cols={6} label="Loading the stock forecast" />}
+      {forecast.isPending && (
+        <SkeletonRows rows={6} cols={6} label={t('resellerForecast.loadingTheStockForecast')} />
+      )}
       {forecast.isError && (
-        <ErrorState message={serverVerdict(forecast.error)} retry={() => void forecast.refetch()} />
+        <ErrorState message={verdict(forecast.error, t)} retry={() => void forecast.refetch()} />
       )}
 
       {loaded && (
         <>
           <RsSection
-            title={`Sales over the last ${forecast.data.windowDays} days`}
-            note={`Flagged under ${forecast.data.reorderDays} days — both numbers are in your settings.`}
+            title={t('resellerForecast.salesOverTheLast', { windowDays: forecast.data.windowDays })}
+            note={t('resellerForecast.flaggedUnderDaysBoth', {
+              reorderDays: forecast.data.reorderDays,
+            })}
             flush
           >
             {rows.length === 0 ? (
               <EmptyState
                 bare
-                title="No products enabled for a member store"
-                description="Give a product a member store price and switch it on for a store, and it appears here."
-                action={<RsLink href="/reseller-stores">Your member stores</RsLink>}
+                title={t('resellerForecast.noProductsEnabledFor')}
+                description={t('resellerForecast.giveAProductA')}
+                action={
+                  <RsLink href="/reseller-stores">{t('resellerForecast.yourMemberStores')}</RsLink>
+                }
               />
             ) : (
-              <Table caption="Stock forecast">
+              <Table caption={t('resellerForecast.stockForecast')}>
                 <THead>
                   <Tr>
-                    <Th>Product</Th>
-                    <Th align="right">Available</Th>
-                    <Th align="right">Sold</Th>
-                    <Th align="right">Per day</Th>
-                    <Th align="right">Days left</Th>
+                    <Th>{t('resellerForecast.product')}</Th>
+                    <Th align="right">{t('resellerForecast.available')}</Th>
+                    <Th align="right">{t('resellerForecast.sold')}</Th>
+                    <Th align="right">{t('resellerForecast.perDay')}</Th>
+                    <Th align="right">{t('resellerForecast.daysLeft')}</Th>
                     <Th />
                   </Tr>
                 </THead>
@@ -184,13 +205,20 @@ export default function ResellerStockForecastPage(): ReactElement {
                       </Td>
                       <Td align="right">
                         {r.daysOfStock === null ? (
-                          <span className="rs-faint">Not selling</span>
+                          <span className="rs-faint">{t('resellerForecast.notSelling')}</span>
                         ) : (
                           <Num value={r.daysOfStock} />
                         )}
                       </Td>
                       <Td>
-                        {r.reorder && <StatusChip kind="failed" label="Reorder" size="sm" pulse />}
+                        {r.reorder && (
+                          <StatusChip
+                            kind="failed"
+                            label={t('resellerForecast.reorder')}
+                            size="sm"
+                            pulse
+                          />
+                        )}
                       </Td>
                     </Tr>
                   ))}
@@ -202,12 +230,15 @@ export default function ResellerStockForecastPage(): ReactElement {
           {rows.length > 0 && (
             <RsStrip>
               <RsStripFact
-                label="To reorder"
+                label={t('resellerForecast.toReorder2')}
                 value={reorder}
                 tone={reorder > 0 ? 'warn' : 'good'}
               />
-              <RsStripFact label="Products" value={rows.length} />
-              <RsStripFact label="Window" value={`${forecast.data.windowDays} days`} />
+              <RsStripFact label={t('resellerForecast.products')} value={rows.length} />
+              <RsStripFact
+                label={t('resellerForecast.window')}
+                value={`${forecast.data.windowDays} days`}
+              />
             </RsStrip>
           )}
         </>

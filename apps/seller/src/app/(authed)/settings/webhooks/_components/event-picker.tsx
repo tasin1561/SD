@@ -6,8 +6,9 @@ import { Checkbox } from '@skydrop/ui/app/checkbox';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useWebhookEvents } from '@/lib/api-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import './event-picker.css';
+import { useT } from '@/i18n/client';
 
 /** What a new endpoint starts subscribed to. */
 export const DEFAULT_EVENTS: readonly string[] = [
@@ -51,11 +52,13 @@ export function EventPicker({
   readonly value: readonly string[];
   readonly onChange: (next: readonly string[]) => void;
 }): ReactElement {
+  const t = useT();
   const events = useWebhookEvents();
 
-  if (events.isPending) return <SkeletonRows label="Loading the events" rows={3} cols={2} />;
+  if (events.isPending)
+    return <SkeletonRows label={t('settingsWebhooks.loadingTheEvents')} rows={3} cols={2} />;
   if (events.isError) {
-    return <ErrorState message={serverVerdict(events.error)} retry={() => void events.refetch()} />;
+    return <ErrorState message={verdict(events.error, t)} retry={() => void events.refetch()} />;
   }
 
   const offered = events.data;
@@ -75,7 +78,7 @@ export function EventPicker({
 
   return (
     <fieldset className="whk-events">
-      <legend>Events</legend>
+      <legend>{t('settingsWebhooks.events')}</legend>
 
       {unknown.length > 0 && (
         <div className="whk-events__warn" role="status">
@@ -83,11 +86,8 @@ export function EventPicker({
           <div>
             <p>
               {unknown.length === 1
-                ? 'This event is not one we send'
-                : 'These events are not ones we send'}
-              . Nothing has ever been delivered for {unknown.length === 1 ? 'it' : 'them'} — most
-              likely a typo from when this was typed by hand. Remove{' '}
-              {unknown.length === 1 ? 'it' : 'them'} and tick what you meant below.
+                ? t('settingsWebhooks.unknownEventOne')
+                : t('settingsWebhooks.unknownEventsMany')}
             </p>
             <ul className="whk-events__chips">
               {unknown.map((code) => (
@@ -95,7 +95,7 @@ export function EventPicker({
                   <span className="sk-ident">{code}</span>
                   <button
                     type="button"
-                    aria-label={`Remove ${code}`}
+                    aria-label={t('settingsWebhooks.remove', { code })}
                     onClick={() => {
                       const next = new Set(chosen);
                       next.delete(code);

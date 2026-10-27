@@ -7,6 +7,8 @@ import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
 import { useVariantSearch } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * Choose a variant by name, not by uuid.
@@ -42,6 +44,7 @@ export function VariantPicker({
    *  picture to show what was chosen instead of a uuid. */
   readonly onPick: (hit: SellerVariantSearchHit, label: string) => void;
 }): ReactElement {
+  const t = useT();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -82,7 +85,7 @@ export function VariantPicker({
         label={fieldLabel}
         icon={<Search size={16} />}
         value={picked && !open ? label : query}
-        placeholder="Search by product or SKU"
+        placeholder={t('inbound.searchByProductOr')}
         autoComplete="off"
         role="combobox"
         aria-expanded={open}
@@ -105,17 +108,14 @@ export function VariantPicker({
           className="inv-combo__list"
         >
           {!maySearch ? (
-            <p className="inv-combo__msg">
-              Searching the catalogue needs catalogue access, which this account does not have. Ask
-              a colleague who has it to add the products, or paste the SKU they give you.
-            </p>
+            <p className="inv-combo__msg">{t('inbound.searchingTheCatalogueNeeds')}</p>
           ) : query.trim() === '' ? (
-            <p className="inv-combo__msg">Type a product name or SKU.</p>
+            <p className="inv-combo__msg">{t('inbound.typeAProductName')}</p>
           ) : results.isLoading ? (
-            <p className="inv-combo__msg">Searching…</p>
+            <p className="inv-combo__msg">{t('inbound.searching')}</p>
           ) : hits.length === 0 ? (
             <p className="inv-combo__msg">
-              Nothing matches “{query.trim()}”. Only active variants appear here.
+              {richMessage(t('inbound.nothingMatchesOnlyActive'), { query: query.trim() })}
             </p>
           ) : (
             hits.map((h) => {

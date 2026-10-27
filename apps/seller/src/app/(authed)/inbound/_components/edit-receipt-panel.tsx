@@ -25,10 +25,13 @@ import {
   type GoodsReceiptView,
   type UpdateGoodsReceiptBody,
 } from '@/lib/account-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { VariantPicker } from './variant-picker';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Correct a declaration that has not yet been received.
@@ -103,6 +106,7 @@ function EditReceiptForm({
   readonly receipt: Pick<GoodsReceiptView, 'id' | 'status' | 'receiptNumber'>;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const detail = useGoodsReceipt(receipt.id);
   const update = useUpdateGoodsReceipt();
@@ -118,7 +122,7 @@ function EditReceiptForm({
   }, [detail.data, form]);
 
   const dirty = form !== null && initial !== null && JSON.stringify(form) !== initial;
-  const problem = form === null ? null : firstProblem(form);
+  const problem = form === null ? null : firstProblem(t, form);
 
   function patch(next: Partial<FormState>): void {
     setForm((f) => (f === null ? f : { ...f, ...next }));
@@ -159,7 +163,7 @@ function EditReceiptForm({
       { id: receipt.id, body },
       {
         onSuccess: () => {
-          toast.success(`${receipt.receiptNumber} updated`);
+          toast.success(t('inbound.updated', { receiptNumber: receipt.receiptNumber }));
           onClose();
         },
       },
@@ -176,18 +180,18 @@ function EditReceiptForm({
       }}
       size="lg"
       icon={<ClipboardPen size={18} />}
-      title={`Correct ${receipt.receiptNumber}`}
-      description="Only possible while the consignment is still pending. Once the warehouse starts receiving it, what you declared is what they count against."
+      title={t('inbound.correct', { receiptNumber: receipt.receiptNumber })}
+      description={t('inbound.onlyPossibleWhileThe')}
       footer={
         ready ? (
           <DialogFooter>
             <Button variant="ghost" size="md" onClick={onClose}>
-              Discard changes
+              {t('inbound.discardChanges')}
             </Button>
             <AsyncButton
               variant="primary"
               size="md"
-              labels={{ idle: 'Save corrections', busy: 'Saving…' }}
+              labels={{ idle: t('inbound.saveCorrections'), busy: t('inbound.saving') }}
               state={mutationPhase(update)}
               disabled={!dirty || problem !== null || update.isPending}
               onClick={save}
@@ -199,12 +203,10 @@ function EditReceiptForm({
       {detail.isLoading || form === null ? (
         <SkeletonRows rows={4} />
       ) : detail.isError ? (
-        <InlineError message={serverVerdict(detail.error)} retry={() => void detail.refetch()} />
+        <InlineError message={verdict(detail.error, t)} retry={() => void detail.refetch()} />
       ) : (
         <div className="inv-stack">
-          <Note>
-            Replacing a product replaces the whole list, so leave the ones that are right alone.
-          </Note>
+          <Note>{t('inbound.replacingAProductReplaces')}</Note>
           {form.lines.map((line) => (
             <div key={line.key} className="prd-option">
               <div className="prd-option__head">
@@ -215,7 +217,7 @@ function EditReceiptForm({
                 <div style={{ flex: '1 1 240px', minWidth: 0 }}>
                   <VariantPicker
                     id={`v-${line.key}`}
-                    fieldLabel="Item"
+                    fieldLabel={t('inbound.item')}
                     value={line.variantId}
                     label={line.label}
                     onPick={(hit, shown) =>
@@ -229,12 +231,12 @@ function EditReceiptForm({
                   icon={<Trash2 size={14} />}
                   onClick={() => patch({ lines: form.lines.filter((l) => l.key !== line.key) })}
                 >
-                  Remove
+                  {t('inbound.remove')}
                 </Button>
               </div>
               <FieldGrid columns={2}>
                 <NumberStepper
-                  label="Quantity"
+                  label={t('inbound.quantity')}
                   id={`q-${line.key}`}
                   min={QTY_MIN}
                   max={QTY_MAX}
@@ -242,9 +244,9 @@ function EditReceiptForm({
                   onChange={(e) => patchLine(line.key, { expectedQty: e.target.value })}
                 />
                 <TextField
-                  label="Unit cost (₹)"
+                  label={t('inbound.unitCost')}
                   id={`c-${line.key}`}
-                  hint="Optional"
+                  hint={t('inbound.optional')}
                   type="number"
                   min={0}
                   step="0.01"
@@ -253,7 +255,7 @@ function EditReceiptForm({
                 />
               </FieldGrid>
               <Checkbox
-                label="This product has manufacture and expiry dates"
+                label={t('inbound.thisProductHasManufacture')}
                 checked={line.hasDates}
                 onChange={(e) =>
                   patchLine(line.key, {
@@ -267,9 +269,9 @@ function EditReceiptForm({
               {line.hasDates && (
                 <FieldGrid columns={2}>
                   <DateField
-                    label="Manufactured"
+                    label={t('inbound.manufactured')}
                     id={`m-${line.key}`}
-                    hint="Optional"
+                    hint={t('inbound.optional')}
                     value={line.manufacturedAt}
                     onChange={(e) => patchLine(line.key, { manufacturedAt: e.target.value })}
                   />
@@ -277,9 +279,9 @@ function EditReceiptForm({
                     its expiry loses it, and FEFO picking is decided on
                     exactly this date. */}
                   <DateField
-                    label="Expires"
+                    label={t('inbound.expires')}
                     id={`e-${line.key}`}
-                    hint="Optional"
+                    hint={t('inbound.optional')}
                     value={line.expiresAt}
                     onChange={(e) => patchLine(line.key, { expiresAt: e.target.value })}
                   />
@@ -311,22 +313,22 @@ function EditReceiptForm({
                 })
               }
             >
-              Add a product
+              {t('inbound.addAProduct')}
             </Button>
           </div>
 
           <FieldGrid columns={2}>
             <DateField
-              label="Expected arrival"
+              label={t('inbound.expectedArrival')}
               id="gr-edit-eta"
-              hint="Clear it if you no longer know."
+              hint={t('inbound.clearItIfYou')}
               value={form.expectedArrivalAt}
               onChange={(e) => patch({ expectedArrivalAt: e.target.value })}
             />
             <TextField
-              label="Your reference"
+              label={t('inbound.yourReference')}
               id="gr-edit-ref"
-              hint={`Optional. Up to ${REFERENCE_MAX} characters.`}
+              hint={t('inbound.optionalUpToCharacters', { referenceMax: REFERENCE_MAX })}
               maxLength={REFERENCE_MAX}
               value={form.sellerReference}
               onChange={(e) => patch({ sellerReference: e.target.value })}
@@ -338,7 +340,7 @@ function EditReceiptForm({
               {problem}
             </p>
           )}
-          {update.error !== null && <InlineError message={serverVerdict(update.error)} />}
+          {update.error !== null && <InlineError message={verdict(update.error, t)} />}
         </div>
       )}
     </Dialog>
@@ -392,20 +394,20 @@ function toLinePayload(l: LineDraft): DeclareReceiptLine {
 
 /** First reason the server would refuse, phrased for the operator. Only
  *  mirrors the DTO's stated bounds — anything subtler is the server's. */
-function firstProblem(f: FormState): string | null {
-  if (f.lines.length === 0) return 'A consignment needs at least one line. Cancel it instead.';
+function firstProblem(t: Translate<MessageKey>, f: FormState): string | null {
+  if (f.lines.length === 0) return t('inbound.aConsignmentNeedsAt');
   for (const l of f.lines) {
-    if (l.variantId.trim() === '') return 'Every row needs a product — pick one from the list.';
+    if (l.variantId.trim() === '') return t('inbound.everyRowNeedsA');
     const qty = Number(l.expectedQty);
     if (!Number.isInteger(qty) || qty < QTY_MIN || qty > QTY_MAX) {
-      return `Quantity must be a whole number between ${QTY_MIN} and ${QTY_MAX}.`;
+      return t('inbound.quantityMustBeA', { qtyMin: QTY_MIN, qtyMax: QTY_MAX });
     }
     if (l.unitCostInr.trim() !== '' && !(Number(l.unitCostInr) >= 0)) {
-      return 'Unit cost cannot be negative.';
+      return t('inbound.unitCostCannotBe');
     }
   }
   if (f.sellerReference.length > REFERENCE_MAX) {
-    return `Your reference is limited to ${REFERENCE_MAX} characters.`;
+    return t('inbound.yourReferenceIsLimited', { referenceMax: REFERENCE_MAX });
   }
   return null;
 }

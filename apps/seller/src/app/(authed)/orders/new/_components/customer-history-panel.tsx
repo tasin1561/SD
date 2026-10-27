@@ -8,6 +8,9 @@ import { Skeleton } from '@skydrop/ui/app/skeleton';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import '../../_components/orders.css';
 import { useCustomerLookup, type CustomerOrderSummary } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
+import type { MessageKey } from '@/i18n/catalog';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * Who you are about to ship to.
@@ -30,14 +33,23 @@ import { useCustomerLookup, type CustomerOrderSummary } from '@/lib/api-hooks';
 const HIGH_RETURN_RATE = 30;
 const ELEVATED_RETURN_RATE = 15;
 
-function rateTone(pct: number): { tone: 'bad' | 'warn' | 'good'; label: string } {
+/** The risk level, as a word. `NONE` never reaches the chip. */
+const RISK_WORD: Record<string, MessageKey> = {
+  NONE: 'orderNew.riskNone',
+  LOW: 'orderNew.riskLow',
+  MEDIUM: 'orderNew.riskMedium',
+  HIGH: 'orderNew.riskHigh',
+  BLOCKED: 'orderNew.riskBlocked',
+};
+
+function rateTone(pct: number): { tone: 'bad' | 'warn' | 'good'; labelKey: MessageKey } {
   if (pct >= HIGH_RETURN_RATE) {
-    return { tone: 'bad', label: 'Well above average' };
+    return { tone: 'bad', labelKey: 'orderNew.wellAboveAverage' };
   }
   if (pct >= ELEVATED_RETURN_RATE) {
-    return { tone: 'warn', label: 'Above average' };
+    return { tone: 'warn', labelKey: 'orderNew.aboveAverage' };
   }
-  return { tone: 'good', label: 'Normal' };
+  return { tone: 'good', labelKey: 'orderNew.normal' };
 }
 
 function OrderLine({ o }: { readonly o: CustomerOrderSummary }): ReactElement {
@@ -68,6 +80,7 @@ export function CustomerHistoryPanel({
     postalCode: string;
   }) => void;
 }): ReactElement | null {
+  const t = useT();
   const q = useCustomerLookup(phoneE164);
 
   if (q.isLoading) {
@@ -95,11 +108,17 @@ export function CustomerHistoryPanel({
     // mid-form where a plain card reads as more chrome. The accent is
     // the neutral one — a returning customer is not a warning, and the
     // risk tone below is what carries alarm when there is any.
-    <div className="ord-history" role="region" aria-label="This customer's history">
+    <div className="ord-history" role="region" aria-label={t('orderNew.thisCustomerSHistory')}>
       <div className="ord-row ord-row--between">
-        <span className="ord-strong">{customerName ?? 'Returning customer'}</span>
+        <span className="ord-strong">{customerName ?? t('orderNew.returningCustomer')}</span>
         {riskLevel !== 'NONE' && (
-          <StatusChip kind="failed" label={`Flagged ${riskLevel.toLowerCase()}`} size="sm" />
+          <StatusChip
+            kind="failed"
+            label={t('orderNew.flagged', {
+              riskLevel: t(RISK_WORD[riskLevel] ?? 'orderNew.riskNone'),
+            })}
+            size="sm"
+          />
         )}
       </div>
 
@@ -110,31 +129,45 @@ export function CustomerHistoryPanel({
             {platform.returnRatePercent}%
           </span>
           <span className="ord-p">
-            came back — {platform.returned} of {platform.delivered + platform.returned} delivered
-            attempts
+            {richMessage(t('orderNew.cameBackOfDelivered'), {
+              returned: platform.returned,
+              attempts: platform.delivered + platform.returned,
+            })}
           </span>
-          <span className="ord-faint">({tone.label})</span>
+          <span className="ord-faint">({t(tone.labelKey)})</span>
         </div>
       ) : (
         <p className="ord-p">
-          {platform.totalOrders} order{platform.totalOrders === 1 ? '' : 's'} across Skydrop — too
-          few concluded to give a return rate yet.
+          {t(
+            platform.totalOrders === 1
+              ? 'orderNew.orderAcrossSkydropOne'
+              : 'orderNew.ordersAcrossSkydropMany',
+            { totalOrders: platform.totalOrders },
+          )}
         </p>
       )}
 
       <div className="ord-history__counts">
         <span>
-          Across Skydrop: {platform.totalOrders} orders · {platform.delivered} delivered ·{' '}
-          {platform.returned} returned
+          {richMessage(t('orderNew.acrossSkydropOrdersDelivered'), {
+            totalOrders: platform.totalOrders,
+            delivered: platform.delivered,
+            returned: platform.returned,
+          })}
         </span>
         <span>
-          With you: {yours.totalOrders} orders · {yours.delivered} delivered · {yours.returned}{' '}
-          returned
+          {richMessage(t('orderNew.withYouOrdersDelivered'), {
+            totalOrders: yours.totalOrders,
+            delivered: yours.delivered,
+            returned: yours.returned,
+          })}
         </span>
         {platform.refusedOnCall > 0 && (
           <span>
-            Declined on the confirmation call {platform.refusedOnCall}×{' '}
-            <span className="ord-faint">(no shipping cost)</span>
+            {richMessage(t('orderNew.declinedOnTheCall'), {
+              count: platform.refusedOnCall,
+              note: <span className="ord-faint">{t('orderNew.noShippingCost')}</span>,
+            })}
           </span>
         )}
       </div>
@@ -145,7 +178,7 @@ export function CustomerHistoryPanel({
 
       {yours.recentOrders.length > 0 && (
         <div>
-          <span className="ord-faint">Your orders to this customer</span>
+          <span className="ord-faint">{t('orderNew.yourOrdersToThis')}</span>
           <ul className="ord-mini-list">
             {yours.recentOrders.slice(0, 5).map((o) => (
               <OrderLine key={o.orderId} o={o} />
@@ -174,12 +207,15 @@ export function CustomerHistoryPanel({
               })
             }
           >
-            Use these delivery details
+            {t('orderNew.useTheseDeliveryDetails')}
           </Button>
           <span className="ord-faint">
-            {last.addressLine1}
-            {last.postalCode === '' ? '' : ` · ${last.postalCode}`} — from {last.fromOrderNumber},{' '}
-            {new Date(last.placedAt).toLocaleDateString('en-IN')}
+            {richMessage(t('orderNew.addressFromOrder'), {
+              address: last.addressLine1,
+              postal: last.postalCode === '' ? '' : ` · ${last.postalCode}`,
+              order: last.fromOrderNumber,
+              date: new Date(last.placedAt).toLocaleDateString('en-IN'),
+            })}
           </span>
         </div>
       )}

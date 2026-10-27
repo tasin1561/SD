@@ -7,6 +7,7 @@ import { TextField } from '@skydrop/ui/app/text-field';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
 import { Check, Minus, Plus, Search, Star, X } from 'lucide-react';
 import { useSetVariantFavourite, useVariantSearch } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
 
 export interface PickedLine {
   readonly key: number;
@@ -65,6 +66,7 @@ export function ProductCatalogue({
   readonly stockByVariant: ReadonlyMap<string, StockFigure>;
   readonly onAdd: (hit: SellerVariantSearchHit) => void;
 }): ReactElement {
+  const t = useT();
   const [query, setQuery] = useState('');
   /** Show only the starred ones. Off by default — a filter that hides
    *  most of the catalogue should never be the state you arrive in. */
@@ -85,8 +87,8 @@ export function ProductCatalogue({
           <TextField
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by SKU, product name or variant…"
-            aria-label="Search the catalogue"
+            placeholder={t('productPicker.searchBySkuProduct')}
+            aria-label={t('productPicker.searchTheCatalogue')}
             icon={<Search size={15} />}
           />
         </div>
@@ -94,8 +96,16 @@ export function ProductCatalogue({
           type="button"
           onClick={() => setFavouritesOnly((v) => !v)}
           aria-pressed={favouritesOnly}
-          aria-label={favouritesOnly ? 'Show all products' : 'Show starred products only'}
-          title={favouritesOnly ? 'Showing starred only' : 'Show starred only'}
+          aria-label={
+            favouritesOnly
+              ? t('productPicker.showAllProducts')
+              : t('productPicker.showStarredProductsOnly')
+          }
+          title={
+            favouritesOnly
+              ? t('productPicker.showingStarredOnly')
+              : t('productPicker.showStarredOnly')
+          }
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] border ${
             favouritesOnly
               ? 'border-accent bg-[var(--color-accent-tint)] text-accent'
@@ -108,14 +118,14 @@ export function ProductCatalogue({
 
       <div className="border-border-subtle max-h-[24rem] overflow-auto border-t">
         {results.isLoading ? (
-          <p className="text-text-muted px-4 py-3 text-sm">Searching…</p>
+          <p className="text-text-muted px-4 py-3 text-sm">{t('productPicker.searching')}</p>
         ) : hits.length === 0 ? (
           <p className="text-text-muted px-4 py-3 text-sm">
             {favouritesOnly
-              ? 'Nothing starred yet. Tap a star to keep a product at the top of this list.'
+              ? t('productPicker.nothingStarredYetTap')
               : query.trim() === ''
-                ? 'Your active products appear here. Type to narrow them down.'
-                : `Nothing matches “${query.trim()}”.`}
+                ? t('productPicker.yourActiveProductsAppear')
+                : t('productPicker.nothingMatches', { query: query.trim() })}
           </p>
         ) : (
           <ul>
@@ -149,14 +159,16 @@ export function ProductCatalogue({
                         ·
                       </span>
                       <span className={`min-w-0 ${none ? 'text-[var(--status-failed-fg)]' : ''}`}>
-                        {none ? 'out of stock' : `${available} in stock`}
-                        {inTransit > 0 ? ` (+${inTransit} coming)` : ''}
+                        {none
+                          ? t('productPicker.outOfStock')
+                          : t('productPicker.inStock', { available })}
+                        {inTransit > 0 ? t('productPicker.coming', { inTransit }) : ''}
                       </span>
                     </p>
                   </div>
                   <span className="text-text-body shrink-0 font-mono text-sm tabular-nums">
                     {h.effectiveDeclaredValueInr === null ? (
-                      <span className="text-text-faint text-xs">No price</span>
+                      <span className="text-text-faint text-xs">{t('productPicker.noPrice')}</span>
                     ) : (
                       // convert={false} throughout: every field on this
                       // form is labelled "(INR)" and typed in rupees, so a
@@ -169,7 +181,7 @@ export function ProductCatalogue({
                     type="button"
                     onClick={() => onAdd(h)}
                     disabled={already}
-                    aria-label={`Add ${h.skuCode}`}
+                    aria-label={t('productPicker.add', { skuCode: h.skuCode })}
                     className={`skydrop-hit inline-flex h-8 shrink-0 items-center gap-1 rounded-[4px] px-2.5 text-xs font-medium ${
                       already
                         ? 'bg-[var(--status-delivered-bg)] text-[var(--status-delivered-fg)]'
@@ -177,7 +189,7 @@ export function ProductCatalogue({
                     }`}
                   >
                     {already ? <Check size={13} aria-hidden /> : <Plus size={13} aria-hidden />}
-                    {already ? 'Added' : 'Add'}
+                    {already ? t('productPicker.added') : t('productPicker.add2')}
                   </button>
                   {/*
                     Its OWN button, outside the add button. Nesting it
@@ -194,7 +206,12 @@ export function ProductCatalogue({
                       })
                     }
                     aria-pressed={h.isFavourite}
-                    aria-label={`${h.isFavourite ? 'Unstar' : 'Star'} ${h.skuCode}`}
+                    aria-label={t(
+                      h.isFavourite ? 'productPicker.unstarSku' : 'productPicker.starSku',
+                      {
+                        skuCode: h.skuCode,
+                      },
+                    )}
                     className={`skydrop-hit flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] ${
                       h.isFavourite
                         ? 'text-[var(--status-pending-fg)]'
@@ -233,10 +250,11 @@ export function OrderedProducts({
   readonly onPatch: (key: number, patch: Partial<PickedLine>) => void;
   readonly onRemove: (key: number) => void;
 }): ReactElement {
+  const t = useT();
   if (lines.length === 0) {
     return (
       <p className="text-text-muted px-4 py-6 text-center text-sm">
-        Nothing added yet. Pick from the catalogue above.
+        {t('productPicker.nothingAddedYetPick')}
       </p>
     );
   }
@@ -266,7 +284,7 @@ export function OrderedProducts({
                 value={l.quantity}
                 min={1}
                 onChange={(v) => onPatch(l.key, { quantity: v })}
-                label={`Quantity of ${l.skuCode}`}
+                label={t('productPicker.quantityOf', { skuCode: l.skuCode })}
               />
 
               <span className="text-text-bright w-24 shrink-0 text-right font-mono text-sm tabular-nums">
@@ -280,7 +298,7 @@ export function OrderedProducts({
               <button
                 type="button"
                 onClick={() => onRemove(l.key)}
-                aria-label={`Remove ${l.skuCode}`}
+                aria-label={t('productPicker.remove', { skuCode: l.skuCode })}
                 className="text-text-faint hover:text-[var(--status-failed-fg)] skydrop-hit flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px]"
               >
                 <X size={15} aria-hidden />
@@ -289,13 +307,13 @@ export function OrderedProducts({
 
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-[52px]">
               <label className="text-text-muted flex items-center gap-2 text-xs">
-                Unit price
+                {t('productPicker.unitPrice')}
                 <input
                   type="number"
                   min={0}
                   step="0.01"
                   value={l.unitPriceInr}
-                  aria-label={`Unit price of ${l.skuCode}`}
+                  aria-label={t('productPicker.unitPriceOf', { skuCode: l.skuCode })}
                   onChange={(e) => onPatch(l.key, { unitPriceInr: e.target.value })}
                   className="border-border bg-surface text-text-body h-8 w-24 rounded-[4px] border px-2 text-xs tabular-nums [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:text-base"
                 />
@@ -303,7 +321,9 @@ export function OrderedProducts({
               {short && (
                 <span className="text-[var(--status-failed-fg)] text-xs">
                   only {s?.available ?? 0} available
-                  {(s?.inTransit ?? 0) > 0 ? `, ${s?.inTransit} coming` : ''}
+                  {(s?.inTransit ?? 0) > 0
+                    ? t('productPicker.coming2', { inTransit: s?.inTransit ?? 0 })
+                    : ''}
                 </span>
               )}
             </div>
@@ -335,6 +355,7 @@ function Stepper({
   readonly step?: number;
   readonly label: string;
 }): ReactElement {
+  const t = useT();
   const n = Number(value);
   const bump = (by: number): void => {
     const base = Number.isFinite(n) ? n : min;
@@ -345,7 +366,7 @@ function Stepper({
       <button
         type="button"
         onClick={() => bump(-step)}
-        aria-label={`Decrease ${label}`}
+        aria-label={t('productPicker.decrease', { label })}
         className="text-text-muted hover:text-text-bright flex h-8 w-8 items-center justify-center [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-10"
       >
         <Minus size={13} aria-hidden />
@@ -362,7 +383,7 @@ function Stepper({
       <button
         type="button"
         onClick={() => bump(step)}
-        aria-label={`Increase ${label}`}
+        aria-label={t('productPicker.increase', { label })}
         className="text-text-muted hover:text-text-bright flex h-8 w-8 items-center justify-center [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-10"
       >
         <Plus size={13} aria-hidden />

@@ -17,7 +17,7 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import {
   useRemoveResellerOverlayImage,
   useResellerStoreTerms,
@@ -29,12 +29,16 @@ import {
 } from '@/lib/reseller-catalogue-hooks';
 import { PriceFields, draftFrom, priceBody, type PriceDraft } from '../../_components/price-fields';
 import { RsError, RsLink, RsProduct, RsSection, pendingPhase } from '../../_components/rs-parts';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
-const REASON_WORDS: Record<NotSellableReason, string> = {
-  NOT_ENABLED: 'Not sold here',
-  NO_TRANSFER_PRICE: 'No price yet',
-  VARIANT_NOT_RESELLABLE: 'Product archived',
-};
+const reasonWordsOf = (t: Translate<MessageKey>): Record<NotSellableReason, string> => ({
+  NOT_ENABLED: t('resellerStoreDetail.notSoldHere'),
+  NO_TRANSFER_PRICE: t('resellerStoreDetail.noPriceYet'),
+  VARIANT_NOT_RESELLABLE: t('resellerStoreDetail.productArchived'),
+});
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
@@ -44,23 +48,21 @@ function when(iso: string): string {
  * The three words a seller meets on this screen that mean something
  * precise here. The definitions restate RS-3 — they add no rule.
  */
-const GLOSSARY = {
-  transfer: {
-    title: 'Transfer price',
-    description:
-      'What the store pays you per unit. A store with no price of its own pays the one on your price list.',
-  },
-  setAside: {
-    title: 'Set aside',
-    description:
-      'Units kept for this store alone. When your stock falls below what you have set aside, the newest set-aside is reduced first.',
-  },
-  hidden: {
-    title: 'Hidden share',
-    description:
-      'A share of the stock the store is not shown, from 0 to 90%, so it sees less than you hold.',
-  },
-} as const;
+const glossaryOf = (t: Translate<MessageKey>) =>
+  ({
+    transfer: {
+      title: t('resellerStoreDetail.transferPrice'),
+      description: t('resellerStoreDetail.whatTheStorePays'),
+    },
+    setAside: {
+      title: t('resellerStoreDetail.setAside2'),
+      description: t('resellerStoreDetail.unitsKeptForThis'),
+    },
+    hidden: {
+      title: t('resellerStoreDetail.hiddenShare3'),
+      description: t('resellerStoreDetail.aShareOfThe'),
+    },
+  }) as const;
 
 /**
  * RS-3 — one store's catalogue terms: which products it sells, at what
@@ -82,6 +84,7 @@ export function StoreCatalogue({
   storeName: string;
   final: boolean;
 }): ReactElement {
+  const t = useT();
   const identity = useSellerIdentity();
   const mayEdit = can(identity, 'stores.pricing') && !final;
   const terms = useResellerStoreTerms(storeId);
@@ -101,10 +104,10 @@ export function StoreCatalogue({
   }, [terms.data, search, onlySold]);
 
   if (terms.isPending) {
-    return <SkeletonRows rows={5} cols={7} label="Loading the store’s catalogue" />;
+    return <SkeletonRows rows={5} cols={7} label={t('resellerStoreDetail.loadingTheStoreS')} />;
   }
   if (terms.isError) {
-    return <ErrorState message={serverVerdict(terms.error)} retry={() => void terms.refetch()} />;
+    return <ErrorState message={verdict(terms.error, t)} retry={() => void terms.refetch()} />;
   }
   const current =
     editing === null
@@ -114,23 +117,27 @@ export function StoreCatalogue({
   return (
     <>
       <RsSection
-        title="What this store sells"
-        note="A price with no override comes from your price list."
-        action={<RsLink href="/reseller-stores/price-list">Your price list</RsLink>}
+        title={t('resellerStoreDetail.whatThisStoreSells')}
+        note={t('resellerStoreDetail.aPriceWithNo')}
+        action={
+          <RsLink href="/reseller-stores/price-list">
+            {t('resellerStoreDetail.yourPriceList')}
+          </RsLink>
+        }
         flush
       >
         <TableToolbar
           search={{
             value: search,
             onChange: setSearch,
-            label: 'Search by product or SKU',
-            placeholder: 'Product or SKU…',
+            label: t('resellerStoreDetail.searchByProductOr'),
+            placeholder: t('resellerStoreDetail.productOrSku'),
           }}
           filters={
             <Switch
               checked={onlySold}
               onCheckedChange={setOnlySold}
-              label="Only products sold here"
+              label={t('resellerStoreDetail.onlyProductsSoldHere')}
             />
           }
         />
@@ -138,26 +145,32 @@ export function StoreCatalogue({
           <EmptyState
             bare
             icon={terms.data.rows.length === 0 ? undefined : <PackageSearch size={22} />}
-            title={terms.data.rows.length === 0 ? 'No active products yet' : 'Nothing matches'}
+            title={
+              terms.data.rows.length === 0
+                ? t('resellerStoreDetail.noActiveProductsYet')
+                : t('resellerStoreDetail.nothingMatches')
+            }
             description={
               terms.data.rows.length === 0
-                ? 'Add products to your catalogue first; they appear here to turn on for the store.'
-                : 'Try a different name or SKU code.'
+                ? t('resellerStoreDetail.addProductsToYour')
+                : t('resellerStoreDetail.tryADifferentName')
             }
           />
         ) : (
-          <Table caption="What this store sells">
+          <Table caption={t('resellerStoreDetail.whatThisStoreSells')}>
             <THead>
               <Tr>
-                <Th>Product</Th>
-                <Th>Sold here</Th>
+                <Th>{t('resellerStoreDetail.product')}</Th>
+                <Th>{t('resellerStoreDetail.soldHere')}</Th>
                 <Th>
-                  <GlossaryTerm {...GLOSSARY.transfer}>Transfer price</GlossaryTerm>
+                  <GlossaryTerm {...glossaryOf(t).transfer}>
+                    {t('resellerStoreDetail.transferPrice')}
+                  </GlossaryTerm>
                 </Th>
-                <Th>Stock</Th>
-                <Th align="right">Available (real)</Th>
-                <Th align="right">Store sees</Th>
-                <Th>Actions</Th>
+                <Th>{t('resellerStoreDetail.stock')}</Th>
+                <Th align="right">{t('resellerStoreDetail.availableReal')}</Th>
+                <Th align="right">{t('resellerStoreDetail.storeSees')}</Th>
+                <Th>{t('resellerStoreDetail.actions')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -175,7 +188,9 @@ export function StoreCatalogue({
                     <StatusChip
                       kind={r.sellable ? 'confirmed' : 'neutral'}
                       label={
-                        r.sellable ? 'Yes' : REASON_WORDS[r.notSellableReason ?? 'NOT_ENABLED']
+                        r.sellable
+                          ? t('resellerStoreDetail.yes')
+                          : reasonWordsOf(t)[r.notSellableReason ?? 'NOT_ENABLED']
                       }
                       size="sm"
                     />
@@ -193,8 +208,12 @@ export function StoreCatalogue({
                     )}
                   </Td>
                   <Td className="rs-small">
-                    {r.stockMode === 'SET_ASIDE' ? `Set aside ${r.setAsideQty ?? 0}` : 'Shared'}
-                    {r.hiddenPercent > 0 ? ` · ${r.hiddenPercent}% hidden` : ''}
+                    {r.stockMode === 'SET_ASIDE'
+                      ? t('resellerStoreDetail.setAside', { setAsideQty: r.setAsideQty ?? 0 })
+                      : t('resellerStoreDetail.shared')}
+                    {r.hiddenPercent > 0
+                      ? t('resellerStoreDetail.hidden', { hiddenPercent: r.hiddenPercent })
+                      : ''}
                   </Td>
                   <Td align="right">
                     <Num value={r.realAvailable} />
@@ -210,7 +229,7 @@ export function StoreCatalogue({
                         icon={<Pencil size={13} />}
                         onClick={() => setEditing(r)}
                       >
-                        Edit
+                        {t('resellerStoreDetail.edit')}
                       </Button>
                     ) : (
                       '—'
@@ -225,19 +244,21 @@ export function StoreCatalogue({
 
       {terms.data.recentShrinks.length > 0 ? (
         <RsSection
-          title="Set-asides we reduced"
-          note="When stock fell below what you had set aside, the newest went first."
+          title={t('resellerStoreDetail.setAsidesWeReduced')}
+          note={t('resellerStoreDetail.whenStockFellBelow')}
           flush
         >
-          <Table caption="Set-asides we reduced">
+          <Table caption={t('resellerStoreDetail.setAsidesWeReduced')}>
             <THead>
               <Tr>
-                <Th>When</Th>
-                <Th>SKU</Th>
+                <Th>{t('resellerStoreDetail.when')}</Th>
+                <Th>{t('resellerStoreDetail.sku')}</Th>
                 <Th>
-                  <GlossaryTerm {...GLOSSARY.setAside}>Set aside</GlossaryTerm>
+                  <GlossaryTerm {...glossaryOf(t).setAside}>
+                    {t('resellerStoreDetail.setAside2')}
+                  </GlossaryTerm>
                 </Th>
-                <Th align="right">On hand then</Th>
+                <Th align="right">{t('resellerStoreDetail.onHandThen')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -283,6 +304,7 @@ function EditTermsModal({
   row: StoreTermsRow;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const save = useSaveResellerStoreTerms();
   const upload = useUploadResellerOverlayImage();
@@ -329,11 +351,11 @@ function EditTermsModal({
       });
     } catch (err) {
       // SET_ASIDE_EXCEEDS_STOCK says how many are free (FE-2: verbatim).
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       // Rethrown so the confirmation stays open with the verdict on it.
       throw err;
     }
-    toast.success(`Saved ${row.skuCode} for this store.`);
+    toast.success(t('resellerStoreDetail.savedForThisStore', { skuCode: row.skuCode }));
     onClose();
   }
 
@@ -344,8 +366,8 @@ function EditTermsModal({
     upload.mutate(
       { storeId, variantId: row.variantId, file },
       {
-        onSuccess: () => toast.success('Picture added.'),
-        onError: (err) => toast.error(serverVerdict(err)),
+        onSuccess: () => toast.success(t('resellerStoreDetail.pictureAdded')),
+        onError: (err) => toast.error(verdict(err, t)),
       },
     );
   }
@@ -356,14 +378,18 @@ function EditTermsModal({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title={`${row.productName} — this store`}
-      description={`${row.skuCode}. ${row.realAvailable} available now; ${row.freeToSetAside} could be set aside for this store.`}
+      title={t('resellerStoreDetail.thisStore', { productName: row.productName })}
+      description={t('resellerStoreDetail.availableNowCouldBe', {
+        skuCode: row.skuCode,
+        realAvailable: row.realAvailable,
+        freeToSetAside: row.freeToSetAside,
+      })}
       icon={<Pencil size={18} />}
       size="lg"
       footer={
         <DialogFooter>
           <Button variant="secondary" size="md" onClick={onClose}>
-            Cancel
+            {t('resellerStoreDetail.cancel')}
           </Button>
           <AsyncButton
             type="submit"
@@ -371,18 +397,22 @@ function EditTermsModal({
             variant="primary"
             size="md"
             state={pendingPhase(save.isPending)}
-            labels={{ idle: 'Save', busy: 'Saving…' }}
+            labels={{ idle: t('resellerStoreDetail.save'), busy: t('resellerStoreDetail.saving') }}
           />
         </DialogFooter>
       }
     >
       <form id="rs-terms-form" onSubmit={review} className="rs-form">
         <div className="rs-switches">
-          <Switch checked={enabled} onCheckedChange={setEnabled} label="This store may sell it" />
+          <Switch
+            checked={enabled}
+            onCheckedChange={setEnabled}
+            label={t('resellerStoreDetail.thisStoreMaySell')}
+          />
           <Switch
             checked={ownPrice}
             onCheckedChange={setOwnPrice}
-            label="Give this store its own price"
+            label={t('resellerStoreDetail.giveThisStoreIts')}
           />
         </div>
         {ownPrice ? (
@@ -390,26 +420,26 @@ function EditTermsModal({
         ) : (
           <p className="rs-muted">
             {row.defaultPrice === null
-              ? 'This product has no default price yet — set one on your price list, or give this store its own.'
-              : 'Uses your default price list.'}
+              ? t('resellerStoreDetail.thisProductHasNo')
+              : t('resellerStoreDetail.usesYourDefaultPrice')}
           </p>
         )}
 
         <div className="rs-grid-3">
           <Select
             id="terms-mode"
-            label="Stock"
+            label={t('resellerStoreDetail.stock')}
             value={stockMode}
             onChange={(e) => setStockMode(e.target.value as StockMode)}
           >
-            <option value="SHARED">Shared with your other stores</option>
-            <option value="SET_ASIDE">A set-aside for this store</option>
+            <option value="SHARED">{t('resellerStoreDetail.sharedWithYourOther')}</option>
+            <option value="SET_ASIDE">{t('resellerStoreDetail.aSetAsideFor')}</option>
           </Select>
           {stockMode === 'SET_ASIDE' ? (
             <TextField
               id="terms-qty"
-              label="Units set aside"
-              hint={`${row.freeToSetAside} free right now.`}
+              label={t('resellerStoreDetail.unitsSetAside')}
+              hint={t('resellerStoreDetail.freeRightNow', { freeToSetAside: row.freeToSetAside })}
               inputMode="numeric"
               inputClassName="sk-figure"
               value={setAside}
@@ -418,8 +448,8 @@ function EditTermsModal({
           ) : null}
           <TextField
             id="terms-hidden"
-            label="Hidden share (%)"
-            hint="0 to 90."
+            label={t('resellerStoreDetail.hiddenShare')}
+            hint={t('resellerStoreDetail.0To90')}
             inputMode="numeric"
             inputClassName="sk-figure"
             value={hidden}
@@ -427,30 +457,33 @@ function EditTermsModal({
           />
         </div>
         <p className="rs-faint">
-          <GlossaryTerm {...GLOSSARY.setAside}>Set aside</GlossaryTerm> and{' '}
-          <GlossaryTerm {...GLOSSARY.hidden}>hidden share</GlossaryTerm> decide what the store is
-          shown.
+          <GlossaryTerm {...glossaryOf(t).setAside}>
+            {t('resellerStoreDetail.setAside2')}
+          </GlossaryTerm>{' '}
+          and{' '}
+          <GlossaryTerm {...glossaryOf(t).hidden}>
+            {t('resellerStoreDetail.hiddenShare2')}
+          </GlossaryTerm>{' '}
+          {t('resellerStoreDetail.decideWhatTheStore')}
         </p>
 
         <TextField
           id="terms-title"
-          label="What the store calls it"
-          hint="Blank uses your product name."
+          label={t('resellerStoreDetail.whatTheStoreCalls')}
+          hint={t('resellerStoreDetail.blankUsesYourProduct')}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
         <TextArea
           id="terms-desc"
-          label="Description for the store"
-          hint="Blank uses your product description."
+          label={t('resellerStoreDetail.descriptionForTheStore')}
+          hint={t('resellerStoreDetail.blankUsesYourProduct2')}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
 
         <div className="rs-stack rs-stack--tight">
-          <p className="rs-body">
-            Pictures for this store (up to 5; none uses your product picture)
-          </p>
+          <p className="rs-body">{t('resellerStoreDetail.picturesForThisStore')}</p>
           {row.overlayImages.length > 0 ? (
             <div className="rs-pictures">
               {row.overlayImages.map((img) => (
@@ -462,7 +495,7 @@ function EditTermsModal({
                     disabled={removeImage.isPending}
                     onClick={() => setRemovingImageId(img.id)}
                   >
-                    Remove
+                    {t('resellerStoreDetail.remove')}
                   </Button>
                 </div>
               ))}
@@ -473,10 +506,10 @@ function EditTermsModal({
             onOpenChange={(o) => {
               if (!o) setRemovingImageId(null);
             }}
-            title="Remove this picture?"
+            title={t('resellerStoreDetail.removeThisPicture')}
             entity={`${row.productName} · ${row.skuCode}`}
-            consequence="The store stops showing it straight away. You can add it again later."
-            confirmLabel="Remove the picture"
+            consequence={t('resellerStoreDetail.theStoreStopsShowing')}
+            confirmLabel={t('resellerStoreDetail.removeThePicture')}
             destructive
             closeOnSuccess={false}
             onConfirm={async () => {
@@ -487,9 +520,9 @@ function EditTermsModal({
                   variantId: row.variantId,
                   imageId: removingImageId,
                 });
-                toast.success('Picture removed.');
+                toast.success(t('resellerStoreDetail.pictureRemoved'));
               } catch (err) {
-                toast.error(serverVerdict(err));
+                toast.error(verdict(err, t));
               }
               setRemovingImageId(null);
             }}
@@ -498,7 +531,7 @@ function EditTermsModal({
               primitive draws a text box and would be wrong here. */}
           <div className="rs-file">
             <label className="rs-file__label" htmlFor="terms-picture">
-              Add a picture
+              {t('resellerStoreDetail.addAPicture')}
             </label>
             <input
               id="terms-picture"
@@ -510,7 +543,7 @@ function EditTermsModal({
               onChange={addPicture}
             />
             <span id="terms-picture-hint" className="rs-file__hint">
-              JPG, PNG or WebP, at most 2 MB.
+              {t('resellerStoreDetail.jpgPngOrWebp')}
             </span>
           </div>
         </div>
@@ -521,45 +554,48 @@ function EditTermsModal({
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Save these terms for the store?"
+        title={t('resellerStoreDetail.saveTheseTermsFor')}
         entity={storeName}
-        consequence="The store sees the new terms straight away. Orders it has already placed keep the terms they were placed under."
-        confirmLabel="Save"
-        cancelLabel="Back"
+        consequence={t('resellerStoreDetail.theStoreSeesThe')}
+        confirmLabel={t('resellerStoreDetail.save')}
+        cancelLabel={t('resellerStoreDetail.back')}
         onConfirm={submit}
         error={error}
       >
         <ul className="rs-confirm-list">
           <li>
-            <b>Product:</b> {row.productName} · <span className="sk-ident">{row.skuCode}</span>
+            <b>{t('resellerStoreDetail.product2')}</b> {row.productName} ·{' '}
+            <span className="sk-ident">{row.skuCode}</span>
           </li>
           <li>
-            <b>This store may sell it:</b> {enabled ? 'Yes' : 'No'}
+            <b>{t('resellerStoreDetail.thisStoreMaySell2')}</b>{' '}
+            {enabled ? t('resellerStoreDetail.yes') : t('resellerStoreDetail.no')}
           </li>
           <li>
-            <b>Price:</b>{' '}
+            <b>{t('resellerStoreDetail.price')}</b>{' '}
             {ownPrice ? (
               <>
-                its own —{' '}
-                {price.transferPriceInr.trim() === '' ||
-                !Number.isFinite(Number(price.transferPriceInr.trim())) ? (
-                  price.transferPriceInr.trim()
-                ) : (
-                  <Money amount={price.transferPriceInr.trim()} convert={false} />
-                )}{' '}
-                a unit
+                {richMessage(t('resellerStoreDetail.itsOwnAUnit'), {
+                  convert:
+                    price.transferPriceInr.trim() === '' ||
+                    !Number.isFinite(Number(price.transferPriceInr.trim())) ? (
+                      price.transferPriceInr.trim()
+                    ) : (
+                      <Money amount={price.transferPriceInr.trim()} convert={false} />
+                    ),
+                })}
               </>
             ) : (
-              'your default price list'
+              t('resellerStoreDetail.yourDefaultPriceList')
             )}
           </li>
           <li>
-            <b>Stock:</b>{' '}
+            <b>{t('resellerStoreDetail.stock2')}</b>{' '}
             {stockMode === 'SET_ASIDE'
-              ? `A set-aside for this store (${setAside.trim()})`
-              : 'Shared with your other stores'}
+              ? t('resellerStoreDetail.aSetAsideFor2', { setAside: setAside.trim() })
+              : t('resellerStoreDetail.sharedWithYourOther')}
             {' · '}
-            {hidden.trim()}% hidden
+            {t('resellerStoreDetail.percentHidden', { hidden: hidden.trim() })}
           </li>
         </ul>
       </ConfirmDialog>

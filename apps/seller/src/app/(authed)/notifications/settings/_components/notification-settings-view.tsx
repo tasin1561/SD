@@ -35,9 +35,13 @@ import {
   useSetNotificationSubscription,
   type TopicDef,
 } from '@/lib/notification-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { SetCallout, SetFact, SetPageHeader } from '../../../settings/_components/settings-parts';
 import '../../_components/notifications.css';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Everything about what Skydrop sends you, on one page.
@@ -95,6 +99,7 @@ import '../../_components/notifications.css';
  *     decision nobody made.
  */
 export function NotificationSettingsView(): ReactElement {
+  const t = useT();
   const identity = useSellerIdentity();
   // Cosmetic only (FE-2) — the API refuses a PATCH from somebody
   // without the permission regardless. This decides whether we render a
@@ -115,29 +120,29 @@ export function NotificationSettingsView(): ReactElement {
   const onCount = allTopics.filter((t) => !muted.has(t.topic)).length;
 
   const rows = prefs.data ?? [];
-  const quiet = useMemo(() => summariseQuietHours(rows), [rows]);
+  const quiet = useMemo(() => summariseQuietHours(t, rows), [rows]);
 
   return (
     <div className="set-page">
       <SetPageHeader
         crumbs={[
-          { label: 'Client console' },
-          { label: 'Notifications', href: '/notifications' },
-          { label: 'Settings' },
+          { label: t('notificationSettings.clientConsole') },
+          { label: t('notificationSettings.notifications'), href: '/notifications' },
+          { label: t('notificationSettings.settings') },
         ]}
-        title="Notification settings"
+        title={t('notificationSettings.notificationSettings')}
         subtitle={
           mayManageCompany
-            ? 'Two separate choices: what reaches YOU, and what this COMPANY is emailed about. Both only ever remove a message — neither can turn one on that the other switched off. Messages about your account and credentials are in neither list: they always go to your email and cannot be silenced.'
-            : 'What reaches YOUR inbox. Messages about your account and credentials are not listed — they only ever go to your email, and cannot be silenced.'
+            ? t('notificationSettings.twoSeparateChoicesWhat')
+            : t('notificationSettings.whatReachesYourInbox')
         }
         // WHOSE decision each half is, said in the fact row rather than
         // only in the prose — it is the distinction the merge of these
         // two screens exists to keep visible.
         meta={
           <span className="set-meta">
-            <SetFact tone="accent">Yours</SetFact>
-            {mayManageCompany && <SetFact>The company&apos;s</SetFact>}
+            <SetFact tone="accent">{t('notificationSettings.yours')}</SetFact>
+            {mayManageCompany && <SetFact>{t('notificationSettings.theCompanyS')}</SetFact>}
           </span>
         }
       />
@@ -146,7 +151,7 @@ export function NotificationSettingsView(): ReactElement {
              comp's telemetry tiles are not here for that reason. ─── */}
       <div className="set-kpis">
         <KpiCard
-          label="Your alerts"
+          label={t('notificationSettings.yourAlerts')}
           icon={<BellRing size={14} />}
           figure={
             topics.isLoading ? (
@@ -158,41 +163,41 @@ export function NotificationSettingsView(): ReactElement {
             )
           }
           tone="neutral"
-          hint="Topics reaching your inbox."
+          hint={t('notificationSettings.topicsReachingYourInbox')}
         />
         {mayManageCompany &&
           (prefs.isLoading ? (
             <KpiCard
-              label="Company categories"
+              label={t('notificationSettings.companyCategories')}
               icon={<Landmark size={14} />}
               figure={<span className="set-kpi-faint">—</span>}
               tone="neutral"
-              hint="Email + in-app, set for everyone here."
+              hint={t('notificationSettings.emailInAppSet')}
             />
           ) : (
             <KpiCard
-              label="Company categories"
+              label={t('notificationSettings.companyCategories')}
               icon={<Landmark size={14} />}
               value={rows.length}
               format={String}
               unit="categories"
               tone="neutral"
-              hint="Email + in-app, set for everyone here."
+              hint={t('notificationSettings.emailInAppSet')}
             />
           ))}
         <KpiCard
-          label="Quiet hours"
+          label={t('notificationSettings.quietHours')}
           icon={<Clock size={14} />}
           figure={<span className="set-kpi-text">{quiet.label}</span>}
           tone={quiet.set ? 'pending' : 'neutral'}
           hint={quiet.note}
         />
         <KpiCard
-          label="Never silenced"
+          label={t('notificationSettings.neverSilenced')}
           icon={<ShieldCheck size={14} />}
-          figure={<span className="set-kpi-text">Account &amp; security</span>}
+          figure={<span className="set-kpi-text">{t('notificationSettings.accountSecurity')}</span>}
           tone="neutral"
-          hint="Sign-in, password, invites."
+          hint={t('notificationSettings.signInPasswordInvites')}
         />
       </div>
 
@@ -238,6 +243,7 @@ function YourTopics({
   readonly muted: ReadonlySet<string>;
   readonly onError: (s: string) => void;
 }): ReactElement {
+  const t = useT();
   const setSub = useSetNotificationSubscription();
   const clearSub = useClearNotificationSubscription();
   const [error, setError] = useState<string | null>(null);
@@ -253,11 +259,11 @@ function YourTopics({
 
   return (
     <section className="set-section">
-      <SectionHeading title="What reaches you" note="Your own choices, for your own inbox." />
-      <p className="set-muted">
-        Nobody else at this company sees them, and changing one here does not change what anybody
-        else receives.
-      </p>
+      <SectionHeading
+        title={t('notificationSettings.whatReachesYou')}
+        note={t('notificationSettings.yourOwnChoicesFor')}
+      />
+      <p className="set-muted">{t('notificationSettings.nobodyElseAtThis')}</p>
       {error !== null && (
         <SetCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
           <p>{error}</p>
@@ -265,7 +271,7 @@ function YourTopics({
       )}
       {loading ? (
         <div className="set-card" data-flush>
-          <SkeletonRows rows={3} cols={2} label="Loading topics…" />
+          <SkeletonRows rows={3} cols={2} label={t('notificationSettings.loadingTopics')} />
         </div>
       ) : (
         <Accordion
@@ -310,7 +316,8 @@ function YourTopics({
                                — the API refuses the mute either way
                                (FE-2). */
                             <p className="set-row__note">
-                              <Lock size={11} aria-hidden /> Always on. {d.immutableReason ?? ''}
+                              <Lock size={11} aria-hidden /> {t('notificationSettings.alwaysOn')}{' '}
+                              {d.immutableReason ?? ''}
                             </p>
                           ) : null}
                         </div>
@@ -318,17 +325,17 @@ function YourTopics({
                           <Switch
                             checked={isOn}
                             disabled={d.mutable === false}
-                            aria-label={`Notify me about: ${d.label}`}
+                            aria-label={t('notificationSettings.notifyMeAbout', { label: d.label })}
                             onCheckedChange={() => {
                               setError(null);
                               if (isOn) {
                                 setSub.mutate(
                                   { topic: d.topic, mode: 'MUTED' },
-                                  { onError: (e) => setError(serverVerdict(e)) },
+                                  { onError: (e) => setError(verdict(e, t)) },
                                 );
                               } else {
                                 clearSub.mutate(d.topic, {
-                                  onError: (e) => setError(serverVerdict(e)),
+                                  onError: (e) => setError(verdict(e, t)),
                                 });
                               }
                             }}
@@ -349,67 +356,74 @@ function YourTopics({
 
 /* ── The company's ──────────────────────────────────────────────── */
 
-const CATEGORY_LABEL: Record<string, { title: string; description: string }> = {
+const CATEGORY_LABEL: Record<string, { titleKey: MessageKey; descriptionKey: MessageKey }> = {
   ORDER_UPDATES: {
-    title: 'Order updates',
-    description: 'New orders, confirmations, cancellations, rejections.',
+    titleKey: 'notificationSettings.orderUpdates',
+    descriptionKey: 'notificationSettings.orderUpdatesDesc',
   },
   SHIPMENT_UPDATES: {
-    title: 'Shipment updates',
-    description: 'Dispatch, in-transit, delivery, NDR, RTO.',
+    titleKey: 'notificationSettings.shipmentUpdates',
+    descriptionKey: 'notificationSettings.shipmentUpdatesDesc',
   },
   STOCK_ALERTS: {
-    title: 'Stock alerts',
-    description: 'Low-stock thresholds + receiving completed.',
+    titleKey: 'notificationSettings.stockAlerts',
+    descriptionKey: 'notificationSettings.stockAlertsDesc',
   },
   CALL_CENTER_OUTCOMES: {
-    title: 'Call centre outcomes',
-    description: 'NDR cap reached, customer declined, etc.',
+    titleKey: 'notificationSettings.callCentreOutcomes',
+    descriptionKey: 'notificationSettings.callCentreOutcomesDesc',
   },
-  BILLING: { title: 'Billing', description: 'Remittance summaries + invoices.' },
+  BILLING: {
+    titleKey: 'notificationSettings.billing',
+    descriptionKey: 'notificationSettings.billingDesc',
+  },
   SYSTEM_ANNOUNCEMENTS: {
-    title: 'System announcements',
-    description: 'Maintenance windows, policy updates.',
+    titleKey: 'notificationSettings.systemAnnouncements',
+    descriptionKey: 'notificationSettings.systemAnnouncementsDesc',
   },
-  MARKETING: { title: 'Marketing', description: 'Skydrop product updates + tips.' },
+  MARKETING: {
+    titleKey: 'notificationSettings.marketing',
+    descriptionKey: 'notificationSettings.marketingDesc',
+  },
 };
 
 function CompanyCategories(): ReactElement {
+  const t = useT();
   const list = useNotificationPreferences();
   const toast = useToast();
 
   return (
     <section className="set-section">
       <SectionHeading
-        title="The company's email"
-        note="What this company is emailed about — applies to everyone here, not only you."
+        title={t('notificationSettings.theCompanySEmail')}
+        note={t('notificationSettings.whatThisCompanyIs')}
       />
       {list.isLoading ? (
         <div className="set-card" data-flush>
-          <SkeletonRows rows={3} cols={5} label="Loading preferences…" />
+          <SkeletonRows rows={3} cols={5} label={t('notificationSettings.loadingPreferences')} />
         </div>
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed.'} retry={() => void list.refetch()} />
+        <ErrorState
+          message={list.error?.message ?? t('notificationSettings.failed')}
+          retry={() => void list.refetch()}
+        />
       ) : list.data === undefined || list.data.length === 0 ? (
-        <EmptyState title="No preferences yet." />
+        <EmptyState title={t('notificationSettings.noPreferencesYet')} />
       ) : (
         <div className="set-card" data-flush>
-          <p className="set-card__lead">
-            Switching a category off stops that email reaching your colleagues too. Changes save
-            instantly.
-          </p>
+          <p className="set-card__lead">{t('notificationSettings.switchingACategoryOff')}</p>
           {/* A TABLE, not seven stacked cards. Seven categories × four
               controls is a grid of the same question asked seven times,
               and a column is how you compare them. The `Table` primitive
               turns each row into a labelled card on a phone. */}
-          <Table caption="The company's email, by category">
+          <Table caption={t('notificationSettings.theCompanySEmail2')}>
             <THead>
               <Tr>
-                <Th>Category</Th>
-                <Th>Email</Th>
-                <Th>In-app</Th>
-                <Th>Quiet hours</Th>
-                <Th>What that means</Th>
+                <Th>{t('notificationSettings.category')}</Th>
+                <Th>{t('notificationSettings.email')}</Th>
+                <Th>{t('notificationSettings.inApp')}</Th>
+                <Th>{t('notificationSettings.quietHours')}</Th>
+                <Th>{t('notificationSettings.whatThatMeans')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -432,9 +446,7 @@ function CompanyCategories(): ReactElement {
               DAILY_DIGEST needs a scheduler that does not exist. A
               control that does nothing is worse than no control.
             */}
-            Quiet hours hold the EMAIL only, in the company timezone. An email that arrives inside
-            the window waits until it ends rather than being dropped — and an inbox line is never
-            held, because nothing pings and the row itself is the delivery.
+            {t('notificationSettings.quietHoursHoldThe')}
           </p>
         </div>
       )}
@@ -451,6 +463,7 @@ function PreferenceRow({
   readonly onToast: (s: string) => void;
   readonly onError: (s: string) => void;
 }): ReactElement {
+  const t = useT();
   const update = useUpdateNotificationPreference();
   const [busy, setBusy] = useState(false);
 
@@ -463,13 +476,17 @@ function PreferenceRow({
       await update.mutateAsync({ category: row.category, body });
       onToast(msg);
     } catch (e) {
-      onError(serverVerdict(e, 'Update failed'));
+      onError(verdict(e, t, t('notificationSettings.updateFailed')));
     } finally {
       setBusy(false);
     }
   }
 
-  const label = CATEGORY_LABEL[row.category] ?? { title: row.category, description: '' };
+  const known = CATEGORY_LABEL[row.category];
+  const label = {
+    title: known === undefined ? row.category : t(known.titleKey),
+    description: known === undefined ? '' : t(known.descriptionKey),
+  };
   const held = row.quietHoursStart !== null && row.quietHoursEnd !== null;
 
   return (
@@ -482,7 +499,7 @@ function PreferenceRow({
         <Switch
           checked={row.emailEnabled}
           disabled={busy}
-          aria-label={`Email ${label.title}`}
+          aria-label={t('notificationSettings.email2', { title: label.title })}
           onCheckedChange={(v) => void patch({ emailEnabled: v }, 'Saved.')}
         />
       </Td>
@@ -490,7 +507,7 @@ function PreferenceRow({
         <Switch
           checked={row.inAppEnabled}
           disabled={busy}
-          aria-label={`In-app ${label.title}`}
+          aria-label={t('notificationSettings.inApp2', { title: label.title })}
           onCheckedChange={(v) => void patch({ inAppEnabled: v }, 'Saved.')}
         />
       </Td>
@@ -498,7 +515,7 @@ function PreferenceRow({
         <div className="ntf-quiet">
           <TextField
             type="time"
-            aria-label={`Quiet hours start for ${label.title}`}
+            aria-label={t('notificationSettings.quietHoursStartFor', { title: label.title })}
             className="ntf-quiet__time"
             inputClassName="sk-figure"
             icon={<Clock size={14} />}
@@ -514,7 +531,7 @@ function PreferenceRow({
           <span className="set-faint">to</span>
           <TextField
             type="time"
-            aria-label={`Quiet hours end for ${label.title}`}
+            aria-label={t('notificationSettings.quietHoursEndFor', { title: label.title })}
             className="ntf-quiet__time"
             inputClassName="sk-figure"
             icon={<Clock size={14} />}
@@ -532,11 +549,13 @@ function PreferenceRow({
       <Td>
         {/* Derived, never typed: what the two times above actually do. */}
         {!row.emailEnabled ? (
-          <span className="set-faint">No email at all</span>
+          <span className="set-faint">{t('notificationSettings.noEmailAtAll')}</span>
         ) : held ? (
-          <span className="set-cell-muted">Held till {row.quietHoursEnd}</span>
+          <span className="set-cell-muted">
+            {richMessage(t('notificationSettings.heldTill'), { quietHoursEnd: row.quietHoursEnd })}
+          </span>
         ) : (
-          <span className="set-cell-muted">Sent straight away</span>
+          <span className="set-cell-muted">{t('notificationSettings.sentStraightAway')}</span>
         )}
       </Td>
     </Tr>
@@ -546,6 +565,7 @@ function PreferenceRow({
 /* ── The rail ───────────────────────────────────────────────────── */
 
 function AlwaysOn(): ReactElement {
+  const t = useT();
   /**
    * NOTIF-9: CREDENTIAL is `[EMAIL]` and `mutable: false`. Not a
    * preference nobody has got round to adding — a password reset you
@@ -557,13 +577,13 @@ function AlwaysOn(): ReactElement {
   const items: ReadonlyArray<{ Icon: typeof ShieldCheck; title: string; body: string }> = [
     {
       Icon: ShieldCheck,
-      title: 'Account and sign-in',
-      body: 'Password resets, email verification, team invitations, new-device warnings.',
+      title: t('notificationSettings.accountAndSignIn'),
+      body: t('notificationSettings.accountAlwaysDesc'),
     },
     {
       Icon: Landmark,
-      title: 'Bank and payout changes',
-      body: 'A change to the account we pay you into is always confirmed by email.',
+      title: t('notificationSettings.bankAndPayoutChanges'),
+      body: t('notificationSettings.bankAlwaysDesc'),
     },
   ];
   return (
@@ -572,15 +592,12 @@ function AlwaysOn(): ReactElement {
         title={
           <span className="set-chips">
             <BellOff size={15} aria-hidden />
-            Cannot be switched off
+            {t('notificationSettings.cannotBeSwitchedOff')}
           </span>
         }
       />
       <div className="set-card">
-        <p className="set-muted">
-          These go to your email whatever is set above. A warning you can silence is one you find
-          out about too late.
-        </p>
+        <p className="set-muted">{t('notificationSettings.theseGoToYour')}</p>
         <ul className="ntf-always">
           {items.map(({ Icon, title, body }) => (
             <li key={title} className="ntf-always__item">
@@ -615,17 +632,26 @@ interface QuietSummary {
  * agree — and where they do not, saying "Varies" is the honest answer
  * rather than picking one and presenting it as the rule.
  */
-function summariseQuietHours(rows: readonly NotificationPreferenceView[]): QuietSummary {
+function summariseQuietHours(
+  t: Translate<MessageKey>,
+  rows: readonly NotificationPreferenceView[],
+): QuietSummary {
   const withWindow = rows.filter((r) => r.quietHoursStart !== null && r.quietHoursEnd !== null);
   const timezone = rows[0]?.timezone ?? null;
   if (rows.length === 0) {
-    return { set: false, label: '—', note: 'nothing set yet', timezone: null, window: null };
+    return {
+      set: false,
+      label: '—',
+      note: t('notificationSettings.nothingSetYet'),
+      timezone: null,
+      window: null,
+    };
   }
   if (withWindow.length === 0) {
     return {
       set: false,
-      label: 'Not set',
-      note: 'email is sent as it happens',
+      label: t('notificationSettings.notSet'),
+      note: t('notificationSettings.emailIsSentAs'),
       timezone,
       window: null,
     };
@@ -634,8 +660,8 @@ function summariseQuietHours(rows: readonly NotificationPreferenceView[]): Quiet
   if (distinct.size > 1) {
     return {
       set: true,
-      label: 'Varies',
-      note: `${withWindow.length} categories, different windows`,
+      label: t('notificationSettings.varies'),
+      note: t('notificationSettings.categoriesDifferentWindows', { withWindow: withWindow.length }),
       timezone,
       window: null,
     };
@@ -648,7 +674,7 @@ function summariseQuietHours(rows: readonly NotificationPreferenceView[]): Quiet
     label: `${start}–${end}`,
     note:
       withWindow.length === rows.length
-        ? 'on every category'
+        ? t('notificationSettings.onEveryCategory')
         : `on ${withWindow.length} of ${rows.length}`,
     timezone,
     window: { start, end },
@@ -662,6 +688,7 @@ function TimezoneCard({
   readonly timezone: string;
   readonly quiet: QuietSummary;
 }): ReactElement {
+  const t = useT();
   // Rendered from the CLIENT clock in the company's zone. Deliberately
   // not a ticking clock: a second-by-second readout on a settings page
   // is motion for its own sake, and this only has to answer "which side
@@ -682,7 +709,7 @@ function TimezoneCard({
         title={
           <span className="set-chips">
             <Clock size={15} aria-hidden />
-            Your timezone
+            {t('notificationSettings.yourTimezone')}
           </span>
         }
       />
@@ -691,16 +718,13 @@ function TimezoneCard({
           <div className="ntf-clock sk-figure">{local}</div>
           <div className="set-faint sk-ident">{timezone}</div>
         </div>
-        <p className="set-muted">
-          Quiet hours are read in this zone, from the company profile — never a stored offset, which
-          drifts an hour twice a year.
-        </p>
+        <p className="set-muted">{t('notificationSettings.quietHoursAreRead')}</p>
         {quiet.window !== null && (
           <div className="ntf-window" data-inside={inside ? '1' : undefined}>
             {inside ? <BellOff size={14} aria-hidden /> : <BellRing size={14} aria-hidden />}
             {inside
-              ? `Inside quiet hours — email is waiting until ${quiet.window.end}`
-              : 'Outside quiet hours — email is going out now'}
+              ? t('notificationSettings.insideQuietHoursEmail', { end: quiet.window.end })
+              : t('notificationSettings.outsideQuietHoursEmail')}
           </div>
         )}
       </div>

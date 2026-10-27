@@ -15,7 +15,7 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import {
   useDecideStoreAction,
   useDecideStoreAddressChange,
@@ -38,30 +38,34 @@ import {
   RsStripFact,
   pendingPhase,
 } from '../_components/rs-parts';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 /** What the store asked for, in the seller's words rather than an enum. */
-const ASKED_FOR: Record<StoreActionRequestRow['action'], string> = {
-  RECALL: 'Call the customer again',
-  REATTEMPT: 'Try delivering it again',
-  RTO: 'Send the parcel back',
-};
+const askedForOf = (t: Translate<MessageKey>): Record<StoreActionRequestRow['action'], string> => ({
+  RECALL: t('resellerRequests.callTheCustomerAgain2'),
+  REATTEMPT: t('resellerRequests.tryDeliveringItAgain'),
+  RTO: t('resellerRequests.sendTheParcelBack'),
+});
 
 /**
  * What approving a delivery ask DOES, per ask — the same words the
  * store's "What they can do" screen uses for a direct action. Approving
  * runs exactly that, so the confirmation says it before it happens.
  */
-const APPROVE_DOES: Record<StoreActionRequestRow['action'], string> = {
-  RECALL:
-    'Approving runs it now: the call is queued with our call centre. The store is told either way.',
-  REATTEMPT:
-    'Approving runs it now: a ticket opens and Skydrop admin passes the request to the courier. The store is told either way.',
-  RTO: 'Approving runs it now: the courier is asked to return the parcel. The store is told either way.',
-};
+const approveDoesOf = (
+  t: Translate<MessageKey>,
+): Record<StoreActionRequestRow['action'], string> => ({
+  RECALL: t('resellerRequests.approvingRunsItNow'),
+  REATTEMPT: t('resellerRequests.approvingRunsItNow2'),
+  RTO: t('resellerRequests.approvingRunsItNow3'),
+});
 
 /**
  * 2026-09-16 — the one queue for everything your reseller stores are
@@ -87,6 +91,7 @@ const APPROVE_DOES: Record<StoreActionRequestRow['action'], string> = {
  *       nowhere else.
  */
 export default function StoreRequestsPage(): ReactElement {
+  const t = useT();
   // Asked here only to decide whether ALL queues are empty; the sections
   // ask again and read the same cache entry, so this costs no extra
   // request.
@@ -104,23 +109,25 @@ export default function StoreRequestsPage(): ReactElement {
   const header = (
     <PageHeader
       breadcrumbs={[
-        { label: 'Client console' },
-        { label: 'Reselling' },
-        { label: 'Waiting on you' },
+        { label: t('resellerRequests.clientConsole') },
+        { label: t('resellerRequests.reselling') },
+        { label: t('resellerRequests.waitingOnYou') },
       ]}
       Link={Link}
-      title="Waiting on you"
-      subtitle="What your Member stores have asked Client staff to approve. Until you answer, nothing happens — and a request nobody answers closes after a few days and the store is told."
+      title={t('resellerRequests.waitingOnYou')}
+      subtitle={t('resellerRequests.whatYourMemberStores')}
       meta={
         !counted ? undefined : (
           <RsFacts>
             <RsFact tone={total > 0 ? 'warn' : 'good'} dot={total > 0}>
-              {total === 0 ? 'Nothing waiting' : `${total} waiting`}
+              {total === 0
+                ? t('resellerRequests.nothingWaiting')
+                : t('resellerRequests.waiting', { total })}
             </RsFact>
           </RsFacts>
         )
       }
-      action={<RsLink href="/reseller-stores">All member stores</RsLink>}
+      action={<RsLink href="/reseller-stores">{t('resellerRequests.allMemberStores')}</RsLink>}
     />
   );
 
@@ -134,28 +141,28 @@ export default function StoreRequestsPage(): ReactElement {
   const tiles = counted ? (
     <div className="rs-kpis">
       <KpiCard
-        label="Cancels, call questions, issues"
+        label={t('resellerRequests.cancelsCallQuestionsIssues')}
         icon={<MessageSquareWarning size={14} />}
         value={orderCount ?? 0}
         unit={orderCount === 1 ? 'request' : 'requests'}
         tone={(orderCount ?? 0) > 0 ? 'pending' : 'neutral'}
-        hint="Approving runs it exactly as if the store had done it itself."
+        hint={t('resellerRequests.approvingRunsItExactly')}
       />
       <KpiCard
-        label="Delivery asks"
+        label={t('resellerRequests.deliveryAsks')}
         icon={<Truck size={14} />}
         value={actionCount ?? 0}
         unit={actionCount === 1 ? 'ask' : 'asks'}
         tone={(actionCount ?? 0) > 0 ? 'pending' : 'neutral'}
-        hint="Call again, deliver again, or send the parcel back."
+        hint={t('resellerRequests.callAgainDeliverAgain')}
       />
       <KpiCard
-        label="Order and address changes"
+        label={t('resellerRequests.orderAndAddressChanges')}
         icon={<MapPin size={14} />}
         value={addressCount ?? 0}
         unit={addressCount === 1 ? 'change' : 'changes'}
         tone={(addressCount ?? 0) > 0 ? 'pending' : 'neutral'}
-        hint="Until you answer, the parcel keeps the details it has."
+        hint={t('resellerRequests.untilYouAnswerThe')}
       />
     </div>
   ) : null;
@@ -170,7 +177,7 @@ export default function StoreRequestsPage(): ReactElement {
             <Skeleton key={i} className="rs-kpi-skel" height={104} rounded="md" />
           ))}
         </div>
-        <SkeletonRows rows={4} cols={6} label="Loading what your stores are waiting on" />
+        <SkeletonRows rows={4} cols={6} label={t('resellerRequests.loadingWhatYourStores')} />
       </div>
     );
   }
@@ -193,9 +200,11 @@ export default function StoreRequestsPage(): ReactElement {
       {allEmpty ? (
         <EmptyState
           tone="positive"
-          title="Nothing is waiting"
-          description="When a member store asks for something you chose to approve yourself, it appears here. Anything you let them do on their own never stops here at all."
-          action={<RsLink href="/reseller-stores">Change what your stores can do</RsLink>}
+          title={t('resellerRequests.nothingIsWaiting')}
+          description={t('resellerRequests.whenAMemberStore')}
+          action={
+            <RsLink href="/reseller-stores">{t('resellerRequests.changeWhatYourStores')}</RsLink>
+          }
         />
       ) : (
         <>
@@ -204,10 +213,14 @@ export default function StoreRequestsPage(): ReactElement {
           <AddressChangesSection />
           {counted && (
             <RsStrip>
-              <RsStripFact label="Waiting" value={total} tone={total > 0 ? 'warn' : 'good'} />
-              <RsStripFact label="Cancels & issues" value={orderCount ?? 0} />
-              <RsStripFact label="Delivery asks" value={actionCount ?? 0} />
-              <RsStripFact label="Changes" value={addressCount ?? 0} />
+              <RsStripFact
+                label={t('resellerRequests.waiting2')}
+                value={total}
+                tone={total > 0 ? 'warn' : 'good'}
+              />
+              <RsStripFact label={t('resellerRequests.cancelsIssues')} value={orderCount ?? 0} />
+              <RsStripFact label={t('resellerRequests.deliveryAsks')} value={actionCount ?? 0} />
+              <RsStripFact label={t('resellerRequests.changes')} value={addressCount ?? 0} />
             </RsStrip>
           )}
         </>
@@ -228,6 +241,7 @@ function AnswerCell({
   onReject: () => void;
   error: string | null;
 }): ReactElement {
+  const t = useT();
   return (
     <div className="rs-answer">
       <div className="rs-actions">
@@ -238,7 +252,7 @@ function AnswerCell({
           disabled={busy}
           onClick={onApprove}
         >
-          Approve
+          {t('resellerRequests.approve')}
         </Button>
         <Button
           variant="secondary"
@@ -247,7 +261,7 @@ function AnswerCell({
           disabled={busy}
           onClick={onReject}
         >
-          Reject
+          {t('resellerRequests.reject')}
         </Button>
       </div>
       {error !== null ? <RsError compact>{error}</RsError> : null}
@@ -285,33 +299,34 @@ function OrderCell({
  * it directly; the reply says whether it actually happened.
  */
 function OrderRequestsSection(): ReactElement {
+  const t = useT();
   const rows = useStoreOrderRequests();
   const [rejecting, setRejecting] = useState<StoreOrderRequestRow | null>(null);
 
   return (
     <RsSection
-      title="Cancels, call questions and issues"
-      note="Call an order off, answer whether to keep calling, or raise an issue with Skydrop."
+      title={t('resellerRequests.cancelsCallQuestionsAnd')}
+      note={t('resellerRequests.callAnOrderOff')}
       flush
     >
       {rows.isPending ? (
-        <SkeletonRows rows={2} cols={6} label="Loading requests" />
+        <SkeletonRows rows={2} cols={6} label={t('resellerRequests.loadingRequests')} />
       ) : rows.isError ? (
         <div className="rs-card__pad">
-          <ErrorState message={serverVerdict(rows.error)} retry={() => void rows.refetch()} />
+          <ErrorState message={verdict(rows.error, t)} retry={() => void rows.refetch()} />
         </div>
       ) : rows.data.length === 0 ? (
-        <EmptyState bare tone="positive" title="Nothing to answer here" />
+        <EmptyState bare tone="positive" title={t('resellerRequests.nothingToAnswerHere')} />
       ) : (
-        <Table caption="Cancels, call questions and issues">
+        <Table caption={t('resellerRequests.cancelsCallQuestionsAnd')}>
           <THead>
             <Tr>
-              <Th>Store</Th>
-              <Th>Order</Th>
-              <Th>They asked to</Th>
-              <Th>What they said</Th>
-              <Th>Asked</Th>
-              <Th>Your answer</Th>
+              <Th>{t('resellerRequests.store')}</Th>
+              <Th>{t('resellerRequests.order')}</Th>
+              <Th>{t('resellerRequests.theyAskedTo')}</Th>
+              <Th>{t('resellerRequests.whatTheySaid')}</Th>
+              <Th>{t('resellerRequests.asked')}</Th>
+              <Th>{t('resellerRequests.yourAnswer')}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -333,6 +348,7 @@ function OrderRequestRow({
   request: StoreOrderRequestRow;
   onReject: () => void;
 }): ReactElement {
+  const t = useT();
   const decide = useDecideStoreOrderRequest();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
@@ -345,18 +361,15 @@ function OrderRequestRow({
       if (out.status !== 'EXECUTED') {
         // Verbatim (FE-2): e.g. [NOT_CANCELLABLE] when the order was
         // packed while this waited.
-        setError(
-          out.failureReason ??
-            'You approved it, but it could not be carried out. The store has been told.',
-        );
-        toast.error('Approved, but it could not be carried out.');
+        setError(out.failureReason ?? t('resellerRequests.youApprovedItBut'));
+        toast.error(t('resellerRequests.approvedButItCould'));
         return;
       }
-      toast.success('Approved and carried out. The store has been told.');
+      toast.success(t('resellerRequests.approvedAndCarriedOut'));
     } catch (err) {
       // Verbatim (FE-2): STORE_REQUEST_ALREADY_DECIDED when somebody else
       // answered it first.
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -385,14 +398,16 @@ function OrderRequestRow({
         <ConfirmDialog
           open={confirming}
           onOpenChange={setConfirming}
-          title={`Approve ${storeName}’s request?`}
-          entity={order?.orderNumber ?? 'this order'}
+          title={t('resellerRequests.approveSRequest', { storeName })}
+          entity={order?.orderNumber ?? t('resellerRequests.thisOrder')}
           entityIsIdentifier={order !== null}
-          consequence="Approving runs it exactly as if the store had done it itself. The store is told either way."
-          confirmLabel="Approve"
+          consequence={t('resellerRequests.approvingRunsItExactly2')}
+          confirmLabel={t('resellerRequests.approve')}
           onConfirm={approve}
         >
-          <p className="rs-muted">They asked to: {request.label}</p>
+          <p className="rs-muted">
+            {richMessage(t('resellerRequests.theyAskedTo2'), { label: request.label })}
+          </p>
         </ConfirmDialog>
       </Td>
     </Tr>
@@ -425,6 +440,7 @@ function ReasonDialog({
   onClose: () => void;
   onSubmit: () => void;
 }): ReactElement {
+  const t = useT();
   return (
     <Dialog
       open={open}
@@ -437,14 +453,14 @@ function ReasonDialog({
       footer={
         <DialogFooter>
           <Button variant="secondary" size="md" onClick={onCancel}>
-            Cancel
+            {t('resellerRequests.cancel')}
           </Button>
           <AsyncButton
             variant="destructive"
             size="md"
             disabled={note.trim() === ''}
             state={pendingPhase(pending)}
-            labels={{ idle: 'Turn it down', busy: 'Sending…' }}
+            labels={{ idle: t('resellerRequests.turnItDown'), busy: t('resellerRequests.sending') }}
             onClick={onSubmit}
           />
         </DialogFooter>
@@ -453,7 +469,7 @@ function ReasonDialog({
       <div className="rs-form">
         <TextArea
           id={fieldId}
-          label="Your reason"
+          label={t('resellerRequests.yourReason')}
           rows={3}
           maxLength={2000}
           showCount
@@ -476,6 +492,7 @@ function RejectOrderRequestModal({
   request: StoreOrderRequestRow | null;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const decide = useDecideStoreOrderRequest();
   const toast = useToast();
   const [note, setNote] = useState('');
@@ -486,11 +503,11 @@ function RejectOrderRequestModal({
     setError(null);
     try {
       await decide.mutateAsync({ requestId: request.id, approve: false, note: note.trim() });
-      toast.success('Turned down. The store has been sent your reason.');
+      toast.success(t('resellerRequests.turnedDownTheStore'));
       setNote('');
       onClose();
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -499,10 +516,13 @@ function RejectOrderRequestModal({
       open={request !== null}
       title={
         request === null
-          ? 'Turn it down'
-          : `Turn down “${request.label}” on ${request.order?.orderNumber ?? 'this order'}?`
+          ? t('resellerRequests.turnItDown')
+          : t('resellerRequests.turnDownOn', {
+              label: request.label,
+              order: request.order?.orderNumber ?? t('resellerRequests.thisOrder'),
+            })
       }
-      description="The store reads this, and nothing is done. Say why."
+      description={t('resellerRequests.theStoreReadsThis')}
       fieldId="reject-order-request-note"
       note={note}
       setNote={setNote}
@@ -520,36 +540,34 @@ function RejectOrderRequestModal({
 }
 
 function ActionRequestsSection(): ReactElement {
+  const t = useT();
   const requests = useStoreActionRequests();
   const [rejecting, setRejecting] = useState<StoreActionRequestRow | null>(null);
 
   return (
     <RsSection
-      title="Delivery asks"
-      note="Call the customer again, try delivering again, or send the parcel back."
+      title={t('resellerRequests.deliveryAsks')}
+      note={t('resellerRequests.callTheCustomerAgain')}
       flush
     >
       {requests.isPending ? (
-        <SkeletonRows rows={2} cols={6} label="Loading asks" />
+        <SkeletonRows rows={2} cols={6} label={t('resellerRequests.loadingAsks')} />
       ) : requests.isError ? (
         <div className="rs-card__pad">
-          <ErrorState
-            message={serverVerdict(requests.error)}
-            retry={() => void requests.refetch()}
-          />
+          <ErrorState message={verdict(requests.error, t)} retry={() => void requests.refetch()} />
         </div>
       ) : requests.data.length === 0 ? (
-        <EmptyState bare tone="positive" title="Nothing to answer here" />
+        <EmptyState bare tone="positive" title={t('resellerRequests.nothingToAnswerHere')} />
       ) : (
-        <Table caption="Delivery asks">
+        <Table caption={t('resellerRequests.deliveryAsks')}>
           <THead>
             <Tr>
-              <Th>Store</Th>
-              <Th>Order</Th>
-              <Th>They asked for</Th>
-              <Th>Why</Th>
-              <Th>Asked</Th>
-              <Th>Your answer</Th>
+              <Th>{t('resellerRequests.store')}</Th>
+              <Th>{t('resellerRequests.order')}</Th>
+              <Th>{t('resellerRequests.theyAskedFor')}</Th>
+              <Th>{t('resellerRequests.why')}</Th>
+              <Th>{t('resellerRequests.asked')}</Th>
+              <Th>{t('resellerRequests.yourAnswer')}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -571,6 +589,7 @@ function RequestRow({
   request: StoreActionRequestRow;
   onReject: () => void;
 }): ReactElement {
+  const t = useT();
   const decide = useDecideStoreAction();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
@@ -583,18 +602,15 @@ function RequestRow({
       // Approving RUNS it. The reply is what actually happened, and the
       // store is emailed the same thing (2026-09-17).
       if (out.status !== 'EXECUTED') {
-        setError(
-          out.executionError ??
-            'You approved it, but it could not be carried out. The store has been told.',
-        );
-        toast.error('Approved, but it could not be carried out.');
+        setError(out.executionError ?? t('resellerRequests.youApprovedItBut'));
+        toast.error(t('resellerRequests.approvedButItCould'));
         return;
       }
-      toast.success('Approved and carried out. The store has been told.');
+      toast.success(t('resellerRequests.approvedAndCarriedOut'));
     } catch (err) {
       // Verbatim (FE-2): DELIVERY_ACTION_ALREADY_DECIDED when somebody
       // else got there first, which is the common one on a shared queue.
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -612,7 +628,7 @@ function RequestRow({
           extra={request.order === null ? undefined : request.order.recipientName}
         />
       </Td>
-      <Td className="rs-body">{ASKED_FOR[request.action]}</Td>
+      <Td className="rs-body">{askedForOf(t)[request.action]}</Td>
       <Td>
         <span className="rs-small rs-wrap">{request.reason}</span>
       </Td>
@@ -627,14 +643,19 @@ function RequestRow({
         <ConfirmDialog
           open={confirming}
           onOpenChange={setConfirming}
-          title={`Approve ${storeName}’s ask: ${ASKED_FOR[request.action]}?`}
-          entity={request.order?.orderNumber ?? 'this order'}
+          title={t('resellerRequests.approveSAsk', {
+            storeName,
+            action: askedForOf(t)[request.action],
+          })}
+          entity={request.order?.orderNumber ?? t('resellerRequests.thisOrder')}
           entityIsIdentifier={request.order !== null}
-          consequence={APPROVE_DOES[request.action]}
-          confirmLabel="Approve"
+          consequence={approveDoesOf(t)[request.action]}
+          confirmLabel={t('resellerRequests.approve')}
           onConfirm={approve}
         >
-          <p className="rs-muted">Why: {request.reason}</p>
+          <p className="rs-muted">
+            {richMessage(t('resellerRequests.why2'), { reason: request.reason })}
+          </p>
         </ConfirmDialog>
       </Td>
     </Tr>
@@ -653,6 +674,7 @@ function RejectModal({
   request: StoreActionRequestRow | null;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const decide = useDecideStoreAction();
   const toast = useToast();
   const [note, setNote] = useState('');
@@ -663,11 +685,11 @@ function RejectModal({
     setError(null);
     try {
       await decide.mutateAsync({ requestId: request.id, approve: false, note: note.trim() });
-      toast.success('Turned down. The store has been sent your reason.');
+      toast.success(t('resellerRequests.turnedDownTheStore'));
       setNote('');
       onClose();
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -676,10 +698,13 @@ function RejectModal({
       open={request !== null}
       title={
         request === null
-          ? 'Turn it down'
-          : `Turn down “${ASKED_FOR[request.action]}” on ${request.order?.orderNumber ?? 'this order'}?`
+          ? t('resellerRequests.turnItDown')
+          : t('resellerRequests.turnDownOn', {
+              label: askedForOf(t)[request.action],
+              order: request.order?.orderNumber ?? t('resellerRequests.thisOrder'),
+            })
       }
-      description="The store reads this. They have a customer waiting on the answer, so say why."
+      description={t('resellerRequests.theStoreReadsThis2')}
       fieldId="reject-note"
       note={note}
       setNote={setNote}
@@ -697,18 +722,18 @@ function RejectModal({
 }
 
 /** What a person calls each delivery detail. */
-const FIELD_LABEL: Readonly<Record<AddressField, string>> = {
-  recipientName: 'Name',
-  recipientPhoneE164: 'Phone',
-  recipientAltPhoneE164: 'Second phone',
-  recipientEmail: 'Email',
-  recipientAddressLine1: 'Address',
-  recipientAddressLine2: 'Landmark line',
-  recipientLandmark: 'Landmark (old field)',
-  recipientCity: 'City',
-  recipientStateProvince: 'State',
-  recipientPostalCode: 'PIN code',
-};
+const fieldLabelOf = (t: Translate<MessageKey>): Readonly<Record<AddressField, string>> => ({
+  recipientName: t('resellerRequests.name'),
+  recipientPhoneE164: t('resellerRequests.phone'),
+  recipientAltPhoneE164: t('resellerRequests.secondPhone'),
+  recipientEmail: t('resellerRequests.email'),
+  recipientAddressLine1: t('resellerRequests.address'),
+  recipientAddressLine2: t('resellerRequests.landmarkLine'),
+  recipientLandmark: t('resellerRequests.landmarkOldField'),
+  recipientCity: t('resellerRequests.city'),
+  recipientStateProvince: t('resellerRequests.state'),
+  recipientPostalCode: t('resellerRequests.pinCode'),
+});
 
 /** The same ten in the order somebody reads an address. */
 const ALL_FIELDS: readonly AddressField[] = [
@@ -746,36 +771,37 @@ const CURRENT_VALUE: Partial<
 };
 
 function AddressChangesSection(): ReactElement {
+  const t = useT();
   const addresses = useStoreAddressChanges();
   const [rejecting, setRejecting] = useState<StoreAddressChangeRow | null>(null);
 
   return (
     <RsSection
-      title="Order and address changes"
-      note="Until you answer, the parcel keeps the details it has."
+      title={t('resellerRequests.orderAndAddressChanges')}
+      note={t('resellerRequests.untilYouAnswerThe')}
       flush
     >
       {addresses.isPending ? (
-        <SkeletonRows rows={2} cols={6} label="Loading corrections" />
+        <SkeletonRows rows={2} cols={6} label={t('resellerRequests.loadingCorrections')} />
       ) : addresses.isError ? (
         <div className="rs-card__pad">
           <ErrorState
-            message={serverVerdict(addresses.error)}
+            message={verdict(addresses.error, t)}
             retry={() => void addresses.refetch()}
           />
         </div>
       ) : addresses.data.length === 0 ? (
-        <EmptyState bare tone="positive" title="No corrections are waiting" />
+        <EmptyState bare tone="positive" title={t('resellerRequests.noCorrectionsAreWaiting')} />
       ) : (
-        <Table caption="Order and address changes">
+        <Table caption={t('resellerRequests.orderAndAddressChanges')}>
           <THead>
             <Tr>
-              <Th>Store</Th>
-              <Th>Order</Th>
-              <Th>What is changing</Th>
-              <Th>Why they say it is wrong</Th>
-              <Th>Asked</Th>
-              <Th>Your answer</Th>
+              <Th>{t('resellerRequests.store')}</Th>
+              <Th>{t('resellerRequests.order')}</Th>
+              <Th>{t('resellerRequests.whatIsChanging')}</Th>
+              <Th>{t('resellerRequests.whyTheySayIt')}</Th>
+              <Th>{t('resellerRequests.asked')}</Th>
+              <Th>{t('resellerRequests.yourAnswer')}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -797,6 +823,7 @@ function AddressRow({
   request: StoreAddressChangeRow;
   onReject: () => void;
 }): ReactElement {
+  const t = useT();
   const decide = useDecideStoreAddressChange();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
@@ -810,20 +837,15 @@ function AddressRow({
       // have been confirmed or gone into a call while this sat here. The
       // server's own words for the refusal, verbatim (FE-2).
       if (out.status === 'FAILED') {
-        setError(
-          out.failureReason ??
-            'You approved it, but the order had already moved on and the details were not changed.',
-        );
-        toast.error('Approved, but the order could not be changed.');
+        setError(out.failureReason ?? t('resellerRequests.youApprovedItBut2'));
+        toast.error(t('resellerRequests.approvedButTheOrder'));
         return;
       }
-      toast.success(
-        'Approved — the order now carries the new details, and the store has been told.',
-      );
+      toast.success(t('resellerRequests.approvedTheOrderNow'));
     } catch (err) {
       // Verbatim (FE-2): ADDRESS_CHANGE_ALREADY_DECIDED when somebody
       // else answered it first, which is the common one on a shared queue.
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -851,7 +873,7 @@ function AddressRow({
         const now = order === null || order === undefined ? undefined : CURRENT_VALUE[k]?.(order);
         return (
           <li key={k}>
-            <span className="rs-changes__field">{FIELD_LABEL[k]}: </span>
+            <span className="rs-changes__field">{fieldLabelOf(t)[k]}: </span>
             {now === undefined || now === null || now === '' ? null : (
               <span className="rs-changes__was">{now} → </span>
             )}
@@ -869,7 +891,7 @@ function AddressRow({
       */}
       {otherChanges.map((label) => (
         <li key={label}>
-          <span className="rs-changes__field">Also changing: </span>
+          <span className="rs-changes__field">{t('resellerRequests.alsoChanging')}</span>
           <span className="rs-changes__now">{label}</span>
         </li>
       ))}
@@ -897,11 +919,11 @@ function AddressRow({
         <ConfirmDialog
           open={confirming}
           onOpenChange={setConfirming}
-          title={`Approve ${storeName}’s change?`}
-          entity={order?.orderNumber ?? 'this order'}
+          title={t('resellerRequests.approveSChange', { storeName })}
+          entity={order?.orderNumber ?? t('resellerRequests.thisOrder')}
           entityIsIdentifier={order !== null}
-          consequence="Approving writes the new details onto the order, if it still can. The store is told either way."
-          confirmLabel="Approve"
+          consequence={t('resellerRequests.approvingWritesTheNew')}
+          confirmLabel={t('resellerRequests.approve')}
           onConfirm={approve}
         >
           {changeList}
@@ -924,6 +946,7 @@ function RejectAddressModal({
   request: StoreAddressChangeRow | null;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const decide = useDecideStoreAddressChange();
   const toast = useToast();
   const [note, setNote] = useState('');
@@ -934,11 +957,11 @@ function RejectAddressModal({
     setError(null);
     try {
       await decide.mutateAsync({ requestId: request.id, approve: false, note: note.trim() });
-      toast.success('Turned down. The store has been sent your reason.');
+      toast.success(t('resellerRequests.turnedDownTheStore'));
       setNote('');
       onClose();
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -947,10 +970,12 @@ function RejectAddressModal({
       open={request !== null}
       title={
         request === null
-          ? 'Turn down the correction'
-          : `Leave ${request.order?.orderNumber ?? 'this order'} going to the address it has?`
+          ? t('resellerRequests.turnDownTheCorrection')
+          : t('resellerRequests.leaveGoingToAddress', {
+              order: request.order?.orderNumber ?? t('resellerRequests.thisOrder'),
+            })
       }
-      description="The store reads this. The parcel keeps its current address, so say why you are leaving it."
+      description={t('resellerRequests.theStoreReadsThis3')}
       fieldId="reject-address-note"
       note={note}
       setNote={setNote}

@@ -7,6 +7,7 @@ import {
 } from '@/app/(authed)/inventory/_components/stock-ui';
 import { CsvImportPanel } from '../../orders/_components/csv-import-panel';
 import { SavedMappings } from './_components/saved-mappings';
+import { getT } from '@/i18n/server';
 
 /**
  * Bulk import products + variants from a CSV. Same flow as the order
@@ -16,21 +17,22 @@ import { SavedMappings } from './_components/saved-mappings';
  * Anything older is on /products/import/jobs, which is also the only way
  * into a single import — the panel's rows do not open.
  */
-export default function CatalogImportPage(): ReactElement {
+export default async function CatalogImportPage(): Promise<ReactElement> {
+  const { t } = await getT();
   return (
     <AreaPage>
       <StockPageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Stock & WMS' },
-          { label: 'Products', href: '/products' },
-          { label: 'CSV import' },
+          { label: t('productImport.clientConsole') },
+          { label: t('productImport.stockWms') },
+          { label: t('productImport.products'), href: '/products' },
+          { label: t('productImport.csvImport') },
         ]}
-        title="Bulk catalogue import"
-        subtitle="Upload a CSV of products and variants. Re-uploading updates what is already there — products are matched on your own reference and variants on their SKU code."
+        title={t('productImport.bulkCatalogueImport')}
+        subtitle={t('productImport.uploadACsvOf')}
         action={
           <LinkButton href="/products/import/jobs" variant="ghost" icon={<History size={15} />}>
-            Import history
+            {t('productImport.importHistory')}
           </LinkButton>
         }
       />

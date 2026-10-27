@@ -20,51 +20,64 @@ import {
 } from '@skydrop/ui/status';
 import { useResellerOrderMoney } from '@/lib/api-hooks';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { DisputeFiguresModal } from './dispute-figures-modal';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /** The fee a split line is a share of, in words. */
-export function feeLabel(fee: WalletEntryDirection | StoreWalletEntryDirection | string): string {
+export function feeLabel(
+  t: Translate<MessageKey>,
+  fee: WalletEntryDirection | StoreWalletEntryDirection | string,
+): string {
   switch (fee) {
     case 'ORDER_CHARGES':
-      return 'Delivery fee';
+      return t('orderResellerMoney.deliveryFee');
     case 'RTO_FEE':
-      return 'Return fee';
+      return t('orderResellerMoney.returnFee');
     case 'CUSTOMER_RETURN_FEE':
-      return 'Customer return fee';
+      return t('orderResellerMoney.customerReturnFee');
     default:
       return fee.toLowerCase().replace(/_/g, ' ');
   }
 }
 
 /** Why a credit was not written, in words a seller reads. */
-export function skippedReasonWords(reason: string | null): string | null {
+export function skippedReasonWords(t: Translate<MessageKey>, reason: string | null): string | null {
   if (reason === null) return null;
-  if (reason === 'ORDER_LOST_IN_TRANSIT') return 'The parcel was lost in transit.';
-  if (reason.startsWith('ORDER_')) return 'The order was called off.';
+  if (reason === 'ORDER_LOST_IN_TRANSIT') return t('orderResellerMoney.lostInTransit');
+  if (reason.startsWith('ORDER_')) return t('orderResellerMoney.calledOff');
   switch (reason) {
     case 'RETURNED_UNDELIVERED':
-      return 'It came back without being delivered.';
+      return t('orderResellerMoney.cameBackUndelivered');
     case 'RETURNED':
-      return 'The goods came back.';
+      return t('orderResellerMoney.goodsCameBack');
     case 'NOT_DELIVERED':
-      return 'Not delivered yet — a courier payout will release it.';
+      return t('orderResellerMoney.notDeliveredYet');
     case 'COURIER_HAS_NOT_PAID':
-      return 'The courier has not paid for it yet.';
+      return t('orderResellerMoney.courierNotPaid');
     case 'COURIER_REVERSED':
-      return 'The courier took the COD back.';
+      return t('orderResellerMoney.courierReversed');
     case 'PREPAID_NOT_PAID_BY_STORE':
-      return 'The store has not paid for this prepaid order.';
+      return t('orderResellerMoney.storeNotPaid');
     default:
       return reason;
   }
 }
 
-function when(p: ResellerPartyCreditView): string {
+function when(t: Translate<MessageKey>, p: ResellerPartyCreditView): string {
   const d = p.reversedAt ?? p.creditedAt ?? p.dueAt;
   if (d === null) return '—';
-  const label = p.reversedAt !== null ? 'Taken back' : p.creditedAt !== null ? 'Credited' : 'Due';
-  return `${label} ${new Date(d).toLocaleString()}`;
+  return t(
+    p.reversedAt !== null
+      ? 'orderResellerMoney.takenBack'
+      : p.creditedAt !== null
+        ? 'orderResellerMoney.credited'
+        : 'orderResellerMoney.due',
+    { when: new Date(d).toLocaleString() },
+  );
 }
 
 /**
@@ -77,13 +90,14 @@ function when(p: ResellerPartyCreditView): string {
  * (FE-2): `tickets.create` is what the server checks.
  */
 function DisputeFiguresAction({ orderId }: { readonly orderId: string }): ReactElement | null {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const identity = useSellerIdentity();
   if (!can(identity, 'tickets.create')) return null;
   return (
     <>
       <Button variant="ghost" size="sm" icon={<Scale size={14} />} onClick={() => setOpen(true)}>
-        Raise with the store
+        {t('orderResellerMoney.raiseWithTheStore')}
       </Button>
       <DisputeFiguresModal open={open} onOpenChange={setOpen} orderId={orderId} />
     </>
@@ -108,12 +122,13 @@ export function ResellerMoneyPanel({
   readonly orderId: string;
   readonly enabled: boolean;
 }): ReactElement | null {
+  const t = useT();
   const money = useResellerOrderMoney(orderId, enabled);
   if (!enabled) return null;
   if (money.isLoading) {
     return (
-      <OrdSection title="Member store money">
-        <SkeletonRows rows={3} cols={4} label="Loading the store money…" />
+      <OrdSection title={t('orderResellerMoney.memberStoreMoney')}>
+        <SkeletonRows rows={3} cols={4} label={t('orderResellerMoney.loadingTheStoreMoney')} />
       </OrdSection>
     );
   }
@@ -121,8 +136,8 @@ export function ResellerMoneyPanel({
     // A channel order has no reseller money — nothing to show, not an error.
     if (money.error instanceof ApiError && money.error.status === 404) return null;
     return (
-      <OrdSection title="Member store money">
-        <ErrorState message={serverVerdict(money.error)} retry={() => void money.refetch()} />
+      <OrdSection title={t('orderResellerMoney.memberStoreMoney')}>
+        <ErrorState message={verdict(money.error, t)} retry={() => void money.refetch()} />
       </OrdSection>
     );
   }
@@ -131,20 +146,18 @@ export function ResellerMoneyPanel({
   const mine = view.parties.find((p) => p.party === 'SELLER');
   return (
     <OrdSection
-      title="Member store money"
-      note="Your transfer price for the goods, your share of Skydrop's fees on this order, and when it reaches your wallet."
+      title={t('orderResellerMoney.memberStoreMoney')}
+      note={t('orderResellerMoney.yourTransferPriceFor')}
       action={<DisputeFiguresAction orderId={orderId} />}
     >
       <div className="ord-stack">
         {mine === undefined ? (
-          <p className="ord-p">
-            Nothing planned yet — the plan is made when the order is confirmed.
-          </p>
+          <p className="ord-p">{t('orderResellerMoney.nothingPlannedYetThe')}</p>
         ) : (
           <Facts
             items={[
               {
-                label: 'Status',
+                label: t('orderResellerMoney.status'),
                 value: (
                   <StatusChip
                     kind={resellerCreditStatusKind(mine.status)}
@@ -153,29 +166,34 @@ export function ResellerMoneyPanel({
                   />
                 ),
               },
-              { label: 'When', value: mine.timing },
-              { label: 'Date', value: when(mine) },
-              ...(skippedReasonWords(mine.skippedReason) !== null
-                ? [{ label: 'Why', value: skippedReasonWords(mine.skippedReason) }]
+              { label: t('orderResellerMoney.when'), value: mine.timing },
+              { label: t('orderResellerMoney.date'), value: when(t, mine) },
+              ...(skippedReasonWords(t, mine.skippedReason) !== null
+                ? [
+                    {
+                      label: t('orderResellerMoney.why'),
+                      value: skippedReasonWords(t, mine.skippedReason),
+                    },
+                  ]
                 : []),
               {
-                label: 'Transfer price',
+                label: t('orderResellerMoney.transferPrice'),
                 value: <Money amount={mine.grossInr} direction="credit" convert={false} />,
               },
               {
-                label: 'Your share of the COD tax',
+                label: t('orderResellerMoney.yourShareOfThe'),
                 value: <Money amount={mine.taxShareInr} direction="debit" convert={false} />,
               },
               {
-                label: 'Your share of the COD fee',
+                label: t('orderResellerMoney.yourShareOfThe2'),
                 value: <Money amount={mine.codFeeShareInr} direction="debit" convert={false} />,
               },
               {
-                label: 'Your share of the Instant Pay fee',
+                label: t('orderResellerMoney.yourShareOfThe3'),
                 value: <Money amount={mine.instantFeeShareInr} direction="debit" convert={false} />,
               },
               {
-                label: 'You receive',
+                label: t('orderResellerMoney.youReceive'),
                 value: <Money amount={mine.netInr} convert={false} />,
                 total: true,
               },
@@ -185,19 +203,19 @@ export function ResellerMoneyPanel({
 
         {view.fees.length > 0 ? (
           <div className="ord-card" data-flush="1">
-            <Table caption="Fees on this order">
+            <Table caption={t('orderResellerMoney.feesOnThisOrder')}>
               <THead>
                 <Tr>
-                  <Th>Fee billed</Th>
-                  <Th align="right">Yours</Th>
-                  <Th align="right">Paid by the store</Th>
-                  <Th align="right">Total</Th>
+                  <Th>{t('orderResellerMoney.feeBilled')}</Th>
+                  <Th align="right">{t('orderResellerMoney.yours')}</Th>
+                  <Th align="right">{t('orderResellerMoney.paidByTheStore')}</Th>
+                  <Th align="right">{t('orderResellerMoney.total')}</Th>
                 </Tr>
               </THead>
               <TBody>
                 {view.fees.map((f) => (
                   <Tr key={f.fee}>
-                    <Td>{feeLabel(f.fee)}</Td>
+                    <Td>{feeLabel(t, f.fee)}</Td>
                     <Td align="right">
                       <Money amount={f.sellerInr} convert={false} />
                     </Td>
@@ -215,17 +233,17 @@ export function ResellerMoneyPanel({
         ) : null}
 
         <div className="ord-card" data-flush="1">
-          <Table caption="Your wallet on this order">
+          <Table caption={t('orderResellerMoney.yourWalletOnThis')}>
             <THead>
               <Tr>
-                <Th>Your wallet on this order</Th>
-                <Th>When</Th>
-                <Th align="right">Amount</Th>
+                <Th>{t('orderResellerMoney.yourWalletOnThis')}</Th>
+                <Th>{t('orderResellerMoney.when')}</Th>
+                <Th align="right">{t('orderResellerMoney.amount')}</Th>
               </Tr>
             </THead>
             <TBody>
               {(view.sellerLines ?? []).length === 0 ? (
-                <TableEmpty colSpan={3}>Nothing in your wallet from this order yet.</TableEmpty>
+                <TableEmpty colSpan={3}>{t('orderResellerMoney.nothingInYourWallet')}</TableEmpty>
               ) : (
                 (view.sellerLines ?? []).map((l) => (
                   <Tr key={l.id}>
@@ -253,7 +271,9 @@ export function ResellerMoneyPanel({
         </div>
         {view.sellerNetInr !== null ? (
           <p className="ord-p ord-row ord-row--end">
-            Net to you so far: <Money amount={view.sellerNetInr} convert={false} />
+            {richMessage(t('orderResellerMoney.netToYouSo'), {
+              money: <Money amount={view.sellerNetInr} convert={false} />,
+            })}
           </p>
         ) : null}
       </div>

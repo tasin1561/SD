@@ -52,12 +52,14 @@ import {
 } from '@/app/(authed)/inventory/_components/stock-ui';
 import { consignmentStatusKind } from '@skydrop/ui/status';
 import { useConsignments, useDeclareConsignment } from '@/lib/account-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
 import { VariantPicker } from './variant-picker';
 import { productCount, routeWords, shortDate, statusWords } from './consignment-words';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 const PAGE_SIZE = 25;
 
@@ -92,6 +94,7 @@ interface StagedLine {
 }
 
 export function InboundIndex(): ReactElement {
+  const t = useT();
   const router = useRouter();
   const canManage = can(useSellerIdentity(), 'inbound.manage');
   const [status, setStatus] = useState<ConsignmentStatus | ''>('');
@@ -119,19 +122,29 @@ export function InboundIndex(): ReactElement {
   return (
     <AreaPage>
       <PageHeader
-        breadcrumbs={[{ label: 'Client console' }, { label: 'Stock' }, { label: 'Add stock' }]}
+        breadcrumbs={[
+          { label: t('inbound.clientConsole') },
+          { label: t('inbound.stock') },
+          { label: t('inbound.addStock') },
+        ]}
         Link={Link}
-        title="Add stock"
-        subtitle="Consignments on their way to the Indian warehouse — where each one is now, and what was counted when it got there."
+        title={t('inbound.addStock')}
+        subtitle={t('inbound.consignmentsOnTheirWay')}
         meta={
           list.data === undefined ? undefined : (
             <MetaFacts>
               <MetaFact tone="accent">
                 {total} {total === 1 ? 'consignment' : 'consignments'}
               </MetaFact>
-              {moving.length > 0 && <MetaFact dot>{moving.length} still travelling</MetaFact>}
+              {moving.length > 0 && (
+                <MetaFact dot>
+                  {richMessage(t('inbound.stillTravelling'), { moving: moving.length })}
+                </MetaFact>
+              )}
               {varied.length > 0 && (
-                <MetaFact tone="warn">{varied.length} counted differently</MetaFact>
+                <MetaFact tone="warn">
+                  {richMessage(t('inbound.countedDifferently'), { varied: varied.length })}
+                </MetaFact>
               )}
             </MetaFacts>
           )
@@ -145,7 +158,7 @@ export function InboundIndex(): ReactElement {
               icon={<PackagePlus size={16} />}
               onClick={() => setAnnouncing(true)}
             >
-              Announce a consignment
+              {t('inbound.announceAConsignment')}
             </Button>
           ) : undefined
         }
@@ -162,51 +175,61 @@ export function InboundIndex(): ReactElement {
       */}
       {list.data === undefined ? (
         <KpiGrid>
-          <KpiCard label="Still travelling" icon={<Plane size={14} />} figure={<Dash />} />
-          <KpiCard label="Landed and counted" icon={<PackageOpen size={14} />} figure={<Dash />} />
-          <KpiCard label="Counted differently" icon={<Scale size={14} />} figure={<Dash />} />
+          <KpiCard
+            label={t('inbound.stillTravelling2')}
+            icon={<Plane size={14} />}
+            figure={<Dash />}
+          />
+          <KpiCard
+            label={t('inbound.landedAndCounted')}
+            icon={<PackageOpen size={14} />}
+            figure={<Dash />}
+          />
+          <KpiCard
+            label={t('inbound.countedDifferently2')}
+            icon={<Scale size={14} />}
+            figure={<Dash />}
+          />
         </KpiGrid>
       ) : (
         <KpiGrid>
           <KpiCard
-            label="Still travelling"
+            label={t('inbound.stillTravelling2')}
             icon={<Plane size={14} />}
             value={moving.length}
             format={rawCount}
-            unit="on this page"
+            unit={t('inbound.onThisPage')}
             tone="info"
-            hint="Announced, in Dhaka, or in the air."
+            hint={t('inbound.announcedInDhakaOr')}
           />
           <KpiCard
-            label="Landed and counted"
+            label={t('inbound.landedAndCounted')}
             icon={<PackageOpen size={14} />}
             value={landed.length}
             format={rawCount}
-            unit="on this page"
+            unit={t('inbound.onThisPage')}
             tone="neutral"
-            hint="Fully received in India. Their stock is on the shelf."
+            hint={t('inbound.fullyReceivedInIndia')}
           />
           <KpiCard
-            label="Counted differently"
+            label={t('inbound.countedDifferently2')}
             icon={<Scale size={14} />}
             value={varied.length}
             format={rawCount}
-            unit="on this page"
+            unit={t('inbound.onThisPage')}
             tone={varied.length > 0 ? 'pending' : 'neutral'}
             // CNS-3: a variance is a NUMBER, never a blocking state.
             // Saying so on the tile is what stops somebody waiting for a
             // release that is never coming.
             hint={
-              varied.length > 0
-                ? 'Nothing is blocked by it — your stock is what was counted.'
-                : 'Every count so far matched what was declared.'
+              varied.length > 0 ? t('inbound.nothingIsBlockedBy') : t('inbound.everyCountSoFar')
             }
           />
         </KpiGrid>
       )}
 
       <AreaSection
-        title="Consignment register"
+        title={t('inbound.consignmentRegister')}
         note={
           list.data === undefined
             ? undefined
@@ -215,7 +238,7 @@ export function InboundIndex(): ReactElement {
         action={
           filtered ? (
             <Button variant="ghost" size="sm" icon={<RotateCcw size={14} />} onClick={resetFilters}>
-              Reset
+              {t('inbound.reset')}
             </Button>
           ) : undefined
         }
@@ -228,10 +251,10 @@ export function InboundIndex(): ReactElement {
           <div className="inv-pad inv-stack inv-stack--tight">
             <div className="inv-filter-row">
               <span className="inv-filter-row__label" id="cn-where">
-                Where
+                {t('inbound.where')}
               </span>
               <Tabs
-                label="Where"
+                label={t('inbound.where')}
                 size="sm"
                 value={status === '' ? 'ANY' : status}
                 onChange={(id) => {
@@ -239,7 +262,7 @@ export function InboundIndex(): ReactElement {
                   setPage(1);
                 }}
                 items={[
-                  { id: 'ANY', label: 'Anywhere' },
+                  { id: 'ANY', label: t('inbound.anywhere') },
                   ...Object.values(ConsignmentStatus).map((s) => ({
                     id: s,
                     label: statusWords(s),
@@ -249,10 +272,10 @@ export function InboundIndex(): ReactElement {
             </div>
             <div className="inv-filter-row">
               <span className="inv-filter-row__label" id="cn-route">
-                Route
+                {t('inbound.route')}
               </span>
               <Tabs
-                label="Route"
+                label={t('inbound.route')}
                 size="sm"
                 value={route === '' ? 'ANY' : route}
                 onChange={(id) => {
@@ -260,7 +283,7 @@ export function InboundIndex(): ReactElement {
                   setPage(1);
                 }}
                 items={[
-                  { id: 'ANY', label: 'Either route' },
+                  { id: 'ANY', label: t('inbound.eitherRoute') },
                   ...Object.values(ConsignmentRoute).map((r) => ({
                     id: r,
                     label: routeWords(r).title,
@@ -276,21 +299,23 @@ export function InboundIndex(): ReactElement {
             </PanelPad>
           ) : list.isError ? (
             <PanelPad>
-              <InlineError message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+              <InlineError message={verdict(list.error, t)} retry={() => void list.refetch()} />
             </PanelPad>
           ) : items.length === 0 ? (
             <PanelPad>
               <EmptyState
-                title={filtered ? 'Nothing matches that' : 'No stock announced yet'}
+                title={
+                  filtered ? t('inbound.nothingMatchesThat') : t('inbound.noStockAnnouncedYet')
+                }
                 description={
                   filtered
-                    ? 'Try another place or route, or reset the filters.'
-                    : 'Announce a consignment before it ships so receiving knows to expect it — and so you can follow it.'
+                    ? t('inbound.tryAnotherPlaceOr')
+                    : t('inbound.announceAConsignmentBefore')
                 }
                 action={
                   filtered ? (
                     <Button variant="secondary" size="md" onClick={resetFilters}>
-                      Reset filters
+                      {t('inbound.resetFilters')}
                     </Button>
                   ) : canManage ? (
                     <Button
@@ -299,7 +324,7 @@ export function InboundIndex(): ReactElement {
                       icon={<PackagePlus size={16} />}
                       onClick={() => setAnnouncing(true)}
                     >
-                      Announce a consignment
+                      {t('inbound.announceAConsignment')}
                     </Button>
                   ) : undefined
                 }
@@ -308,15 +333,15 @@ export function InboundIndex(): ReactElement {
             </PanelPad>
           ) : (
             <>
-              <Table caption="Consignment register">
+              <Table caption={t('inbound.consignmentRegister')}>
                 <THead>
                   <Tr>
-                    <Th>Consignment</Th>
-                    <Th>Route</Th>
-                    <Th align="right">Products</Th>
-                    <Th>Your reference</Th>
-                    <Th>Expected</Th>
-                    <Th>Where it is</Th>
+                    <Th>{t('inbound.consignment')}</Th>
+                    <Th>{t('inbound.route')}</Th>
+                    <Th align="right">{t('inbound.products')}</Th>
+                    <Th>{t('inbound.yourReference')}</Th>
+                    <Th>{t('inbound.expected')}</Th>
+                    <Th>{t('inbound.whereItIs')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -363,16 +388,13 @@ export function InboundIndex(): ReactElement {
                   pageSize={PAGE_SIZE}
                   total={total}
                   onPageChange={setPage}
-                  label="Consignment pages"
+                  label={t('inbound.consignmentPages')}
                 />
               </PanelPad>
             </>
           )}
         </Panel>
-        <Note>
-          Open a consignment to see its timeline, and what each warehouse counted against what you
-          declared.
-        </Note>
+        <Note>{t('inbound.openAConsignmentTo')}</Note>
       </AreaSection>
 
       <AnnounceConsignment open={announcing} onClose={() => setAnnouncing(false)} />
@@ -403,6 +425,7 @@ function AnnounceConsignment({
   open: boolean;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const create = useDeclareConsignment();
   const [route, setRoute] = useState<ConsignmentRoute>(ConsignmentRoute.DIRECT_IN);
   /** Collapsed by default — see the note on the info toggle below. */
@@ -517,7 +540,10 @@ function AnnounceConsignment({
     );
   }
 
-  const announceLabel = `Announce ${pendingLines.length} product${pendingLines.length === 1 ? '' : 's'}`;
+  const announceLabel = t('inbound.announceProduct', {
+    pendingLines: pendingLines.length,
+    plural: pendingLines.length === 1 ? '' : 's',
+  });
 
   return (
     <Dialog
@@ -527,18 +553,18 @@ function AnnounceConsignment({
       }}
       size="lg"
       icon={<Ship size={18} />}
-      title="Announce a consignment"
-      description="Say where you are sending it and what is in it, so receiving knows what to count against."
+      title={t('inbound.announceAConsignment')}
+      description={t('inbound.sayWhereYouAre')}
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={close}>
-            Cancel
+            {t('inbound.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
             icon={<Truck size={16} />}
-            labels={{ idle: announceLabel, busy: 'Announcing…' }}
+            labels={{ idle: announceLabel, busy: t('inbound.announcing') }}
             state={mutationPhase(create)}
             disabled={pendingLines.length === 0 || create.isPending}
             onClick={announce}
@@ -549,13 +575,17 @@ function AnnounceConsignment({
       <div className="inv-stack">
         <Stepper
           mode="wizard"
-          label="Announcing a consignment"
+          label={t('inbound.announcingAConsignment')}
           current={step}
           navigable="none"
           steps={[
-            { id: 'cn-step-route', label: 'Route', icon: <MapPin size={14} /> },
-            { id: 'cn-step-lines', label: 'Contents', icon: <PackageOpen size={14} /> },
-            { id: 'cn-step-send', label: 'Arrival and reference', icon: <Truck size={14} /> },
+            { id: 'cn-step-route', label: t('inbound.route'), icon: <MapPin size={14} /> },
+            { id: 'cn-step-lines', label: t('inbound.contents'), icon: <PackageOpen size={14} /> },
+            {
+              id: 'cn-step-send',
+              label: t('inbound.arrivalAndReference'),
+              icon: <Truck size={14} />,
+            },
           ]}
         />
 
@@ -563,7 +593,7 @@ function AnnounceConsignment({
           <SectionHeading
             as="h3"
             id="cn-route-h"
-            title="Where are you sending it?"
+            title={t('inbound.whereAreYouSending')}
             // The full explanation of each route used to sit inside the
             // two choices, which made them tall enough to be most of the
             // modal — and a seller picking the same route for the tenth
@@ -578,12 +608,14 @@ function AnnounceConsignment({
                 icon={<Info size={16} />}
                 onClick={() => setRouteInfo((v) => !v)}
                 aria-expanded={routeInfo}
-                aria-label={routeInfo ? 'Hide what the routes mean' : 'What do the routes mean?'}
+                aria-label={
+                  routeInfo ? t('inbound.hideWhatTheRoutes') : t('inbound.whatDoTheRoutes')
+                }
               />
             }
           />
           <ChoiceCards
-            label="Route"
+            label={t('inbound.route')}
             hideLegend
             name="cn-route-choice"
             value={route}
@@ -608,10 +640,8 @@ function AnnounceConsignment({
         </section>
 
         <section className="inv-stack inv-stack--tight" aria-labelledby="cn-lines-h">
-          <SectionHeading as="h3" id="cn-lines-h" title="What is in it?" />
-          <Note>
-            At least one product. Unit cost is optional but makes landed cost and margin accurate.
-          </Note>
+          <SectionHeading as="h3" id="cn-lines-h" title={t('inbound.whatIsInIt')} />
+          <Note>{t('inbound.atLeastOneProduct')}</Note>
           {/*
             Four columns, with the button in the last one. It belongs to
             the row it adds — parked on a line of its own underneath, it
@@ -621,7 +651,7 @@ function AnnounceConsignment({
           <div className="inv-line-grid">
             <VariantPicker
               id="cn-variant"
-              fieldLabel="Item"
+              fieldLabel={t('inbound.item')}
               value={picked?.id ?? ''}
               label={variantLabel}
               onPick={(hit, shown) => {
@@ -630,16 +660,16 @@ function AnnounceConsignment({
               }}
             />
             <NumberStepper
-              label="Quantity"
+              label={t('inbound.quantity')}
               id="cn-qty"
               min={1}
               value={qty}
               onChange={(e) => setQty(e.target.value)}
             />
             <TextField
-              label="Unit cost (₹)"
+              label={t('inbound.unitCost')}
               id="cn-cost"
-              hint="Optional"
+              hint={t('inbound.optional')}
               type="number"
               min={0}
               step="0.01"
@@ -659,15 +689,15 @@ function AnnounceConsignment({
                 icon={<Plus size={16} />}
                 disabled={!lineReady}
                 onClick={addLine}
-                aria-label="Add this product to the consignment"
+                aria-label={t('inbound.addThisProductTo')}
               >
-                Add
+                {t('inbound.add')}
               </Button>
             </div>
           </div>
 
           <Checkbox
-            label="Has manufacture / expiry dates"
+            label={t('inbound.hasManufactureExpiryDates')}
             checked={hasDates}
             onChange={(e) => {
               setHasDates(e.target.checked);
@@ -682,16 +712,16 @@ function AnnounceConsignment({
           {hasDates && (
             <FieldGrid columns={2}>
               <DateField
-                label="Manufactured"
+                label={t('inbound.manufactured')}
                 id="cn-mfg"
-                hint="Optional"
+                hint={t('inbound.optional')}
                 value={manufacturedAt}
                 onChange={(e) => setManufacturedAt(e.target.value)}
               />
               <DateField
-                label="Expires"
+                label={t('inbound.expires')}
                 id="cn-exp"
-                hint="Optional"
+                hint={t('inbound.optional')}
                 value={expiresAt}
                 onChange={(e) => setExpiresAt(e.target.value)}
               />
@@ -704,13 +734,13 @@ function AnnounceConsignment({
             the fields, saw nothing appear anywhere, and reasonably assumed
             typing them was the whole job. The header IS the instruction.
           */}
-          <Table caption="Products in this consignment">
+          <Table caption={t('inbound.productsInThisConsignment')}>
             <THead>
               <Tr>
-                <Th>Product</Th>
-                <Th align="right">Qty</Th>
-                <Th align="right">Unit cost</Th>
-                <Th align="right" aria-label="Remove" />
+                <Th>{t('inbound.product')}</Th>
+                <Th align="right">{t('inbound.qty')}</Th>
+                <Th align="right">{t('inbound.unitCost2')}</Th>
+                <Th align="right" aria-label={t('inbound.remove')} />
               </Tr>
             </THead>
             <TBody>
@@ -748,16 +778,14 @@ function AnnounceConsignment({
                       icon={<Trash2 size={14} />}
                       onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}
                     >
-                      Remove
+                      {t('inbound.remove')}
                     </Button>
                   </Td>
                 </Tr>
               ))}
               {lines.length === 0 && (
                 <TableEmpty colSpan={4}>
-                  <span className="inv-muted">
-                    Nothing added yet. Pick a product above, give it a quantity, then press Add.
-                  </span>
+                  <span className="inv-muted">{t('inbound.nothingAddedYetPick')}</span>
                 </TableEmpty>
               )}
             </TBody>
@@ -766,22 +794,22 @@ function AnnounceConsignment({
 
         <FieldGrid columns={2}>
           <DateField
-            label="Expected arrival"
+            label={t('inbound.expectedArrival')}
             id="cn-eta"
-            hint="Optional. A rough date beats none."
+            hint={t('inbound.optionalARoughDate')}
             value={expectedArrivalAt}
             onChange={(e) => setExpectedArrivalAt(e.target.value)}
           />
           <TextField
-            label="Your reference"
+            label={t('inbound.yourReference')}
             id="cn-ref"
-            hint="Optional."
+            hint={t('inbound.optional2')}
             value={sellerReference}
             onChange={(e) => setSellerReference(e.target.value)}
           />
         </FieldGrid>
 
-        {create.error !== null && <InlineError message={serverVerdict(create.error)} />}
+        {create.error !== null && <InlineError message={verdict(create.error, t)} />}
       </div>
     </Dialog>
   );

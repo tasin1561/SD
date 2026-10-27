@@ -12,7 +12,7 @@ import { MessageRelayStatus, useToast } from '@skydrop/ui/components';
 import { PaperPlaneSendButton } from '@skydrop/ui/app/paper-plane-send';
 import { TextArea } from '@skydrop/ui/app/text-field';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import {
   useCourierThreadForTicket,
   useReplyOnTicket,
@@ -20,6 +20,7 @@ import {
   type TicketView,
 } from '@/lib/ops-hooks';
 import './tickets.css';
+import { useT } from '@/i18n/client';
 
 type Side = 'SELLER' | 'US' | 'COURIER';
 
@@ -56,6 +57,7 @@ interface Bubble {
  * the messages harder to find, not the history clearer.
  */
 export function TicketConversation({ ticket }: { readonly ticket: TicketView }): ReactElement {
+  const t = useT();
   const timeline = useTicketTimeline(ticket.id);
   const courier = useCourierThreadForTicket(ticket.id);
   const reply = useReplyOnTicket();
@@ -78,7 +80,7 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
       await reply.mutateAsync({ ticketId: ticket.id, note });
       setDraft('');
     } catch (err) {
-      toast.error(serverVerdict(err));
+      toast.error(verdict(err, t));
       throw err;
     }
   };
@@ -110,7 +112,7 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
     goods. Worse than the admin copy of this: the seller is the party
     being asked to pay.
   */
-  const store = ticket.storeName ?? 'The store';
+  const store = ticket.storeName ?? t('tickets.theStore');
   const openedByStore = ticket.openedBy === 'STORE';
 
   // The opening message, on the side of WHOEVER OPENED the ticket. A
@@ -124,7 +126,7 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
     bubbles.push({
       key: 'raised',
       side: theirs ? 'SELLER' : 'US',
-      who: openedByStore ? store : mineAtOpen ? 'You' : 'Skydrop',
+      who: openedByStore ? store : mineAtOpen ? t('tickets.you') : 'Skydrop',
       body: ticket.description,
       at: ticket.createdAt,
       // Spread rather than `: undefined` — under
@@ -149,7 +151,7 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
     bubbles.push({
       key: `note-${i}`,
       side: mine || fromStore ? 'SELLER' : 'US',
-      who: fromStore ? store : mine ? 'You' : 'Skydrop',
+      who: fromStore ? store : mine ? t('tickets.you') : 'Skydrop',
       body: said,
       at: e.at,
       ...(mine ? { relayedAt: e.relayedAt } : {}),
@@ -162,7 +164,7 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
       // Only what the courier SAID is theirs. Our outbound message to
       // them is still us talking.
       side: m.direction === 'INBOUND' ? 'COURIER' : 'US',
-      who: m.direction === 'INBOUND' ? 'Courier' : 'Skydrop',
+      who: m.direction === 'INBOUND' ? t('tickets.courier') : 'Skydrop',
       body: m.body,
       at: m.occurredAt,
     });
@@ -191,7 +193,7 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
   bubbles.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 
   if (timeline.isLoading || courier.isLoading) {
-    return <SkeletonRows rows={3} cols={1} label="Loading the conversation…" />;
+    return <SkeletonRows rows={3} cols={1} label={t('tickets.loadingTheConversation')} />;
   }
 
   return (
@@ -203,9 +205,7 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
         no way to say anything themselves.
       */}
       {bubbles.length === 0 ? (
-        <p className="tkt-empty-thread">
-          Nothing said yet. We reply here once we have looked into it.
-        </p>
+        <p className="tkt-empty-thread">{t('tickets.nothingSaidYetWe')}</p>
       ) : null}
       <ol className="tkt-thread">
         {bubbles.map((b) => {
@@ -258,21 +258,21 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
             is a way to write to them, which is ours to do.
           */}
           <TextArea
-            label="Reply on this ticket"
+            label={t('tickets.replyOnThisTicket')}
             rows={2}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Anything that helps — we take it to the courier for you."
+            placeholder={t('tickets.anythingThatHelpsWe')}
             // Display only: the server's limit on a note (AddTicketNoteDto),
             // shown so a long reply is not a surprise, never enforced here.
             countMax={2000}
           />
           <div className="tkt-reply__actions">
             <PaperPlaneSendButton
-              label="Send"
-              busyLabel="Sending…"
-              doneLabel="Sent"
-              errorLabel="Not sent"
+              label={t('tickets.send')}
+              busyLabel={t('tickets.sending')}
+              doneLabel={t('tickets.sent')}
+              errorLabel={t('tickets.notSent')}
               size="sm"
               icon={<Send size={14} />}
               disabled={draft.trim() === '' || reply.isPending}
@@ -281,10 +281,7 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
           </div>
         </div>
       ) : (
-        <p className="tkt-closed">
-          This ticket is closed. If something is still wrong, raise a new issue and we will pick it
-          up.
-        </p>
+        <p className="tkt-closed">{t('tickets.thisTicketIsClosed')}</p>
       )}
     </>
   );

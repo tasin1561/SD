@@ -8,6 +8,7 @@ import { Button } from '@skydrop/ui/app/button';
 import { TextField } from '@skydrop/ui/app/text-field';
 import type { AsyncPhase } from '@skydrop/ui/app/async-button';
 import './settings.css';
+import { useT } from '@/i18n/client';
 
 /**
  * The presentational pieces shared by Settings, Team, Notifications and
@@ -137,6 +138,7 @@ export function RevealCard({
   readonly dismissLabel: string;
   readonly onDismiss: () => void;
 }): ReactElement {
+  const t = useT();
   const [copied, setCopied] = useState(false);
 
   async function copy(): Promise<void> {
@@ -182,7 +184,7 @@ export function RevealCard({
           icon={<Copy size={14} />}
           onClick={() => void copy()}
         >
-          {copied ? 'Copied!' : 'Copy'}
+          {copied ? t('settingsHub.copied') : t('settingsHub.copy')}
         </Button>
       </div>
     </section>

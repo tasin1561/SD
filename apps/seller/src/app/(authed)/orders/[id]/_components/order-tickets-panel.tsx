@@ -11,6 +11,7 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { OrdSection } from '../../_components/orders-parts';
 import { useSellerTickets } from '@/lib/ops-hooks';
 import { RaiseTicketModal } from '../../../tickets/_components/raise-ticket-modal';
+import { useT } from '@/i18n/client';
 
 /**
  * Every conversation open on this parcel, and a way to start another.
@@ -39,23 +40,24 @@ export function OrderTicketsPanel({
   readonly raising: boolean;
   readonly onRaisingChange: (next: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const tickets = useSellerTickets({ orderId });
   const setRaising = onRaisingChange;
   const rows = tickets.data ?? [];
 
   return (
-    <OrdSection title="Issues raised on this order">
+    <OrdSection title={t('orderTickets.issuesRaisedOnThis')}>
       {tickets.isLoading ? (
-        <SkeletonRows rows={2} cols={1} label="Loading issues…" />
+        <SkeletonRows rows={2} cols={1} label={t('orderTickets.loadingIssues')} />
       ) : rows.length === 0 ? (
         <EmptyState
           bare
           icon={<LifeBuoy size={20} />}
-          title="Nothing raised yet"
-          description="If something is wrong with this parcel, tell us and we will take it up with the courier."
+          title={t('orderTickets.nothingRaisedYet')}
+          description={t('orderTickets.ifSomethingIsWrong')}
         />
       ) : (
-        <ListRows label="Issues raised on this order">
+        <ListRows label={t('orderTickets.issuesRaisedOnThis')}>
           {rows.map((t) => (
             <ListRow
               key={t.id}

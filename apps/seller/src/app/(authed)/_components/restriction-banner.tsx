@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
 import { Money } from '@skydrop/ui/components';
 import { useSellerRestriction } from '@/lib/ops-hooks';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * On every page, because a hold changes what the whole portal will do.
@@ -16,6 +18,7 @@ import { useSellerRestriction } from '@/lib/ops-hooks';
  * top-up screens, where the figures are rupees too.
  */
 export function RestrictionBanner(): ReactElement | null {
+  const t = useT();
   const restriction = useSellerRestriction();
   const active = restriction.data ?? null;
   if (active === null) return null;
@@ -31,18 +34,21 @@ export function RestrictionBanner(): ReactElement | null {
         </span>
         <div className="min-w-0 text-sm">
           <p className="text-text-bright font-medium">
-            Top up <Money amount={active.shortfallInr} currency="INR" convert={false} /> to lift the
-            hold on your account
+            {richMessage(t('authedShell.topUpToLift'), {
+              money: <Money amount={active.shortfallInr} currency="INR" convert={false} />,
+            })}
           </p>
           <p className="text-text-body mt-0.5">{active.reason}</p>
           <p className="text-text-muted mt-1 text-xs">
-            Your balance is <Money amount={active.balanceInr} currency="INR" convert={false} />; the
-            hold clears on its own at{' '}
-            <Money amount={active.clearAtBalanceInr} currency="INR" convert={false} />.{' '}
-            <Link href="/wallet" className="text-accent underline">
-              Go to your wallet
-            </Link>
-            .
+            {richMessage(t('authedShell.yourBalanceIsThe'), {
+              money: <Money amount={active.balanceInr} currency="INR" convert={false} />,
+              money2: <Money amount={active.clearAtBalanceInr} currency="INR" convert={false} />,
+              link: (
+                <Link href="/wallet" className="text-accent underline">
+                  {t('authedShell.goToYourWallet')}
+                </Link>
+              ),
+            })}
           </p>
         </div>
       </div>

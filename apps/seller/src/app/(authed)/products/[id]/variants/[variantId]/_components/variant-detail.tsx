@@ -22,7 +22,7 @@ import {
   useVariantDetail,
 } from '@/lib/api-hooks';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 // The LEGACY toast on purpose, for `ArchiveVariantButton` only: its
 // behaviour test mounts the legacy `Toaster`, and the shell mounts both
 // providers while pages move across, so the toast looks the same either way.
@@ -52,6 +52,9 @@ import {
 } from '@/app/(authed)/inventory/_components/stock-ui';
 import { VariantImageUpload } from './image-upload';
 import { StockConfigPanel } from './stock-config-panel';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Variant detail. Inline edit (no separate /edit route). SKU code is
@@ -74,6 +77,7 @@ export function VariantDetailView({
   productId: string;
   variantId: string;
 }): ReactElement {
+  const t = useT();
   const detail = useVariantDetail(productId, variantId);
   // The product, so a blank variant field can be shown as the value it
   // actually resolves to rather than as a dash.
@@ -87,25 +91,28 @@ export function VariantDetailView({
   return (
     <AreaPage>
       <BackLink href={`/products/${productId}`}>
-        <ArrowLeft size={14} /> Product
+        <ArrowLeft size={14} /> {t('variantDetail.product2')}
       </BackLink>
 
       {detail.isLoading ? (
-        <SkeletonRows rows={6} label="Loading variant…" />
+        <SkeletonRows rows={6} label={t('variantDetail.loadingVariant')} />
       ) : detail.isError ? (
         <ErrorState
-          message={detail.error?.message ?? 'Failed to load variant.'}
+          message={detail.error?.message ?? t('variantDetail.failedToLoadVariant')}
           retry={() => void detail.refetch()}
         />
       ) : !detail.data ? (
-        <ErrorState message="Variant not found." />
+        <ErrorState message={t('variantDetail.variantNotFound')} />
       ) : (
         <>
           <PageHeader
             breadcrumbs={[
-              { label: 'Client console' },
-              { label: 'Products', href: '/products' },
-              { label: product.data?.name ?? 'Product', href: `/products/${productId}` },
+              { label: t('variantDetail.clientConsole') },
+              { label: t('variantDetail.products'), href: '/products' },
+              {
+                label: product.data?.name ?? t('variantDetail.product'),
+                href: `/products/${productId}`,
+              },
               { label: detail.data.skuCode },
             ]}
             Link={Link}
@@ -157,20 +164,20 @@ export function VariantDetailView({
                  The stock SETTINGS below are a different question. */}
           <KpiGrid>
             <KpiCard
-              label="Ships at"
+              label={t('variantDetail.shipsAt')}
               icon={<Boxes size={14} />}
-              figure={weight ?? <span className="inv-faint">Not set</span>}
+              figure={weight ?? <span className="inv-faint">{t('variantDetail.notSet')}</span>}
               {...(weight === null ? {} : { unit: 'g' })}
               tone={weight === null ? 'pending' : 'neutral'}
-              hint={inheritHint(detail.data.weightGrams, product.data?.defaultWeightGrams)}
+              hint={inheritHint(t, detail.data.weightGrams, product.data?.defaultWeightGrams)}
             />
             <KpiCard
-              label="Declared value"
+              label={t('variantDetail.declaredValue')}
               icon={<Wallet size={14} />}
               figure={
                 effective(detail.data.declaredValueInr, product.data?.defaultDeclaredValueInr) ===
                 null ? (
-                  <span className="inv-faint">Not set</span>
+                  <span className="inv-faint">{t('variantDetail.notSet')}</span>
                 ) : (
                   <Money
                     amount={
@@ -181,26 +188,27 @@ export function VariantDetailView({
               }
               tone="neutral"
               hint={inheritHint(
+                t,
                 detail.data.declaredValueInr,
                 product.data?.defaultDeclaredValueInr,
               )}
             />
             <KpiCard
-              label="GST rate"
+              label={t('variantDetail.gstRate')}
               icon={<Percent size={14} />}
               figure={
                 detail.data.gstRate === null ? (
-                  <span className="inv-faint">Not set</span>
+                  <span className="inv-faint">{t('variantDetail.notSet')}</span>
                 ) : (
                   detail.data.gstRate
                 )
               }
               {...(detail.data.gstRate === null ? {} : { unit: '%' })}
               tone="neutral"
-              hint={detail.data.gstRate === null ? 'Falls back to the system rate.' : undefined}
+              hint={detail.data.gstRate === null ? t('variantDetail.fallsBackToThe') : undefined}
             />
             <KpiCard
-              label="Scans as"
+              label={t('variantDetail.scansAs')}
               icon={<Barcode size={14} />}
               /*
                 LBL-2: the pack bench resolves a scan to
@@ -221,15 +229,15 @@ export function VariantDetailView({
               tone="neutral"
               hint={
                 detail.data.barcode === null
-                  ? 'Your SKU code — add a barcode and both keep working.'
-                  : 'Your own barcode.'
+                  ? t('variantDetail.yourSkuCodeAdd')
+                  : t('variantDetail.yourOwnBarcode')
               }
             />
           </KpiGrid>
 
           <AreaSection
-            title="Details"
-            note="What this SKU is, and what it inherits."
+            title={t('variantDetail.details')}
+            note={t('variantDetail.whatThisSkuIs')}
             action={
               !editing && (
                 <Button
@@ -238,7 +246,7 @@ export function VariantDetailView({
                   icon={<Pencil size={14} />}
                   onClick={() => setEditing(true)}
                 >
-                  Edit variant
+                  {t('variantDetail.editVariant')}
                 </Button>
               )
             }
@@ -259,7 +267,10 @@ export function VariantDetailView({
 
           <StockConfigPanel productId={productId} variantId={variantId} />
 
-          <AreaSection title="Pictures" note="What the customer sees beside this SKU.">
+          <AreaSection
+            title={t('variantDetail.pictures')}
+            note={t('variantDetail.whatTheCustomerSees')}
+          >
             <Panel>
               <VariantImageUpload variantId={variantId} skuCode={detail.data.skuCode} />
             </Panel>
@@ -292,6 +303,7 @@ export function ArchiveVariantButton({
   readonly skuCode: string;
   readonly archived: boolean;
 }): ReactElement | null {
+  const t = useT();
   const mayManage = can(useSellerIdentity(), 'catalog.manage');
   const archive = useArchiveVariant(productId, variantId);
   const toast = useToast();
@@ -307,16 +319,16 @@ export function ArchiveVariantButton({
       setConfirming(false);
       toast.success(
         nextArchived
-          ? `${skuCode} archived — it can no longer be ordered or received.`
-          : `${skuCode} restored — it can be ordered again.`,
+          ? t('variantDetail.archivedItCanNo', { skuCode })
+          : t('variantDetail.restoredItCanBe', { skuCode }),
       );
     } catch (err) {
-      const verdict = serverVerdict(err);
+      const message = verdict(err, t);
       if (nextArchived) {
-        setError(verdict);
+        setError(message);
         // Rejecting keeps the confirm open with the verdict in it.
         throw err;
-      } else toast.error(verdict);
+      } else toast.error(message);
     }
   }
 
@@ -326,8 +338,8 @@ export function ArchiveVariantButton({
         variant="secondary"
         icon={archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
         labels={{
-          idle: archived ? 'Restore variant' : 'Archive variant',
-          busy: archived ? 'Restoring…' : 'Archiving…',
+          idle: archived ? t('variantDetail.restoreVariant') : t('variantDetail.archiveVariant'),
+          busy: archived ? t('variantDetail.restoring') : t('variantDetail.archiving'),
         }}
         state={mutationPhase(archive)}
         disabled={archive.isPending}
@@ -339,11 +351,11 @@ export function ArchiveVariantButton({
           setConfirming(next);
           if (!next) setError(null);
         }}
-        title={`Archive ${skuCode}?`}
+        title={t('variantDetail.archive', { skuCode })}
         entity={skuCode}
         entityIsIdentifier
-        consequence="It stops being orderable and no new stock can be received against it. Its order history and any stock already here stay as they are, and you can restore it at any time."
-        confirmLabel="Archive variant"
+        consequence={t('variantDetail.itStopsBeingOrderable')}
+        confirmLabel={t('variantDetail.archiveVariant')}
         destructive
         error={error ?? undefined}
         onConfirm={() => run(true)}
@@ -371,6 +383,7 @@ function Inherited({
   readonly fallback: string | number | null | undefined;
   readonly suffix?: string;
 }): ReactElement {
+  const t = useT();
   if (own !== null && own !== '') {
     return (
       <>
@@ -383,7 +396,7 @@ function Inherited({
   // Shown plainly: this IS the value the variant ships and is valued at.
   // The tooltip says where it came from for anyone who wonders.
   return (
-    <span title="From the product default">
+    <span title={t('variantDetail.fromTheProductDefault')}>
       {fallback}
       {suffix}
     </span>
@@ -397,15 +410,19 @@ function VariantReadCard({
   variant: SellerVariantView;
   product: SellerProductView | undefined;
 }): ReactElement {
+  const t = useT();
   // No card of its own: the section's panel is the surface.
   return (
     <Facts
       columns={2}
       items={[
-        { label: 'SKU', value: <span className="sk-ident">{variant.skuCode}</span> },
-        { label: 'Label', value: variant.variantLabel ?? <Dash /> },
         {
-          label: 'Weight',
+          label: t('variantDetail.sku'),
+          value: <span className="sk-ident">{variant.skuCode}</span>,
+        },
+        { label: t('variantDetail.label'), value: variant.variantLabel ?? <Dash /> },
+        {
+          label: t('variantDetail.weight'),
           value: (
             <span className="sk-figure">
               <Inherited
@@ -417,13 +434,13 @@ function VariantReadCard({
           ),
         },
         {
-          label: 'Box (L × W × H)',
+          label: t('variantDetail.boxLWH'),
           value: (
             <span className="sk-figure">
               {variant.lengthCm !== null ? (
                 `${variant.lengthCm} × ${variant.widthCm ?? '—'} × ${variant.heightCm ?? '—'} cm`
               ) : product?.defaultLengthCm != null ? (
-                <span title="From the product default">
+                <span title={t('variantDetail.fromTheProductDefault')}>
                   {product.defaultLengthCm} × {product.defaultWidthCm ?? '—'} ×{' '}
                   {product.defaultHeightCm ?? '—'} cm
                 </span>
@@ -434,7 +451,7 @@ function VariantReadCard({
           ),
         },
         {
-          label: 'Declared value',
+          label: t('variantDetail.declaredValue'),
           value: (
             <span className="sk-figure">
               <Inherited
@@ -445,7 +462,7 @@ function VariantReadCard({
           ),
         },
         {
-          label: 'GST rate',
+          label: t('variantDetail.gstRate'),
           value:
             variant.gstRate === null ? (
               <Dash />
@@ -454,7 +471,7 @@ function VariantReadCard({
             ),
         },
         {
-          label: 'Barcode',
+          label: t('variantDetail.barcode'),
           value:
             variant.barcode === null ? (
               <Dash />
@@ -482,12 +499,13 @@ function effective(
 
 /** Says WHERE the figure came from, because inheriting is not nothing. */
 function inheritHint(
+  t: Translate<MessageKey>,
   own: string | number | null,
   fallback: string | number | null | undefined,
 ): string | undefined {
   if (own !== null) return undefined;
-  if (fallback === null || fallback === undefined) return 'Set it here or on the product.';
-  return 'From the product default.';
+  if (fallback === null || fallback === undefined) return t('variantDetail.setItHereOr');
+  return t('variantDetail.fromTheProductDefault2');
 }
 
 function VariantEditForm({
@@ -501,6 +519,7 @@ function VariantEditForm({
   onCancel: () => void;
   onSaved: () => void;
 }): ReactElement {
+  const t = useT();
   const [variantLabel, setVariantLabel] = useState(variant.variantLabel ?? '');
   const [weightGrams, setWeightGrams] = useState(
     variant.weightGrams === null ? '' : String(variant.weightGrams),
@@ -538,7 +557,7 @@ function VariantEditForm({
       if (err instanceof ApiError) {
         setServerError(`[${err.code}] ${err.message}`);
       } else {
-        setServerError('Update failed. Please try again.');
+        setServerError(t('variantDetail.updateFailedPleaseTry'));
       }
     }
   }
@@ -553,10 +572,15 @@ function VariantEditForm({
     readonly step?: string;
     readonly ident?: boolean;
   }> = [
-    { id: 'variantLabel', label: 'Label', value: variantLabel, set: setVariantLabel },
+    {
+      id: 'variantLabel',
+      label: t('variantDetail.label'),
+      value: variantLabel,
+      set: setVariantLabel,
+    },
     {
       id: 'weightGrams',
-      label: 'Weight (g)',
+      label: t('variantDetail.weightG'),
       value: weightGrams,
       set: setWeightGrams,
       type: 'number',
@@ -564,7 +588,7 @@ function VariantEditForm({
     },
     {
       id: 'lengthCm',
-      label: 'Length (cm)',
+      label: t('variantDetail.lengthCm'),
       value: lengthCm,
       set: setLengthCm,
       type: 'number',
@@ -573,7 +597,7 @@ function VariantEditForm({
     },
     {
       id: 'widthCm',
-      label: 'Width (cm)',
+      label: t('variantDetail.widthCm'),
       value: widthCm,
       set: setWidthCm,
       type: 'number',
@@ -582,7 +606,7 @@ function VariantEditForm({
     },
     {
       id: 'heightCm',
-      label: 'Height (cm)',
+      label: t('variantDetail.heightCm'),
       value: heightCm,
       set: setHeightCm,
       type: 'number',
@@ -591,7 +615,7 @@ function VariantEditForm({
     },
     {
       id: 'declaredValueInr',
-      label: 'Declared (INR)',
+      label: t('variantDetail.declaredInr'),
       value: declaredValueInr,
       set: setDeclaredValueInr,
       type: 'number',
@@ -599,22 +623,28 @@ function VariantEditForm({
     },
     {
       id: 'gstRate',
-      label: 'GST rate (%)',
+      label: t('variantDetail.gstRate2'),
       value: gstRate,
       set: setGstRate,
       type: 'number',
       step: '0.01',
     },
-    { id: 'barcode', label: 'Barcode', value: barcode, set: setBarcode, ident: true },
+    {
+      id: 'barcode',
+      label: t('variantDetail.barcode'),
+      value: barcode,
+      set: setBarcode,
+      ident: true,
+    },
   ];
 
   return (
     <form onSubmit={handleSave} className="inv-stack">
       <FieldGrid columns={2}>
         <TextField
-          label="SKU"
+          label={t('variantDetail.sku')}
           id="sku"
-          hint="Immutable"
+          hint={t('variantDetail.immutable')}
           value={variant.skuCode}
           disabled
           inputClassName="sk-ident"
@@ -639,11 +669,11 @@ function VariantEditForm({
         <AsyncButton
           type="submit"
           variant="primary"
-          labels={{ idle: 'Save changes', busy: 'Saving…' }}
+          labels={{ idle: t('variantDetail.saveChanges'), busy: t('variantDetail.saving') }}
           state={mutationPhase(update)}
         />
         <Button variant="ghost" onClick={onCancel} disabled={update.isPending}>
-          Cancel
+          {t('variantDetail.cancel')}
         </Button>
       </Actions>
     </form>

@@ -1,0 +1,91 @@
+import { defineMessages } from '../define';
+
+/** Copy owned by the "orderPending" feature. */
+export const orderPending = defineMessages({
+  'orderPending.rowUpdated': ['Row {rowNumber} updated', 'সারি {rowNumber} হালনাগাদ হয়েছে'],
+  'orderPending.rowIsNowAn': [
+    'Row {rowNumber} is now an order',
+    'সারি {rowNumber} এখন একটি অর্ডার',
+  ],
+  'orderPending.possibleDuplicate': ['Possible duplicate', 'সম্ভাব্য ডুপ্লিকেট'],
+  'orderPending.valueToFix': ['{problems} value{plural} to fix', '{problems}টি মান ঠিক করতে হবে'],
+  'orderPending.thisCustomerAlreadyHas': [
+    'This customer already has {duplicateOf} order{plural} not yet packed. Import only if this is a separate parcel.',
+    'এই গ্রাহকের {duplicateOf}টি অর্ডার এখনো প্যাক হয়নি। আলাদা পার্সেল হলেই কেবল ইম্পোর্ট করুন।',
+  ],
+  'orderPending.importAnyway': ['Import anyway', 'তবুও ইম্পোর্ট করুন'],
+  'orderPending.importAsOrder': ['Import as order', 'অর্ডার হিসেবে ইম্পোর্ট'],
+  'orderPending.importing': ['Importing…', 'ইম্পোর্ট হচ্ছে…'],
+  'orderPending.saveWithoutImporting': ['Save without importing', 'ইম্পোর্ট না করে সংরক্ষণ'],
+  'orderPending.saving': ['Saving…', 'সংরক্ষণ হচ্ছে…'],
+  'orderPending.saved': ['Saved', 'সংরক্ষিত'],
+  'orderPending.discard': ['Discard', 'বাতিল করুন'],
+  'orderPending.importThisRowAnyway': ['Import this row anyway?', 'এই সারি তবুও ইম্পোর্ট করবেন?'],
+  'orderPending.importThisRowAs': [
+    'Import this row as an order?',
+    'এই সারি অর্ডার হিসেবে ইম্পোর্ট করবেন?',
+  ],
+  'orderPending.discardThisRow': ['Discard this row?', 'এই সারি বাতিল করবেন?'],
+  'orderPending.clientConsole': ['Client console', 'ক্লায়েন্ট কনসোল'],
+  'orderPending.fulfilment': ['Fulfilment', 'ফুলফিলমেন্ট'],
+  'orderPending.orders': ['Orders', 'অর্ডার'],
+  'orderPending.pending': ['Pending', 'অপেক্ষমাণ'],
+  'orderPending.pendingOrders': ['Pending orders', 'অপেক্ষমাণ অর্ডার'],
+  'orderPending.rowsFromACsv': [
+    'Rows from a CSV upload that need a decision before they can become orders. Everything else in your upload has already imported.',
+    'CSV আপলোডের যে সারিগুলো অর্ডার হওয়ার আগে আপনার সিদ্ধান্ত দরকার। আপলোডের বাকি সবকিছু ইতিমধ্যে ইম্পোর্ট হয়ে গেছে।',
+  ],
+  'orderPending.nothingWaiting': ['Nothing waiting', 'কিছুই অপেক্ষায় নেই'],
+  'orderPending.lookLikeDuplicates': [
+    '{duplicates} look like duplicates',
+    '{duplicates}টি ডুপ্লিকেটের মতো দেখাচ্ছে',
+  ],
+  'orderPending.uploadACsv': ['Upload a CSV', 'CSV আপলোড করুন'],
+  'orderPending.waitingOnYou': ['Waiting on you', 'আপনার অপেক্ষায়'],
+  'orderPending.noneOfTheseIs': [
+    'None of these is an order yet.',
+    'এগুলোর কোনোটিই এখনো অর্ডার হয়নি।',
+  ],
+  'orderPending.valuesToFix': ['Values to fix', 'ঠিক করার মান'],
+  'orderPending.somethingIsMissingOr': [
+    'Something is missing or unreadable.',
+    'কিছু নেই বা পড়া যাচ্ছে না।',
+  ],
+  'orderPending.lookLikeDuplicates2': ['Look like duplicates', 'ডুপ্লিকেটের মতো'],
+  'orderPending.thisCustomerAlreadyHas2': [
+    'This customer already has a parcel on the way.',
+    'এই গ্রাহকের একটি পার্সেল ইতিমধ্যে পথে আছে।',
+  ],
+  'orderPending.loadingPendingRows': ['Loading pending rows', 'অপেক্ষমাণ সারি লোড হচ্ছে'],
+  'orderPending.everyRowFromYour': [
+    'Every row from your uploads became an order. New uploads only land here if something is missing or looks like a duplicate.',
+    'আপনার আপলোডের প্রতিটি সারি অর্ডার হয়ে গেছে। কিছু না থাকলে বা ডুপ্লিকেটের মতো দেখালে তবেই নতুন আপলোড এখানে আসে।',
+  ],
+  'orderPending.fieldOrderRef': ['Your order ref', 'আপনার অর্ডার রেফ'],
+  'orderPending.fieldSku': ['SKU', 'SKU'],
+  'orderPending.fieldQty': ['Qty', 'পরিমাণ'],
+  'orderPending.fieldCustomerName': ['Customer name', 'গ্রাহকের নাম'],
+  'orderPending.fieldPhone': ['Phone', 'ফোন'],
+  'orderPending.fieldEmail': ['Email', 'ইমেইল'],
+  'orderPending.fieldAddressLine1': ['Address line 1', 'ঠিকানার 1ম লাইন'],
+  'orderPending.fieldAddressLine2': ['Address line 2', 'ঠিকানার 2য় লাইন'],
+  'orderPending.fieldLandmark': ['Landmark', 'ল্যান্ডমার্ক'],
+  'orderPending.fieldCity': ['City', 'শহর'],
+  'orderPending.fieldState': ['State', 'রাজ্য'],
+  'orderPending.fieldPin': ['PIN', 'পিন'],
+  'orderPending.fieldCodAmount': ['COD amount', 'COD-র পরিমাণ'],
+  'orderPending.rowWithRef': ['Row {rowNumber} · {ref}', 'সারি {rowNumber} · {ref}'],
+  'orderPending.rowNumber': ['Row {rowNumber}', 'সারি {rowNumber}'],
+  'orderPending.importDuplicateConsequence': [
+    'It becomes a new order even though this customer already has one waiting. Any changes you typed are saved first.',
+    'এই গ্রাহকের একটি অর্ডার আগে থেকেই অপেক্ষায় থাকলেও এটি নতুন অর্ডার হবে। আপনি যা পরিবর্তন করেছেন তা আগে সংরক্ষণ হবে।',
+  ],
+  'orderPending.importConsequence': [
+    'It becomes an order and leaves this list. Any changes you typed are saved first.',
+    'এটি একটি অর্ডার হবে এবং এই তালিকা থেকে সরে যাবে। আপনি যা পরিবর্তন করেছেন তা আগে সংরক্ষণ হবে।',
+  ],
+  'orderPending.itIsRemovedFrom': [
+    'It is removed from this list and no order is made from it.',
+    'It is removed from this list and no order is made from it.',
+  ],
+});

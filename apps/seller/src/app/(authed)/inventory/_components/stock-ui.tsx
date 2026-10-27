@@ -10,6 +10,7 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { statusLabel, stockUnitStatusKind } from '@skydrop/ui/status';
 import type { StockUnitStatus } from '@skydrop/db';
 import './stock-ui.css';
+import { useT } from '@/i18n/client';
 
 /**
  * The presentational pieces shared by the stock area of the seller
@@ -216,13 +217,14 @@ export function InlineError({
   readonly message: string;
   readonly retry?: (() => void) | undefined;
 }): ReactElement {
+  const t = useT();
   return (
     <div className="inv-error" role="alert">
       <OctagonX size={16} aria-hidden className="inv-error__icon" />
       <p className="inv-error__text">{message}</p>
       {retry !== undefined && (
         <button type="button" onClick={retry} className="inv-error__retry">
-          Retry
+          {t('inventory.retry')}
         </button>
       )}
     </div>

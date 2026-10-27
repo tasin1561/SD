@@ -19,14 +19,17 @@ import {
   type SellerApiKeyScope,
 } from '@skydrop/api-client';
 import { useApiKeysList, useCreateApiKey, useRevokeApiKey } from '@/lib/api-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { RevealCard, SetCallout, SetFact, SetPageHeader } from '../../_components/settings-parts';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
-const CRUMBS = [
-  { label: 'Client console' },
-  { label: 'Account' },
-  { label: 'Settings', href: '/settings' },
-  { label: 'API keys' },
+const crumbsOf = (t: Translate<MessageKey>) => [
+  { label: t('settingsApiKeys.clientConsole') },
+  { label: t('settingsApiKeys.account') },
+  { label: t('settingsApiKeys.settings'), href: '/settings' },
+  { label: t('settingsApiKeys.apiKeys') },
 ];
 
 /** ACTIVE / EXPIRED / REVOKED, decided the same way in both places it is read. */
@@ -68,6 +71,7 @@ function stateKind(state: KeyState): 'delivered' | 'pending' | 'cancelled' {
  * and sends exactly the request the form (or the row) used to send.
  */
 export function ApiKeysIndex(): ReactElement {
+  const t = useT();
   const list = useApiKeysList();
   const create = useCreateApiKey();
   const revoke = useRevokeApiKey();
@@ -85,7 +89,7 @@ export function ApiKeysIndex(): ReactElement {
   } | null>(null);
 
   function fmtError(e: unknown): string {
-    return serverVerdict(e, 'Action failed');
+    return verdict(e, t, t('settingsApiKeys.actionFailed'));
   }
 
   function toggleScope(scope: SellerApiKeyScope, on: boolean): void {
@@ -99,7 +103,7 @@ export function ApiKeysIndex(): ReactElement {
     // it here stops somebody minting a key that fails on first use with
     // a message about a field they never saw.
     if (scopes.length === 0) {
-      setError('Choose at least one thing this key may do.');
+      setError(t('settingsApiKeys.chooseAtLeastOne'));
       return;
     }
     setConfirmCreate(true);
@@ -117,7 +121,7 @@ export function ApiKeysIndex(): ReactElement {
       setName('');
       setTtlDays('');
       setScopes([]);
-      toast.success('API key created.');
+      toast.success(t('settingsApiKeys.apiKeyCreated'));
     } catch (e) {
       setError(fmtError(e));
     }
@@ -127,7 +131,7 @@ export function ApiKeysIndex(): ReactElement {
     setError(null);
     try {
       await revoke.mutateAsync({ id });
-      toast.success('API key revoked.');
+      toast.success(t('settingsApiKeys.apiKeyRevoked'));
       setPendingRevoke(null);
     } catch (e) {
       setError(fmtError(e));
@@ -140,9 +144,9 @@ export function ApiKeysIndex(): ReactElement {
   return (
     <div className="set-page">
       <SetPageHeader
-        crumbs={CRUMBS}
-        title="API keys"
-        subtitle="Programmatic access. Plaintext is shown ONCE on create — copy it immediately."
+        crumbs={crumbsOf(t)}
+        title={t('settingsApiKeys.apiKeys')}
+        subtitle={t('settingsApiKeys.programmaticAccessPlaintextIs')}
         /*
           The comps put a request count and a rate-limit headroom bar
           here. Neither is stored per key — `lastUsedAt` is the whole
@@ -165,19 +169,21 @@ export function ApiKeysIndex(): ReactElement {
       {revealed && (
         <RevealCard
           icon={<KeyRound size={15} />}
-          title="New API key — copy it now"
+          title={t('settingsApiKeys.newApiKeyCopy')}
           note={revealed.name}
           body={
             <>
-              This is the only time we&apos;ll show the plaintext.{' '}
+              {t('settingsApiKeys.thisIsTheOnly')}{' '}
               {revealed.expiresAt !== null
-                ? `Expires ${new Date(revealed.expiresAt).toLocaleDateString()}.`
-                : 'No expiry set.'}
+                ? t('settingsApiKeys.expires', {
+                    expiresAt: new Date(revealed.expiresAt).toLocaleDateString(),
+                  })
+                : t('settingsApiKeys.noExpirySet')}
             </>
           }
           value={revealed.plaintext}
-          valueLabel="API key plaintext"
-          dismissLabel="I've copied it"
+          valueLabel={t('settingsApiKeys.apiKeyPlaintext')}
+          dismissLabel={t('settingsApiKeys.iVeCopiedIt')}
           onDismiss={() => setRevealed(null)}
         />
       )}
@@ -189,24 +195,27 @@ export function ApiKeysIndex(): ReactElement {
       )}
 
       <section className="set-section">
-        <SectionHeading title="Issue a key" note="The plaintext is shown once." />
+        <SectionHeading
+          title={t('settingsApiKeys.issueAKey')}
+          note={t('settingsApiKeys.thePlaintextIsShown')}
+        />
         <div className="set-card">
           <form onSubmit={onCreate} className="set-inline">
             <TextField
-              label="Key name"
+              label={t('settingsApiKeys.keyName')}
               icon={<Tag size={15} />}
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={100}
               showCount
               required
-              placeholder="e.g. Production CRM"
+              placeholder={t('settingsApiKeys.eGProductionCrm')}
               className="set-grow"
             />
             <TextField
-              label="Expires in days"
+              label={t('settingsApiKeys.expiresInDays')}
               icon={<CalendarClock size={15} />}
-              hint="Blank = no expiry"
+              hint={t('settingsApiKeys.blankNoExpiry')}
               type="number"
               min={1}
               max={730}
@@ -222,12 +231,8 @@ export function ApiKeysIndex(): ReactElement {
               is exactly what this replaced.
             */}
             <fieldset className="set-scopes">
-              <legend>What may this key do?</legend>
-              <p className="set-muted">
-                Pick as little as the integration needs. Your wallet, withdrawals, company profile
-                and bank account, team, roles, other keys and webhooks are never reachable by a key,
-                whatever is ticked here.
-              </p>
+              <legend>{t('settingsApiKeys.whatMayThisKey')}</legend>
+              <p className="set-muted">{t('settingsApiKeys.pickAsLittleAs')}</p>
               <div className="set-scopes__list">
                 {SELLER_API_KEY_SCOPES.map((scope) => (
                   <Checkbox
@@ -245,7 +250,11 @@ export function ApiKeysIndex(): ReactElement {
                 type="submit"
                 variant="primary"
                 icon={<KeyRound size={15} />}
-                labels={{ idle: 'Create key', busy: 'Creating…', error: 'Not created' }}
+                labels={{
+                  idle: t('settingsApiKeys.createKey'),
+                  busy: t('settingsApiKeys.creating'),
+                  error: t('settingsApiKeys.notCreated'),
+                }}
                 state={create.isPending ? 'busy' : 'idle'}
                 disabled={create.isPending}
               />
@@ -256,33 +265,33 @@ export function ApiKeysIndex(): ReactElement {
 
       <section className="set-section">
         <SectionHeading
-          title="Your keys"
-          note={rows.length === 0 ? undefined : `${rows.length} issued`}
+          title={t('settingsApiKeys.yourKeys')}
+          note={rows.length === 0 ? undefined : t('settingsApiKeys.issued', { rows: rows.length })}
         />
         <div className="set-card" data-flush>
           {list.isLoading ? (
-            <SkeletonRows rows={3} cols={6} label="Loading keys…" />
+            <SkeletonRows rows={3} cols={6} label={t('settingsApiKeys.loadingKeys')} />
           ) : list.isError ? (
             <ErrorState
-              message={list.error?.message ?? 'Failed.'}
+              message={list.error?.message ?? t('settingsApiKeys.failed')}
               retry={() => void list.refetch()}
             />
           ) : (
-            <Table caption="API keys">
+            <Table caption={t('settingsApiKeys.apiKeys')}>
               <THead>
                 <Tr>
-                  <Th>Name</Th>
-                  <Th>Prefix</Th>
-                  <Th>Scopes</Th>
-                  <Th>Last used</Th>
-                  <Th>Expires</Th>
-                  <Th>State</Th>
-                  <Th align="right">Actions</Th>
+                  <Th>{t('settingsApiKeys.name')}</Th>
+                  <Th>{t('settingsApiKeys.prefix')}</Th>
+                  <Th>{t('settingsApiKeys.scopes')}</Th>
+                  <Th>{t('settingsApiKeys.lastUsed')}</Th>
+                  <Th>{t('settingsApiKeys.expires2')}</Th>
+                  <Th>{t('settingsApiKeys.state')}</Th>
+                  <Th align="right">{t('settingsApiKeys.actions')}</Th>
                 </Tr>
               </THead>
               <TBody>
                 {rows.length === 0 ? (
-                  <TableEmpty colSpan={7}>No API keys yet.</TableEmpty>
+                  <TableEmpty colSpan={7}>{t('settingsApiKeys.noApiKeysYet')}</TableEmpty>
                 ) : (
                   rows.map((k) => {
                     const state = keyState(k);
@@ -294,7 +303,9 @@ export function ApiKeysIndex(): ReactElement {
                           <span className="sk-ident">{k.keyPrefix}…</span>
                         </Td>
                         <Td className="set-cell-muted">
-                          {k.scopes.length === 0 ? 'None — reissue this key' : k.scopes.join(', ')}
+                          {k.scopes.length === 0
+                            ? t('settingsApiKeys.noneReissueThisKey')
+                            : k.scopes.join(', ')}
                         </Td>
                         <Td className="set-cell-muted">
                           {k.lastUsedAt !== null ? new Date(k.lastUsedAt).toLocaleString() : '—'}
@@ -302,7 +313,7 @@ export function ApiKeysIndex(): ReactElement {
                         <Td className="set-cell-muted">
                           {k.expiresAt !== null
                             ? new Date(k.expiresAt).toLocaleDateString()
-                            : 'No expiry'}
+                            : t('settingsApiKeys.noExpiry')}
                         </Td>
                         <Td>
                           <StatusChip
@@ -320,7 +331,7 @@ export function ApiKeysIndex(): ReactElement {
                                 setPendingRevoke({ id: k.id, name: k.name, prefix: k.keyPrefix })
                               }
                             >
-                              Revoke
+                              {t('settingsApiKeys.revoke')}
                             </Button>
                           )}
                         </Td>
@@ -337,16 +348,17 @@ export function ApiKeysIndex(): ReactElement {
       <ConfirmDialog
         open={confirmCreate}
         onOpenChange={setConfirmCreate}
-        title="Create this API key?"
+        title={t('settingsApiKeys.createThisApiKey')}
         entity={name.trim()}
-        consequence={`A new key that can call the Skydrop API for this company the moment it exists, limited to: ${scopes.join(
-          ', ',
-        )}. ${
+        consequence={t(
           ttlDays
-            ? `It expires in ${ttlDays} ${ttlDays === '1' ? 'day' : 'days'}.`
-            : 'It never expires.'
-        } The plaintext is shown once, straight after — copy it then.`}
-        confirmLabel="Create key"
+            ? ttlDays === '1'
+              ? 'settingsApiKeys.createConsequenceOneDay'
+              : 'settingsApiKeys.createConsequenceDays'
+            : 'settingsApiKeys.createConsequenceNever',
+          { scopes: scopes.join(', '), ttlDays },
+        )}
+        confirmLabel={t('settingsApiKeys.createKey')}
         onConfirm={doCreate}
       />
 
@@ -355,10 +367,10 @@ export function ApiKeysIndex(): ReactElement {
         onOpenChange={(next) => {
           if (!next) setPendingRevoke(null);
         }}
-        title="Revoke this API key?"
+        title={t('settingsApiKeys.revokeThisApiKey')}
         entity={pendingRevoke === null ? '' : `${pendingRevoke.name} · ${pendingRevoke.prefix}…`}
-        consequence="Every integration using this key stops working at once. A revoked key cannot be brought back — you would issue a new one."
-        confirmLabel="Revoke key"
+        consequence={t('settingsApiKeys.everyIntegrationUsingThis')}
+        confirmLabel={t('settingsApiKeys.revokeKey')}
         destructive
         onConfirm={() => (pendingRevoke === null ? undefined : onRevoke(pendingRevoke.id))}
       />

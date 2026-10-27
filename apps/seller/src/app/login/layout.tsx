@@ -1,6 +1,5 @@
 import type { ReactNode, ReactElement } from 'react';
-import { SignInFrame } from '@skydrop/ui/app/sign-in';
-import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
+import { SellerSignInFrame } from '@/components/auth-frame';
 
 /**
  * The sign-in screen's frame — the ONE shared SignInFrame (apps restyle):
@@ -10,9 +9,5 @@ import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
  * SignInCard inside.
  */
 export default function LoginLayout({ children }: { children: ReactNode }): ReactElement {
-  return (
-    <SignInFrame portal="client portal" themeControl={<ThemeSwitch />}>
-      {children}
-    </SignInFrame>
-  );
+  return <SellerSignInFrame>{children}</SellerSignInFrame>;
 }

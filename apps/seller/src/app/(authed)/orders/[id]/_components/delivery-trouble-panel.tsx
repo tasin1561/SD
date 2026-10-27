@@ -18,7 +18,14 @@ import {
 } from '@/lib/ops-hooks';
 import { useSellerFees } from '@/lib/api-hooks';
 import { feeOfKind, type FeeFigure } from '@/lib/fee-figure';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
+import { useLocale, useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { CATALOGS } from '@/i18n/catalog';
+import type { Locale } from '@skydrop/ui/app/i18n';
+import { CALL_OUTCOME_BN, DELIVERY_ACTION_STATUS_BN } from '@/i18n/enum-words';
 
 /**
  * What happened to a parcel that could not be delivered, and what the
@@ -46,13 +53,18 @@ import { serverVerdict } from '@/lib/server-verdict';
  * can be pinned: the failure is a FALLBACK reappearing as the primary,
  * which a render test asserting "a heading is shown" passes either way.
  */
-export function deliveryPanelTitle(orderStatus: string): string {
-  if (orderStatus === 'DELIVERY_FAILED') return 'Delivery did not succeed';
-  if (orderStatus === 'OUT_FOR_DELIVERY') return 'Out for delivery';
+export function deliveryPanelTitleKey(orderStatus: string): MessageKey {
+  if (orderStatus === 'DELIVERY_FAILED') return 'orderDelivery.deliveryDidNotSucceed';
+  if (orderStatus === 'OUT_FOR_DELIVERY') return 'orderDelivery.outForDelivery';
   // Past it, one way or the other. The panel is then a RECORD — what was
   // said to the customer and what was asked for — so it is named for
   // that rather than for a state the order has left.
-  return 'What happened with this delivery';
+  return 'orderDelivery.whatHappenedWithThisDelivery';
+}
+
+/** The English heading — what the pinned spec asserts. The panel itself renders the key. */
+export function deliveryPanelTitle(orderStatus: string): string {
+  return CATALOGS.en[deliveryPanelTitleKey(orderStatus)];
 }
 function statusKind(s: DeliveryActionStatus): 'pending' | 'confirmed' | 'failed' | 'cancelled' {
   switch (s) {
@@ -70,17 +82,22 @@ function statusKind(s: DeliveryActionStatus): 'pending' | 'confirmed' | 'failed'
 }
 
 /** The ledger's own words, in the seller's. */
-function humanOutcome(outcome: string): string {
+function humanOutcome(
+  outcome: string,
+  locale: Locale,
+  bn?: Readonly<Record<string, string>>,
+): string {
+  if (locale === 'bn' && bn?.[outcome] !== undefined) return bn[outcome];
   return outcome
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/^./, (c) => c.toUpperCase());
 }
 
-const ACTION_LABEL: Readonly<Record<DeliveryActionKind, string>> = {
-  REATTEMPT: 'Try delivering again',
-  RECALL: 'Call the customer for me',
-  RTO: 'Send it back',
+const ACTION_LABEL: Readonly<Record<DeliveryActionKind, MessageKey>> = {
+  REATTEMPT: 'orderDelivery.tryDeliveringAgain',
+  RECALL: 'orderDelivery.callTheCustomerForMe',
+  RTO: 'orderDelivery.sendItBack',
 };
 
 /**
@@ -99,32 +116,35 @@ const ACTION_LABEL: Readonly<Record<DeliveryActionKind, string>> = {
  * applies" is true; printing a dash or a zero is not.
  */
 function actionsWith(
+  t: Translate<MessageKey>,
   returnFee: FeeFigure | null,
 ): ReadonlyArray<{ value: DeliveryActionKind; label: string; hint: string }> {
   const cost =
     returnFee === null
-      ? 'a return fee applies'
+      ? t('orderDelivery.aReturnFeeApplies')
       : returnFee.priced
-        ? `the return fee is ${returnFee.primary}` +
-          (returnFee.agreed === null ? '' : ` (agreed as ${returnFee.agreed})`)
-        : `the return fee is ${returnFee.primary}, charged in rupees at the rate on the day`;
+        ? returnFee.agreed === null
+          ? t('orderDelivery.costPriced', { primary: returnFee.primary })
+          : t('orderDelivery.costPricedAgreed', {
+              primary: returnFee.primary,
+              agreed: returnFee.agreed,
+            })
+        : t('orderDelivery.theReturnFeeIs', { primary: returnFee.primary });
   return [
     {
       value: 'REATTEMPT',
-      label: ACTION_LABEL.REATTEMPT,
-      hint: 'We ask the courier for another attempt. Best when you know the customer will be there.',
+      label: t(ACTION_LABEL.REATTEMPT),
+      hint: t('orderDelivery.weAskTheCourier'),
     },
     {
       value: 'RECALL',
-      label: ACTION_LABEL.RECALL,
-      hint: 'One of our agents phones them and reports back. Nothing moves until you know more.',
+      label: t(ACTION_LABEL.RECALL),
+      hint: t('orderDelivery.oneOfOurAgents'),
     },
     {
       value: 'RTO',
-      label: ACTION_LABEL.RTO,
-      hint:
-        'Your call, so this goes to the courier straight away — there is no operator step and it ' +
-        `cannot be undone. The parcel returns to our warehouse, the sale ends, and ${cost}.`,
+      label: t(ACTION_LABEL.RTO),
+      hint: t('orderDelivery.rtoHint', { cost }),
     },
   ];
 }
@@ -152,6 +172,8 @@ export function DeliveryTroublePanel({
   readonly open: boolean;
   readonly onOpenChange: (next: boolean) => void;
 }): ReactElement | null {
+  const t = useT();
+  const locale = useLocale();
   const inTrouble = orderStatus === 'DELIVERY_FAILED' || orderStatus === 'OUT_FOR_DELIVERY';
   const actions = useDeliveryActions(orderId);
   const calls = useCallHistory(orderId);
@@ -160,7 +182,7 @@ export function DeliveryTroublePanel({
   // not worth a request on every order page.
   const fees = useSellerFees(open);
   const returnFee = feeOfKind(fees.data?.items, 'return');
-  const ACTIONS = actionsWith(returnFee);
+  const ACTIONS = actionsWith(t, returnFee);
 
   const setOpen = onOpenChange;
   const [action, setAction] = useState<DeliveryActionKind>('REATTEMPT');
@@ -178,7 +200,7 @@ export function DeliveryTroublePanel({
   async function submit(): Promise<void> {
     setError(null);
     if (reason.trim().length < 10) {
-      setError('Tell us what you know — an operator reads this before deciding');
+      setError(t('orderDelivery.tellUsWhatYou'));
       return;
     }
     try {
@@ -186,19 +208,16 @@ export function DeliveryTroublePanel({
       setReason('');
       setOpen(false);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
   return (
-    <OrdSection title={deliveryPanelTitle(orderStatus)}>
+    <OrdSection title={t(deliveryPanelTitleKey(orderStatus))}>
       <div className="ord-stack">
         {orderStatus === 'DELIVERY_FAILED' && (
           <Notice tone="warn" icon={<AlertTriangle size={16} />}>
-            <span>
-              The courier could not hand this over. We have queued a call to your customer to find
-              out why — you can also tell us what to do below.
-            </span>
+            <span>{t('orderDelivery.theCourierCouldNot')}</span>
           </Notice>
         )}
 
@@ -207,13 +226,15 @@ export function DeliveryTroublePanel({
             lead to opposite decisions. */}
         {(calls.data?.items.length ?? 0) > 0 && (
           <div>
-            <h3 className="ord-h3">What we discussed with your customer</h3>
+            <h3 className="ord-h3">{t('orderDelivery.whatWeDiscussedWith')}</h3>
             <ul className="ord-cards">
               {calls.data?.items.map((c) => (
                 <li key={c.id} className="ord-callcard" data-tone="accent">
                   <div className="ord-callcard__head">
                     <PhoneCall size={14} aria-hidden />
-                    <span className="ord-callcard__title">{humanOutcome(c.outcome)}</span>
+                    <span className="ord-callcard__title">
+                      {humanOutcome(c.outcome, locale, CALL_OUTCOME_BN)}
+                    </span>
                     <span className="ord-callcard__time sk-figure">
                       {new Date(c.calledAt).toLocaleString()}
                     </span>
@@ -228,12 +249,16 @@ export function DeliveryTroublePanel({
                   )}
                   {c.customerSaidAddress !== null && (
                     <span className="ord-faint">
-                      Customer gave a different address: {c.customerSaidAddress}
+                      {richMessage(t('orderDelivery.customerGaveADifferent'), {
+                        customerSaidAddress: c.customerSaidAddress,
+                      })}
                     </span>
                   )}
                   {c.rescheduledFor !== null && (
                     <span className="ord-faint">
-                      Asked us to call back {new Date(c.rescheduledFor).toLocaleString()}
+                      {richMessage(t('orderDelivery.askedUsToCall'), {
+                        rescheduledFor: new Date(c.rescheduledFor).toLocaleString(),
+                      })}
                     </span>
                   )}
                 </li>
@@ -244,28 +269,34 @@ export function DeliveryTroublePanel({
 
         {(actions.data?.items.length ?? 0) > 0 && (
           <div>
-            <h3 className="ord-h3">What you asked for</h3>
+            <h3 className="ord-h3">{t('orderDelivery.whatYouAskedFor')}</h3>
             <ul className="ord-cards">
               {actions.data?.items.map((a) => (
                 <li key={a.id} className="ord-callcard">
                   <div className="ord-callcard__head">
                     <span className="ord-callcard__title">
-                      {ACTION_LABEL[a.action] ?? a.action}
+                      {ACTION_LABEL[a.action] === undefined ? a.action : t(ACTION_LABEL[a.action])}
                     </span>
                     <span className="ord-callcard__time">
                       <StatusChip
                         kind={statusKind(a.status)}
-                        label={humanOutcome(a.status)}
+                        label={humanOutcome(a.status, locale, DELIVERY_ACTION_STATUS_BN)}
                         size="sm"
                       />
                     </span>
                   </div>
                   <p className="ord-p">{a.reason}</p>
                   {a.decisionNote !== null && (
-                    <span className="ord-faint">Our reply: {a.decisionNote}</span>
+                    <span className="ord-faint">
+                      {richMessage(t('orderDelivery.ourReply'), { decisionNote: a.decisionNote })}
+                    </span>
                   )}
                   {a.executionError !== null && (
-                    <span className="ord-error">Could not be carried out: {a.executionError}</span>
+                    <span className="ord-error">
+                      {richMessage(t('orderDelivery.couldNotBeCarried'), {
+                        executionError: a.executionError,
+                      })}
+                    </span>
                   )}
                 </li>
               ))}
@@ -280,25 +311,28 @@ export function DeliveryTroublePanel({
           setOpen(next);
           if (!next) setError(null);
         }}
-        title="What should we do?"
+        title={t('orderDelivery.whatShouldWeDo')}
         icon={<Truck size={18} />}
         description={
           action === 'RTO'
-            ? 'Returning your own parcel is your decision, so this reaches the courier immediately.'
-            : 'An operator reads this and acts on it — nothing reaches the courier automatically.'
+            ? t('orderDelivery.returningYourOwnParcel')
+            : t('orderDelivery.anOperatorReadsThis')
         }
         locked={request.isPending}
         footer={
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)} disabled={request.isPending}>
-              Cancel
+              {t('orderDelivery.cancel')}
             </Button>
             <AsyncButton
               variant={action === 'RTO' ? 'destructive' : 'primary'}
               state={request.isPending ? 'busy' : undefined}
               labels={{
-                idle: action === 'RTO' ? 'Send it back now' : 'Send request',
-                busy: 'Sending…',
+                idle:
+                  action === 'RTO'
+                    ? t('orderDelivery.sendItBackNow')
+                    : t('orderDelivery.sendRequest'),
+                busy: t('orderDelivery.sending'),
               }}
               disabled={request.isPending}
               onClick={() => {
@@ -314,7 +348,7 @@ export function DeliveryTroublePanel({
       >
         <div className="ord-stack ord-stack--tight">
           <Select
-            label="What would you like"
+            label={t('orderDelivery.whatWouldYouLike')}
             required
             hint={ACTIONS.find((a) => a.value === action)?.hint}
             value={action}
@@ -327,9 +361,9 @@ export function DeliveryTroublePanel({
             ))}
           </Select>
           <TextArea
-            label="What do you know"
+            label={t('orderDelivery.whatDoYouKnow')}
             required
-            hint="Anything that helps — the customer called you, they'll be home Saturday, the address was wrong."
+            hint={t('orderDelivery.anythingThatHelpsThe')}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
@@ -346,19 +380,17 @@ export function DeliveryTroublePanel({
       <ConfirmDialog
         open={confirmRto}
         onOpenChange={setConfirmRto}
-        title="Send this parcel back now?"
-        entity={orderNumber ?? 'This order'}
+        title={t('orderDelivery.sendThisParcelBack')}
+        entity={orderNumber ?? t('orderDelivery.thisOrder')}
         entityIsIdentifier={orderNumber !== undefined}
         consequence={
-          'The courier is told straight away and it cannot be undone. The parcel returns to our ' +
-          'warehouse, the sale ends, and ' +
-          (returnFee === null
-            ? 'a return fee applies.'
+          returnFee === null
+            ? t('orderDelivery.rtoConsequenceNone')
             : returnFee.priced
-              ? `you are charged a return fee of ${returnFee.primary}.`
-              : `you are charged a return fee of ${returnFee.primary}, in rupees at the rate on the day.`)
+              ? t('orderDelivery.rtoConsequencePriced', { primary: returnFee.primary })
+              : t('orderDelivery.rtoConsequenceUnpriced', { primary: returnFee.primary })
         }
-        confirmLabel="Send it back now"
+        confirmLabel={t('orderDelivery.sendItBackNow')}
         destructive
         onConfirm={() => submit()}
       />

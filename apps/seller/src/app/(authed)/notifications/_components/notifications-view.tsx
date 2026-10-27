@@ -24,6 +24,8 @@ import {
 } from '@/lib/notification-hooks';
 import { SetFact, SetPageHeader } from '../../settings/_components/settings-parts';
 import './notifications.css';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /** The tab id that means "every group" — a group name is never empty. */
 const ALL_GROUPS = '__all';
@@ -71,6 +73,7 @@ const ALL_GROUPS = '__all';
  * search, because it answers "nothing found" for something that exists.
  */
 export function NotificationsView(): ReactElement {
+  const t = useT();
   /** Pages accumulate — "load earlier" appends rather than replacing. */
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [older, setOlder] = useState<readonly FeedItem[]>([]);
@@ -156,9 +159,12 @@ export function NotificationsView(): ReactElement {
   return (
     <div className="set-page">
       <SetPageHeader
-        crumbs={[{ label: 'Client console' }, { label: 'Notifications' }]}
-        title="Notifications"
-        subtitle="Everything sent to you — what a courier did, what the warehouse checked in, and what moved in your wallet."
+        crumbs={[
+          { label: t('notifications.clientConsole') },
+          { label: t('notifications.notifications') },
+        ]}
+        title={t('notifications.notifications')}
+        subtitle={t('notifications.everythingSentToYou')}
         meta={
           feed.data === undefined ? undefined : (
             <span className="set-meta">
@@ -166,11 +172,11 @@ export function NotificationsView(): ReactElement {
                 <SetFact tone="accent">{unread} unread</SetFact>
               ) : (
                 <SetFact tone="good" dot>
-                  All read
+                  {t('notifications.allRead')}
                 </SetFact>
               )}
               <SetFact>{items.length} loaded</SetFact>
-              {hasMore && <SetFact dot>More further back</SetFact>}
+              {hasMore && <SetFact dot>{t('notifications.moreFurtherBack')}</SetFact>}
             </span>
           )
         }
@@ -179,7 +185,11 @@ export function NotificationsView(): ReactElement {
             {unread > 0 && (
               <AsyncButton
                 variant="secondary"
-                labels={{ idle: 'Mark all read', busy: 'Marking…', done: 'All read' }}
+                labels={{
+                  idle: t('notifications.markAllRead'),
+                  busy: t('notifications.marking'),
+                  done: t('notifications.allRead'),
+                }}
                 onAction={() => markAll.mutateAsync()}
               />
             )}
@@ -189,7 +199,7 @@ export function NotificationsView(): ReactElement {
                 icon={<Trash2 size={14} />}
                 onClick={() => setConfirmDismissAll(true)}
               >
-                Clear all
+                {t('notifications.clearAll')}
               </Button>
             )}
             <Link href="/notifications/settings" className={buttonClassName('secondary', 'md')}>
@@ -197,7 +207,7 @@ export function NotificationsView(): ReactElement {
               <span className="sk-btn__icon" aria-hidden>
                 <Settings2 size={15} />
               </span>
-              <span className="sk-btn__label">Settings</span>
+              <span className="sk-btn__label">{t('notifications.settings')}</span>
             </Link>
           </div>
         }
@@ -205,11 +215,11 @@ export function NotificationsView(): ReactElement {
 
       <section className="set-section">
         <SectionHeading
-          title="Inbox"
+          title={t('notifications.inbox')}
           note={
             shown.length === items.length
               ? `${items.length} ${items.length === 1 ? 'message' : 'messages'}`
-              : `${shown.length} of ${items.length} loaded`
+              : t('notifications.ofLoaded', { shown: shown.length, items: items.length })
           }
         />
 
@@ -217,13 +227,13 @@ export function NotificationsView(): ReactElement {
           search={{
             value: query,
             onChange: setQuery,
-            label: 'Filter notifications',
-            placeholder: 'Order, AWB or wording…',
+            label: t('notifications.filterNotifications'),
+            placeholder: t('notifications.orderAwbOrWording'),
           }}
           action={
             filtering ? (
               <Button variant="ghost" size="sm" onClick={resetFilters}>
-                Reset
+                {t('notifications.reset')}
               </Button>
             ) : undefined
           }
@@ -233,21 +243,21 @@ export function NotificationsView(): ReactElement {
             the kind tabs only appear when there is more than one kind. */}
         <div className="ntf-filters">
           <Tabs
-            label="Read state"
+            label={t('notifications.readState')}
             size="sm"
             items={[
-              { id: 'all', label: 'All' },
-              { id: 'unread', label: 'Unread', count: unread },
+              { id: 'all', label: t('notifications.all') },
+              { id: 'unread', label: t('notifications.unread'), count: unread },
             ]}
             value={unreadOnly ? 'unread' : 'all'}
             onChange={(id) => setUnreadOnly(id === 'unread')}
           />
           {tabs.length > 1 && (
             <Tabs
-              label="Kind of notification"
+              label={t('notifications.kindOfNotification')}
               size="sm"
               items={[
-                { id: ALL_GROUPS, label: 'Everything', count: items.length },
+                { id: ALL_GROUPS, label: t('notifications.everything'), count: items.length },
                 ...tabs.map(([group, count]) => ({ id: group, label: group, count })),
               ]}
               value={tab === '' ? ALL_GROUPS : tab}
@@ -258,24 +268,24 @@ export function NotificationsView(): ReactElement {
 
         {feed.isLoading && items.length === 0 ? (
           <div className="set-card" data-flush>
-            <SkeletonRows rows={4} cols={2} label="Loading notifications…" />
+            <SkeletonRows rows={4} cols={2} label={t('notifications.loadingNotifications')} />
           </div>
         ) : shown.length === 0 ? (
           <EmptyState
             {...(filtering ? {} : { icon: <BellOff size={22} /> })}
-            title={filtering ? 'Nothing matches' : 'Nothing yet'}
+            title={filtering ? t('notifications.nothingMatches') : t('notifications.nothingYet')}
             description={
               filtering
                 ? hasMore
-                  ? 'Nothing in what is loaded so far. Load earlier notifications to look further back.'
-                  : 'Nothing here matches. Clear the filter to see everything again.'
-                : 'Anything needing you will appear here — a delivery that failed, a parcel coming back, money that moved.'
+                  ? t('notifications.nothingInWhatIs')
+                  : t('notifications.nothingHereMatchesClear')
+                : t('notifications.anythingNeedingYouWill')
             }
             {...(filtering
               ? {
                   action: (
                     <Button variant="secondary" onClick={resetFilters}>
-                      Clear filter
+                      {t('notifications.clearFilter')}
                     </Button>
                   ),
                 }
@@ -319,7 +329,9 @@ export function NotificationsView(): ReactElement {
                         <span className="ntf-item__kind">
                           {meta?.label ?? humaniseTopic(n.topic)}
                         </span>
-                        {isUnread && <span className="ntf-item__new">New</span>}
+                        {isUnread && (
+                          <span className="ntf-item__new">{t('notifications.new')}</span>
+                        )}
                       </span>
                       <span className="ntf-item__when sk-figure">
                         {agoLabel(n.createdAt, now)}
@@ -355,7 +367,9 @@ export function NotificationsView(): ReactElement {
                       <span className="ntf-item__text" data-open={open ? '1' : undefined}>
                         {n.body}
                       </span>
-                      {!open && <span className="ntf-item__more">Click to read it all</span>}
+                      {!open && (
+                        <span className="ntf-item__more">{t('notifications.clickToReadIt')}</span>
+                      )}
                     </button>
 
                     <div className="ntf-item__actions">
@@ -364,7 +378,7 @@ export function NotificationsView(): ReactElement {
                           order it is about. */}
                       {n.orderId !== null && (
                         <Link href={`/orders/${n.orderId}`} className="ntf-item__order">
-                          View order <ArrowRight size={12} aria-hidden />
+                          {t('notifications.viewOrder')} <ArrowRight size={12} aria-hidden />
                         </Link>
                       )}
                       <AsyncButton
@@ -372,15 +386,23 @@ export function NotificationsView(): ReactElement {
                         size="sm"
                         labels={
                           isUnread
-                            ? { idle: 'Mark read', busy: 'Marking…', done: 'Read' }
-                            : { idle: 'Mark unread', busy: 'Marking…', done: 'Unread' }
+                            ? {
+                                idle: t('notifications.markRead'),
+                                busy: t('notifications.marking'),
+                                done: t('notifications.read'),
+                              }
+                            : {
+                                idle: t('notifications.markUnread'),
+                                busy: t('notifications.marking'),
+                                done: t('notifications.unread'),
+                              }
                         }
                         onAction={() =>
                           isUnread ? markRead.mutateAsync(n.id) : markUnread.mutateAsync(n.id)
                         }
                       />
                       <Button variant="ghost" size="sm" onClick={() => setPendingDismiss(n)}>
-                        Dismiss
+                        {t('notifications.dismiss')}
                       </Button>
                       <span className="ntf-item__topic sk-ident">{n.topic}</span>
                     </div>
@@ -394,7 +416,10 @@ export function NotificationsView(): ReactElement {
         {hasMore && (
           <div className="ntf-more">
             <span className="set-faint sk-figure">
-              Showing {shown.length} of {items.length} loaded
+              {richMessage(t('notifications.showingOfLoaded'), {
+                shown: shown.length,
+                items: items.length,
+              })}
             </span>
             <Button
               variant="secondary"
@@ -407,7 +432,7 @@ export function NotificationsView(): ReactElement {
                 setCursor(feed.data?.nextCursor ?? undefined);
               }}
             >
-              Load earlier notifications
+              {t('notifications.loadEarlierNotifications')}
             </Button>
           </div>
         )}
@@ -418,7 +443,7 @@ export function NotificationsView(): ReactElement {
         onOpenChange={(next) => {
           if (!next) setPendingDismiss(null);
         }}
-        title="Dismiss this notification?"
+        title={t('notifications.dismissThisNotification')}
         entity={
           pendingDismiss === null
             ? ''
@@ -426,8 +451,8 @@ export function NotificationsView(): ReactElement {
               byTopic.get(pendingDismiss.topic)?.label ??
               humaniseTopic(pendingDismiss.topic))
         }
-        consequence="It leaves your inbox. Anybody else who was sent the same message keeps their copy."
-        confirmLabel="Dismiss"
+        consequence={t('notifications.itLeavesYourInbox')}
+        confirmLabel={t('notifications.dismiss')}
         onConfirm={() =>
           pendingDismiss === null
             ? undefined
@@ -443,10 +468,12 @@ export function NotificationsView(): ReactElement {
       <ConfirmDialog
         open={confirmDismissAll}
         onOpenChange={setConfirmDismissAll}
-        title="Clear your whole inbox?"
-        entity={`Your inbox · ${items.length} loaded${hasMore ? ', more further back' : ''}`}
-        consequence="Every notification in your inbox is dismissed. Anybody else who was sent the same messages keeps their copies."
-        confirmLabel="Clear all"
+        title={t('notifications.clearYourWholeInbox')}
+        entity={t(hasMore ? 'notifications.inboxLoadedMore' : 'notifications.inboxLoaded', {
+          count: items.length,
+        })}
+        consequence={t('notifications.everyNotificationInYour')}
+        confirmLabel={t('notifications.clearAll')}
         destructive
         onConfirm={() =>
           dismissAll.mutateAsync().then(

@@ -6,8 +6,9 @@ import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useRecipientAddresses } from '@/lib/account-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import './customers.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Where this customer has actually taken delivery.
@@ -22,32 +23,34 @@ import './customers.css';
  * than an RTO afterwards.
  */
 export function AddressHistory({ customerId }: { readonly customerId: string }): ReactElement {
+  const t = useT();
   const list = useRecipientAddresses({ customerId });
   const items = list.data ?? [];
 
-  if (list.isLoading) return <SkeletonRows rows={2} label="Loading delivery history…" />;
+  if (list.isLoading)
+    return <SkeletonRows rows={2} label={t('customers.loadingDeliveryHistory')} />;
   if (list.isError) {
-    return <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />;
+    return <ErrorState message={verdict(list.error, t)} retry={() => void list.refetch()} />;
   }
   if (items.length === 0) {
     return (
       <EmptyState
         bare
-        title="No delivery history"
-        description="Addresses appear here once an order has been placed to them."
+        title={t('customers.noDeliveryHistory')}
+        description={t('customers.addressesAppearHereOnce')}
       />
     );
   }
 
   return (
-    <Table caption="Where this customer has taken delivery">
+    <Table caption={t('customers.whereThisCustomerHas')}>
       <THead>
         <Tr>
-          <Th>Address</Th>
-          <Th align="right">Orders</Th>
-          <Th align="right">Delivered</Th>
-          <Th align="right">Returned</Th>
-          <Th>Last used</Th>
+          <Th>{t('customers.address')}</Th>
+          <Th align="right">{t('customers.orders')}</Th>
+          <Th align="right">{t('customers.delivered')}</Th>
+          <Th align="right">{t('customers.returned')}</Th>
+          <Th>{t('customers.lastUsed')}</Th>
         </Tr>
       </THead>
       <TBody>

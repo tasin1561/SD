@@ -56,7 +56,7 @@ import {
 } from '@skydrop/ui/status';
 import { useCancelConsignment, useConsignment, useConsignmentEvents } from '@/lib/account-hooks';
 import { useSellerFreight } from '@/lib/ops-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { EditReceiptPanel } from '../../_components/edit-receipt-panel';
@@ -77,6 +77,8 @@ import {
   stamp,
   statusWords,
 } from '../../_components/consignment-words';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /** The server's floor for a cancellation reason. Cosmetic — it refuses
  *  a short one regardless, and that refusal is shown verbatim. */
@@ -96,20 +98,21 @@ const MIN_REASON = 10;
  * counts exist.
  */
 export function ConsignmentDetailView({ id }: { id: string }): ReactElement {
+  const t = useT();
   const detail = useConsignment(id);
 
   return (
     <AreaPage>
       <BackLink href="/inbound">
-        <ArrowLeft size={14} /> Add stock
+        <ArrowLeft size={14} /> {t('inboundDetail.addStock2')}
       </BackLink>
 
       {detail.isLoading ? (
-        <SkeletonRows rows={6} label="Loading consignment…" />
+        <SkeletonRows rows={6} label={t('inboundDetail.loadingConsignment')} />
       ) : detail.isError ? (
-        <ErrorState message={serverVerdict(detail.error)} retry={() => void detail.refetch()} />
+        <ErrorState message={verdict(detail.error, t)} retry={() => void detail.refetch()} />
       ) : detail.data === undefined ? (
-        <ErrorState message="Consignment not found." />
+        <ErrorState message={t('inboundDetail.consignmentNotFound')} />
       ) : (
         <ConsignmentBody consignment={detail.data} />
       )}
@@ -126,6 +129,7 @@ export function ConsignmentDetailView({ id }: { id: string }): ReactElement {
  * Passing it in once makes it a non-null parameter for the whole subtree.
  */
 function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): ReactElement {
+  const t = useT();
   const events = useConsignmentEvents(consignment.id);
   const canManage = can(useSellerIdentity(), 'inbound.manage');
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -140,9 +144,9 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Stock' },
-          { label: 'Add stock', href: '/inbound' },
+          { label: t('inboundDetail.clientConsole') },
+          { label: t('inboundDetail.stock') },
+          { label: t('inboundDetail.addStock'), href: '/inbound' },
           { label: consignment.consignmentNumber },
         ]}
         Link={Link}
@@ -153,7 +157,11 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
             <MetaFact tone="accent">{routeWords(consignment.route).title}</MetaFact>
             <MetaFact dot>{statusWords(consignment.status)}</MetaFact>
             {consignment.sellerReference !== null && (
-              <MetaFact>Your ref {consignment.sellerReference}</MetaFact>
+              <MetaFact>
+                {richMessage(t('inboundDetail.yourRef'), {
+                  sellerReference: consignment.sellerReference,
+                })}
+              </MetaFact>
             )}
           </MetaFacts>
         }
@@ -165,7 +173,7 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
               icon={<XCircle size={14} />}
               onClick={() => setCancelOpen(true)}
             >
-              Cancel consignment
+              {t('inboundDetail.cancelConsignment')}
             </Button>
           ) : undefined
         }
@@ -179,22 +187,26 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
           out rather than shown as zero. */}
       <KpiGrid>
         <KpiCard
-          label="Products declared"
+          label={t('inboundDetail.productsDeclared')}
           icon={<Boxes size={14} />}
           value={productCount(consignment)}
           format={rawCount}
-          unit="SKUs"
+          unit={t('inboundDetail.skus')}
           tone="neutral"
           // `shortDate(null)` is an em dash, so the unguarded form read
           // "Expected —." on every consignment declared without a date.
           {...(consignment.expectedArrivalAt === null
             ? {}
-            : { hint: `Expected ${shortDate(consignment.expectedArrivalAt)}.` })}
+            : {
+                hint: t('inboundDetail.expected', {
+                  expectedArrivalAt: shortDate(consignment.expectedArrivalAt),
+                }),
+              })}
         />
         {progress !== null && (
           <>
             <KpiCard
-              label="Received in India"
+              label={t('inboundDetail.receivedInIndia')}
               icon={<PackageCheck size={14} />}
               value={progress.receivedInIndia}
               format={rawCount}
@@ -207,20 +219,20 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
               // cancelled or still-announced consignment reads 0 here.
               hint={
                 progress.receivedInIndia === 0
-                  ? 'Nothing has been counted in India yet.'
+                  ? t('inboundDetail.nothingHasBeenCounted')
                   : progress.stillToCome === 0
-                    ? 'All of it has landed and been counted.'
-                    : 'On the shelf and sellable.'
+                    ? t('inboundDetail.allOfItHas')
+                    : t('inboundDetail.onTheShelfAnd')
               }
             />
             <KpiCard
               label={
                 <GlossaryTerm
-                  title="Still to come"
+                  title={t('inboundDetail.stillToCome')}
                   icon={<Plane size={16} />}
-                  description="Units declared on this consignment that have not been counted in India yet — waiting in Dhaka or in the air. They are not sellable until they land."
+                  description={t('inboundDetail.unitsDeclaredOnThis')}
                 >
-                  Still to come
+                  {t('inboundDetail.stillToCome')}
                 </GlossaryTerm>
               }
               icon={<Plane size={14} />}
@@ -239,18 +251,21 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
               */
               hint={
                 progress.lostInTransit > 0
-                  ? `${progress.lostInTransit} unit${progress.lostInTransit === 1 ? '' : 's'} left Bangladesh and did not arrive — see the arrival count below.`
-                  : 'In Dhaka or in the air — not sellable yet.'
+                  ? t('inboundDetail.unitLeftBangladeshAnd', {
+                      lostInTransit: progress.lostInTransit,
+                      plural: progress.lostInTransit === 1 ? '' : 's',
+                    })
+                  : t('inboundDetail.inDhakaOrIn')
               }
             />
           </>
         )}
         <KpiCard
-          label="Inbound freight"
+          label={t('inboundDetail.inboundFreight')}
           icon={<Wallet size={14} />}
           figure={
             !billed ? (
-              <span className="inv-faint">Not billed</span>
+              <span className="inv-faint">{t('inboundDetail.notBilled')}</span>
             ) : (
               <Money
                 amount={consignment.freightCharges
@@ -276,22 +291,28 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
           // (2026-09-30) no bill on any box ever had.
           hint={
             consignment.freightCharges.length === 0
-              ? 'Nothing has been billed against this yet.'
+              ? t('inboundDetail.nothingHasBeenBilled')
               : consignment.freightCharges.length === 1
-                ? `One bill · ${statusLabel(consignment.freightCharges[0]?.status ?? InboundFreightStatus.PENDING)}`
-                : `${consignment.freightCharges.length} bills, one per arrival`
+                ? t('inboundDetail.oneBill', {
+                    pending: statusLabel(
+                      consignment.freightCharges[0]?.status ?? InboundFreightStatus.PENDING,
+                    ),
+                  })
+                : t('inboundDetail.billsOnePerArrival', {
+                    freightCharges: consignment.freightCharges.length,
+                  })
           }
         />
       </KpiGrid>
 
-      <AreaSection title="Consignment" note="The facts we hold about it.">
+      <AreaSection title={t('inboundDetail.consignment')} note={t('inboundDetail.theFactsWeHold')}>
         <Panel>
           <div className="inv-stack">
             <Facts
               columns={3}
               items={[
                 {
-                  label: 'Where it is',
+                  label: t('inboundDetail.whereItIs'),
                   value: (
                     <StatusChip
                       kind={consignmentStatusKind(consignment.status)}
@@ -300,26 +321,32 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
                     />
                   ),
                 },
-                { label: 'Route', value: routeWords(consignment.route).title },
-                { label: 'Expected arrival', value: shortDate(consignment.expectedArrivalAt) },
+                { label: t('inboundDetail.route'), value: routeWords(consignment.route).title },
                 {
-                  label: 'Your reference',
+                  label: t('inboundDetail.expectedArrival'),
+                  value: shortDate(consignment.expectedArrivalAt),
+                },
+                {
+                  label: t('inboundDetail.yourReference'),
                   value: consignment.sellerReference ?? <Dash />,
                 },
-                { label: 'Products', value: <Num value={productCount(consignment)} /> },
+                {
+                  label: t('inboundDetail.products'),
+                  value: <Num value={productCount(consignment)} />,
+                },
                 ...(progress === null
                   ? []
                   : [
                       {
-                        label: 'Received in India',
+                        label: t('inboundDetail.receivedInIndia'),
                         value: <Num value={progress.receivedInIndia} />,
                       },
                       {
-                        label: 'Still to come',
+                        label: t('inboundDetail.stillToCome'),
                         value: (
                           <span className="inv-baseline">
                             <Num value={progress.stillToCome} />
-                            <span className="inv-sub">in Dhaka or in the air</span>
+                            <span className="inv-sub">{t('inboundDetail.inDhakaOrIn2')}</span>
                           </span>
                         ),
                       },
@@ -330,7 +357,10 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
               <div className="inv-callout" data-tone="warn">
                 <XCircle size={16} aria-hidden className="inv-callout__icon" />
                 <span>
-                  Cancelled {shortDate(consignment.cancelledAt)} — {consignment.cancelReason}
+                  {richMessage(t('inboundDetail.cancelled'), {
+                    cancelledAt: shortDate(consignment.cancelledAt),
+                    cancelReason: consignment.cancelReason,
+                  })}
                 </span>
               </div>
             )}
@@ -339,14 +369,14 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
       </AreaSection>
 
       <AreaSection
-        title="What has happened"
-        note="Oldest first. Added as it happens — you do not need to ask."
+        title={t('inboundDetail.whatHasHappened')}
+        note={t('inboundDetail.oldestFirstAddedAs')}
       >
         <Panel>
           {events.isLoading ? (
-            <SkeletonRows rows={3} label="Loading timeline…" />
+            <SkeletonRows rows={3} label={t('inboundDetail.loadingTimeline')} />
           ) : events.isError ? (
-            <ErrorState message={serverVerdict(events.error)} retry={() => void events.refetch()} />
+            <ErrorState message={verdict(events.error, t)} retry={() => void events.refetch()} />
           ) : (
             <EventTimeline events={events.data ?? []} consignment={consignment} />
           )}
@@ -354,9 +384,12 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
       </AreaSection>
 
       {consignment.receipts.length === 0 ? (
-        <AreaSection title="Each stop" note="What was declared, and what the warehouse counted.">
+        <AreaSection
+          title={t('inboundDetail.eachStop')}
+          note={t('inboundDetail.whatWasDeclaredAnd')}
+        >
           <Panel>
-            <Note>Nothing has been set up to receive this yet.</Note>
+            <Note>{t('inboundDetail.nothingHasBeenSet')}</Note>
           </Panel>
         </AreaSection>
       ) : (
@@ -373,10 +406,7 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
         ))
       )}
 
-      <AreaSection
-        title="Inbound freight"
-        note="What it cost to move this consignment, and how much of that has been charged so far."
-      >
+      <AreaSection title={t('inboundDetail.inboundFreight')} note={t('inboundDetail.whatItCostTo')}>
         <ConsignmentFreight consignmentId={consignment.id} />
       </AreaSection>
 
@@ -402,13 +432,9 @@ function EventTimeline({
   events: readonly ConsignmentEventView[];
   consignment: ConsignmentView;
 }): ReactElement {
+  const t = useT();
   if (events.length === 0) {
-    return (
-      <Note>
-        Nothing has happened yet beyond announcing it. Steps appear here as the warehouse counts,
-        labels, ships and receives.
-      </Note>
-    );
+    return <Note>{t('inboundDetail.nothingHasHappenedYet')}</Note>;
   }
   // Every event HAS happened, so each is done; the latest is the current
   // step while the consignment is still moving, and done once it has
@@ -431,12 +457,14 @@ function EventTimeline({
   });
   return (
     <Timeline
-      label={`What has happened to ${consignment.consignmentNumber}`}
+      label={t('inboundDetail.whatHasHappenedTo', {
+        consignmentNumber: consignment.consignmentNumber,
+      })}
       steps={steps}
       collapseEarlier={{
         keep: 4,
-        showLabel: 'Show {n} earlier steps',
-        hideLabel: 'Hide the earlier steps',
+        showLabel: t('inboundDetail.showEarlierSteps'),
+        hideLabel: t('inboundDetail.hideTheEarlierSteps'),
       }}
     />
   );
@@ -460,6 +488,7 @@ function LegCard({
   readonly canManage: boolean;
   readonly onCorrect: () => void;
 }): ReactElement {
+  const t = useT();
   const counted = countedUnits(leg);
   const declared = declaredUnits(leg);
   /**
@@ -499,7 +528,7 @@ function LegCard({
             icon={<ClipboardPen size={14} />}
             onClick={onCorrect}
           >
-            Correct contents
+            {t('inboundDetail.correctContents')}
           </Button>
         ) : undefined
       }
@@ -510,9 +539,12 @@ function LegCard({
           <Facts
             columns={3}
             items={[
-              { label: 'Declared', value: <Num value={declared} suffix="units" /> },
               {
-                label: 'Counted',
+                label: t('inboundDetail.declared'),
+                value: <Num value={declared} suffix="units" />,
+              },
+              {
+                label: t('inboundDetail.counted'),
                 value:
                   counted === null ? (
                     <span className="inv-muted">{legProgress(leg).headline}</span>
@@ -521,7 +553,10 @@ function LegCard({
                   ),
               },
               {
-                label: leg.dispatchedAt !== null ? 'Left Bangladesh' : 'Received',
+                label:
+                  leg.dispatchedAt !== null
+                    ? t('inboundDetail.leftBangladesh')
+                    : t('inboundDetail.received'),
                 value:
                   leg.dispatchedAt !== null
                     ? shortDate(leg.dispatchedAt)
@@ -540,26 +575,22 @@ function LegCard({
             // to say what it MEANS.
             <div className="inv-callout" data-tone="warn">
               <TriangleAlert size={16} aria-hidden className="inv-callout__icon" />
-              <span>
-                Some lines were counted differently — the per-product figures are below. Nothing is
-                blocked by it: your stock is what was counted. Raise an issue if the difference is
-                not yours.
-              </span>
+              <span>{t('inboundDetail.someLinesWereCounted')}</span>
             </div>
           )}
 
-          <Table caption={`Counts at ${leg.receiptNumber}`}>
+          <Table caption={t('inboundDetail.countsAt', { receiptNumber: leg.receiptNumber })}>
             <THead>
               <Tr>
-                <Th>Product</Th>
-                <Th align="right">Declared</Th>
-                <Th align="right">Counted</Th>
-                <Th align="right">Difference</Th>
+                <Th>{t('inboundDetail.product')}</Th>
+                <Th align="right">{t('inboundDetail.declared')}</Th>
+                <Th align="right">{t('inboundDetail.counted')}</Th>
+                <Th align="right">{t('inboundDetail.difference')}</Th>
               </Tr>
             </THead>
             {leg.lines.length === 0 ? (
               <TBody>
-                <TableEmpty colSpan={4}>Nothing has been listed against this stop yet.</TableEmpty>
+                <TableEmpty colSpan={4}>{t('inboundDetail.nothingHasBeenListed')}</TableEmpty>
               </TBody>
             ) : (
               <TBody>
@@ -586,7 +617,7 @@ function LegCard({
                           // beside it — a variance against a half-finished
                           // count is a shortfall that mostly is not real.
                           <span className="inv-muted" style={{ fontStyle: 'italic' }}>
-                            <Num value={l.receivedQty ?? 0} /> so far
+                            <Num value={l.receivedQty ?? 0} /> {t('inboundDetail.soFar')}
                           </span>
                         ) : (
                           <span className="inv-muted">—</span>
@@ -634,6 +665,7 @@ function CancelConsignmentModal({
   readonly consignment: ConsignmentView;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const cancel = useCancelConsignment();
   const toast = useToast();
   const [reason, setReason] = useState('');
@@ -650,7 +682,10 @@ function CancelConsignmentModal({
       {
         onSuccess: (res) => {
           toast.success(
-            `${consignment.consignmentNumber} cancelled — ${res.unitsReturned} units returned to you`,
+            t('inboundDetail.cancelledUnitsReturnedTo', {
+              consignmentNumber: consignment.consignmentNumber,
+              unitsReturned: res.unitsReturned,
+            }),
           );
           close();
         },
@@ -671,17 +706,20 @@ function CancelConsignmentModal({
       icon={<TriangleAlert size={18} />}
       size="sm"
       locked={cancel.isPending}
-      title={`Cancel ${consignment.consignmentNumber}?`}
-      description="The goods come back to you and anything already counted is taken off your stock. Only possible before the consignment leaves for India."
+      title={t('inboundDetail.cancel', { consignmentNumber: consignment.consignmentNumber })}
+      description={t('inboundDetail.theGoodsComeBack')}
       footer={
         <DialogFooter>
           <Button variant="secondary" size="md" onClick={close} disabled={cancel.isPending}>
-            Keep it
+            {t('inboundDetail.keepIt')}
           </Button>
           <AsyncButton
             variant="destructive"
             size="md"
-            labels={{ idle: 'Cancel consignment', busy: 'Cancelling…' }}
+            labels={{
+              idle: t('inboundDetail.cancelConsignment'),
+              busy: t('inboundDetail.cancelling'),
+            }}
             state={mutationPhase(cancel)}
             disabled={reason.trim().length < MIN_REASON || cancel.isPending}
             onClick={submitCancel}
@@ -700,15 +738,15 @@ function CancelConsignmentModal({
           </span>
         </div>
         <TextArea
-          label="Why it is coming back"
+          label={t('inboundDetail.whyItIsComing')}
           id="cn-cancel-reason"
-          hint="At least ten characters. Kept on the record permanently."
+          hint={t('inboundDetail.atLeastTenCharacters')}
           rows={3}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
 
-        {cancel.error !== null && <InlineError message={serverVerdict(cancel.error)} />}
+        {cancel.error !== null && <InlineError message={verdict(cancel.error, t)} />}
       </div>
     </Dialog>
   );
@@ -729,11 +767,12 @@ function CancelConsignmentModal({
  * a seller endpoint for it is the next step.
  */
 function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string }): ReactElement {
+  const t = useT();
   const q = useSellerFreight({});
 
-  if (q.isLoading) return <SkeletonRows rows={2} label="Loading freight…" />;
+  if (q.isLoading) return <SkeletonRows rows={2} label={t('inboundDetail.loadingFreight')} />;
   if (q.isError) {
-    return <ErrorState message={serverVerdict(q.error)} retry={() => void q.refetch()} />;
+    return <ErrorState message={verdict(q.error, t)} retry={() => void q.refetch()} />;
   }
 
   const bills = (q.data?.items ?? []).filter((f) => f.consignmentId === consignmentId);
@@ -741,11 +780,7 @@ function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string 
   if (bills.length === 0) {
     return (
       <Panel>
-        <Note>
-          Nothing billed yet. A freight bill appears here once we have the forwarder&apos;s figure
-          for this consignment — on pay-in-advance terms that is after the Dhaka count, otherwise
-          after it lands in India.
-        </Note>
+        <Note>{t('inboundDetail.nothingBilledYetA')}</Note>
       </Panel>
     );
   }
@@ -758,7 +793,7 @@ function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string 
             <div className="inv-leg-head">
               <h3 className="inv-leg-title">
                 <Receipt size={15} aria-hidden style={{ verticalAlign: '-2px', marginRight: 6 }} />
-                {f.receiptNumber ?? 'Freight bill'}
+                {f.receiptNumber ?? t('inboundDetail.freightBill')}
               </h3>
               <StatusChip
                 kind={inboundFreightStatusKind(f.status)}
@@ -770,7 +805,7 @@ function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string 
               columns={3}
               items={[
                 {
-                  label: 'Total',
+                  label: t('inboundDetail.total'),
                   value: (
                     <span className="inv-combo__text">
                       <Money amount={f.totalInr} />
@@ -780,30 +815,36 @@ function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string 
                           without it the total cannot be checked. */}
                       {f.agreedCurrency !== 'INR' && (
                         <span className="inv-sub">
-                          <Money
-                            amount={f.agreedAmount}
-                            currency={f.agreedCurrency}
-                            convert={false}
-                          />{' '}
-                          agreed, converted at the rate when it was billed
+                          {richMessage(t('inboundDetail.agreedConvertedAtThe'), {
+                            money: (
+                              <Money
+                                amount={f.agreedAmount}
+                                currency={f.agreedCurrency}
+                                convert={false}
+                              />
+                            ),
+                          })}
                         </span>
                       )}
                     </span>
                   ),
                 },
-                { label: 'Charged so far', value: <Money amount={f.amountSettledInr} /> },
                 {
-                  label: 'Still to come',
+                  label: t('inboundDetail.chargedSoFar'),
+                  value: <Money amount={f.amountSettledInr} />,
+                },
+                {
+                  label: t('inboundDetail.stillToCome'),
                   value:
                     Number(f.outstandingInr) === 0 ? (
-                      <span className="inv-muted">Nothing</span>
+                      <span className="inv-muted">{t('inboundDetail.nothing')}</span>
                     ) : (
                       <Money amount={f.outstandingInr} direction="debit" />
                     ),
                 },
-                { label: 'Terms', value: freightModeExplainer(f.mode, 'SELLER') },
+                { label: t('inboundDetail.terms'), value: freightModeExplainer(f.mode, 'SELLER') },
                 {
-                  label: 'Units charged',
+                  label: t('inboundDetail.unitsCharged'),
                   value: (
                     <span className="inv-baseline">
                       <Num value={f.unitsSettled} /> <span>of</span> <Num value={f.totalUnits} />
@@ -811,10 +852,10 @@ function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string 
                   ),
                 },
                 {
-                  label: 'Service charge',
+                  label: t('inboundDetail.serviceCharge'),
                   value:
                     f.serviceChargeInr === null || Number(f.serviceChargeInr) === 0 ? (
-                      <span className="inv-muted">None</span>
+                      <span className="inv-muted">{t('inboundDetail.none')}</span>
                     ) : (
                       <Money amount={f.serviceChargeInr} />
                     ),

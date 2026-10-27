@@ -9,7 +9,7 @@ import {
   useRegisterImage,
   useVariantImages,
 } from '@/lib/api-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { Button } from '@skydrop/ui/app/button';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { DropZone } from '@skydrop/ui/app/drop-zone';
@@ -17,6 +17,8 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Note } from '@/app/(authed)/inventory/_components/stock-ui';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * Variant image upload — drag-drop multi (up to MAX concurrent,
@@ -63,6 +65,7 @@ export function VariantImageUpload({
   /** Named in the delete confirm, so it says whose picture goes. */
   skuCode?: string | undefined;
 }): ReactElement {
+  const t = useT();
   const images = useVariantImages(variantId);
   const presign = usePresignImage();
   const register = useRegisterImage();
@@ -88,7 +91,7 @@ export function VariantImageUpload({
         errorCode: ACCEPTED_TYPES.includes(file.type) ? null : 'INVALID_TYPE',
         errorMessage: ACCEPTED_TYPES.includes(file.type)
           ? null
-          : `Only ${ACCEPTED_TYPES.join(', ')} accepted.`,
+          : t('variantDetail.onlyAccepted', { acceptedTypes: ACCEPTED_TYPES.join(', ') }),
       }));
       setQueue((q) => [...q, ...items].slice(-MAX_UPLOAD_BATCH * 2));
       // Kick off uploads for queued items.
@@ -147,7 +150,7 @@ export function VariantImageUpload({
         // body carries the server's {code, message}; we read both
         // straight from there.
         let code = 'UPLOAD_FAILED';
-        let message = 'Upload failed.';
+        let message = t('variantDetail.uploadFailed');
         if (err instanceof ApiError) {
           if (
             typeof err.body === 'object' &&
@@ -185,11 +188,13 @@ export function VariantImageUpload({
   // presign → PUT → register flow above is unchanged.
   return (
     <div className="inv-stack">
-      <Note>Drag up to {MAX_UPLOAD_BATCH} files at once. JPG / PNG / WEBP.</Note>
+      <Note>
+        {richMessage(t('variantDetail.dragUpToFiles'), { maxUploadBatch: MAX_UPLOAD_BATCH })}
+      </Note>
       <DropZone
-        label="Drop images here or click to browse"
-        hint={`JPG / PNG / WEBP · up to ${MAX_UPLOAD_BATCH} at once`}
-        buttonText="Choose images"
+        label={t('variantDetail.dropImagesHereOr')}
+        hint={t('variantDetail.jpgPngWebpUp', { maxUploadBatch: MAX_UPLOAD_BATCH })}
+        buttonText={t('variantDetail.chooseImages')}
         accept={ACCEPTED_TYPES.join(',')}
         multiple
         showFiles={false}
@@ -201,7 +206,7 @@ export function VariantImageUpload({
 
       {/* Upload queue */}
       {queue.length > 0 && (
-        <ul className="prd-uploads" aria-label="Uploads">
+        <ul className="prd-uploads" aria-label={t('variantDetail.uploads')}>
           {queue.map((item) => (
             <li key={item.id} className="prd-upload">
               <span className="prd-upload__name">{item.file.name}</span>
@@ -219,20 +224,20 @@ export function VariantImageUpload({
       {/* Persisted images */}
       <div>
         {images.isLoading ? (
-          <SkeletonRows rows={2} label="Loading images…" />
+          <SkeletonRows rows={2} label={t('variantDetail.loadingImages')} />
         ) : images.isError ? (
           <ErrorState
-            message={images.error?.message ?? 'Failed to load images.'}
+            message={images.error?.message ?? t('variantDetail.failedToLoadImages')}
             retry={() => void images.refetch()}
           />
         ) : !images.data || images.data.length === 0 ? (
           <EmptyState
             bare
-            title="No images yet"
-            description="Drop a file above to upload your first."
+            title={t('variantDetail.noImagesYet')}
+            description={t('variantDetail.dropAFileAbove')}
           />
         ) : (
-          <ul className="prd-gallery" aria-label="Pictures">
+          <ul className="prd-gallery" aria-label={t('variantDetail.pictures')}>
             {images.data.map((img, i) => (
               <li key={img.id} className="prd-gallery__item">
                 {/* Plain img — Next/Image would need a remotePatterns
@@ -246,7 +251,7 @@ export function VariantImageUpload({
                        and for ever if that job failed. */}
                 <img
                   src={img.thumbnailUrl ?? img.url}
-                  alt={img.altText ?? 'Variant image'}
+                  alt={img.altText ?? t('variantDetail.variantImage')}
                   className="prd-gallery__img"
                 />
                 <div className="prd-gallery__bar">
@@ -265,8 +270,8 @@ export function VariantImageUpload({
                       });
                     }}
                     disabled={deleteImg.isPending}
-                    title="Delete image"
-                    aria-label="Delete image"
+                    title={t('variantDetail.deleteImage')}
+                    aria-label={t('variantDetail.deleteImage')}
                   />
                 </div>
               </li>
@@ -283,14 +288,19 @@ export function VariantImageUpload({
             setDeleteError(null);
           }
         }}
-        title="Delete this picture?"
+        title={t('variantDetail.deleteThisPicture')}
         entity={
           pendingDelete === null
             ? ''
-            : `${skuCode ?? 'This SKU'} · picture ${pendingDelete.position} of ${total} · ${pendingDelete.size}`
+            : t('variantDetail.pictureOfTotal', {
+                sku: skuCode ?? t('variantDetail.thisSku'),
+                position: pendingDelete.position,
+                total,
+                size: pendingDelete.size,
+              })
         }
-        consequence="It is removed from this SKU and customers stop seeing it beside the product. To show it again you upload it again."
-        confirmLabel="Delete picture"
+        consequence={t('variantDetail.itIsRemovedFrom')}
+        confirmLabel={t('variantDetail.deletePicture')}
         destructive
         error={deleteError ?? undefined}
         onConfirm={async () => {
@@ -298,7 +308,7 @@ export function VariantImageUpload({
           try {
             await deleteImg.mutateAsync({ variantId, imageId: pendingDelete.id });
           } catch (err) {
-            setDeleteError(serverVerdict(err));
+            setDeleteError(verdict(err, t));
             throw err;
           }
         }}

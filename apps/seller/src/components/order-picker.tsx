@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { ComboSelect, type ComboOption } from '@skydrop/ui/app/combo-select';
 import { statusLabel } from '@skydrop/ui/status';
 import { useOrdersList } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
 
 /** Long enough that a stray keystroke does not hit the API. */
 const MIN_QUERY = 2;
@@ -47,7 +48,7 @@ const PAGE_SIZE = 8;
 export function OrderPicker({
   value,
   onChange,
-  label = 'Order',
+  label,
   hint,
   disabled,
 }: {
@@ -57,12 +58,13 @@ export function OrderPicker({
   readonly hint?: string;
   readonly disabled?: boolean;
 }): ReactElement {
+  const t = useT();
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(query.trim()), DEBOUNCE_MS);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebounced(query.trim()), DEBOUNCE_MS);
+    return () => clearTimeout(timer);
   }, [query]);
 
   const enabled = debounced.length >= MIN_QUERY;
@@ -83,7 +85,7 @@ export function OrderPicker({
   return (
     <ComboSelect
       id="order-picker"
-      label={label}
+      label={label ?? t('orderPicker.order')}
       hint={hint}
       disabled={disabled}
       remote
@@ -91,14 +93,14 @@ export function OrderPicker({
       value={value}
       onChange={(next) => onChange(next)}
       onQueryChange={setQuery}
-      placeholder="Order number, name, phone or waybill…"
+      placeholder={t('orderPicker.orderNumberNamePhone')}
       autoComplete="off"
       emptyText={
         !enabled
-          ? 'Type an order number, a name, a phone number or a waybill'
+          ? t('orderPicker.typeAnOrderNumber')
           : list.isFetching
-            ? 'Searching…'
-            : 'No order of yours matches that'
+            ? t('orderPicker.searching')
+            : t('orderPicker.noOrderOfYours')
       }
     />
   );

@@ -1,0 +1,130 @@
+import { defineMessages } from '../define';
+
+/** Copy owned by the "resellerReports" feature. */
+export const resellerReports = defineMessages({
+  'resellerReports.clientConsole': ['Client console', 'Client console'],
+  'resellerReports.reselling': ['Reselling', 'Reselling'],
+  'resellerReports.reports': ['Reports', 'Reports'],
+  'resellerReports.memberStoreReports': ['Member store reports', 'Member store reports'],
+  'resellerReports.howEachOfYour': [
+    'How each of your member stores is doing, what it earned you, and when one pauses itself for too many returns.',
+    'How each of your member stores is doing, what it earned you, and when one pauses itself for too many returns.',
+  ],
+  'resellerReports.autoPauseOn': ['{autoPaused} auto-pause on', '{autoPaused} auto-pause on'],
+  'resellerReports.stockForecast': ['Stock forecast', 'Stock forecast'],
+  'resellerReports.ordersPlaced': ['Orders placed', 'Orders placed'],
+  'resellerReports.byYourMemberStores': [
+    'By your member stores, in this window.',
+    'By your member stores, in this window.',
+  ],
+  'resellerReports.unitsDelivered': ['Units delivered', 'Units delivered'],
+  'resellerReports.reachedACustomerAnd': [
+    'Reached a customer and stayed there.',
+    'Reached a customer and stayed there.',
+  ],
+  'resellerReports.marginOnWhatShipped': ['Margin on what shipped', 'Margin on what shipped'],
+  'resellerReports.linesWeCouldPrice': ['Lines we could price', 'Lines we could price'],
+  'resellerReports.transferPriceLessYour': [
+    'Transfer price less your unit cost, where the cost is recorded.',
+    'Transfer price less your unit cost, where the cost is recorded.',
+  ],
+  'resellerReports.autoPauseArmed': ['Auto-pause armed', 'Auto-pause armed'],
+  'resellerReports.storesThatStopThemselves': [
+    'Stores that stop themselves when too many parcels come back.',
+    'Stores that stop themselves when too many parcels come back.',
+  ],
+  'resellerReports.theWindow': ['The window', 'The window'],
+  'resellerReports.daysAreCountedIn': [
+    'Days are counted in IST, the same as everything else on your account.',
+    'Days are counted in IST, the same as everything else on your account.',
+  ],
+  'resellerReports.from': ['From', 'From'],
+  'resellerReports.to': ['To', 'To'],
+  'resellerReports.loadingTheScorecards': ['Loading the scorecards', 'Loading the scorecards'],
+  'resellerReports.noMemberStoresYet': ['No member stores yet', 'No member stores yet'],
+  'resellerReports.openOneForA': [
+    'Open one for a business that will resell your stock, and its numbers appear here.',
+    'Open one for a business that will resell your stock, and its numbers appear here.',
+  ],
+  'resellerReports.openAMemberStore': ['Open a member store', 'Open a member store'],
+  'resellerReports.scorecards': ['Scorecards', 'Scorecards'],
+  'resellerReports.ratesLeaveOutOrders': [
+    'Rates leave out orders whose outcome is not known yet.',
+    'Rates leave out orders whose outcome is not known yet.',
+  ],
+  'resellerReports.store': ['Store', 'Store'],
+  'resellerReports.placed': ['Placed', 'Placed'],
+  'resellerReports.confirmed': ['Confirmed', 'Confirmed'],
+  'resellerReports.cancelled': ['Cancelled', 'Cancelled'],
+  'resellerReports.delivered': ['Delivered', 'Delivered'],
+  'resellerReports.returned': ['Returned', 'Returned'],
+  'resellerReports.units': ['Units', 'Units'],
+  'resellerReports.margin': ['Margin', 'Margin'],
+  'resellerReports.balance': ['Balance', 'Balance'],
+  'resellerReports.autoPause': ['Auto-pause', 'Auto-pause'],
+  'resellerReports.costKnown': [
+    'cost known {linesWithCost}/{lines}',
+    'cost known {linesWithCost}/{lines}',
+  ],
+  'resellerReports.off': ['Off', 'Off'],
+  'resellerReports.overD': [
+    '> {returnRatePercent}% over {windowDays}d',
+    '> {returnRatePercent}% over {windowDays}d',
+  ],
+  'resellerReports.change': ['Change', 'Change'],
+  'resellerReports.storesRankedByWhat': [
+    'Stores ranked by what they made you',
+    'Stores ranked by what they made you',
+  ],
+  'resellerReports.walletCreditsLessCharges': [
+    'Wallet credits less charges, less the cost of the goods delivered where a cost is recorded.',
+    'Wallet credits less charges, less the cost of the goods delivered where a cost is recorded.',
+  ],
+  'resellerReports.profit': ['Profit', 'Profit'],
+  'resellerReports.costKnown2': ['Cost known', 'Cost known'],
+  'resellerReports.transferRevenueByStore': [
+    'Transfer revenue by store',
+    'Transfer revenue by store',
+  ],
+  'resellerReports.everyWalletEntryIn': [
+    "Every wallet entry in the window naming one of that store's orders.",
+    "Every wallet entry in the window naming one of that store's orders.",
+  ],
+  'resellerReports.loadingTransferRevenue': [
+    'Loading transfer revenue',
+    'Loading transfer revenue',
+  ],
+  'resellerReports.nothingOnYourWallet': [
+    'Nothing on your wallet from a store in this window',
+    'Nothing on your wallet from a store in this window',
+  ],
+  'resellerReports.creditsAndChargesAppear': [
+    "Credits and charges appear here once a store's orders reach the point they are paid.",
+    "Credits and charges appear here once a store's orders reach the point they are paid.",
+  ],
+  'resellerReports.credited': ['Credited', 'Credited'],
+  'resellerReports.charged': ['Charged', 'Charged'],
+  'resellerReports.net': ['Net', 'Net'],
+  'resellerReports.deliveredTransferValue': [
+    'Delivered (transfer value)',
+    'Delivered (transfer value)',
+  ],
+  'resellerReports.latest': [', latest {at}', ', latest {at}'],
+  'resellerReports.saved': ['Saved.', 'Saved.'],
+  'resellerReports.autoPause2': ['Auto-pause “{store}”', 'Auto-pause “{store}”'],
+  'resellerReports.pauseThisStoreAutomatically': [
+    'Pause this store automatically — no new orders — when more of its parcels come back than you allow. Orders already placed carry on; you resume it yourself. After you resume, only parcels that come back afterwards count.',
+    'Pause this store automatically — no new orders — when more of its parcels come back than you allow. Orders already placed carry on; you resume it yourself. After you resume, only parcels that come back afterwards count.',
+  ],
+  'resellerReports.cancel': ['Cancel', 'Cancel'],
+  'resellerReports.save': ['Save', 'Save'],
+  'resellerReports.saving': ['Saving…', 'Saving…'],
+  'resellerReports.saved2': ['Saved', 'Saved'],
+  'resellerReports.pauseAutomatically': ['Pause automatically', 'Pause automatically'],
+  'resellerReports.returnRateAbove': ['Return rate above (%)', 'Return rate above (%)'],
+  'resellerReports.onceAtLeastThis': [
+    'Once at least this many parcels have an outcome',
+    'Once at least this many parcels have an outcome',
+  ],
+  'resellerReports.overTheLastN': ['Over the last N days', 'Over the last N days'],
+});

@@ -15,7 +15,7 @@ import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import {
   useCreateStore,
   useMakeStoreDefault,
@@ -25,12 +25,16 @@ import {
   type StoreView,
 } from '@/lib/store-hooks';
 import { SetCallout, SetFact, SetPageHeader, phaseOf } from '../../_components/settings-parts';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
-const CRUMBS = [
-  { label: 'Client console' },
-  { label: 'Account' },
-  { label: 'Settings', href: '/settings' },
-  { label: 'Stores' },
+const crumbsOf = (t: Translate<MessageKey>) => [
+  { label: t('settingsStores.clientConsole') },
+  { label: t('settingsStores.account') },
+  { label: t('settingsStores.settings'), href: '/settings' },
+  { label: t('settingsStores.stores') },
 ];
 
 /** A store action waiting on its confirmation. */
@@ -55,6 +59,7 @@ type PendingStoreAction =
  * what changes, then send exactly the request the row used to send.
  */
 export function StoresIndex(): ReactElement {
+  const t = useT();
   const identity = useSellerIdentity();
   const canManage = can(identity, 'profile.manage');
   const stores = useStores();
@@ -75,7 +80,7 @@ export function StoresIndex(): ReactElement {
       // FE-2: the server's verdict, verbatim. It is the half that knows
       // why — "this is the default store" is a sentence the UI must not
       // try to guess at.
-      toast.error(serverVerdict(err));
+      toast.error(verdict(err, t));
     }
   }
 
@@ -85,7 +90,7 @@ export function StoresIndex(): ReactElement {
     if (pending.kind === 'default') {
       return run(
         () => makeDefault.mutateAsync({ storeId: s.id }),
-        `New orders will be filed under “${s.name}”.`,
+        t('settingsStores.filedUnder', { name: s.name }),
       );
     }
     return run(
@@ -94,7 +99,9 @@ export function StoresIndex(): ReactElement {
           storeId: s.id,
           isActive: !s.isActive,
         }),
-      s.isActive ? `“${s.name}” is closed.` : `“${s.name}” is open.`,
+      s.isActive
+        ? t('settingsStores.isClosed', { name: s.name })
+        : t('settingsStores.isOpen', { name: s.name }),
     );
   }
 
@@ -108,31 +115,42 @@ export function StoresIndex(): ReactElement {
       ? null
       : pending.kind === 'default'
         ? {
-            title: 'Make this the default store?',
-            consequence: `New orders — including every CSV row that names no store — will be filed under “${pending.store.name}”${defaultStore === undefined ? '' : ` instead of “${defaultStore.name}”`}. Orders already placed stay where they are.`,
-            confirm: 'Make default',
+            title: t('settingsStores.makeThisTheDefault'),
+            consequence:
+              defaultStore === undefined
+                ? t('settingsStores.makeDefaultConsequence', { name: pending.store.name })
+                : t('settingsStores.makeDefaultConsequenceInstead', {
+                    name: pending.store.name,
+                    old: defaultStore.name,
+                  }),
+            confirm: t('settingsStores.makeDefault'),
             destructive: false,
           }
         : pending.store.isActive
           ? {
-              title: 'Close this store?',
-              consequence: `New orders stop being filed under “${pending.store.name}”. The ${pending.store.orderCount} ${pending.store.orderCount === 1 ? 'order' : 'orders'} already there are untouched, and you can reopen it later.`,
-              confirm: 'Close store',
+              title: t('settingsStores.closeThisStore'),
+              consequence: t(
+                pending.store.orderCount === 1
+                  ? 'settingsStores.closeConsequenceOne'
+                  : 'settingsStores.closeConsequenceMany',
+                { name: pending.store.name, count: pending.store.orderCount },
+              ),
+              confirm: t('settingsStores.closeStore'),
               destructive: true,
             }
           : {
-              title: 'Reopen this store?',
-              consequence: `New orders can be filed under “${pending.store.name}” again. It does not become the default.`,
-              confirm: 'Reopen store',
+              title: t('settingsStores.reopenThisStore'),
+              consequence: t('settingsStores.newOrdersCanBe', { store: pending.store.name }),
+              confirm: t('settingsStores.reopenStore'),
               destructive: false,
             };
 
   return (
     <div className="set-page">
       <SetPageHeader
-        crumbs={CRUMBS}
-        title="Stores"
-        subtitle="The shops you sell under. A store decides which brand an order belongs to — your products, stock, wallet and couriers are shared across all of them."
+        crumbs={crumbsOf(t)}
+        title={t('settingsStores.stores')}
+        subtitle={t('settingsStores.theShopsYouSell')}
         meta={
           stores.data === undefined ? undefined : (
             <span className="set-meta">
@@ -142,14 +160,18 @@ export function StoresIndex(): ReactElement {
               <SetFact tone={open.length === 0 ? 'warn' : 'good'} dot>
                 {open.length} open
               </SetFact>
-              {defaultStore !== undefined && <SetFact>Default · {defaultStore.name}</SetFact>}
+              {defaultStore !== undefined && (
+                <SetFact>
+                  {richMessage(t('settingsStores.default'), { defaultStore: defaultStore.name })}
+                </SetFact>
+              )}
             </span>
           )
         }
         action={
           canManage ? (
             <Button size="md" icon={<StoreIcon size={15} />} onClick={() => setAdding(true)}>
-              Add a store
+              {t('settingsStores.addAStore')}
             </Button>
           ) : undefined
         }
@@ -157,11 +179,11 @@ export function StoresIndex(): ReactElement {
 
       {stores.isLoading ? (
         <div className="set-card" data-flush>
-          <SkeletonRows rows={3} cols={4} label="Loading your stores…" />
+          <SkeletonRows rows={3} cols={4} label={t('settingsStores.loadingYourStores')} />
         </div>
       ) : stores.isError || stores.data === undefined ? (
         <ErrorState
-          message={stores.error?.message ?? 'Could not load your stores.'}
+          message={stores.error?.message ?? t('settingsStores.couldNotLoadYour')}
           retry={() => void stores.refetch()}
         />
       ) : (
@@ -173,62 +195,64 @@ export function StoresIndex(): ReactElement {
                 returns, so it is what these say. */}
           <div className="set-kpis">
             <KpiCard
-              label="Shops"
+              label={t('settingsStores.shops')}
               icon={<StoreIcon size={14} />}
               value={rows.length}
               format={String}
               unit={rows.length === 1 ? 'store' : 'stores'}
               tone="neutral"
-              hint={`${open.length} open, ${rows.length - open.length} closed.`}
+              hint={t('settingsStores.openClosed', {
+                open: open.length,
+                open2: rows.length - open.length,
+              })}
             />
             <KpiCard
-              label="Filed under a store"
+              label={t('settingsStores.filedUnderAStore')}
               icon={<PackageCheck size={14} />}
               value={totalOrders}
               format={String}
               unit={totalOrders === 1 ? 'order' : 'orders'}
               tone="neutral"
-              hint="Every order you have placed, across all of them."
+              hint={t('settingsStores.everyOrderYouHave')}
             />
             <KpiCard
-              label="New orders go to"
+              label={t('settingsStores.newOrdersGoTo')}
               icon={<Star size={14} />}
               figure={
                 defaultStore === undefined ? (
-                  <span className="set-kpi-text set-kpi-faint">None set</span>
+                  <span className="set-kpi-text set-kpi-faint">{t('settingsStores.noneSet')}</span>
                 ) : (
                   <span className="set-kpi-text">{defaultStore.name}</span>
                 )
               }
               tone={defaultStore === undefined ? 'pending' : 'neutral'}
-              hint="Including every CSV row that names no store."
+              hint={t('settingsStores.includingEveryCsvRow')}
             />
           </div>
 
           <section className="set-section">
             <SectionHeading
-              title="Your shops"
+              title={t('settingsStores.yourShops')}
               note={`${rows.length} ${rows.length === 1 ? 'store' : 'stores'}`}
             />
             <div className="set-card" data-flush>
               <p className="set-card__lead">
-                New orders are filed under the <strong className="set-strong">default</strong> store
-                unless you pick another — including every row of a CSV upload that names no store.
-                Closing a store stops new orders being filed under it; the orders already there are
-                untouched.
+                {richMessage(t('settingsStores.newOrdersAreFiled'), {
+                  strong: <strong className="set-strong">default</strong>,
+                })}
               </p>
-              <Table caption="Your stores">
+              <Table caption={t('settingsStores.yourStores')}>
                 <THead>
                   <Tr>
-                    <Th>Store</Th>
-                    <Th align="right">Orders</Th>
-                    <Th>State</Th>
-                    <Th align="right">Actions</Th>
+                    <Th>{t('settingsStores.store')}</Th>
+                    <Th align="right">{t('settingsStores.orders')}</Th>
+                    <Th>{t('settingsStores.state')}</Th>
+                    <Th align="right">{t('settingsStores.actions')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
                   {rows.length === 0 ? (
-                    <TableEmpty colSpan={4}>No stores yet.</TableEmpty>
+                    <TableEmpty colSpan={4}>{t('settingsStores.noStoresYet')}</TableEmpty>
                   ) : (
                     rows.map((s) => (
                       <Tr key={s.id}>
@@ -244,11 +268,17 @@ export function StoresIndex(): ReactElement {
                         <Td>
                           <span className="set-chips">
                             {s.isDefault && (
-                              <StatusChip kind="confirmed" label="Default" size="sm" />
+                              <StatusChip
+                                kind="confirmed"
+                                label={t('settingsStores.default2')}
+                                size="sm"
+                              />
                             )}
                             <StatusChip
                               kind={s.isActive ? 'delivered' : 'cancelled'}
-                              label={s.isActive ? 'Open' : 'Closed'}
+                              label={
+                                s.isActive ? t('settingsStores.open') : t('settingsStores.closed')
+                              }
                               size="sm"
                             />
                           </span>
@@ -257,7 +287,7 @@ export function StoresIndex(): ReactElement {
                           {canManage ? (
                             <div className="set-row-actions">
                               <Button variant="ghost" size="sm" onClick={() => setEditing(s)}>
-                                Rename
+                                {t('settingsStores.rename')}
                               </Button>
                               {!s.isDefault && s.isActive && (
                                 <Button
@@ -266,7 +296,7 @@ export function StoresIndex(): ReactElement {
                                   disabled={makeDefault.isPending}
                                   onClick={() => setPending({ kind: 'default', store: s })}
                                 >
-                                  Make default
+                                  {t('settingsStores.makeDefault')}
                                 </Button>
                               )}
                               {!s.isDefault && (
@@ -276,7 +306,9 @@ export function StoresIndex(): ReactElement {
                                   disabled={setActive.isPending}
                                   onClick={() => setPending({ kind: 'active', store: s })}
                                 >
-                                  {s.isActive ? 'Close' : 'Reopen'}
+                                  {s.isActive
+                                    ? t('settingsStores.close')
+                                    : t('settingsStores.reopen')}
                                 </Button>
                               )}
                             </div>
@@ -305,7 +337,7 @@ export function StoresIndex(): ReactElement {
         title={confirmCopy?.title ?? ''}
         entity={pending?.store.name ?? ''}
         consequence={confirmCopy?.consequence ?? ''}
-        confirmLabel={confirmCopy?.confirm ?? 'Confirm'}
+        confirmLabel={confirmCopy?.confirm ?? t('settingsStores.confirm')}
         destructive={confirmCopy?.destructive ?? false}
         onConfirm={confirmPending}
       />
@@ -320,6 +352,7 @@ function StoreModal({
   readonly store?: StoreView;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const create = useCreateStore();
   const update = useUpdateStore();
   const [name, setName] = useState(store?.name ?? '');
@@ -331,7 +364,7 @@ function StoreModal({
   async function save(): Promise<void> {
     setError(null);
     if (name.trim() === '') {
-      setError('Give the store a name');
+      setError(t('settingsStores.giveTheStoreA'));
       return;
     }
     try {
@@ -342,7 +375,7 @@ function StoreModal({
       }
       onClose();
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -353,22 +386,20 @@ function StoreModal({
         if (!next) onClose();
       }}
       icon={<StoreIcon size={18} />}
-      title={editing ? 'Rename this store' : 'Add a store'}
+      title={editing ? t('settingsStores.renameThisStore') : t('settingsStores.addAStore')}
       description={
-        editing
-          ? 'Orders already placed keep the name they were placed under — renaming will not rewrite what a past customer was told.'
-          : 'A new store never becomes the default, so adding one cannot move where your orders are filed. Make it the default afterwards if that is what you want.'
+        editing ? t('settingsStores.ordersAlreadyPlacedKeep') : t('settingsStores.aNewStoreNever')
       }
       footer={
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('settingsStores.cancel')}
           </Button>
           <AsyncButton
             labels={{
-              idle: editing ? 'Save' : 'Add store',
-              busy: 'Saving…',
-              error: 'Not saved',
+              idle: editing ? t('settingsStores.save') : t('settingsStores.addStore'),
+              busy: t('settingsStores.saving'),
+              error: t('settingsStores.notSaved'),
             }}
             state={phaseOf(busy, error)}
             disabled={busy}
@@ -379,7 +410,7 @@ function StoreModal({
     >
       <div className="set-form-grid">
         <TextField
-          label="Name"
+          label={t('settingsStores.name')}
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={80}
@@ -388,8 +419,8 @@ function StoreModal({
           requiredMark
         />
         <TextArea
-          label="Note"
-          hint="A reminder to yourself about which channel this is"
+          label={t('settingsStores.note')}
+          hint={t('settingsStores.aReminderToYourself')}
           rows={2}
           value={note}
           onChange={(e) => setNote(e.target.value)}

@@ -1,0 +1,95 @@
+import { defineMessages } from '../define';
+
+/** Copy owned by the "teamRoles" feature. */
+export const teamRoles = defineMessages({
+  'teamRoles.created': ['{name} created', '{name} created'],
+  'teamRoles.updated': ['{name} updated', '{name} updated'],
+  'teamRoles.newRole': ['New role', 'New role'],
+  'teamRoles.edit': ['Edit {role}', 'Edit {role}'],
+  'teamRoles.cancel': ['Cancel', 'Cancel'],
+  'teamRoles.createRole': ['Create role', 'Create role'],
+  'teamRoles.saveChanges': ['Save changes', 'Save changes'],
+  'teamRoles.saving': ['Saving…', 'Saving…'],
+  'teamRoles.name': ['Name', 'Name'],
+  'teamRoles.warehouseManager': ['Warehouse manager', 'Warehouse manager'],
+  'teamRoles.whatThisRoleIs': ['What this role is for', 'What this role is for'],
+  'teamRoles.shownOnTheRoles': [
+    'Shown on the roles list. Helps whoever assigns it later.',
+    'Shown on the roles list. Helps whoever assigns it later.',
+  ],
+  'teamRoles.searchPermissionsTryReturn': [
+    'Search permissions — try “return”, “wallet” or a key',
+    'Search permissions — try “return”, “wallet” or a key',
+  ],
+  'teamRoles.searchPermissions': ['Search permissions', 'Search permissions'],
+  'teamRoles.match': [' · {matches} match{plural}', ' · {matches} match{plural}'],
+  'teamRoles.selectedNotShown': [
+    ' · {hiddenSelected} selected not shown',
+    ' · {hiddenSelected} selected not shown',
+  ],
+  'teamRoles.nothingMatchesTheSearch': [
+    'Nothing matches “{query}”. The search covers the name, the explanation and the permission key.',
+    'Nothing matches “{query}”. The search covers the name, the explanation and the permission key.',
+  ],
+  'teamRoles.canMoveMoneyOr': ['Can move money or stock', 'Can move money or stock'],
+  'teamRoles.removePermissionsFromThis': [
+    'Remove permissions from this role?',
+    'Remove permissions from this role?',
+  ],
+  'teamRoles.removeAndSave': ['Remove and save', 'Remove and save'],
+  'teamRoles.deleted': ['{role} deleted', '{role} deleted'],
+  'teamRoles.roles': ['Roles', 'Roles'],
+  'teamRoles.aRoleIsA': [
+    'A role is a set of permissions. Create as many as your team needs — the permissions themselves are fixed by the system. One person can hold several roles, and what they can do is everything those roles cover between them.',
+    'A role is a set of permissions. Create as many as your team needs — the permissions themselves are fixed by the system. One person can hold several roles, and what they can do is everything those roles cover between them.',
+  ],
+  'teamRoles.heldByNobody': ['{unused} held by nobody', '{unused} held by nobody'],
+  'teamRoles.yourRoles': ['Your roles', 'Your roles'],
+  'teamRoles.loadingRoles': ['Loading roles…', 'Loading roles…'],
+  'teamRoles.couldNotLoadRoles': ['Could not load roles.', 'Could not load roles.'],
+  'teamRoles.role': ['Role', 'Role'],
+  'teamRoles.covers': ['Covers', 'Covers'],
+  'teamRoles.heldBy': ['Held by', 'Held by'],
+  'teamRoles.actions': ['Actions', 'Actions'],
+  'teamRoles.noRolesYet': ['No roles yet.', 'No roles yet.'],
+  'teamRoles.cannotBeEdited': ['Cannot be edited', 'Cannot be edited'],
+  'teamRoles.everythingIncludingPermissionsAdded': [
+    'Everything, including permissions added later',
+    'Everything, including permissions added later',
+  ],
+  'teamRoles.permission': ['{permissions} permission{plural}', '{permissions} permission{plural}'],
+  'teamRoles.edit2': ['Edit', 'Edit'],
+  'teamRoles.delete': ['Delete', 'Delete'],
+  'teamRoles.deleteThisRole': ['Delete this role?', 'Delete this role?'],
+  'teamRoles.theRoleIsRemoved': [
+    'The role is removed for good. This cannot be undone.',
+    'The role is removed for good. This cannot be undone.',
+  ],
+  'teamRoles.deleteRole': ['Delete role', 'Delete role'],
+  'teamRoles.notSaved': ['Not saved', 'Not saved'],
+  'teamRoles.clientConsole': ['Client console', 'Client console'],
+  'teamRoles.account': ['Account', 'Account'],
+  'teamRoles.team': ['Team', 'Team'],
+  'teamRoles.canMoveMoneyOrStock': [
+    '{count} can move money or stock',
+    '{count}টি টাকা বা স্টক নাড়াতে পারে',
+  ],
+  'teamRoles.thisRole': ['this role', 'এই ভূমিকা'],
+  'teamRoles.removalOnePersonOnePermission': [
+    '{members} person holds {role}, and this permission stop coming from it as soon as it saves. Anyone who also holds another role covering it keeps it.',
+    '{members}জন ব্যক্তির কাছে {role} ভূমিকা আছে; সংরক্ষণ করার সাথে সাথে এই অনুমতিটি এই ভূমিকা থেকে আসা বন্ধ হয়ে যাবে। অন্য কোনো ভূমিকার মাধ্যমে একই অনুমতি যাঁদের আছে, তাঁরা সেটি রেখে দেবেন।',
+  ],
+  'teamRoles.removalOnePersonManyPermissions': [
+    '{members} person holds {role}, and these {count} permissions stop coming from it as soon as it saves. Anyone who also holds another role covering them keeps them.',
+    '{members}জন ব্যক্তির কাছে {role} ভূমিকা আছে; সংরক্ষণ করার সাথে সাথে এই {count}টি অনুমতি এই ভূমিকা থেকে আসা বন্ধ হয়ে যাবে। অন্য কোনো ভূমিকার মাধ্যমে একই অনুমতি যাঁদের আছে, তাঁরা সেটি রেখে দেবেন।',
+  ],
+  'teamRoles.removalManyPeopleOnePermission': [
+    '{members} people hold {role}, and this permission stop coming from it as soon as it saves. Anyone who also holds another role covering it keeps it.',
+    '{members}জন ব্যক্তির কাছে {role} ভূমিকা আছে; সংরক্ষণ করার সাথে সাথে এই অনুমতিটি এই ভূমিকা থেকে আসা বন্ধ হয়ে যাবে। অন্য কোনো ভূমিকার মাধ্যমে একই অনুমতি যাঁদের আছে, তাঁরা সেটি রেখে দেবেন।',
+  ],
+  'teamRoles.removalManyPeopleManyPermissions': [
+    '{members} people hold {role}, and these {count} permissions stop coming from it as soon as it saves. Anyone who also holds another role covering them keeps them.',
+    '{members}জন ব্যক্তির কাছে {role} ভূমিকা আছে; সংরক্ষণ করার সাথে সাথে এই {count}টি অনুমতি এই ভূমিকা থেকে আসা বন্ধ হয়ে যাবে। অন্য কোনো ভূমিকার মাধ্যমে একই অনুমতি যাঁদের আছে, তাঁরা সেটি রেখে দেবেন।',
+  ],
+  'teamRoles.metaTitle': ['Roles · Skydrop', 'ভূমিকা · Skydrop'],
+});

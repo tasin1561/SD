@@ -12,8 +12,12 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { OrderStatus } from '@skydrop/db';
 import { useMyNsaOrders } from '@/lib/ops-hooks';
 import { useOrdersList } from '@/lib/api-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import './needs-attention.css';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * THE SELLER'S side of the NSA worklist.
@@ -62,6 +66,7 @@ import './needs-attention.css';
  * No SLA figure, no resolution rate: nothing measures either.
  */
 export function NeedsAttentionIndex(): ReactElement {
+  const t = useT();
   const list = useMyNsaOrders();
   const rows = list.data ?? [];
 
@@ -102,13 +107,13 @@ export function NeedsAttentionIndex(): ReactElement {
     <div className="nat-page">
       <PageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Selling' },
-          { label: 'Needs attention' },
+          { label: t('needsAttention.clientConsole') },
+          { label: t('needsAttention.selling') },
+          { label: t('needsAttention.needsAttention') },
         ]}
         Link={Link}
-        title="Needs attention"
-        subtitle="Orders we could not confirm on the phone, and parcels that went out for delivery and never arrived."
+        title={t('needsAttention.needsAttention')}
+        subtitle={t('needsAttention.ordersWeCouldNot')}
         /*
           EVERY non-empty case gets a fact, or the row goes blank while
           the page below it is full.
@@ -124,15 +129,23 @@ export function NeedsAttentionIndex(): ReactElement {
             <span className="nat-meta">
               {unconfirmed.length === 0 && rows.length === 0 ? (
                 <Fact tone="good" dot>
-                  Nothing needs you
+                  {t('needsAttention.nothingNeedsYou')}
                 </Fact>
               ) : (
                 <>
                   {waitingOnYou > 0 && (
-                    <Fact tone="warn">{waitingOnYou} waiting on your decision</Fact>
+                    <Fact tone="warn">
+                      {richMessage(t('needsAttention.waitingOnYourDecision'), { waitingOnYou })}
+                    </Fact>
                   )}
-                  {letGo > 0 && <Fact dot>{letGo} let go after the last attempt</Fact>}
-                  {rows.length > 0 && <Fact tone="bad">{rows.length} stuck with a courier</Fact>}
+                  {letGo > 0 && (
+                    <Fact dot>{richMessage(t('needsAttention.letGoAfterThe'), { letGo })}</Fact>
+                  )}
+                  {rows.length > 0 && (
+                    <Fact tone="bad">
+                      {richMessage(t('needsAttention.stuckWithACourier'), { rows: rows.length })}
+                    </Fact>
+                  )}
                 </>
               )}
             </span>
@@ -148,7 +161,7 @@ export function NeedsAttentionIndex(): ReactElement {
             changes under the reader. */}
         {answered ? (
           <KpiCard
-            label="We could not reach the customer"
+            label={t('needsAttention.weCouldNotReach')}
             icon={<PhoneOff size={14} />}
             value={unconfirmed.length}
             format={String}
@@ -156,29 +169,29 @@ export function NeedsAttentionIndex(): ReactElement {
             tone={waitingOnYou > 0 ? 'pending' : 'neutral'}
             hint={
               unconfirmed.length === 0
-                ? 'Every order our agents rang was answered.'
-                : 'You know your customer better than we do.'
+                ? t('needsAttention.everyOrderOurAgents')
+                : t('needsAttention.youKnowYourCustomer')
             }
             foot={
               unconfirmed.length > 0
                 ? [
-                    { label: 'Waiting on your decision', value: waitingOnYou },
-                    { label: 'Already let go', value: letGo },
+                    { label: t('needsAttention.waitingOnYourDecision2'), value: waitingOnYou },
+                    { label: t('needsAttention.alreadyLetGo'), value: letGo },
                   ]
                 : undefined
             }
           />
         ) : (
           <KpiCard
-            label="We could not reach the customer"
+            label={t('needsAttention.weCouldNotReach')}
             icon={<PhoneOff size={14} />}
             figure={<span className="nat-faint">—</span>}
             tone={waitingOnYou > 0 ? 'pending' : 'neutral'}
             foot={
               unconfirmed.length > 0
                 ? [
-                    { label: 'Waiting on your decision', value: waitingOnYou },
-                    { label: 'Already let go', value: letGo },
+                    { label: t('needsAttention.waitingOnYourDecision2'), value: waitingOnYou },
+                    { label: t('needsAttention.alreadyLetGo'), value: letGo },
                   ]
                 : undefined
             }
@@ -186,24 +199,26 @@ export function NeedsAttentionIndex(): ReactElement {
         )}
         {list.data === undefined ? (
           <KpiCard
-            label="Out for delivery, never arrived"
+            label={t('needsAttention.outForDeliveryNever')}
             icon={<Truck size={14} />}
             figure={<span className="nat-faint">—</span>}
             unit={rows.length === 0 ? undefined : 'parcels'}
             tone={overdue > 0 ? 'debit' : rows.length > 0 ? 'pending' : 'neutral'}
-            hint={answered ? overdueHint(rows.length) : undefined}
+            hint={answered ? overdueHint(t, rows.length) : undefined}
           />
         ) : (
           <KpiCard
-            label="Out for delivery, never arrived"
+            label={t('needsAttention.outForDeliveryNever')}
             icon={<Truck size={14} />}
             value={rows.length}
             format={String}
             unit={rows.length === 0 ? undefined : 'parcels'}
             tone={overdue > 0 ? 'debit' : rows.length > 0 ? 'pending' : 'neutral'}
-            hint={answered ? overdueHint(rows.length) : undefined}
+            hint={answered ? overdueHint(t, rows.length) : undefined}
             foot={
-              rows.length > 0 ? [{ label: 'Out three nights or more', value: overdue }] : undefined
+              rows.length > 0
+                ? [{ label: t('needsAttention.outThreeNightsOr'), value: overdue }]
+                : undefined
             }
           />
         )}
@@ -215,10 +230,10 @@ export function NeedsAttentionIndex(): ReactElement {
               width most of these sellers are on — a long title wraps
               into the note beside it; the sentence belongs in the note. */}
           <SectionHeading
-            title="Could not reach"
-            note="Our agents rang and nobody answered. Open one to decide what happens to it."
+            title={t('needsAttention.couldNotReach')}
+            note={t('needsAttention.ourAgentsRangAnd')}
           />
-          <ListRows label="Orders we could not confirm">
+          <ListRows label={t('needsAttention.ordersWeCouldNot2')}>
             {unconfirmed.map((o) => {
               const waiting = o.status === OrderStatus.AWAITING_SELLER_DECISION;
               return (
@@ -236,7 +251,9 @@ export function NeedsAttentionIndex(): ReactElement {
                         <span className="nat-faint sk-ident"> · {o.recipientPhoneE164}</span>
                       </span>
                       <span className="nat-line nat-faint">
-                        Placed {new Date(o.placedAt).toLocaleDateString('en-IN')}
+                        {richMessage(t('needsAttention.placed'), {
+                          placedAt: new Date(o.placedAt).toLocaleDateString('en-IN'),
+                        })}
                       </span>
                       {/* THE SENTENCE FOLLOWS THE CARD (2026-09-27).
                           It was one fixed string — "open the order, you
@@ -250,14 +267,23 @@ export function NeedsAttentionIndex(): ReactElement {
                       <span className="nat-next">
                         {waiting ? (
                           <>
-                            <span className="nat-next__lead">Open the order</span> — tell us to keep
-                            trying, or let it go. If you leave it, we let it go for you after a few
-                            days.
+                            {richMessage(t('needsAttention.tellUsToKeep'), {
+                              span: (
+                                <span className="nat-next__lead">
+                                  {t('needsAttention.openTheOrder')}
+                                </span>
+                              ),
+                            })}
                           </>
                         ) : (
                           <>
-                            <span className="nat-next__lead">Open the order</span> — from there you
-                            can ask us to call again, or raise an issue.
+                            {richMessage(t('needsAttention.fromThereYouCan'), {
+                              span: (
+                                <span className="nat-next__lead">
+                                  {t('needsAttention.openTheOrder')}
+                                </span>
+                              ),
+                            })}
                           </>
                         )}
                       </span>
@@ -265,13 +291,17 @@ export function NeedsAttentionIndex(): ReactElement {
                   }
                   status={
                     <span className="nat-state" data-tone={waiting ? 'pending' : undefined}>
-                      {waiting ? 'Waiting on your decision' : 'Let go after the last attempt'}
+                      {waiting
+                        ? t('needsAttention.waitingOnYourDecision2')
+                        : t('needsAttention.letGoAfterThe2')}
                     </span>
                   }
                   meta={
                     o.codAmountInr !== null ? (
                       <span className="nat-cod">
-                        COD <Money amount={o.codAmountInr} currency="INR" convert={false} />
+                        {richMessage(t('needsAttention.cod'), {
+                          money: <Money amount={o.codAmountInr} currency="INR" convert={false} />,
+                        })}
                       </span>
                     ) : undefined
                   }
@@ -284,28 +314,28 @@ export function NeedsAttentionIndex(): ReactElement {
 
       <section className="nat-section">
         <SectionHeading
-          title="Overdue parcels"
-          note="Out for delivery and still not arrived. We chase the courier; this says how far we have got."
+          title={t('needsAttention.overdueParcels')}
+          note={t('needsAttention.outForDeliveryAnd')}
         />
         {list.isLoading ? (
-          <SkeletonRows rows={3} label="Loading overdue parcels…" />
+          <SkeletonRows rows={3} label={t('needsAttention.loadingOverdueParcels')} />
         ) : list.isError ? (
-          <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+          <ErrorState message={verdict(list.error, t)} retry={() => void list.refetch()} />
         ) : rows.length === 0 ? (
           unconfirmed.length > 0 ? (
             // The page is NOT empty — saying "nothing of yours is stuck"
             // directly under a list of orders that need them reads as a
             // page arguing with itself.
-            <p className="nat-quiet">Nothing of yours is out for delivery and overdue.</p>
+            <p className="nat-quiet">{t('needsAttention.nothingOfYoursIs')}</p>
           ) : (
             <EmptyState
               tone="positive"
-              title="Nothing of yours needs you"
-              description="No order is waiting on a decision, and every parcel out for delivery has either arrived or been scanned as a failed attempt. This page fills in the evening, so it is normally empty during the day."
+              title={t('needsAttention.nothingOfYoursNeeds')}
+              description={t('needsAttention.noOrderIsWaiting')}
             />
           )
         ) : (
-          <ListRows label="Overdue parcels">
+          <ListRows label={t('needsAttention.overdueParcels')}>
             {rows.map((r) => (
               <ListRow
                 key={r.orderId}
@@ -330,15 +360,13 @@ export function NeedsAttentionIndex(): ReactElement {
                       // picked this up yet" is the thing worth knowing,
                       // and an empty space reads as a page that failed
                       // to load.
-                      <span className="nat-next">
-                        We have flagged this and will chase the courier. Nobody has picked it up
-                        yet.
-                      </span>
+                      <span className="nat-next">{t('needsAttention.weHaveFlaggedThis')}</span>
                     ) : (
                       <span className="nat-next" data-picked="1">
-                        We are chasing this — picked up{' '}
-                        {new Date(r.acknowledgedAt).toLocaleString('en-IN')}
-                        {r.note !== null && <span className="nat-faint"> · {r.note}</span>}
+                        {richMessage(t('needsAttention.weAreChasingThis'), {
+                          acknowledgedAt: new Date(r.acknowledgedAt).toLocaleString('en-IN'),
+                          span: r.note !== null && <span className="nat-faint"> · {r.note}</span>,
+                        })}
                       </span>
                     )}
                   </>
@@ -352,13 +380,17 @@ export function NeedsAttentionIndex(): ReactElement {
                       r.dayCount >= 3 ? 'critical' : r.dayCount === 2 ? 'pending' : undefined
                     }
                   >
-                    {r.dayCount === 1 ? 'Out since yesterday' : `Out for ${r.dayCount} days`}
+                    {r.dayCount === 1
+                      ? t('needsAttention.outSinceYesterday')
+                      : t('needsAttention.outForDays', { dayCount: r.dayCount })}
                   </span>
                 }
                 meta={
                   r.codAmountInr !== null ? (
                     <span className="nat-cod">
-                      COD <Money amount={r.codAmountInr} currency="INR" convert={false} />
+                      {richMessage(t('needsAttention.cod'), {
+                        money: <Money amount={r.codAmountInr} currency="INR" convert={false} />,
+                      })}
                     </span>
                   ) : undefined
                 }
@@ -372,10 +404,8 @@ export function NeedsAttentionIndex(): ReactElement {
 }
 
 /** The hint under the overdue tile — only said once all three have answered. */
-function overdueHint(count: number): string {
-  return count === 0
-    ? 'This list fills in the evening, so it is normally empty during the day.'
-    : 'We chase the courier on these. You do not have to.';
+function overdueHint(t: Translate<MessageKey>, count: number): string {
+  return count === 0 ? t('needsAttention.thisListFillsIn') : t('needsAttention.weChaseTheCourier');
 }
 
 /**

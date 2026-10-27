@@ -31,6 +31,8 @@ import {
   PanelPad,
   rawCount,
 } from '@/app/(authed)/inventory/_components/stock-ui';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * Seller catalogue list — the LIST pattern for the console redesign.
@@ -112,6 +114,7 @@ function dimensions(p: {
 }
 
 export function ProductsIndex(): ReactElement {
+  const t = useT();
   const identity = useSellerIdentity();
   const router = useRouter();
   const sp = useSearchParams();
@@ -162,19 +165,33 @@ export function ProductsIndex(): ReactElement {
   return (
     <AreaPage>
       <PageHeader
-        breadcrumbs={[{ label: 'Client console' }, { label: 'Stock & WMS' }, { label: 'Products' }]}
+        breadcrumbs={[
+          { label: t('productList.clientConsole') },
+          { label: t('productList.stockWms') },
+          { label: t('productList.products') },
+        ]}
         Link={Link}
-        title="Products"
-        subtitle="Your catalogue: products, their variants and the pictures customers see."
+        title={t('productList.products')}
+        subtitle={t('productList.yourCatalogueProductsTheir')}
         meta={
           stock.data === undefined ? undefined : (
             <MetaFacts>
-              <MetaFact tone="accent">{stock.data.totalSkus} SKUs</MetaFact>
+              <MetaFact tone="accent">
+                {richMessage(t('productList.skus'), { totalSkus: stock.data.totalSkus })}
+              </MetaFact>
               {stock.data.lowStockSkus > 0 && (
-                <MetaFact tone="warn">{stock.data.lowStockSkus} low on stock</MetaFact>
+                <MetaFact tone="warn">
+                  {richMessage(t('productList.lowOnStock'), {
+                    lowStockSkus: stock.data.lowStockSkus,
+                  })}
+                </MetaFact>
               )}
               {stock.data.totalQtyInTransit > 0 && (
-                <MetaFact dot>{stock.data.totalQtyInTransit} units in transit</MetaFact>
+                <MetaFact dot>
+                  {richMessage(t('productList.unitsInTransit'), {
+                    totalQtyInTransit: stock.data.totalQtyInTransit,
+                  })}
+                </MetaFact>
               )}
             </MetaFacts>
           )
@@ -183,12 +200,12 @@ export function ProductsIndex(): ReactElement {
           <Actions>
             {canSeePath(identity, '/products/import') && (
               <LinkButton href="/products/import" variant="ghost" icon={<Upload size={15} />}>
-                CSV import
+                {t('productList.csvImport')}
               </LinkButton>
             )}
             {canSeePath(identity, '/products/new') && (
               <LinkButton href="/products/new" variant="primary" icon={<Plus size={15} />}>
-                New product
+                {t('productList.newProduct')}
               </LinkButton>
             )}
           </Actions>
@@ -207,52 +224,66 @@ export function ProductsIndex(): ReactElement {
         <KpiGrid>
           {stock.data === undefined ? (
             <>
-              <KpiCard label="Active SKUs" icon={<Layers size={14} />} figure={<Dash />} />
-              <KpiCard label="Units in stock" icon={<Boxes size={14} />} figure={<Dash />} />
-              <KpiCard label="Low on stock" icon={<TriangleAlert size={14} />} figure={<Dash />} />
-              <KpiCard label="Stock value at cost" icon={<Wallet size={14} />} figure={<Dash />} />
+              <KpiCard
+                label={t('productList.activeSkus')}
+                icon={<Layers size={14} />}
+                figure={<Dash />}
+              />
+              <KpiCard
+                label={t('productList.unitsInStock')}
+                icon={<Boxes size={14} />}
+                figure={<Dash />}
+              />
+              <KpiCard
+                label={t('productList.lowOnStock2')}
+                icon={<TriangleAlert size={14} />}
+                figure={<Dash />}
+              />
+              <KpiCard
+                label={t('productList.stockValueAtCost')}
+                icon={<Wallet size={14} />}
+                figure={<Dash />}
+              />
             </>
           ) : (
             <>
               <KpiCard
-                label="Active SKUs"
+                label={t('productList.activeSkus')}
                 icon={<Layers size={14} />}
                 value={stock.data.totalSkus}
                 format={rawCount}
-                unit="SKUs"
+                unit={t('productList.skus2')}
                 tone="neutral"
               />
               <KpiCard
-                label="Units in stock"
+                label={t('productList.unitsInStock')}
                 icon={<Boxes size={14} />}
                 value={stock.data.totalQtyOnHand}
                 format={rawCount}
                 unit="units"
                 tone="neutral"
                 foot={[
-                  { label: 'Sellable now', value: stock.data.totalQtyAvailable },
-                  { label: 'Held for orders', value: stock.data.totalQtyReserved },
+                  { label: t('productList.sellableNow'), value: stock.data.totalQtyAvailable },
+                  { label: t('productList.heldForOrders'), value: stock.data.totalQtyReserved },
                 ]}
               />
               <KpiCard
-                label="Low on stock"
+                label={t('productList.lowOnStock2')}
                 icon={<TriangleAlert size={14} />}
                 value={stock.data.lowStockSkus}
                 format={rawCount}
-                unit="SKUs"
+                unit={t('productList.skus2')}
                 tone={stock.data.lowStockSkus > 0 ? 'pending' : 'neutral'}
-                hint={
-                  stock.data.lowStockSkus > 0 ? 'At or under the threshold you set.' : undefined
-                }
+                hint={stock.data.lowStockSkus > 0 ? t('productList.atOrUnderThe') : undefined}
               />
               <KpiCard
-                label="Stock value at cost"
+                label={t('productList.stockValueAtCost')}
                 icon={<Wallet size={14} />}
                 figure={<Money amount={stock.data.valueAtWarehouseInr} />}
                 tone="neutral"
                 foot={[
                   {
-                    label: 'In transit',
+                    label: t('productList.inTransit'),
                     value: <Money amount={stock.data.valueInTransitInr} />,
                   },
                   // NOT folded into the total as zero. A batch with no
@@ -260,7 +291,12 @@ export function ProductsIndex(): ReactElement {
                   // summary counts those units separately for exactly
                   // this reason (TRE-6's "uncovered, never defaulted").
                   ...(stock.data.valueUnknownUnits > 0
-                    ? [{ label: 'Units with no cost', value: stock.data.valueUnknownUnits }]
+                    ? [
+                        {
+                          label: t('productList.unitsWithNoCost'),
+                          value: stock.data.valueUnknownUnits,
+                        },
+                      ]
                     : []),
                 ]}
               />
@@ -270,7 +306,7 @@ export function ProductsIndex(): ReactElement {
       )}
 
       <AreaSection
-        title="Catalogue register"
+        title={t('productList.catalogueRegister')}
         note={
           list.data === undefined
             ? undefined
@@ -293,19 +329,19 @@ export function ProductsIndex(): ReactElement {
               search={{
                 value: searchInput,
                 onChange: setSearchInput,
-                label: 'Search products by name or reference',
-                placeholder: 'Name or ref…',
+                label: t('productList.searchProductsByName'),
+                placeholder: t('productList.nameOrRef'),
               }}
               filters={
                 <Tabs
-                  label="Product status"
+                  label={t('productList.productStatus')}
                   size="sm"
                   value={params.status === '' ? 'ALL' : params.status}
                   onChange={(id) =>
                     updateUrl({ status: id === 'ALL' ? '' : (id as ProductStatus), page: 1 })
                   }
                   items={[
-                    { id: 'ALL', label: 'All products' },
+                    { id: 'ALL', label: t('productList.allProducts') },
                     ...STATUSES.map((s) => ({
                       id: s,
                       label: s.charAt(0) + s.slice(1).toLowerCase(),
@@ -322,7 +358,7 @@ export function ProductsIndex(): ReactElement {
                     icon={<RotateCcw size={14} />}
                     onClick={resetFilters}
                   >
-                    Reset
+                    {t('productList.reset')}
                   </Button>
                 ) : undefined
               }
@@ -331,12 +367,12 @@ export function ProductsIndex(): ReactElement {
 
           {list.isLoading ? (
             <PanelPad>
-              <SkeletonRows rows={6} cols={6} label="Loading catalogue…" />
+              <SkeletonRows rows={6} cols={6} label={t('productList.loadingCatalogue')} />
             </PanelPad>
           ) : list.isError ? (
             <PanelPad>
               <ErrorState
-                message={list.error?.message ?? 'Failed to load catalog.'}
+                message={list.error?.message ?? t('productList.failedToLoadCatalog')}
                 retry={() => void list.refetch()}
               />
             </PanelPad>
@@ -344,20 +380,20 @@ export function ProductsIndex(): ReactElement {
             <PanelPad>
               <EmptyState
                 bare
-                title={filtered ? 'Nothing matches that' : 'No products yet'}
+                title={
+                  filtered ? t('productList.nothingMatchesThat') : t('productList.noProductsYet')
+                }
                 description={
-                  filtered
-                    ? 'Try a different name or reference, or reset the filters.'
-                    : 'Add one by hand, or bring a whole catalogue in with the CSV import.'
+                  filtered ? t('productList.tryADifferentName') : t('productList.addOneByHand')
                 }
                 action={
                   filtered ? (
                     <Button variant="secondary" size="md" onClick={resetFilters}>
-                      Reset filters
+                      {t('productList.resetFilters')}
                     </Button>
                   ) : canSeePath(identity, '/products/new') ? (
                     <LinkButton href="/products/new" variant="primary" icon={<Plus size={15} />}>
-                      New product
+                      {t('productList.newProduct')}
                     </LinkButton>
                   ) : undefined
                 }
@@ -365,16 +401,16 @@ export function ProductsIndex(): ReactElement {
             </PanelPad>
           ) : (
             <>
-              <Table caption="Catalogue register">
+              <Table caption={t('productList.catalogueRegister')}>
                 <THead>
                   <Tr>
-                    <Th aria-label="Picture" />
-                    <Th>Product</Th>
-                    <Th>Your ref</Th>
-                    <Th>Box &amp; weight</Th>
-                    <Th align="right">Declared value</Th>
-                    <Th>Status</Th>
-                    <Th>Updated</Th>
+                    <Th aria-label={t('productList.picture')} />
+                    <Th>{t('productList.product')}</Th>
+                    <Th>{t('productList.yourRef')}</Th>
+                    <Th>{t('productList.boxWeight')}</Th>
+                    <Th align="right">{t('productList.declaredValue')}</Th>
+                    <Th>{t('productList.status')}</Th>
+                    <Th>{t('productList.updated')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -409,10 +445,12 @@ export function ProductsIndex(): ReactElement {
                             <Dash />
                           ) : (
                             <>
-                              <span className="sk-figure inv-muted">{box ?? 'No box size'}</span>
+                              <span className="sk-figure inv-muted">
+                                {box ?? t('productList.noBoxSize')}
+                              </span>
                               <span className="inv-sub sk-figure">
                                 {p.defaultWeightGrams === null
-                                  ? 'No weight'
+                                  ? t('productList.noWeight')
                                   : `${p.defaultWeightGrams} g`}
                               </span>
                             </>
@@ -448,7 +486,7 @@ export function ProductsIndex(): ReactElement {
                   pageSize={PAGE_SIZE}
                   total={list.data.total}
                   onPageChange={(next) => updateUrl({ page: next })}
-                  label="Catalogue pages"
+                  label={t('productList.cataloguePages')}
                 />
               </PanelPad>
             </>

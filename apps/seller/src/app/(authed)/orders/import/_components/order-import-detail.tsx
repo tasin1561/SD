@@ -21,7 +21,7 @@ import { ParachuteProgress, type ParachuteState } from '@skydrop/ui/app/parachut
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { Skeleton } from '@skydrop/ui/app/skeleton';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { isOrderImportRunning, useOrderImport } from '@/lib/order-import-hooks';
 import {
   BackLink,
@@ -31,6 +31,9 @@ import {
   Notice,
   OrdSection,
 } from '../../_components/orders-parts';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * One order CSV import, by id.
@@ -52,20 +55,20 @@ import {
  * the right person to make that call and the wrong thing to discover
  * as a blank line on a screen.
  */
-function outcomeProse(status: BulkUploadStatus): string {
+function outcomeProse(t: Translate<MessageKey>, status: BulkUploadStatus): string {
   switch (status) {
     case 'PENDING':
-      return 'Queued. A worker will pick this up shortly; the counts below start moving when it does.';
+      return t('orderImport.queuedAWorkerWill');
     case 'PROCESSING':
-      return 'Running now — the counts below refresh every few seconds while you watch.';
+      return t('orderImport.runningNowTheCounts');
     case 'COMPLETED':
-      return 'Finished. Every row in the file was accepted.';
+      return t('orderImport.finishedEveryRowIn');
     case 'COMPLETED_WITH_ERRORS':
-      return 'Finished, but some rows were rejected. The error report lists each one with its reason — fix those rows and upload just them again.';
+      return t('orderImport.finishedButSomeRows');
     case 'FAILED':
-      return 'The import stopped before it could finish. Nothing more will be created from this file; correct it and upload again.';
+      return t('orderImport.theImportStoppedBefore');
     case 'CANCELLED':
-      return 'Cancelled. Any rows already imported stayed imported — the rest were never read.';
+      return t('orderImport.cancelledAnyRowsAlready');
     default: {
       const exhaustive: never = status;
       return exhaustive;
@@ -96,6 +99,7 @@ function runState(status: BulkUploadStatus, running: boolean): ParachuteState {
 }
 
 export function OrderImportDetail({ importId }: { readonly importId: string }): ReactElement {
+  const t = useT();
   const detail = useOrderImport(importId);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const job = detail.data;
@@ -123,7 +127,7 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setDownloadError(serverVerdict(err, 'Could not download the error report.'));
+      setDownloadError(verdict(err, t, t('orderImport.couldNotDownloadThe')));
       // Re-thrown so the button's label ends on the real outcome; the
       // verdict above is what the seller reads.
       throw err;
@@ -137,13 +141,18 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
   return (
     <div className="ord-page">
       <BackLink href="/orders/import" icon={<ArrowLeft size={14} aria-hidden />}>
-        Bulk order import
+        {t('orderImport.bulkOrderImport')}
       </BackLink>
 
       {detail.isLoading ? (
         // Shaped like the page that is coming — four tiles over a card
         // — so nothing jumps when the numbers land.
-        <div className="ord-stack" role="status" aria-live="polite" aria-label="Loading import…">
+        <div
+          className="ord-stack"
+          role="status"
+          aria-live="polite"
+          aria-label={t('orderImport.loadingImport')}
+        >
           <Skeleton width="40%" height={24} />
           <div className="ord-kpis">
             {[0, 1, 2, 3].map((i) => (
@@ -154,24 +163,24 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
         </div>
       ) : detail.isError ? (
         <ErrorState
-          message={serverVerdict(detail.error, 'Failed to load this import.')}
+          message={verdict(detail.error, t, t('orderImport.failedToLoadThis'))}
           retry={() => void detail.refetch()}
         />
       ) : job === undefined ? (
-        <ErrorState message="This import could not be found." />
+        <ErrorState message={t('orderImport.thisImportCouldNot')} />
       ) : (
         <>
           <PageHeader
             breadcrumbs={[
-              { label: 'Client console' },
-              { label: 'Fulfilment' },
-              { label: 'Orders', href: '/orders' },
-              { label: 'CSV import', href: '/orders/import' },
+              { label: t('orderImport.clientConsole') },
+              { label: t('orderImport.fulfilment') },
+              { label: t('orderImport.orders'), href: '/orders' },
+              { label: t('orderImport.csvImport'), href: '/orders/import' },
               { label: job.fileName },
             ]}
             Link={Link}
             title={<span className="sk-ident">{job.fileName}</span>}
-            subtitle={outcomeProse(job.status)}
+            subtitle={outcomeProse(t, job.status)}
             meta={
               <span className="ord-meta">
                 <StatusChip
@@ -193,7 +202,7 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
               has handled nothing yet, so it shows no number at all. */}
           <div className="ord-card">
             <ParachuteProgress
-              label={`Importing ${job.fileName}`}
+              label={t('orderImport.importing', { fileName: job.fileName })}
               state={runState(job.status, running)}
               value={
                 !running
@@ -202,64 +211,66 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
                     ? null
                     : Math.min(100, Math.max(0, (handled / job.rowCount) * 100))
               }
-              doneLabel="Import finished"
-              failedLabel="Import stopped"
-              detail={`${handled} of ${job.rowCount} ${job.rowCount === 1 ? 'row' : 'rows'} handled`}
+              doneLabel={t('orderImport.importFinished')}
+              failedLabel={t('orderImport.importStopped')}
+              detail={t(job.rowCount === 1 ? 'orderImport.rowHandled' : 'orderImport.rowsHandled', {
+                handled,
+                count: job.rowCount,
+              })}
             />
           </div>
 
           <div className="ord-kpis">
             <KpiCard
-              label="Rows in file"
+              label={t('orderImport.rowsInFile')}
               icon={<FileSpreadsheet size={14} />}
               value={job.rowCount}
               unit={job.rowCount === 1 ? 'row' : 'rows'}
               tone="neutral"
             />
             <KpiCard
-              label="Orders created"
+              label={t('orderImport.ordersCreated')}
               icon={<PackagePlus size={14} />}
               value={job.ordersCreated}
               unit={job.ordersCreated === 1 ? 'order' : 'orders'}
               tone={job.ordersCreated > 0 ? 'credit' : 'neutral'}
-              hint={running ? 'Still counting.' : undefined}
+              hint={running ? t('orderImport.stillCounting') : undefined}
             />
             <KpiCard
-              label="Rows refused"
+              label={t('orderImport.rowsRefused')}
               icon={<XCircle size={14} />}
               value={job.rowsFailed}
               unit={job.rowsFailed === 1 ? 'row' : 'rows'}
               tone={job.rowsFailed > 0 ? 'debit' : 'neutral'}
-              hint={job.rowsFailed > 0 ? 'Listed in the error report.' : undefined}
+              hint={job.rowsFailed > 0 ? t('orderImport.listedInTheError') : undefined}
             />
             <KpiCard
-              label="Rows skipped"
+              label={t('orderImport.rowsSkipped')}
               icon={<SkipForward size={14} />}
               value={job.rowsSkipped}
               unit={job.rowsSkipped === 1 ? 'row' : 'rows'}
               tone="neutral"
-              hint={
-                job.rowsSkipped > 0
-                  ? 'Already sent under the same reference — not duplicated.'
-                  : undefined
-              }
+              hint={job.rowsSkipped > 0 ? t('orderImport.alreadySentUnderThe') : undefined}
             />
           </div>
 
-          <OrdSection title="This run" note="When it ran, and for how long.">
+          <OrdSection title={t('orderImport.thisRun')} note={t('orderImport.whenItRanAnd')}>
             <Facts
               columns={2}
               items={[
-                { label: 'Status', value: <span className="sk-ident">{job.status}</span> },
-                { label: 'Uploaded', value: stamp(job.createdAt) },
-                { label: 'Started', value: stamp(job.startedAt) },
-                { label: 'Finished', value: stamp(job.completedAt) },
                 {
-                  label: running ? 'Running for' : 'Took',
+                  label: t('orderImport.status'),
+                  value: <span className="sk-ident">{job.status}</span>,
+                },
+                { label: t('orderImport.uploaded'), value: stamp(job.createdAt) },
+                { label: t('orderImport.started'), value: stamp(job.startedAt) },
+                { label: t('orderImport.finished'), value: stamp(job.completedAt) },
+                {
+                  label: running ? t('orderImport.runningFor') : t('orderImport.took'),
                   value: duration(job.startedAt, job.completedAt),
                 },
                 {
-                  label: 'Import ID',
+                  label: t('orderImport.importId'),
                   value: <span className="sk-ident">{job.id}</span>,
                 },
               ]}
@@ -280,21 +291,21 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
                 variant="secondary"
                 icon={<Download size={14} />}
                 labels={{
-                  idle: 'Error report CSV',
-                  busy: 'Downloading…',
-                  done: 'Downloaded',
-                  error: 'Download failed',
+                  idle: t('orderImport.errorReportCsv'),
+                  busy: t('orderImport.downloading'),
+                  done: t('orderImport.downloaded'),
+                  error: t('orderImport.downloadFailed'),
                 }}
                 onAction={() => downloadErrorReport()}
               />
             )}
             {job.ordersCreated > 0 && (
               <LinkButton href="/orders" variant="ghost">
-                View orders
+                {t('orderImport.viewOrders')}
               </LinkButton>
             )}
             <LinkButton href="/orders/import" variant="ghost" icon={<Upload size={15} />}>
-              Import another file
+              {t('orderImport.importAnotherFile')}
             </LinkButton>
           </div>
         </>

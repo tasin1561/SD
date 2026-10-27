@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@skydrop/ui/app/page-header';
 import { EditOrderForm } from './_components/edit-order-form';
+import { getT } from '@/i18n/server';
 
 /**
  * Edit a DRAFT order. Loads the existing order on the client + shows
@@ -15,20 +16,21 @@ export default async function EditOrderPage({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<ReactElement> {
+  const { t } = await getT();
   const { id } = await params;
   return (
     <div className="ord-page">
       <PageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Fulfilment' },
-          { label: 'Orders', href: '/orders' },
-          { label: 'Order', href: `/orders/${id}` },
-          { label: 'Edit' },
+          { label: t('orderEdit.clientConsole') },
+          { label: t('orderEdit.fulfilment') },
+          { label: t('orderEdit.orders'), href: '/orders' },
+          { label: t('orderEdit.order'), href: `/orders/${id}` },
+          { label: t('orderEdit.edit') },
         ]}
         Link={Link}
-        title="Edit order"
-        subtitle="A draft can be changed in full. Once it is waiting on the call centre, the recipient and the notes are still yours to correct."
+        title={t('orderEdit.editOrder')}
+        subtitle={t('orderEdit.aDraftCanBe')}
       />
       <EditOrderForm orderId={id} />
     </div>

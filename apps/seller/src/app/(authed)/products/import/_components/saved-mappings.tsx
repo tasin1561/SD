@@ -25,7 +25,8 @@ import {
   useUpdateCsvMapping,
   type CsvMappingView,
 } from '@/lib/account-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * Saved column mappings for CSV import.
@@ -42,6 +43,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  * can be saved.
  */
 export function SavedMappings(): ReactElement {
+  const t = useT();
   const list = useCsvMappings();
   const remove = useDeleteCsvMapping();
   const update = useUpdateCsvMapping();
@@ -54,8 +56,8 @@ export function SavedMappings(): ReactElement {
 
   return (
     <AreaSection
-      title="Saved column mappings"
-      note="Your spreadsheet's headers, translated to ours."
+      title={t('productImport.savedColumnMappings')}
+      note={t('productImport.yourSpreadsheetSHeaders')}
       action={
         <Button
           variant="secondary"
@@ -63,7 +65,7 @@ export function SavedMappings(): ReactElement {
           icon={<Plus size={14} />}
           onClick={() => setCreating(true)}
         >
-          Save a mapping
+          {t('productImport.saveAMapping')}
         </Button>
       }
     >
@@ -74,14 +76,14 @@ export function SavedMappings(): ReactElement {
           </PanelPad>
         ) : list.isError ? (
           <PanelPad>
-            <InlineError message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+            <InlineError message={verdict(list.error, t)} retry={() => void list.refetch()} />
           </PanelPad>
         ) : items.length === 0 ? (
           <PanelPad>
             <EmptyState
               bare
-              title="No saved mappings"
-              description="Only worth it if your export headers differ from the template. If you use our template as-is, you do not need one."
+              title={t('productImport.noSavedMappings')}
+              description={t('productImport.onlyWorthItIf')}
               action={
                 <Button
                   variant="secondary"
@@ -89,20 +91,20 @@ export function SavedMappings(): ReactElement {
                   icon={<Plus size={15} />}
                   onClick={() => setCreating(true)}
                 >
-                  Save a mapping
+                  {t('productImport.saveAMapping')}
                 </Button>
               }
             />
           </PanelPad>
         ) : (
-          <Table caption="Saved column mappings">
+          <Table caption={t('productImport.savedColumnMappings')}>
             <THead>
               <Tr>
-                <Th>Name</Th>
-                <Th align="right">Columns</Th>
-                <Th>Last used</Th>
-                <Th>Default</Th>
-                <Th align="right" aria-label="Actions" />
+                <Th>{t('productImport.name')}</Th>
+                <Th align="right">{t('productImport.columns')}</Th>
+                <Th>{t('productImport.lastUsed')}</Th>
+                <Th>{t('productImport.default')}</Th>
+                <Th align="right" aria-label={t('productImport.actions')} />
               </Tr>
             </THead>
             <TBody>
@@ -140,7 +142,7 @@ export function SavedMappings(): ReactElement {
                           disabled={update.isPending}
                           onClick={() => update.mutate({ id: m.id, body: { isDefault: true } })}
                         >
-                          Make default
+                          {t('productImport.makeDefault')}
                         </Button>
                       )}
                       <Button
@@ -149,7 +151,7 @@ export function SavedMappings(): ReactElement {
                         icon={<Pencil size={14} />}
                         onClick={() => setEditing(m)}
                       >
-                        Edit
+                        {t('productImport.edit')}
                       </Button>
                       <Button
                         variant="ghost"
@@ -161,7 +163,7 @@ export function SavedMappings(): ReactElement {
                           setRemoving(m);
                         }}
                       >
-                        Remove
+                        {t('productImport.remove')}
                       </Button>
                     </span>
                   </Td>
@@ -173,7 +175,7 @@ export function SavedMappings(): ReactElement {
       </Panel>
 
       {(remove.error !== null || update.error !== null) && removing === null && (
-        <InlineError message={serverVerdict(remove.error ?? update.error)} />
+        <InlineError message={verdict(remove.error ?? update.error, t)} />
       )}
 
       <ConfirmDialog
@@ -181,16 +183,16 @@ export function SavedMappings(): ReactElement {
         onOpenChange={(open) => {
           if (!open) setRemoving(null);
         }}
-        title="Remove this mapping?"
+        title={t('productImport.removeThisMapping')}
         entity={removing === null ? '' : removing.name}
         consequence={
           removing !== null && removing.isDefault
-            ? 'It is your default, so future uploads use the template headers until you pick another. Uploads already done are not touched.'
-            : 'Future uploads can no longer use it. Uploads already done are not touched.'
+            ? t('productImport.itIsYourDefault')
+            : t('productImport.futureUploadsCanNo')
         }
-        confirmLabel="Remove mapping"
+        confirmLabel={t('productImport.removeMapping')}
         destructive
-        error={remove.error === null ? undefined : serverVerdict(remove.error)}
+        error={remove.error === null ? undefined : verdict(remove.error, t)}
         onConfirm={async () => {
           if (removing === null) return;
           await remove.mutateAsync({ id: removing.id });
@@ -224,6 +226,7 @@ function MappingDialog({
   creating: boolean;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const create = useCreateCsvMapping();
   const update = useUpdateCsvMapping();
   const open = mapping !== null || creating;
@@ -253,16 +256,16 @@ function MappingDialog({
     try {
       const parsed: unknown = JSON.parse(effectiveJson);
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        setParseError('The mapping must be a JSON object of ourField → yourHeader.');
+        setParseError(t('productImport.theMappingMustBe'));
         return;
       }
       columnMap = parsed as Record<string, string>;
     } catch {
-      setParseError('That is not valid JSON. Check for a trailing comma or a missing quote.');
+      setParseError(t('productImport.thatIsNotValid'));
       return;
     }
     if (Object.keys(columnMap).length === 0) {
-      setParseError('An empty mapping would translate nothing.');
+      setParseError(t('productImport.anEmptyMappingWould'));
       return;
     }
     if (mapping === null) {
@@ -284,18 +287,20 @@ function MappingDialog({
       onOpenChange={(next) => {
         if (!next) close();
       }}
-      title={mapping === null ? 'Save a column mapping' : 'Edit mapping'}
-      description="Keys are our field names; values are the headers as they appear in your file."
+      title={
+        mapping === null ? t('productImport.saveAColumnMapping') : t('productImport.editMapping')
+      }
+      description={t('productImport.keysAreOurField')}
       size="md"
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={close}>
-            Cancel
+            {t('productImport.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
-            labels={{ idle: 'Save mapping', busy: 'Saving…' }}
+            labels={{ idle: t('productImport.saveMapping'), busy: t('productImport.saving') }}
             state={busy ? 'busy' : mutationPhase(mapping === null ? create : update)}
             disabled={effectiveName.trim() === '' || effectiveJson.trim() === '' || busy}
             onClick={save}
@@ -305,9 +310,9 @@ function MappingDialog({
     >
       <div className="inv-stack">
         <TextField
-          label="Name"
+          label={t('productImport.name')}
           id="cm-name"
-          hint="How you will recognise it. e.g. Shopify export"
+          hint={t('productImport.howYouWillRecognise')}
           value={effectiveName}
           onChange={(e) => {
             setTouched(true);
@@ -317,7 +322,7 @@ function MappingDialog({
         />
 
         <TextArea
-          label="Mapping"
+          label={t('productImport.mapping')}
           id="cm-json"
           rows={8}
           inputClassName="sk-ident"
@@ -330,14 +335,11 @@ function MappingDialog({
           placeholder={EXAMPLE}
         />
 
-        <Note>
-          Download the template to see every field name we accept — anything you do not map keeps
-          its template header.
-        </Note>
+        <Note>{t('productImport.downloadTheTemplateTo')}</Note>
 
         {parseError !== null && <InlineError message={parseError} />}
         {serverError !== null && serverError !== undefined && (
-          <InlineError message={serverVerdict(serverError)} />
+          <InlineError message={verdict(serverError, t)} />
         )}
       </div>
     </Dialog>

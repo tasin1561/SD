@@ -31,7 +31,7 @@ import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { resellerStoreStatusKind, resellerStoreStatusLabel } from '@skydrop/ui/status';
 import type { ResellerStoreStatusValue } from '@skydrop/api-client';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { roleLine } from '@/lib/role-words';
 import { StoreActionsSection } from './_components/store-actions-section';
 import { StoreCatalogue } from './_components/store-catalogue';
@@ -62,6 +62,10 @@ import {
   RsSection,
   pendingPhase,
 } from '../_components/rs-parts';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 type StoreTab = 'overview' | 'catalogue' | 'terms' | 'actions';
 
@@ -86,23 +90,23 @@ function day(iso: string | null): string {
       });
 }
 
-const EVENT_WORDS: Record<string, string> = {
-  CREATED: 'Opened',
-  APPROVED: 'Approved',
-  REJECTED: 'Rejected',
-  PAUSED: 'Paused',
-  RESUMED: 'Resumed',
-  CLOSED: 'Closed',
-  WALLET_MANAGER_CHANGED: 'Wallet manager changed',
-};
+const eventWordsOf = (t: Translate<MessageKey>): Record<string, string> => ({
+  CREATED: t('resellerStoreDetail.opened'),
+  APPROVED: t('resellerStoreDetail.approved'),
+  REJECTED: t('resellerStoreDetail.rejected'),
+  PAUSED: t('resellerStoreDetail.paused'),
+  RESUMED: t('resellerStoreDetail.resumed'),
+  CLOSED: t('resellerStoreDetail.closed'),
+  WALLET_MANAGER_CHANGED: t('resellerStoreDetail.walletManagerChanged'),
+});
 
-const ACTOR_WORDS: Record<string, string> = {
-  STAFF: 'Skydrop',
-  SELLER: 'You',
-  STORE: 'The store',
-  SYSTEM: 'System',
-  API: 'Your systems',
-};
+const actorWordsOf = (t: Translate<MessageKey>): Record<string, string> => ({
+  STAFF: t('resellerStoreDetail.skydrop2'),
+  SELLER: t('resellerStoreDetail.you2'),
+  STORE: t('resellerStoreDetail.theStore'),
+  SYSTEM: t('resellerStoreDetail.system'),
+  API: t('resellerStoreDetail.yourSystems'),
+});
 
 /**
  * The tone of the STATUS card.
@@ -134,18 +138,18 @@ function statusTone(status: ResellerStoreStatusValue): KpiTone {
   }
 }
 
-function statusWords(status: ResellerStoreStatusValue): string {
+function statusWords(t: Translate<MessageKey>, status: ResellerStoreStatusValue): string {
   switch (status) {
     case 'ACTIVE':
-      return 'Selling';
+      return t('resellerStoreDetail.selling');
     case 'PENDING_SELLER_APPROVAL':
-      return 'Awaiting you';
+      return t('resellerStoreDetail.awaitingYou');
     case 'PAUSED':
-      return 'Paused';
+      return t('resellerStoreDetail.paused');
     case 'REJECTED':
-      return 'Rejected';
+      return t('resellerStoreDetail.rejected');
     case 'CLOSED':
-      return 'Closed';
+      return t('resellerStoreDetail.closed');
     default: {
       const exhaustive: never = status;
       return exhaustive;
@@ -167,6 +171,7 @@ function statusWords(status: ResellerStoreStatusValue): string {
  *       store row itself carries no signing date.
  */
 export default function ResellerStorePage(): ReactElement {
+  const t = useT();
   const { storeId } = useParams<{ storeId: string }>();
   const store = useResellerStore(storeId);
   const [tab, setTab] = useState<StoreTab>('overview');
@@ -177,16 +182,16 @@ export default function ResellerStorePage(): ReactElement {
     return (
       <div className="rs-page">
         <div className="rs-head">
-          <RsBack href="/reseller-stores">All member stores</RsBack>
+          <RsBack href="/reseller-stores">{t('resellerStoreDetail.allMemberStores')}</RsBack>
           <PageHeader
             breadcrumbs={[
-              { label: 'Client console' },
-              { label: 'Reselling' },
-              { label: 'Stores', href: '/reseller-stores' },
-              { label: 'Store' },
+              { label: t('resellerStoreDetail.clientConsole') },
+              { label: t('resellerStoreDetail.reselling') },
+              { label: t('resellerStoreDetail.stores'), href: '/reseller-stores' },
+              { label: t('resellerStoreDetail.store') },
             ]}
             Link={Link}
-            title="Member store"
+            title={t('resellerStoreDetail.memberStore')}
           />
         </div>
         {store.isPending ? (
@@ -196,10 +201,10 @@ export default function ResellerStorePage(): ReactElement {
                 <Skeleton key={i} className="rs-kpi-skel" height={104} rounded="md" />
               ))}
             </div>
-            <SkeletonRows rows={5} cols={4} label="Loading the store" />
+            <SkeletonRows rows={5} cols={4} label={t('resellerStoreDetail.loadingTheStore')} />
           </>
         ) : (
-          <ErrorState message={serverVerdict(store.error)} retry={() => void store.refetch()} />
+          <ErrorState message={verdict(store.error, t)} retry={() => void store.refetch()} />
         )}
       </div>
     );
@@ -212,27 +217,37 @@ export default function ResellerStorePage(): ReactElement {
   return (
     <div className="rs-page">
       <div className="rs-head">
-        <RsBack href="/reseller-stores">All member stores</RsBack>
+        <RsBack href="/reseller-stores">{t('resellerStoreDetail.allMemberStores')}</RsBack>
         <PageHeader
           breadcrumbs={[
-            { label: 'Client console' },
-            { label: 'Reselling' },
-            { label: 'Stores', href: '/reseller-stores' },
+            { label: t('resellerStoreDetail.clientConsole') },
+            { label: t('resellerStoreDetail.reselling') },
+            { label: t('resellerStoreDetail.stores'), href: '/reseller-stores' },
             { label: s.name },
           ]}
           Link={Link}
           title={s.name}
           subtitle={
             s.displayName === null
-              ? 'Customers see this name on their parcel and on the tracking page.'
-              : `Customers see “${s.displayName}”.`
+              ? t('resellerStoreDetail.customersSeeThisName')
+              : t('resellerStoreDetail.customersSee', { displayName: s.displayName })
           }
           meta={
             <RsFacts>
               <RsFact tone={s.origin === 'ADMIN' ? 'accent' : undefined}>
-                Opened by {s.origin === 'ADMIN' ? 'Skydrop' : 'you'}
+                {t(
+                  s.origin === 'ADMIN'
+                    ? 'resellerStoreDetail.openedBySkydrop'
+                    : 'resellerStoreDetail.openedByYou',
+                )}
               </RsFact>
-              <RsFact>Wallet run by {s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'you'}</RsFact>
+              <RsFact>
+                {t(
+                  s.walletManagedBy === 'SKYDROP'
+                    ? 'resellerStoreDetail.walletRunBySkydrop'
+                    : 'resellerStoreDetail.walletRunByYou',
+                )}
+              </RsFact>
               {invited > 0 && (
                 <RsFact tone="warn" dot>
                   {invited} invitation{invited === 1 ? '' : 's'} outstanding
@@ -246,8 +261,10 @@ export default function ResellerStorePage(): ReactElement {
                 kind={resellerStoreStatusKind(s.status)}
                 label={resellerStoreStatusLabel(s.status)}
               />
-              <RsLink href={`/orders?storeId=${encodeURIComponent(s.id)}`}>Its orders</RsLink>
-              <RsLink href="/reseller-stores/reports">Reports</RsLink>
+              <RsLink href={`/orders?storeId=${encodeURIComponent(s.id)}`}>
+                {t('resellerStoreDetail.itsOrders')}
+              </RsLink>
+              <RsLink href="/reseller-stores/reports">{t('resellerStoreDetail.reports')}</RsLink>
             </div>
           }
         />
@@ -260,43 +277,50 @@ export default function ResellerStorePage(): ReactElement {
              the team count is a plain number, so only it rolls up. */}
       <div className="rs-kpis">
         <KpiCard
-          label="Status"
+          label={t('resellerStoreDetail.status')}
           icon={<CircleDot size={14} />}
-          figure={statusWords(s.status)}
+          figure={statusWords(t, s.status)}
           tone={statusTone(s.status)}
           hint={
-            s.statusChangedAt === null ? 'Since it was opened.' : `Since ${day(s.statusChangedAt)}.`
+            s.statusChangedAt === null
+              ? t('resellerStoreDetail.sinceItWasOpened')
+              : t('resellerStoreDetail.since', { statusChangedAt: day(s.statusChangedAt) })
           }
         />
         <KpiCard
-          label="Team"
+          label={t('resellerStoreDetail.team')}
           icon={<Users size={14} />}
           value={s.memberCount}
           unit={s.memberCount === 1 ? 'person' : 'people'}
           tone="neutral"
           hint={
             invited === 0
-              ? 'Everyone who can sign in to this store.'
-              : `${invited} more invited and not yet signed in.`
+              ? t('resellerStoreDetail.everyoneWhoCanSign')
+              : t('resellerStoreDetail.moreInvitedAndNot', { invited })
           }
         />
         <KpiCard
-          label="Wallet managed by"
+          label={t('resellerStoreDetail.walletManagedBy')}
           icon={<Wallet size={14} />}
-          figure={s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'You'}
+          figure={s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : t('resellerStoreDetail.youCap')}
           tone="neutral"
           hint={
             s.walletManagedBy === 'SKYDROP'
-              ? 'It tops up to us and withdraws through us.'
-              : 'You top it up from your wallet and pay it yourself.'
+              ? t('resellerStoreDetail.itTopsUpTo')
+              : t('resellerStoreDetail.youTopItUp')
           }
         />
         <KpiCard
-          label="Opened"
+          label={t('resellerStoreDetail.opened')}
           icon={<CalendarClock size={14} />}
           figure={day(s.createdAt)}
           tone="neutral"
-          hint={`${s.events.length} ${s.events.length === 1 ? 'entry' : 'entries'} in its history.`}
+          hint={t(
+            s.events.length === 1
+              ? 'resellerStoreDetail.historyEntryOne'
+              : 'resellerStoreDetail.historyEntryMany',
+            { count: s.events.length },
+          )}
         />
       </div>
 
@@ -305,7 +329,7 @@ export default function ResellerStorePage(): ReactElement {
           labelled by its tab. Only the chosen panel is mounted, exactly
           as before, so a tab's data is asked for when it is opened. */}
       <Tabs
-        label="Store sections"
+        label={t('resellerStoreDetail.storeSections')}
         panelClassName="rs-panel"
         value={tab}
         onChange={(id) => {
@@ -314,22 +338,22 @@ export default function ResellerStorePage(): ReactElement {
         items={[
           {
             id: 'overview',
-            label: 'Overview',
+            label: t('resellerStoreDetail.overview'),
             panel: <OverviewTab store={s} open={open} final={final} />,
           },
           {
             id: 'catalogue',
-            label: 'Catalogue & stock',
+            label: t('resellerStoreDetail.catalogueStock'),
             panel: <StoreCatalogue storeId={s.id} storeName={s.name} final={final} />,
           },
           {
             id: 'terms',
-            label: 'Terms',
+            label: t('resellerStoreDetail.terms'),
             panel: <TermsSection storeId={s.id} final={final} />,
           },
           {
             id: 'actions',
-            label: 'What they can do',
+            label: t('resellerStoreDetail.whatTheyCanDo'),
             panel: <StoreActionsSection storeId={s.id} storeName={s.name} final={final} />,
           },
         ]}
@@ -347,20 +371,27 @@ function OverviewTab({
   open: boolean;
   final: boolean;
 }): ReactElement {
+  const t = useT();
   const details: ReadonlyArray<{ label: string; value: string }> = [
-    { label: 'Customers see', value: s.displayName ?? s.name },
-    { label: 'Opened by', value: s.origin === 'ADMIN' ? 'Skydrop' : 'You' },
-    { label: 'Contact email', value: s.contactEmail ?? '—' },
-    { label: 'Contact phone', value: s.contactPhone ?? '—' },
-    { label: 'Note', value: s.note ?? '—' },
-    { label: 'Status since', value: when(s.statusChangedAt) },
+    { label: t('resellerStoreDetail.customersSee2'), value: s.displayName ?? s.name },
+    {
+      label: t('resellerStoreDetail.openedBy'),
+      value: s.origin === 'ADMIN' ? 'Skydrop' : t('resellerStoreDetail.youCap'),
+    },
+    { label: t('resellerStoreDetail.contactEmail'), value: s.contactEmail ?? '—' },
+    { label: t('resellerStoreDetail.contactPhone'), value: s.contactPhone ?? '—' },
+    { label: t('resellerStoreDetail.note2'), value: s.note ?? '—' },
+    { label: t('resellerStoreDetail.statusSince'), value: when(s.statusChangedAt) },
   ];
   return (
     <>
       {s.status === 'PENDING_SELLER_APPROVAL' ? <DecisionCard store={s} /> : null}
       {open ? <LifecycleCard store={s} /> : null}
 
-      <RsSection title="Details" note="How we hold this store.">
+      <RsSection
+        title={t('resellerStoreDetail.details')}
+        note={t('resellerStoreDetail.howWeHoldThis')}
+      >
         <dl className="rs-facts-list">
           {details.map((d) => (
             <div key={d.label} className="rs-facts-list__item">
@@ -376,28 +407,28 @@ function OverviewTab({
       <TeamSection store={s} canInvite={open} />
 
       <RsSection
-        title="History"
-        note="Every change to this store, oldest last. Never edited."
+        title={t('resellerStoreDetail.history')}
+        note={t('resellerStoreDetail.everyChangeToThis')}
         flush
       >
         {s.events.length === 0 ? (
-          <EmptyState bare title="No history yet" />
+          <EmptyState bare title={t('resellerStoreDetail.noHistoryYet')} />
         ) : (
-          <Table caption="Store history">
+          <Table caption={t('resellerStoreDetail.storeHistory')}>
             <THead>
               <Tr>
-                <Th>When</Th>
-                <Th>What</Th>
-                <Th>By</Th>
-                <Th>Note</Th>
+                <Th>{t('resellerStoreDetail.when')}</Th>
+                <Th>{t('resellerStoreDetail.what')}</Th>
+                <Th>{t('resellerStoreDetail.by')}</Th>
+                <Th>{t('resellerStoreDetail.note2')}</Th>
               </Tr>
             </THead>
             <TBody>
               {s.events.map((e) => (
                 <Tr key={e.id}>
                   <Td className="rs-when sk-figure">{when(e.createdAt)}</Td>
-                  <Td className="rs-strong">{EVENT_WORDS[e.kind] ?? e.kind}</Td>
-                  <Td className="rs-small">{ACTOR_WORDS[e.actorType] ?? e.actorType}</Td>
+                  <Td className="rs-strong">{eventWordsOf(t)[e.kind] ?? e.kind}</Td>
+                  <Td className="rs-small">{actorWordsOf(t)[e.actorType] ?? e.actorType}</Td>
                   <Td className="rs-small">{e.note ?? '—'}</Td>
                 </Tr>
               ))}
@@ -410,6 +441,7 @@ function OverviewTab({
 }
 
 function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const approve = useApproveResellerStore();
   const reject = useRejectResellerStore();
@@ -432,10 +464,10 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
     };
     try {
       await approve.mutateAsync({ storeId: store.id, body: { invite } });
-      toast.success(`“${store.name}” is approved and open.`);
+      toast.success(t('resellerStoreDetail.isApprovedAndOpen', { store: store.name }));
       setApproving(false);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -444,10 +476,10 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
     setError(null);
     try {
       await reject.mutateAsync({ storeId: store.id, body: { reason: reason.trim() } });
-      toast.success(`“${store.name}” is rejected.`);
+      toast.success(t('resellerStoreDetail.isRejected', { store: store.name }));
       setRejecting(false);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -461,31 +493,31 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
             <Store size={18} />
           </span>
           <div>
-            <h2 className="rs-decision__title">Skydrop opened this store for you</h2>
-            <p className="rs-decision__body">
-              Nothing can be ordered through it until you approve it. Rejecting it is final.
-            </p>
+            <h2 className="rs-decision__title">
+              {t('resellerStoreDetail.skydropOpenedThisStore')}
+            </h2>
+            <p className="rs-decision__body">{t('resellerStoreDetail.nothingCanBeOrdered')}</p>
           </div>
         </div>
         <div className="rs-actions">
           <Button variant="primary" size="md" onClick={() => setApproving(true)}>
-            Approve
+            {t('resellerStoreDetail.approve')}
           </Button>
           <Button variant="destructive" size="md" onClick={() => setRejecting(true)}>
-            Reject
+            {t('resellerStoreDetail.reject')}
           </Button>
         </div>
       </div>
       <Dialog
         open={approving}
         onOpenChange={setApproving}
-        title={`Approve “${store.name}”?`}
-        description="It opens at once, with its first user invited — they get the email that gives the store a login."
+        title={t('resellerStoreDetail.approve2', { store: store.name })}
+        description={t('resellerStoreDetail.itOpensAtOnce')}
         icon={<UserPlus size={18} />}
         footer={
           <DialogFooter>
             <Button variant="secondary" size="md" onClick={() => setApproving(false)}>
-              Cancel
+              {t('resellerStoreDetail.cancel')}
             </Button>
             <AsyncButton
               type="submit"
@@ -493,7 +525,10 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
               variant="primary"
               size="md"
               state={pendingPhase(approve.isPending)}
-              labels={{ idle: 'Approve', busy: 'Approving…' }}
+              labels={{
+                idle: t('resellerStoreDetail.approve'),
+                busy: t('resellerStoreDetail.approving'),
+              }}
             />
           </DialogFooter>
         }
@@ -501,7 +536,7 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
         <form id="rs-approve-form" onSubmit={doApprove} className="rs-form">
           <TextField
             id="ap-email"
-            label="First user’s email"
+            label={t('resellerStoreDetail.firstUserSEmail')}
             type="email"
             required
             value={inviteEmail}
@@ -509,8 +544,8 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
           />
           <TextField
             id="ap-name"
-            label="Their name"
-            hint="They become the store’s owner."
+            label={t('resellerStoreDetail.theirName')}
+            hint={t('resellerStoreDetail.theyBecomeTheStore')}
             required
             value={inviteName}
             onChange={(e) => setInviteName(e.target.value)}
@@ -521,13 +556,13 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
       <Dialog
         open={rejecting}
         onOpenChange={setRejecting}
-        title={`Reject “${store.name}”?`}
-        description="This is final. Say why — Skydrop reads it."
+        title={t('resellerStoreDetail.reject2', { store: store.name })}
+        description={t('resellerStoreDetail.thisIsFinalSay')}
         tone="critical"
         footer={
           <DialogFooter>
             <Button variant="secondary" size="md" onClick={() => setRejecting(false)}>
-              Cancel
+              {t('resellerStoreDetail.cancel')}
             </Button>
             <AsyncButton
               type="submit"
@@ -535,7 +570,10 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
               variant="destructive"
               size="md"
               state={pendingPhase(reject.isPending)}
-              labels={{ idle: 'Reject for good', busy: 'Rejecting…' }}
+              labels={{
+                idle: t('resellerStoreDetail.rejectForGood'),
+                busy: t('resellerStoreDetail.rejecting'),
+              }}
             />
           </DialogFooter>
         }
@@ -543,8 +581,8 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
         <form id="rs-reject-form" onSubmit={doReject} className="rs-form">
           <TextArea
             id="rj-reason"
-            label="Why"
-            hint="At least 10 characters."
+            label={t('resellerStoreDetail.why')}
+            hint={t('resellerStoreDetail.atLeast10Characters')}
             required
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -557,6 +595,7 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
 }
 
 function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const pause = usePauseResellerStore();
   const resume = useResumeResellerStore();
@@ -572,12 +611,12 @@ function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement 
     setError(null);
     try {
       await close.mutateAsync({ storeId: store.id, body: { reason: reason.trim() } });
-      toast.success(`“${store.name}” is closed.`);
+      toast.success(t('resellerStoreDetail.isClosed', { store: store.name }));
       setClosing(false);
     } catch (err) {
       // STORE_HAS_ORDERS_IN_FLIGHT / STORE_HAS_CREDITS_TO_RUN /
       // STORE_WALLET_NOT_SETTLED each say what to do instead (FE-2).
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -591,11 +630,13 @@ function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement 
             {paused ? <CirclePause size={18} /> : <CirclePlay size={18} />}
           </span>
           <div>
-            <h2 className="rs-decision__title">{paused ? 'Paused' : 'Open'}</h2>
+            <h2 className="rs-decision__title">
+              {paused ? t('resellerStoreDetail.paused') : t('resellerStoreDetail.open')}
+            </h2>
             <p className="rs-decision__body">
               {paused
-                ? 'It takes no new orders; anything already placed carries on. Close it for good once every parcel is delivered or back with us, every credit has run and its wallet is ₹0.'
-                : 'Pausing stops new orders. To close it for good, pause it first.'}
+                ? t('resellerStoreDetail.itTakesNoNew')
+                : t('resellerStoreDetail.pausingStopsNewOrders')}
             </p>
           </div>
         </div>
@@ -607,7 +648,7 @@ function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement 
               icon={<CirclePause size={15} />}
               onClick={() => setPausing(true)}
             >
-              Pause
+              {t('resellerStoreDetail.pause')}
             </Button>
           ) : (
             <Button
@@ -617,12 +658,12 @@ function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement 
               disabled={resume.isPending}
               onClick={() => setResuming(true)}
             >
-              Resume
+              {t('resellerStoreDetail.resume')}
             </Button>
           )}
           {paused ? (
             <Button variant="destructive" size="md" onClick={() => setClosing(true)}>
-              Close for good
+              {t('resellerStoreDetail.closeForGood')}
             </Button>
           ) : null}
         </div>
@@ -630,18 +671,18 @@ function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement 
       <ConfirmDialog
         open={pausing}
         onOpenChange={setPausing}
-        title={`Pause “${store.name}”?`}
+        title={t('resellerStoreDetail.pause2', { store: store.name })}
         entity={store.name}
-        consequence="It stops taking new orders until you resume it."
-        confirmLabel="Pause"
+        consequence={t('resellerStoreDetail.itStopsTakingNew')}
+        confirmLabel={t('resellerStoreDetail.pause')}
         closeOnSuccess={false}
         onConfirm={async () => {
           try {
             await pause.mutateAsync({ storeId: store.id, body: {} });
-            toast.success(`“${store.name}” is paused.`);
+            toast.success(t('resellerStoreDetail.isPaused', { store: store.name }));
             setPausing(false);
           } catch (err) {
-            toast.error(serverVerdict(err));
+            toast.error(verdict(err, t));
           }
         }}
       />
@@ -650,31 +691,31 @@ function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement 
       <ConfirmDialog
         open={resuming}
         onOpenChange={setResuming}
-        title={`Resume “${store.name}”?`}
+        title={t('resellerStoreDetail.resume2', { store: store.name })}
         entity={store.name}
-        consequence="It takes new orders again straight away."
-        confirmLabel="Resume"
+        consequence={t('resellerStoreDetail.itTakesNewOrders')}
+        confirmLabel={t('resellerStoreDetail.resume')}
         closeOnSuccess={false}
         onConfirm={async () => {
           try {
             await resume.mutateAsync({ storeId: store.id });
-            toast.success(`“${store.name}” takes orders again.`);
+            toast.success(t('resellerStoreDetail.takesOrdersAgain', { store: store.name }));
             setResuming(false);
           } catch (err) {
-            toast.error(serverVerdict(err));
+            toast.error(verdict(err, t));
           }
         }}
       />
       <Dialog
         open={closing}
         onOpenChange={setClosing}
-        title={`Close “${store.name}” for good?`}
-        description="Its team loses access, and it can never reopen."
+        title={t('resellerStoreDetail.closeForGood2', { store: store.name })}
+        description={t('resellerStoreDetail.itsTeamLosesAccess')}
         tone="critical"
         footer={
           <DialogFooter>
             <Button variant="secondary" size="md" onClick={() => setClosing(false)}>
-              Cancel
+              {t('resellerStoreDetail.cancel')}
             </Button>
             <AsyncButton
               type="submit"
@@ -682,7 +723,10 @@ function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement 
               variant="destructive"
               size="md"
               state={pendingPhase(close.isPending)}
-              labels={{ idle: 'Close for good', busy: 'Closing…' }}
+              labels={{
+                idle: t('resellerStoreDetail.closeForGood'),
+                busy: t('resellerStoreDetail.closing'),
+              }}
             />
           </DialogFooter>
         }
@@ -690,8 +734,8 @@ function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement 
         <form id="rs-close-form" onSubmit={doClose} className="rs-form">
           <TextArea
             id="cl-reason"
-            label="Why"
-            hint="At least 10 characters."
+            label={t('resellerStoreDetail.why')}
+            hint={t('resellerStoreDetail.atLeast10Characters')}
             required
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -710,24 +754,29 @@ function WalletCard({
   store: ResellerStoreDetail;
   disabled: boolean;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const set = useSetWalletManager();
   const [value, setValue] = useState<WalletManager>(store.walletManagedBy);
   const [confirming, setConfirming] = useState(false);
   return (
     <RsSection
-      title="Who manages the store’s wallet"
-      note="It cannot change while a top-up or withdrawal is waiting on Skydrop."
+      title={t('resellerStoreDetail.whoManagesTheStore')}
+      note={t('resellerStoreDetail.itCannotChangeWhile')}
     >
       <ul className="rs-who">
         <li>
           <span>
-            <b>You:</b> you top the store up from your wallet and pay it yourself.
+            {richMessage(t('resellerStoreDetail.youTopTheStore'), {
+              b: <b>{t('resellerStoreDetail.you')}</b>,
+            })}
           </span>
         </li>
         <li>
           <span>
-            <b>Skydrop:</b> the store tops up to Skydrop’s bank and withdraws through Skydrop.
+            {richMessage(t('resellerStoreDetail.theStoreTopsUp'), {
+              b: <b>{t('resellerStoreDetail.skydrop')}</b>,
+            })}
           </span>
         </li>
       </ul>
@@ -735,12 +784,12 @@ function WalletCard({
         <div className="rs-inline-field">
           <Select
             id="wallet-manager"
-            label="Managed by"
+            label={t('resellerStoreDetail.managedBy')}
             value={value}
             disabled={disabled}
             onChange={(e) => setValue(e.target.value as WalletManager)}
           >
-            <option value="SELLER">You</option>
+            <option value="SELLER">{t('resellerStoreDetail.you2')}</option>
             <option value="SKYDROP">Skydrop</option>
           </Select>
         </div>
@@ -750,7 +799,7 @@ function WalletCard({
           disabled={disabled || set.isPending || value === store.walletManagedBy}
           onClick={() => setConfirming(true)}
         >
-          Save
+          {t('resellerStoreDetail.save')}
         </Button>
       </div>
       <ConfirmDialog
@@ -758,23 +807,23 @@ function WalletCard({
         onOpenChange={setConfirming}
         title={
           value === 'SKYDROP'
-            ? `Let Skydrop manage “${store.name}”’s wallet?`
-            : `Manage “${store.name}”’s wallet yourself?`
+            ? t('resellerStoreDetail.letSkydropManageS', { store: store.name })
+            : t('resellerStoreDetail.manageSWalletYourself', { store: store.name })
         }
         entity={store.name}
         consequence={
           value === 'SKYDROP'
-            ? 'From now on the store tops up to Skydrop’s bank and withdraws through Skydrop. You stop topping it up and paying it yourself.'
-            : 'From now on you top the store up from your own wallet and pay it yourself. It stops topping up to Skydrop’s bank and withdrawing through Skydrop.'
+            ? t('resellerStoreDetail.fromNowOnThe')
+            : t('resellerStoreDetail.fromNowOnYou')
         }
-        confirmLabel="Change who manages it"
+        confirmLabel={t('resellerStoreDetail.changeWhoManagesIt')}
         closeOnSuccess={false}
         onConfirm={async () => {
           try {
             await set.mutateAsync({ storeId: store.id, body: { walletManagedBy: value } });
-            toast.success('Saved.');
+            toast.success(t('resellerStoreDetail.saved'));
           } catch (err) {
-            toast.error(serverVerdict(err));
+            toast.error(verdict(err, t));
           }
           setConfirming(false);
         }}
@@ -790,6 +839,7 @@ function TeamSection({
   store: ResellerStoreDetail;
   canInvite: boolean;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const invite = useInviteToResellerStore();
   const resend = useResendResellerInvitation();
@@ -800,9 +850,9 @@ function TeamSection({
       // Says the old link is dead, because somebody who forwards the
       // first email after resending will otherwise be sending a key
       // that no longer turns.
-      toast.success(`Invitation sent again to ${email}. The earlier link no longer works.`);
+      toast.success(t('resellerStoreDetail.invitationSentAgainTo', { email }));
     } catch (err) {
-      toast.error(serverVerdict(err));
+      toast.error(verdict(err, t));
     }
   }
   const revoke = useRevokeResellerInvitation();
@@ -826,20 +876,20 @@ function TeamSection({
         storeId: store.id,
         body: { email: email.trim(), fullName: fullName.trim(), roleKeys },
       });
-      toast.success(`Invitation sent to ${email.trim()}.`);
+      toast.success(t('resellerStoreDetail.invitationSentTo', { email: email.trim() }));
       setInviting(false);
       setEmail('');
       setFullName('');
       setRoleKeys([]);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
   return (
     <RsSection
-      title="The store’s team"
-      note="People with a login for this store on the store portal."
+      title={t('resellerStoreDetail.theStoreSTeam')}
+      note={t('resellerStoreDetail.peopleWithALogin')}
       action={
         canInvite ? (
           <Button
@@ -848,7 +898,7 @@ function TeamSection({
             icon={<UserPlus size={14} />}
             onClick={() => setInviting(true)}
           >
-            Invite someone
+            {t('resellerStoreDetail.inviteSomeone')}
           </Button>
         ) : undefined
       }
@@ -857,23 +907,23 @@ function TeamSection({
       {store.team.members.length === 0 && store.team.invitations.length === 0 ? (
         <EmptyState
           bare
-          title="Nobody on the team yet"
-          description={
-            canInvite ? 'Invite the store’s first user — they become its owner.' : undefined
-          }
+          title={t('resellerStoreDetail.nobodyOnTheTeam')}
+          description={canInvite ? t('resellerStoreDetail.inviteTheStoreS') : undefined}
         />
       ) : (
-        <Table caption="The store’s team">
+        <Table caption={t('resellerStoreDetail.theStoreSTeam')}>
           <THead>
             <Tr>
-              <Th>Name</Th>
-              <Th>Email</Th>
-              <Th>Roles</Th>
-              <Th>State</Th>
+              <Th>{t('resellerStoreDetail.name')}</Th>
+              <Th>{t('resellerStoreDetail.email')}</Th>
+              <Th>{t('resellerStoreDetail.roles')}</Th>
+              <Th>{t('resellerStoreDetail.state')}</Th>
               {/* Only an invitation can be acted on here: there is no seller
                   endpoint to change a store member's role or remove them —
                   the store's own admins do that on the reseller portal. */}
-              {store.team.invitations.length > 0 ? <Th>Actions</Th> : null}
+              {store.team.invitations.length > 0 ? (
+                <Th>{t('resellerStoreDetail.actions')}</Th>
+              ) : null}
             </Tr>
           </THead>
           <TBody>
@@ -886,7 +936,11 @@ function TeamSection({
                     Ops, on the screen a seller uses to check who at a
                     store can reach its money. */}
                 <Td className="rs-small">{roleLine(m)}</Td>
-                <Td className="rs-small">Last signed in {when(m.lastLoginAt)}</Td>
+                <Td className="rs-small">
+                  {richMessage(t('resellerStoreDetail.lastSignedIn'), {
+                    lastLoginAt: when(m.lastLoginAt),
+                  })}
+                </Td>
                 {store.team.invitations.length > 0 ? <Td /> : null}
               </Tr>
             ))}
@@ -902,12 +956,12 @@ function TeamSection({
                     {i.expired ? (
                       <>
                         <AlertTriangle size={13} aria-hidden />
-                        Expired {when(i.expiresAt)} — never accepted
+                        {t('resellerStoreDetail.expiredNeverAccepted', { when: when(i.expiresAt) })}
                       </>
                     ) : (
                       <>
                         <Mail size={13} aria-hidden />
-                        Invited — expires {when(i.expiresAt)}
+                        {t('resellerStoreDetail.invitedExpires', { when: when(i.expiresAt) })}
                       </>
                     )}
                   </span>
@@ -920,7 +974,9 @@ function TeamSection({
                       disabled={resend.isPending || revoke.isPending}
                       onClick={() => void doResend(i.id, i.email)}
                     >
-                      {i.expired ? 'Send again' : 'Resend'}
+                      {i.expired
+                        ? t('resellerStoreDetail.sendAgain')
+                        : t('resellerStoreDetail.resend')}
                     </Button>
                     <Button
                       variant="secondary"
@@ -928,7 +984,7 @@ function TeamSection({
                       disabled={revoke.isPending || resend.isPending}
                       onClick={() => setWithdrawing({ id: i.id, email: i.email })}
                     >
-                      Withdraw
+                      {t('resellerStoreDetail.withdraw')}
                     </Button>
                   </span>
                 </Td>
@@ -942,19 +998,21 @@ function TeamSection({
         onOpenChange={(o) => {
           if (!o) setWithdrawing(null);
         }}
-        title={`Withdraw the invitation to ${withdrawing?.email ?? ''}?`}
+        title={t('resellerStoreDetail.withdrawTheInvitationTo', {
+          email: withdrawing?.email ?? '',
+        })}
         entity={withdrawing?.email ?? ''}
-        consequence="The link in their email stops working. You can invite them again later."
-        confirmLabel="Withdraw it"
+        consequence={t('resellerStoreDetail.theLinkInTheir')}
+        confirmLabel={t('resellerStoreDetail.withdrawIt')}
         destructive
         closeOnSuccess={false}
         onConfirm={async () => {
           if (withdrawing === null) return;
           try {
             await revoke.mutateAsync({ storeId: store.id, invitationId: withdrawing.id });
-            toast.success('Invitation withdrawn.');
+            toast.success(t('resellerStoreDetail.invitationWithdrawn'));
           } catch (err) {
-            toast.error(serverVerdict(err));
+            toast.error(verdict(err, t));
           }
           setWithdrawing(null);
         }}
@@ -962,13 +1020,13 @@ function TeamSection({
       <Dialog
         open={inviting}
         onOpenChange={setInviting}
-        title="Invite someone to the store"
-        description="They get an email with a link to set up their login. It works for 7 days."
+        title={t('resellerStoreDetail.inviteSomeoneToThe')}
+        description={t('resellerStoreDetail.theyGetAnEmail')}
         icon={<UserPlus size={18} />}
         footer={
           <DialogFooter>
             <Button variant="secondary" size="md" onClick={() => setInviting(false)}>
-              Cancel
+              {t('resellerStoreDetail.cancel')}
             </Button>
             <AsyncButton
               type="submit"
@@ -976,7 +1034,10 @@ function TeamSection({
               variant="primary"
               size="md"
               state={pendingPhase(invite.isPending)}
-              labels={{ idle: 'Send invitation', busy: 'Sending…' }}
+              labels={{
+                idle: t('resellerStoreDetail.sendInvitation'),
+                busy: t('resellerStoreDetail.sending'),
+              }}
             />
           </DialogFooter>
         }
@@ -984,14 +1045,14 @@ function TeamSection({
         <form id="rs-invite-form" onSubmit={doInvite} className="rs-form">
           <TextField
             id="ti-name"
-            label="Name"
+            label={t('resellerStoreDetail.name')}
             required
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
           />
           <TextField
             id="ti-email"
-            label="Email"
+            label={t('resellerStoreDetail.email')}
             type="email"
             required
             value={email}
@@ -1003,7 +1064,7 @@ function TeamSection({
               DTO, the service or the guard answers first. */}
           <MultiSelect
             id="ti-role"
-            label="Roles"
+            label={t('resellerStoreDetail.roles')}
             required
             options={store.team.roles.map((r) => ({
               value: r.key,
@@ -1015,9 +1076,13 @@ function TeamSection({
               setError(null);
               setRoleKeys(next as readonly StoreRoleKey[]);
             }}
-            placeholder={roleKeys.length === 0 ? 'Choose one or more roles' : 'Add another role'}
-            hint="They can do everything their roles cover between them."
-            emptyText="No matching role"
+            placeholder={
+              roleKeys.length === 0
+                ? t('resellerStoreDetail.chooseOneOrMore')
+                : t('resellerStoreDetail.addAnotherRole')
+            }
+            hint={t('resellerStoreDetail.theyCanDoEverything')}
+            emptyText={t('resellerStoreDetail.noMatchingRole')}
           />
           {error !== null ? <RsError>{error}</RsError> : null}
         </form>

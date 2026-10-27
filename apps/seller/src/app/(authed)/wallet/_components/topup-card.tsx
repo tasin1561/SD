@@ -15,6 +15,7 @@ import { can } from '@/lib/page-access';
 import { useTopupBankAccounts, useTopupProofUrl, useTopupRequests } from '@/lib/api-hooks';
 import { TopupWizard } from './topup-wizard';
 import './wallet.css';
+import { useT } from '@/i18n/client';
 
 /** The view type says `string`; this is what makes it safe to badge. */
 function isTopupStatus(value: string): value is TopupRequestStatus {
@@ -38,6 +39,7 @@ export function TopupCard({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }): ReactElement | null {
+  const t = useT();
   const identity = useSellerIdentity();
   const banks = useTopupBankAccounts();
   const requests = useTopupRequests();
@@ -56,8 +58,8 @@ export function TopupCard({
     <>
       {rows.length === 0 ? (
         <EmptyState
-          title="No top-ups yet."
-          description="Send money to one of our accounts, then record it here — we credit it once it shows on our statement, so it is not instant."
+          title={t('wallet.noTopUpsYet')}
+          description={t('wallet.sendMoneyToOne')}
           action={
             <Button
               variant="primary"
@@ -65,19 +67,19 @@ export function TopupCard({
               icon={<Plus size={15} />}
               onClick={() => onOpenChange(true)}
             >
-              Top-up wallet
+              {t('wallet.topUpWallet')}
             </Button>
           }
         />
       ) : (
-        <Table caption="Top-ups">
+        <Table caption={t('wallet.topUps')}>
           <THead>
             <Tr>
-              <Th>Sent</Th>
-              <Th>To</Th>
-              <Th align="right">Amount</Th>
-              <Th>Reference</Th>
-              <Th>Status</Th>
+              <Th>{t('wallet.sent')}</Th>
+              <Th>{t('wallet.to')}</Th>
+              <Th align="right">{t('wallet.amount')}</Th>
+              <Th>{t('wallet.reference')}</Th>
+              <Th>{t('wallet.status')}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -200,13 +202,18 @@ export function TopupCard({
  * behind a signed URL that does not exist until this runs.
  */
 function ProofLink({ topupId }: { readonly topupId: string }): ReactElement {
+  const t = useT();
   const proof = useTopupProofUrl();
   return (
     <AsyncButton
       variant="ghost"
       size="sm"
       disabled={proof.isPending}
-      labels={{ idle: 'View receipt', busy: 'Opening…', done: 'Opened' }}
+      labels={{
+        idle: t('wallet.viewReceipt'),
+        busy: t('wallet.opening'),
+        done: t('wallet.opened'),
+      }}
       minBusyMs={300}
       settleMs={1200}
       // Opened inside the click, filled when the presigned URL lands: a

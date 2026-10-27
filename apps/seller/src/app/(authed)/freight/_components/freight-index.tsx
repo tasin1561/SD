@@ -16,6 +16,8 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useSellerFreight } from '@/lib/ops-hooks';
 import './freight.css';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /** The filter tab that means "no status filter". */
 const ALL = 'all';
@@ -48,6 +50,7 @@ const ALL = 'all';
  *                          seller view. It is our margin, not their bill.
  */
 export function SellerFreightIndex(): ReactElement {
+  const t = useT();
   const [status, setStatus] = useState<string>('');
   const list = useSellerFreight(status === '' ? {} : { status });
 
@@ -87,13 +90,13 @@ export function SellerFreightIndex(): ReactElement {
     <div className="frt-page">
       <PageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Money' },
-          { label: 'Inbound freight' },
+          { label: t('freight.clientConsole') },
+          { label: t('freight.money') },
+          { label: t('freight.inboundFreight') },
         ]}
         Link={Link}
-        title="Inbound freight"
-        subtitle="The shipping cost of getting your stock from Bangladesh into our Indian warehouse. WHEN it is charged depends on the terms agreed for each consignment — see Terms on each row."
+        title={t('freight.inboundFreight')}
+        subtitle={t('freight.theShippingCostOf')}
         meta={
           !loaded ? undefined : (
             <span className="frt-meta">
@@ -102,13 +105,17 @@ export function SellerFreightIndex(): ReactElement {
               </span>
               {Number(outstanding) > 0 && (
                 <span className="frt-fact" data-tone="warn">
-                  <span className="frt-fact__dot" aria-hidden />
-                  Still owed
+                  {richMessage(t('freight.stillOwed'), {
+                    span: <span className="frt-fact__dot" aria-hidden />,
+                  })}
                 </span>
               )}
               {totals.unitsTotal > 0 && (
                 <span className="frt-fact">
-                  {totals.unitsSettled} of {totals.unitsTotal} units charged
+                  {richMessage(t('freight.ofUnitsCharged'), {
+                    unitsSettled: totals.unitsSettled,
+                    unitsTotal: totals.unitsTotal,
+                  })}
                 </span>
               )}
             </span>
@@ -127,14 +134,14 @@ export function SellerFreightIndex(): ReactElement {
              `figure`; the two counts roll up once when they first land. */}
       <div className="frt-kpis">
         <KpiCard
-          label="Still owed"
+          label={t('freight.stillOwed2')}
           icon={<Wallet size={14} />}
           figure={loaded ? <Money amount={outstanding} decimals={false} /> : dash}
           tone={loaded && Number(outstanding) > 0 ? 'pending' : 'neutral'}
-          hint="What is still to be taken from your wallet"
+          hint={t('freight.whatIsStillTo')}
         />
         <KpiCard
-          label="Billed to you"
+          label={t('freight.billedToYou')}
           icon={<ReceiptText size={14} />}
           figure={loaded ? <Money amount={totals.billed} decimals={false} /> : dash}
           tone="neutral"
@@ -142,7 +149,7 @@ export function SellerFreightIndex(): ReactElement {
             ? {
                 foot: [
                   {
-                    label: 'Charged so far',
+                    label: t('freight.chargedSoFar'),
                     value: <Money amount={totals.charged} decimals={false} />,
                   },
                 ],
@@ -151,25 +158,25 @@ export function SellerFreightIndex(): ReactElement {
         />
         {loaded ? (
           <KpiCard
-            label="Consignments billed"
+            label={t('freight.consignmentsBilled')}
             icon={<PlaneTakeoff size={14} />}
             value={rows.length}
             unit={rows.length === 1 ? 'bill' : 'bills'}
             tone="neutral"
-            hint={filtered ? humanise(status) : 'Every status.'}
+            hint={filtered ? humanise(status) : t('freight.everyStatus')}
           />
         ) : (
           <KpiCard
-            label="Consignments billed"
+            label={t('freight.consignmentsBilled')}
             icon={<PlaneTakeoff size={14} />}
             figure={dash}
             tone="neutral"
-            hint={filtered ? humanise(status) : 'Every status.'}
+            hint={filtered ? humanise(status) : t('freight.everyStatus')}
           />
         )}
         {loaded ? (
           <KpiCard
-            label="Units charged"
+            label={t('freight.unitsCharged')}
             icon={<Boxes size={14} />}
             value={totals.unitsSettled}
             unit={
@@ -178,22 +185,22 @@ export function SellerFreightIndex(): ReactElement {
               </>
             }
             tone="neutral"
-            hint="A unit is charged its share when it is delivered."
+            hint={t('freight.aUnitIsCharged')}
           />
         ) : (
           <KpiCard
-            label="Units charged"
+            label={t('freight.unitsCharged')}
             icon={<Boxes size={14} />}
             figure={dash}
             tone="neutral"
-            hint="A unit is charged its share when it is delivered."
+            hint={t('freight.aUnitIsCharged')}
           />
         )}
       </div>
 
       <section className="frt-section">
         <SectionHeading
-          title="Freight bills"
+          title={t('freight.freightBills')}
           note={
             loaded
               ? `${rows.length} ${rows.length === 1 ? 'bill' : 'bills'}${filtered ? ' matching' : ''}`
@@ -202,7 +209,7 @@ export function SellerFreightIndex(): ReactElement {
           action={
             filtered ? (
               <button type="button" onClick={() => setStatus('')} className="frt-reset">
-                Reset
+                {t('freight.reset')}
               </button>
             ) : undefined
           }
@@ -211,43 +218,39 @@ export function SellerFreightIndex(): ReactElement {
         {/* Four statuses, all worth seeing at once — a tab row says what
             the possibilities ARE, which a closed dropdown does not. */}
         <Tabs
-          label="Filter by status"
+          label={t('freight.filterByStatus')}
           size="sm"
           value={status === '' ? ALL : status}
           onChange={(id) => setStatus(id === ALL ? '' : id)}
           items={[
-            { id: ALL, label: 'All bills' },
+            { id: ALL, label: t('freight.allBills') },
             ...Object.values(InboundFreightStatus).map((s) => ({ id: s, label: humanise(s) })),
           ]}
         />
 
         {list.isError ? (
           <ErrorState
-            message={list.error?.message ?? 'Failed to load freight bills.'}
+            message={list.error?.message ?? t('freight.failedToLoadFreight')}
             retry={() => void list.refetch()}
           />
         ) : list.isLoading ? (
-          <SkeletonRows rows={4} cols={6} label="Loading freight bills…" />
+          <SkeletonRows rows={4} cols={6} label={t('freight.loadingFreightBills')} />
         ) : rows.length === 0 ? (
           <EmptyState
-            title={filtered ? 'No bills with that status' : 'No freight bills yet'}
-            description={
-              filtered
-                ? 'Try another status, or reset the filter.'
-                : 'A bill appears here once we receive a consignment from you and record what the freight cost.'
-            }
+            title={filtered ? t('freight.noBillsWithThat') : t('freight.noFreightBillsYet')}
+            description={filtered ? t('freight.tryAnotherStatusOr') : t('freight.aBillAppearsHere')}
           />
         ) : (
-          <Table caption="Freight bills">
+          <Table caption={t('freight.freightBills')}>
             <THead>
               <Tr>
-                <Th>Consignment</Th>
-                <Th>Terms</Th>
-                <Th align="right">Total</Th>
-                <Th align="right">Charged so far</Th>
-                <Th align="right">Still owed</Th>
-                <Th>Units charged</Th>
-                <Th>Status</Th>
+                <Th>{t('freight.consignment')}</Th>
+                <Th>{t('freight.terms')}</Th>
+                <Th align="right">{t('freight.total')}</Th>
+                <Th align="right">{t('freight.chargedSoFar')}</Th>
+                <Th align="right">{t('freight.stillOwed2')}</Th>
+                <Th>{t('freight.unitsCharged')}</Th>
+                <Th>{t('freight.status')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -267,8 +270,9 @@ export function SellerFreightIndex(): ReactElement {
                       </span>
                       {r.voidedAt !== null && (
                         <span className="frt-muted">
-                          Withdrawn {new Date(r.voidedAt).toLocaleDateString()} — this bill was
-                          wrong and anything it charged has gone back to your wallet.
+                          {t('freight.withdrawnBillWrong', {
+                            date: new Date(r.voidedAt).toLocaleDateString(),
+                          })}
                           {r.voidReason === null ? '' : ` ${r.voidReason}`}
                         </span>
                       )}
@@ -279,8 +283,9 @@ export function SellerFreightIndex(): ReactElement {
                       <span>{freightModeWords(r.mode, 'SELLER')}</span>
                       {r.serviceChargeInr !== null && Number(r.serviceChargeInr) > 0 && (
                         <span className="frt-faint">
-                          includes <Money amount={r.serviceChargeInr} decimals={false} /> service
-                          charge
+                          {richMessage(t('freight.includesServiceCharge'), {
+                            money: <Money amount={r.serviceChargeInr} decimals={false} />,
+                          })}
                         </span>
                       )}
                     </div>
@@ -310,7 +315,7 @@ export function SellerFreightIndex(): ReactElement {
                       settled; it is not a debt. Showing the arithmetic
                       would tell a seller they owe money we took back. */}
                     {r.voidedAt !== null ? (
-                      <span className="frt-faint">Nothing — withdrawn</span>
+                      <span className="frt-faint">{t('freight.nothingWithdrawn')}</span>
                     ) : Number(r.outstandingInr) === 0 ? (
                       <span className="frt-faint">—</span>
                     ) : (
@@ -336,17 +341,12 @@ export function SellerFreightIndex(): ReactElement {
 
       {rows.some((r) => r.mode === 'PAY_LATER') && (
         <section className="frt-section">
-          <SectionHeading title="How a bill is charged" />
+          <SectionHeading title={t('freight.howABillIs')} />
           <div className="frt-note">
             <span className="frt-note__icon" aria-hidden>
               <Info size={16} />
             </span>
-            <p>
-              On pay-as-it-sells terms, each unit carries its share of the consignment&apos;s
-              freight, and that share is deducted from your wallet when the unit is delivered. Stock
-              still sitting in the warehouse has not been charged for yet — which is why a bill can
-              stay partly owed for a long time without anything being wrong.
-            </p>
+            <p>{t('freight.onPayAsIt')}</p>
           </div>
         </section>
       )}
@@ -356,13 +356,16 @@ export function SellerFreightIndex(): ReactElement {
       {loaded && (
         <div className="frt-strip">
           <StripFact
-            label="Still owed"
+            label={t('freight.stillOwed2')}
             value={<Money amount={outstanding} decimals={false} />}
             tone={Number(outstanding) > 0 ? 'warn' : 'good'}
           />
-          <StripFact label="Billed" value={<Money amount={totals.billed} decimals={false} />} />
           <StripFact
-            label="Units charged"
+            label={t('freight.billed')}
+            value={<Money amount={totals.billed} decimals={false} />}
+          />
+          <StripFact
+            label={t('freight.unitsCharged')}
             value={`${totals.unitsSettled} / ${totals.unitsTotal}`}
           />
         </div>

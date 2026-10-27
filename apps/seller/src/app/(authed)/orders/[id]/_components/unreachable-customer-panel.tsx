@@ -9,6 +9,8 @@ import { HoldDecisionDialog } from '@/components/hold-decision-dialog';
 import { useHoldReviews } from '@/lib/ops-hooks';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * "We rang your customer and nobody answered" — ON THE ORDER, where the
@@ -50,6 +52,7 @@ export function UnreachableCustomerPanel({
   readonly orderId: string;
   readonly orderNumber: string;
 }): ReactElement {
+  const t = useT();
   const identity = useSellerIdentity();
   // COSMETIC (FE-2): this decides whether we ASK, and whether the button
   // is offered. The server refuses the PATCH regardless.
@@ -66,19 +69,32 @@ export function UnreachableCustomerPanel({
       <Notice
         tone="warn"
         icon={<PhoneOff size={16} />}
-        title="We could not reach your customer — this order is waiting on you"
+        title={t('orderUnreachable.weCouldNotReach')}
       >
         <span className="ord-p">
           {review === null
-            ? 'Our agents rang and nobody answered, so nothing more happens to this order until you decide whether we should keep trying.'
+            ? t('orderUnreachable.ourAgentsRangAnd')
             : review.heldQty > 0
-              ? `Our agents have tried ${review.attemptCount} time${review.attemptCount === 1 ? '' : 's'} without reaching anybody, and ${review.heldQty} unit${review.heldQty === 1 ? '' : 's'} of your stock ${review.heldQty === 1 ? 'is' : 'are'} held against this order in the meantime.`
-              : `Our agents have tried ${review.attemptCount} time${review.attemptCount === 1 ? '' : 's'} without reaching anybody. Nothing more happens to this order until you decide.`}
+              ? t(
+                  review.heldQty === 1
+                    ? 'orderUnreachable.triedAndHeldOne'
+                    : 'orderUnreachable.triedAndHeldMany',
+                  {
+                    attemptCount: review.attemptCount,
+                    plural: review.attemptCount === 1 ? '' : 's',
+                    heldQty: review.heldQty,
+                  },
+                )
+              : t('orderUnreachable.ourAgentsHaveTried', {
+                  attemptCount: review.attemptCount,
+                  plural: review.attemptCount === 1 ? '' : 's',
+                })}
         </span>
         {review !== null && (
           <span className="ord-faint">
-            Raised {new Date(review.createdAt).toLocaleString('en-IN')}. If you leave it, we let the
-            order go for you after a few days.
+            {richMessage(t('orderUnreachable.raisedIfYouLeave'), {
+              createdAt: new Date(review.createdAt).toLocaleString('en-IN'),
+            })}
           </span>
         )}
         {mayDecide ? (
@@ -90,24 +106,19 @@ export function UnreachableCustomerPanel({
                 icon={<Gavel size={14} />}
                 onClick={() => setOpen(true)}
               >
-                Decide
+                {t('orderUnreachable.decide')}
               </Button>
             </span>
           ) : reviews.isLoading ? (
-            <span className="ord-faint">Loading your decision…</span>
+            <span className="ord-faint">{t('orderUnreachable.loadingYourDecision')}</span>
           ) : (
             // Either the decision was already answered (and the order is
             // catching up) or the list could not be read. Both are true
             // statements rather than a dead button.
-            <span className="ord-faint">
-              There is nothing here for you to answer — if this order is still paused in a few
-              minutes, open Unreachable customers.
-            </span>
+            <span className="ord-faint">{t('orderUnreachable.thereIsNothingHere')}</span>
           )
         ) : (
-          <span className="ord-faint">
-            Somebody on your team who manages unreachable customers has to answer this.
-          </span>
+          <span className="ord-faint">{t('orderUnreachable.somebodyOnYourTeam')}</span>
         )}
       </Notice>
 

@@ -10,15 +10,19 @@ import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { useDeleteRole, usePermissionCatalogue, useRoles, type RoleView } from '@/lib/rbac-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { SetFact, SetPageHeader } from '../../../settings/_components/settings-parts';
 import { RoleEditor } from './role-editor';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
-const CRUMBS = [
-  { label: 'Client console' },
-  { label: 'Account' },
-  { label: 'Team', href: '/team' },
-  { label: 'Roles' },
+const crumbsOf = (t: Translate<MessageKey>) => [
+  { label: t('teamRoles.clientConsole') },
+  { label: t('teamRoles.account') },
+  { label: t('teamRoles.team'), href: '/team' },
+  { label: t('teamRoles.roles') },
 ];
 
 /**
@@ -34,6 +38,7 @@ const CRUMBS = [
  * in from any mistake made on this screen.
  */
 export function RolesIndex(): ReactElement {
+  const t = useT();
   const toast = useToast();
   const roles = useRoles();
   const catalogue = usePermissionCatalogue();
@@ -47,11 +52,11 @@ export function RolesIndex(): ReactElement {
   async function onDelete(role: RoleView): Promise<void> {
     try {
       await remove.mutateAsync({ id: role.id });
-      toast.success(`${role.name} deleted`);
+      toast.success(t('teamRoles.deleted', { role: role.name }));
     } catch (e) {
       // The server's refusals here are the useful part — "3 staff still
       // hold this role" tells you exactly what to do next.
-      toast.error(serverVerdict(e));
+      toast.error(verdict(e, t));
     }
   }
 
@@ -71,9 +76,9 @@ export function RolesIndex(): ReactElement {
   return (
     <div className="set-page">
       <SetPageHeader
-        crumbs={CRUMBS}
-        title="Roles"
-        subtitle="A role is a set of permissions. Create as many as your team needs — the permissions themselves are fixed by the system. One person can hold several roles, and what they can do is everything those roles cover between them."
+        crumbs={crumbsOf(t)}
+        title={t('teamRoles.roles')}
+        subtitle={t('teamRoles.aRoleIsA')}
         meta={
           roles.data === undefined ? undefined : (
             <span className="set-meta">
@@ -83,7 +88,11 @@ export function RolesIndex(): ReactElement {
               <SetFact dot>
                 {assignments} role {assignments === 1 ? 'assignment' : 'assignments'}
               </SetFact>
-              {unused.length > 0 && <SetFact>{unused.length} held by nobody</SetFact>}
+              {unused.length > 0 && (
+                <SetFact>
+                  {richMessage(t('teamRoles.heldByNobody'), { unused: unused.length })}
+                </SetFact>
+              )}
             </span>
           )
         }
@@ -98,14 +107,14 @@ export function RolesIndex(): ReactElement {
               setOpen(true);
             }}
           >
-            New role
+            {t('teamRoles.newRole')}
           </Button>
         }
       />
 
       <section className="set-section">
         <SectionHeading
-          title="Your roles"
+          title={t('teamRoles.yourRoles')}
           note={
             roles.data === undefined
               ? undefined
@@ -114,28 +123,30 @@ export function RolesIndex(): ReactElement {
         />
         <div className="set-card" data-flush>
           {roles.isLoading || catalogue.isLoading ? (
-            <SkeletonRows rows={4} cols={4} label="Loading roles…" />
+            <SkeletonRows rows={4} cols={4} label={t('teamRoles.loadingRoles')} />
           ) : roles.isError || catalogue.isError ? (
             <ErrorState
-              message={roles.error?.message ?? catalogue.error?.message ?? 'Could not load roles.'}
+              message={
+                roles.error?.message ?? catalogue.error?.message ?? t('teamRoles.couldNotLoadRoles')
+              }
               retry={() => {
                 void roles.refetch();
                 void catalogue.refetch();
               }}
             />
           ) : (
-            <Table caption="Roles">
+            <Table caption={t('teamRoles.roles')}>
               <THead>
                 <Tr>
-                  <Th>Role</Th>
-                  <Th>Covers</Th>
-                  <Th align="right">Held by</Th>
-                  <Th align="right">Actions</Th>
+                  <Th>{t('teamRoles.role')}</Th>
+                  <Th>{t('teamRoles.covers')}</Th>
+                  <Th align="right">{t('teamRoles.heldBy')}</Th>
+                  <Th align="right">{t('teamRoles.actions')}</Th>
                 </Tr>
               </THead>
               <TBody>
                 {rows.length === 0 ? (
-                  <TableEmpty colSpan={4}>No roles yet.</TableEmpty>
+                  <TableEmpty colSpan={4}>{t('teamRoles.noRolesYet')}</TableEmpty>
                 ) : (
                   rows.map((role) => (
                     <Tr key={role.id}>
@@ -143,7 +154,11 @@ export function RolesIndex(): ReactElement {
                         <span className="set-cell-strong set-chips">
                           {role.name}
                           {role.isOwner && (
-                            <Lock size={12} className="set-faint" aria-label="Cannot be edited" />
+                            <Lock
+                              size={12}
+                              className="set-faint"
+                              aria-label={t('teamRoles.cannotBeEdited')}
+                            />
                           )}
                         </span>
                         <span className="set-cell-sub">
@@ -152,8 +167,11 @@ export function RolesIndex(): ReactElement {
                       </Td>
                       <Td className="set-cell-muted">
                         {role.isOwner
-                          ? 'Everything, including permissions added later'
-                          : `${role.permissions.length} permission${role.permissions.length === 1 ? '' : 's'}`}
+                          ? t('teamRoles.everythingIncludingPermissionsAdded')
+                          : t('teamRoles.permission', {
+                              permissions: role.permissions.length,
+                              plural: role.permissions.length === 1 ? '' : 's',
+                            })}
                       </Td>
                       <Td align="right">
                         <span className="set-chips sk-figure" data-end="1">
@@ -173,7 +191,7 @@ export function RolesIndex(): ReactElement {
                               setOpen(true);
                             }}
                           >
-                            Edit
+                            {t('teamRoles.edit2')}
                           </Button>
                           <Button
                             variant="ghost"
@@ -182,7 +200,7 @@ export function RolesIndex(): ReactElement {
                             disabled={role.isOwner || role.isSystem || role.memberCount > 0}
                             onClick={() => setPendingDelete(role)}
                           >
-                            Delete
+                            {t('teamRoles.delete')}
                           </Button>
                         </div>
                       </Td>
@@ -209,10 +227,10 @@ export function RolesIndex(): ReactElement {
         onOpenChange={(next) => {
           if (!next) setPendingDelete(null);
         }}
-        title="Delete this role?"
+        title={t('teamRoles.deleteThisRole')}
         entity={pendingDelete?.name ?? ''}
-        consequence="The role is removed for good. This cannot be undone."
-        confirmLabel="Delete role"
+        consequence={t('teamRoles.theRoleIsRemoved')}
+        confirmLabel={t('teamRoles.deleteRole')}
         destructive
         onConfirm={() => (pendingDelete === null ? undefined : onDelete(pendingDelete))}
       />

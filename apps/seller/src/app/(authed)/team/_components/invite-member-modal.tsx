@@ -12,8 +12,9 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import type { CreatedTeamInvitation } from '@skydrop/api-client';
 import { useCreateTeamInvitation } from '@/lib/api-hooks';
 import { useRoles } from '@/lib/rbac-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { SetCallout, phaseOf } from '../../settings/_components/settings-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * ── THE SIX HARDCODED ROLES ARE GONE ────────────────────────────────
@@ -47,6 +48,7 @@ export function InviteMemberModal({
   readonly onClose: () => void;
   readonly onSuccess: (revealed: CreatedTeamInvitation) => void;
 }): ReactElement {
+  const t = useT();
   const create = useCreateTeamInvitation();
   const roles = useRoles();
   const [email, setEmail] = useState('');
@@ -61,13 +63,16 @@ export function InviteMemberModal({
     // What the role covers, so the choice is made on the permissions and
     // not on a name somebody at this company picked months ago.
     description: r.isOwner
-      ? 'Everything, including permissions added later'
+      ? t('team.everythingIncludingPermissionsAdded')
       : (r.description ??
-        `${r.permissions.length} permission${r.permissions.length === 1 ? '' : 's'}`),
+        t('team.permission', {
+          permissions: r.permissions.length,
+          plural: r.permissions.length === 1 ? '' : 's',
+        })),
   }));
 
   function fmtError(e: unknown): string {
-    return serverVerdict(e, 'Action failed');
+    return verdict(e, t, t('team.actionFailed'));
   }
 
   async function onSubmit(e: FormEvent): Promise<void> {
@@ -95,13 +100,13 @@ export function InviteMemberModal({
         if (!o) onClose();
       }}
       icon={<UserPlus size={18} />}
-      title="Invite team member"
-      description="The invitee gets a one-time link to set their password. Which roles they hold can be changed later."
+      title={t('team.inviteTeamMember')}
+      description={t('team.theInviteeGetsA')}
       size="md"
     >
       <form onSubmit={(e) => void onSubmit(e)} className="set-form-grid">
         <TextField
-          label="Full name"
+          label={t('team.fullName')}
           icon={<User size={15} />}
           type="text"
           value={fullName}
@@ -109,10 +114,10 @@ export function InviteMemberModal({
           maxLength={120}
           showCount
           required
-          placeholder="Jane Doe"
+          placeholder={t('team.janeDoe')}
         />
         <TextField
-          label="Email"
+          label={t('team.email')}
           icon={<Mail size={15} />}
           type="email"
           value={email}
@@ -123,15 +128,15 @@ export function InviteMemberModal({
         />
 
         {roles.isLoading ? (
-          <SkeletonRows rows={1} cols={1} label="Loading roles…" />
+          <SkeletonRows rows={1} cols={1} label={t('team.loadingRoles')} />
         ) : roles.isError ? (
           <ErrorState
-            message={roles.error?.message ?? 'Could not load this company’s roles.'}
+            message={roles.error?.message ?? t('team.couldNotLoadThis')}
             retry={() => void roles.refetch()}
           />
         ) : (
           <MultiSelect
-            label="Roles"
+            label={t('team.roles')}
             icon={<ShieldCheck size={15} />}
             required
             options={options}
@@ -140,9 +145,11 @@ export function InviteMemberModal({
               setError(null);
               setRoleIds(next);
             }}
-            placeholder={roleIds.length === 0 ? 'Choose one or more roles' : 'Add another role'}
-            hint="They can do everything their roles cover between them. Roles are set up under Team → Roles."
-            emptyText="No matching role"
+            placeholder={
+              roleIds.length === 0 ? t('team.chooseOneOrMore') : t('team.addAnotherRole')
+            }
+            hint={t('team.theyCanDoEverything')}
+            emptyText={t('team.noMatchingRole')}
           />
         )}
 
@@ -154,14 +161,18 @@ export function InviteMemberModal({
 
         <DialogFooter>
           <Button type="button" variant="ghost" size="md" disabled={busy} onClick={onClose}>
-            Cancel
+            {t('team.cancel')}
           </Button>
           <AsyncButton
             type="submit"
             variant="primary"
             size="md"
             icon={<UserPlus size={15} />}
-            labels={{ idle: 'Create invitation', busy: 'Creating…', error: 'Not created' }}
+            labels={{
+              idle: t('team.createInvitation'),
+              busy: t('team.creating'),
+              error: t('team.notCreated'),
+            }}
             state={phaseOf(busy, error)}
             disabled={busy}
           />

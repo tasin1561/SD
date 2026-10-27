@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
 import { ButtonLink } from '@skydrop/ui/app/button';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * Confirms a seller email-verification token.
@@ -18,6 +19,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  * FE-2: the server's verdict is shown verbatim.
  */
 export function VerifyEmailPanel({ token }: { readonly token: string }): ReactElement {
+  const t = useT();
   const [state, setState] = useState<'working' | 'done' | 'failed'>('working');
   const [error, setError] = useState<string | null>(null);
   const fired = useRef(false);
@@ -38,24 +40,24 @@ export function VerifyEmailPanel({ token }: { readonly token: string }): ReactEl
         });
         setState('done');
       } catch (err) {
-        setError(serverVerdict(err, 'Could not verify the email address.'));
+        setError(verdict(err, t, t('authVerify.couldNotVerifyThe')));
         setState('failed');
       }
     })();
   }, [token]);
 
   if (state === 'working') {
-    return <p className="text-text-muted text-xs">Verifying…</p>;
+    return <p className="text-text-muted text-xs">{t('authVerify.verifying')}</p>;
   }
 
   if (state === 'done') {
     return (
       <div className="space-y-3">
         <div className="rounded-[var(--radius-2)] bg-[var(--color-accent-tint)] border border-[var(--color-accent-ring)] px-3 py-2.5 text-xs text-text-bright">
-          Email verified. Nothing else to do here.
+          {t('authVerify.emailVerifiedNothingElse')}
         </div>
         <ButtonLink href="/dashboard" variant="primary" fullWidth>
-          Go to your dashboard
+          {t('authVerify.goToYourDashboard')}
         </ButtonLink>
       </div>
     );
@@ -66,12 +68,9 @@ export function VerifyEmailPanel({ token }: { readonly token: string }): ReactEl
       <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[var(--radius-2)]">
         {error}
       </div>
-      <p className="text-text-muted text-xs">
-        Verification links are single-use and expire. If this one was already used or has aged out,
-        sign in and request a new one.
-      </p>
+      <p className="text-text-muted text-xs">{t('authVerify.verificationLinksAreSingle')}</p>
       <ButtonLink href="/login" variant="secondary" fullWidth>
-        Sign in
+        {t('authVerify.signIn')}
       </ButtonLink>
     </div>
   );

@@ -13,9 +13,10 @@ import type {
   WebhookEndpointWithSecret,
 } from '@skydrop/api-client';
 import { useCreateWebhookEndpoint, useUpdateWebhookEndpoint } from '@/lib/api-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { SetCallout, phaseOf } from '../../_components/settings-parts';
 import { DEFAULT_EVENTS, EventPicker } from './event-picker';
+import { useT } from '@/i18n/client';
 
 /**
  * Create / edit form.
@@ -69,6 +70,7 @@ export function WebhookFormModal(
         readonly onSuccess: () => void;
       },
 ): ReactElement {
+  const t = useT();
   const mode: Mode = props.mode;
   const seed = props.mode === 'edit' ? props.endpoint : null;
 
@@ -83,7 +85,7 @@ export function WebhookFormModal(
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(e: unknown): string {
-    return serverVerdict(e, 'Action failed');
+    return verdict(e, t, t('settingsWebhooks.actionFailed'));
   }
 
   async function onSubmit(e: FormEvent): Promise<void> {
@@ -127,17 +129,21 @@ export function WebhookFormModal(
         if (!o) props.onClose();
       }}
       icon={<Webhook size={18} />}
-      title={mode === 'create' ? 'New webhook endpoint' : 'Edit webhook endpoint'}
+      title={
+        mode === 'create'
+          ? t('settingsWebhooks.newWebhookEndpoint')
+          : t('settingsWebhooks.editWebhookEndpoint')
+      }
       description={
         mode === 'create'
-          ? 'On create, we generate an HMAC secret. You will see it ONCE; copy it to your integration immediately.'
-          : 'Rotate the secret from the row action if you need to change it.'
+          ? t('settingsWebhooks.onCreateWeGenerate')
+          : t('settingsWebhooks.rotateTheSecretFrom')
       }
       size="lg"
     >
       <form onSubmit={(e) => void onSubmit(e)} className="set-form-grid">
         <TextField
-          label="URL"
+          label={t('settingsWebhooks.url')}
           icon={<Link2 size={15} />}
           type="url"
           value={url}
@@ -147,22 +153,22 @@ export function WebhookFormModal(
           inputClassName="sk-ident"
         />
         <TextField
-          label="Display name"
+          label={t('settingsWebhooks.displayName')}
           icon={<Tag size={15} />}
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={160}
           showCount
-          placeholder="My CRM integration"
+          placeholder={t('settingsWebhooks.myCrmIntegration')}
         />
         <TextArea
-          label="Description"
+          label={t('settingsWebhooks.description')}
           rows={2}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           maxLength={2000}
           showCount
-          placeholder="What this endpoint is for, who owns it, etc."
+          placeholder={t('settingsWebhooks.whatThisEndpointIs')}
         />
         <EventPicker value={events} onChange={setEvents} />
 
@@ -174,7 +180,7 @@ export function WebhookFormModal(
 
         <DialogFooter>
           <Button type="button" variant="ghost" size="md" disabled={busy} onClick={props.onClose}>
-            Cancel
+            {t('settingsWebhooks.cancel')}
           </Button>
           <AsyncButton
             type="submit"
@@ -182,8 +188,16 @@ export function WebhookFormModal(
             size="md"
             labels={
               mode === 'create'
-                ? { idle: 'Create endpoint', busy: 'Creating…', error: 'Not created' }
-                : { idle: 'Save', busy: 'Saving…', error: 'Not saved' }
+                ? {
+                    idle: t('settingsWebhooks.createEndpoint'),
+                    busy: t('settingsWebhooks.creating'),
+                    error: t('settingsWebhooks.notCreated'),
+                  }
+                : {
+                    idle: t('settingsWebhooks.save'),
+                    busy: t('settingsWebhooks.saving'),
+                    error: t('settingsWebhooks.notSaved'),
+                  }
             }
             state={phaseOf(busy, error)}
             disabled={busy}

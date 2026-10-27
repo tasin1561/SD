@@ -12,6 +12,9 @@ import {
 import { Timeline, type TimelineStep, type TimelineStepState } from '@skydrop/ui/app/timeline';
 import { journeyOwnerLabel } from '@skydrop/ui/status';
 import { OrdSection } from './orders-parts';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * The order journey, drawn as the u17 timeline.
@@ -54,13 +57,16 @@ const STATE: Record<JourneyMilestoneView['state'], TimelineStepState> = {
 };
 
 /** Milestones → timeline steps. Same labels, same owner word, same times. */
-export function milestoneSteps(milestones: readonly JourneyMilestoneView[]): TimelineStep[] {
+export function milestoneSteps(
+  milestones: readonly JourneyMilestoneView[],
+  t: Translate<MessageKey>,
+): TimelineStep[] {
   return milestones.map((m) => {
     const owner = journeyOwnerLabel(m.owner);
     const description: ReactNode = (
       <>
         <span>{owner}</span>
-        {m.state === 'SKIPPED' && <span> · not needed</span>}
+        {m.state === 'SKIPPED' && <span> · {t('orderDetail.notNeeded')}</span>}
         {m.detail !== null && <span className="ord-sub">{m.detail}</span>}
       </>
     );
@@ -69,7 +75,11 @@ export function milestoneSteps(milestones: readonly JourneyMilestoneView[]): Tim
       label: m.label,
       state: STATE[m.state],
       description,
-      ...(m.at === null ? {} : { time: m.estimated ? `Estimated ${fmtDate(m.at)}` : fmt(m.at) }),
+      ...(m.at === null
+        ? {}
+        : {
+            time: m.estimated ? t('orderDetail.estimatedDate', { date: fmtDate(m.at) }) : fmt(m.at),
+          }),
     };
   });
 }
@@ -92,24 +102,25 @@ export function OrderJourney({
   readonly allParcelsHref: string;
   readonly trackingUrlBase: string;
 }): ReactElement {
+  const t = useT();
   // The latest parcel, as the shared panels chose it.
   const parcel = parcels[parcels.length - 1] ?? null;
   return (
     <div className="ord-stack">
-      <OrdSection title="Order tracker" note="Where this order has got to, stage by stage.">
+      <OrdSection title={t('orderDetail.orderTracker')} note={t('orderDetail.whereThisOrderHas')}>
         <Timeline
-          label="Order tracker"
-          steps={milestoneSteps(milestones)}
+          label={t('orderDetail.orderTracker')}
+          steps={milestoneSteps(milestones, t)}
           header={{
             icon: <Route size={16} />,
-            title: 'Order',
+            title: t('orderDetail.order'),
             id: orderNumber,
             status,
           }}
         />
       </OrdSection>
       {parcel !== null && (
-        <OrdSection title="Parcel" note="What the courier says it is, and where to follow it.">
+        <OrdSection title={t('orderDetail.parcel')} note={t('orderDetail.whatTheCourierSays')}>
           <ParcelFacts
             parcel={parcel}
             allParcelsHref={allParcelsHref}
@@ -117,7 +128,7 @@ export function OrderJourney({
           />
         </OrdSection>
       )}
-      <OrdSection title="Full history" note="Our handling and the courier's scans, together.">
+      <OrdSection title={t('orderDetail.fullHistory')} note={t('orderDetail.ourHandlingAndThe')}>
         <JourneyTimeline entries={entries} />
       </OrdSection>
     </div>

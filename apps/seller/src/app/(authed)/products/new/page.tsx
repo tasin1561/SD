@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { AreaPage, StockPageHeader } from '@/app/(authed)/inventory/_components/stock-ui';
 import { NewProductForm } from './_components/new-product-form';
+import { getT } from '@/i18n/server';
 
 /**
  * Add one product by hand.
@@ -9,18 +10,19 @@ import { NewProductForm } from './_components/new-product-form';
  * the path for a seller with three SKUs, who until now had to build a
  * spreadsheet to add them.
  */
-export default function NewProductPage(): ReactElement {
+export default async function NewProductPage(): Promise<ReactElement> {
+  const { t } = await getT();
   return (
     <AreaPage>
       <StockPageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Stock & WMS' },
-          { label: 'Products', href: '/products' },
-          { label: 'New' },
+          { label: t('productNew.clientConsole') },
+          { label: t('productNew.stockWms') },
+          { label: t('productNew.products'), href: '/products' },
+          { label: t('productNew.new') },
         ]}
-        title="New product"
-        subtitle="One product and every variant it ships in. Reusing an existing product reference adds to that product instead. Bringing in a whole catalogue? Use the CSV import."
+        title={t('productNew.newProduct')}
+        subtitle={t('productNew.oneProductAndEvery')}
       />
       <NewProductForm />
     </AreaPage>

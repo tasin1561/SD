@@ -5,6 +5,7 @@ import type { ReactElement } from 'react';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useOrderPageV2Enabled } from '@/lib/address-check-hooks';
 import { NewOrderForm } from './_components/new-order-form';
+import { useT } from '@/i18n/client';
 
 /**
  * Manual order entry, version 2 — the same form with live address
@@ -28,13 +29,15 @@ import { NewOrderForm } from './_components/new-order-form';
  * have it invites a question we do not want to answer per account.
  */
 export default function NewOrderV2Page(): ReactElement {
+  const t = useT();
   const gate = useOrderPageV2Enabled();
 
   // While we do not yet know, show the shape of a page rather than
   // either half of the answer — flashing the form and then 404ing is
   // worse than a moment of skeleton, and 404ing first would hide the
   // page from the pilot on every slow connection.
-  if (gate.isPending) return <SkeletonRows rows={6} cols={2} label="Loading the order form…" />;
+  if (gate.isPending)
+    return <SkeletonRows rows={6} cols={2} label={t('orderNew.loadingTheOrderForm')} />;
 
   // A failed check is NOT a reason to show an unproven page. Same
   // fail-closed rule the server gate uses, for the same reason.
