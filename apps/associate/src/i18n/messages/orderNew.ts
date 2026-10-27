@@ -3,6 +3,8 @@ import { defineMessages } from '../define';
 /** The new-order form. Product names, variant labels and SKUs come from the catalogue and are not translated. */
 export const orderNew = defineMessages({
   'neworder.title': ['New order', 'নতুন অর্ডার'],
+  // v2 only: shown while we ask whether this account is in the pilot.
+  'neworder.loading': ['Loading the order form…', 'অর্ডার ফর্ম লোড হচ্ছে…'],
   'neworder.subtitle': [
     'Pick what your customer is buying and say where it is going. Your prices are set by your store.',
     'আপনার গ্রাহক কী কিনছেন তা বেছে নিন এবং কোথায় যাবে তা লিখুন। আপনার দাম আপনার স্টোর ঠিক করে।',
