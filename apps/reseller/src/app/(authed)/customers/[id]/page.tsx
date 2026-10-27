@@ -16,7 +16,9 @@ import { TextField } from '@skydrop/ui/app/text-field';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
-import { serverVerdict } from '@/lib/server-verdict';
+import { richMessage, useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import { can } from '@/lib/page-access';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import {
@@ -27,12 +29,6 @@ import {
 } from '@/lib/order-hooks';
 import '../_components/customers.css';
 
-function when(iso: string | null): string {
-  return iso === null
-    ? '—'
-    : new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
-
 /**
  * One of THIS store's customers (RS-5, ORD-7 per owner) and every order the
  * store has placed for them. Their orders are found by their phone number —
@@ -42,29 +38,33 @@ export default function StoreCustomerPage(): ReactElement {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? '';
   const customer = useStoreCustomer(id);
+  const t = useT();
 
   return (
     <div className="rc-cst-page">
       {customer.isPending ? (
         <>
           <PageHeader
-            breadcrumbs={[{ label: 'Customers', href: '/customers' }, { label: 'Customer' }]}
+            breadcrumbs={[
+              { label: t('cst.d.crumb'), href: '/customers' },
+              { label: t('cst.d.customer') },
+            ]}
             Link={Link}
-            title="Customer"
+            title={t('cst.d.customer')}
           />
-          <SkeletonRows rows={4} cols={2} label="Loading the customer" />
+          <SkeletonRows rows={4} cols={2} label={t('cst.d.loading')} />
         </>
       ) : customer.isError ? (
         <>
           <PageHeader
-            breadcrumbs={[{ label: 'Customers', href: '/customers' }, { label: 'Customer' }]}
+            breadcrumbs={[
+              { label: t('cst.d.crumb'), href: '/customers' },
+              { label: t('cst.d.customer') },
+            ]}
             Link={Link}
-            title="Customer"
+            title={t('cst.d.customer')}
           />
-          <ErrorState
-            message={serverVerdict(customer.error)}
-            retry={() => void customer.refetch()}
-          />
+          <ErrorState message={verdict(customer.error, t)} retry={() => void customer.refetch()} />
         </>
       ) : (
         <CustomerBody customer={customer.data} />
@@ -83,6 +83,7 @@ export default function StoreCustomerPage(): ReactElement {
  * other is told.
  */
 function EditCustomer({ customer: c }: { customer: StoreCustomer }): ReactElement {
+  const t = useT();
   const me = useStoreIdentity();
   const update = useUpdateStoreCustomer();
   const toast = useToast();
@@ -109,10 +110,10 @@ function EditCustomer({ customer: c }: { customer: StoreCustomer }): ReactElemen
         email: email.trim() === '' ? null : email.trim(),
         altPhoneE164: alt.trim() === '' ? null : alt.trim(),
       });
-      toast.success('Saved. Your client has been told what changed.');
+      toast.success(t('cst.d.toast'));
       setOpen(false);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       throw err;
     }
   };
@@ -125,7 +126,7 @@ function EditCustomer({ customer: c }: { customer: StoreCustomer }): ReactElemen
         icon={<Pencil size={14} />}
         onClick={() => setOpen(true)}
       >
-        Edit details
+        {t('cst.d.edit')}
       </Button>
       <Dialog
         open={open}
@@ -134,18 +135,23 @@ function EditCustomer({ customer: c }: { customer: StoreCustomer }): ReactElemen
         }}
         size="md"
         icon={<UserRound size={18} />}
-        title="Edit this customer"
-        description="Their phone number is how we tell one customer from another, so it never changes. Your client is told what you changed."
+        title={t('cst.d.editTitle')}
+        description={t('cst.d.editDesc')}
         footer={
           <DialogFooter>
             <Button variant="ghost" size="md" onClick={() => setOpen(false)}>
-              Cancel
+              {t('cst.d.cancel')}
             </Button>
             <AsyncButton
               variant="primary"
               size="md"
               disabled={update.isPending}
-              labels={{ idle: 'Save', busy: 'Saving…', done: 'Saved', error: 'Not saved' }}
+              labels={{
+                idle: t('cst.d.save'),
+                busy: t('cst.d.saving'),
+                done: t('cst.d.saved'),
+                error: t('cst.d.notSaved'),
+              }}
               onAction={save}
             />
           </DialogFooter>
@@ -154,20 +160,20 @@ function EditCustomer({ customer: c }: { customer: StoreCustomer }): ReactElemen
         <div className="rc-cst-form">
           <TextField
             id="cust-name"
-            label="Name"
+            label={t('cst.d.name')}
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
           <TextField
             id="cust-email"
-            label="Email"
+            label={t('cst.d.email')}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
           <TextField
             id="cust-alt"
-            label="Other phone"
-            hint="A second number to try. With the country code, e.g. +919876543210."
+            label={t('cst.d.otherPhone')}
+            hint={t('cst.d.otherPhoneHint')}
             value={alt}
             onChange={(e) => setAlt(e.target.value)}
           />
@@ -192,6 +198,9 @@ function Fact({ label, children }: { label: string; children: ReactNode }): Reac
 }
 
 function CustomerBody({ customer: c }: { customer: StoreCustomer }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
+  const when = (iso: string | null): string => (iso === null ? '—' : formatDateTime(iso, locale));
   const router = useRouter();
   const orders = useStoreOrders({ search: c.phoneE164, pageSize: 50 });
   const allOrdersHref = `/orders?search=${encodeURIComponent(c.phoneE164)}`;
@@ -200,62 +209,59 @@ function CustomerBody({ customer: c }: { customer: StoreCustomer }): ReactElemen
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Customers', href: '/customers' },
-          { label: c.name ?? 'No name given' },
+          { label: t('cst.d.crumb'), href: '/customers' },
+          { label: c.name ?? t('cst.noName') },
         ]}
         Link={Link}
-        title={c.name ?? 'No name given'}
-        subtitle="Your customer. Your client sees them too, and each of you is told when the other changes their details."
+        title={c.name ?? t('cst.noName')}
+        subtitle={t('cst.d.subtitle')}
         action={<EditCustomer customer={c} />}
       />
       <div className="rc-cst-card">
         <dl className="rc-cst-facts">
-          <Fact label="Phone">
+          <Fact label={t('cst.d.phone')}>
             <span className="sk-ident">{c.phoneE164}</span>
           </Fact>
-          <Fact label="Other phone">
+          <Fact label={t('cst.d.otherPhone')}>
             {c.altPhoneE164 === null ? '—' : <span className="sk-ident">{c.altPhoneE164}</span>}
           </Fact>
-          <Fact label="Email">{c.email ?? '—'}</Fact>
-          <Fact label="Orders">
+          <Fact label={t('cst.d.email')}>{c.email ?? '—'}</Fact>
+          <Fact label={t('cst.d.orders')}>
             <span className="sk-figure">{String(c.totalOrdersCount)}</span>
           </Fact>
-          <Fact label="Last order">
+          <Fact label={t('cst.d.lastOrder')}>
             <span className="sk-figure">{when(c.lastOrderAt)}</span>
           </Fact>
-          <Fact label="First seen">
+          <Fact label={t('cst.d.firstSeen')}>
             <span className="sk-figure">{when(c.createdAt)}</span>
           </Fact>
         </dl>
       </div>
       <section className="rc-cst-section">
         <SectionHeading
-          title="Their orders"
-          note="Newest first."
+          title={t('cst.d.theirOrders')}
+          note={t('cst.d.newestFirst')}
           action={
             <Link href={allOrdersHref} className="rc-cst-open">
-              Open in orders <ArrowRight size={14} aria-hidden />
+              {t('cst.d.openInOrders')} <ArrowRight size={14} aria-hidden />
             </Link>
           }
         />
         {orders.isPending ? (
-          <SkeletonRows rows={3} cols={4} label="Loading their orders" />
+          <SkeletonRows rows={3} cols={4} label={t('cst.d.ordersLoading')} />
         ) : orders.isError ? (
-          <ErrorState message={serverVerdict(orders.error)} retry={() => void orders.refetch()} />
+          <ErrorState message={verdict(orders.error, t)} retry={() => void orders.refetch()} />
         ) : orders.data.items.length === 0 ? (
-          <EmptyState
-            title="No orders found"
-            description="Orders placed for this number appear here."
-          />
+          <EmptyState title={t('cst.d.noOrders')} description={t('cst.d.noOrdersBody')} />
         ) : (
           <>
-            <Table caption="Their orders">
+            <Table caption={t('cst.d.theirOrders')}>
               <THead>
                 <Tr>
-                  <Th>Order</Th>
-                  <Th>Status</Th>
-                  <Th align="right">To collect</Th>
-                  <Th>Placed</Th>
+                  <Th>{t('cst.d.col.order')}</Th>
+                  <Th>{t('cst.d.col.status')}</Th>
+                  <Th align="right">{t('cst.d.col.collect')}</Th>
+                  <Th>{t('cst.d.col.placed')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -269,13 +275,13 @@ function CustomerBody({ customer: c }: { customer: StoreCustomer }): ReactElemen
                     <Td>
                       <StatusChip
                         kind={orderStatusKind(o.status)}
-                        label={statusLabel(o.status)}
+                        label={statusLabel(o.status, locale)}
                         size="sm"
                       />
                     </Td>
                     <Td align="right">
                       {o.codAmountInr === null ? (
-                        <span className="rc-cst-faint">Prepaid</span>
+                        <span className="rc-cst-faint">{t('cst.d.prepaid')}</span>
                       ) : (
                         <Money amount={o.codAmountInr} convert={false} />
                       )}
@@ -289,8 +295,13 @@ function CustomerBody({ customer: c }: { customer: StoreCustomer }): ReactElemen
             </Table>
             {orders.data.total > orders.data.items.length ? (
               <p className="rc-cst-more">
-                Showing the latest {orders.data.items.length} of {orders.data.total}.{' '}
-                <Link href={allOrdersHref}>See them all</Link>
+                {richMessage(
+                  t('cst.d.showing', {
+                    shown: orders.data.items.length,
+                    total: orders.data.total,
+                  }),
+                  { link: <Link href={allOrdersHref}>{t('cst.d.seeAll')}</Link> },
+                )}
               </p>
             ) : null}
           </>

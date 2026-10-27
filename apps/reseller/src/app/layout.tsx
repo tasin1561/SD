@@ -1,8 +1,11 @@
 import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
 import { resolvedTheme, THEME_COOKIE_NAME, themeInitScript } from '@skydrop/ui/components';
+import { langInitScript, localeDir } from '@skydrop/ui/app/i18n';
 import { motionInitScript } from '@skydrop/ui/app/motion-init';
 import localFont from 'next/font/local';
+import { AppLocaleProvider } from '@/i18n/client';
+import { getLocale, getT } from '@/i18n/server';
 import './globals.css';
 
 /**
@@ -57,11 +60,43 @@ const mono = localFont({
   ],
 });
 
-export const metadata: Metadata = {
-  title: 'Skydrop Store',
-  description: 'Skydrop member store portal — run your store.',
-  robots: { index: false, follow: false },
-};
+/**
+ * Bangla: Noto Sans Bengali (OFL, licence beside the file), ONE variable woff2
+ * (wght 400-700, 69.9 KB) subset to Bengali + danda, ZWJ/ZWNJ, ₹ and the dotted
+ * circle. Same shape as track's Devanagari face: the @font-face is declared
+ * everywhere, but the family is only NAMED in the font stack under
+ * `html[lang='bn']` (globals.css), and `unicode-range` is Bengali-only, so an
+ * English visitor never requests the file. Not preloaded for the same reason.
+ * It is listed BEFORE Plus Jakarta there so ZWJ/ZWNJ stay with the Bengali run
+ * (Jakarta's range also covers U+200C-D, which would split a conjunct).
+ */
+const bengali = localFont({
+  src: [
+    {
+      path: './fonts/noto-sans-bengali-400-700.woff2',
+      weight: '400 700',
+      style: 'normal',
+    },
+  ],
+  variable: '--font-bn-face',
+  display: 'swap',
+  preload: false,
+  declarations: [
+    {
+      prop: 'unicode-range',
+      value: 'U+0964-0965, U+0980-09FF, U+200C-200D, U+20B9, U+25CC',
+    },
+  ],
+});
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return {
+    title: t('shell.meta.title'),
+    description: t('shell.meta.description'),
+    robots: { index: false, follow: false },
+  };
+}
 
 export default async function RootLayout({
   children,
@@ -78,6 +113,11 @@ export default async function RootLayout({
   // here as well as stamped by the init script so a hydration-mismatch
   // recovery cannot reset <html> to an unthemed state.
   const theme = resolvedTheme((await cookies()).get(THEME_COOKIE_NAME)?.value);
+  // The UI language, from the `sd-lang` cookie, rendered on <html> for the same
+  // reason as the theme: React 19 resets <html>'s attributes to its SERVER props on
+  // a hydration-mismatch recovery, so a client-only `lang` would silently revert to
+  // English. English when there is no cookie.
+  const locale = await getLocale();
   return (
     // `suppressHydrationWarning`: the init script below stamps
     // `data-theme` on this element BEFORE hydration (from localStorage,
@@ -86,10 +126,11 @@ export default async function RootLayout({
     // attribute. React does not descend, so this does not mask
     // mismatches in the app tree.
     <html
-      lang="en"
+      lang={locale}
+      dir={localeDir(locale)}
       suppressHydrationWarning
       data-theme={theme}
-      className={`${sans.variable} ${mono.variable}`}
+      className={`${sans.variable} ${mono.variable}${locale === 'bn' ? ` ${bengali.variable}` : ''}`}
     >
       <head>
         {/* `suppressHydrationWarning` on the SCRIPT, not just on
@@ -103,6 +144,13 @@ export default async function RootLayout({
           suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: themeInitScript }}
         />
+        {/* The UI language: repairs the `sd-lang` cookie from localStorage and
+            stamps `lang` before first paint. Nonce'd like the theme script. */}
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: langInitScript }}
+        />
         {/* The per-user "Reduce motion" choice (localStorage only), applied
             before first paint like the theme. */}
         <script
@@ -111,7 +159,9 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: motionInitScript }}
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <AppLocaleProvider initialLocale={locale}>{children}</AppLocaleProvider>
+      </body>
     </html>
   );
 }

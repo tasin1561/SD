@@ -10,7 +10,8 @@ import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { useToast } from '@skydrop/ui/app/toast';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { useStoreWebhookEvents, useUpdateStoreWebhook, type StoreWebhook } from '@/lib/order-hooks';
 import { RdCallout, phaseOf } from '../../settings/_components/rd-parts';
 
@@ -33,15 +34,17 @@ export function EventPicker({
   readonly value: readonly string[];
   readonly onChange: (next: string[]) => void;
 }): ReactElement {
+  const t = useT();
   const events = useStoreWebhookEvents();
-  if (events.isPending) return <SkeletonRows label="Loading the events" rows={2} cols={2} />;
+  if (events.isPending)
+    return <SkeletonRows label={t('intg.form.loadingEvents')} rows={2} cols={2} />;
   if (events.isError) {
-    return <ErrorState message={serverVerdict(events.error)} retry={() => void events.refetch()} />;
+    return <ErrorState message={verdict(events.error, t)} retry={() => void events.refetch()} />;
   }
   const chosen = new Set(value);
   return (
     <fieldset className="rd-events">
-      <legend>Events</legend>
+      <legend>{t('intg.form.events')}</legend>
       <div className="rd-events__grid">
         {events.data.map((e) => (
           <Checkbox
@@ -74,6 +77,7 @@ export function EditWebhookModal({
   readonly webhook: StoreWebhook;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const update = useUpdateStoreWebhook();
   const [url, setUrl] = useState(webhook.url);
@@ -93,10 +97,10 @@ export function EditWebhookModal({
         description: description.trim(),
         subscribedEvents: events,
       });
-      toast.success('Webhook saved.');
+      toast.success(t('intg.form.saved'));
       onClose();
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -108,13 +112,13 @@ export function EditWebhookModal({
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
-      title="Edit webhook"
-      description="The signing secret does not change — use New secret for that."
+      title={t('intg.form.editTitle')}
+      description={t('intg.form.editDesc')}
     >
       <form onSubmit={(e) => void submit(e)} className="rd-form">
         <TextField
           id="wh-edit-url"
-          label="Your https URL"
+          label={t('intg.form.url')}
           icon={<Link2 size={15} />}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
@@ -124,7 +128,7 @@ export function EditWebhookModal({
         />
         <TextField
           id="wh-edit-name"
-          label="Name"
+          label={t('intg.form.name')}
           icon={<Tag size={15} />}
           value={name}
           maxLength={160}
@@ -133,7 +137,7 @@ export function EditWebhookModal({
         />
         <TextArea
           id="wh-edit-description"
-          label="Description"
+          label={t('intg.form.description')}
           icon={<FileText size={15} />}
           value={description}
           maxLength={2000}
@@ -148,13 +152,17 @@ export function EditWebhookModal({
         ) : null}
         <DialogFooter>
           <Button type="button" variant="secondary" size="md" onClick={onClose}>
-            Cancel
+            {t('intg.form.cancel')}
           </Button>
           <AsyncButton
             type="submit"
             variant="primary"
             size="md"
-            labels={{ idle: 'Save', busy: 'Saving…', error: 'Not saved' }}
+            labels={{
+              idle: t('intg.form.save'),
+              busy: t('intg.form.saving'),
+              error: t('intg.form.notSaved'),
+            }}
             state={phaseOf(update.isPending, error)}
             disabled={update.isPending || url.trim() === '' || events.length === 0}
           />

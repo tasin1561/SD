@@ -10,7 +10,9 @@ import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTimeBrowser } from '@/i18n/format';
+import { verdict as toVerdict } from '@/i18n/verdict';
 import {
   useChangeStoreConsignee,
   useStoreConsignee,
@@ -52,6 +54,8 @@ export function StoreConsigneePanel({
   /** Shown in the confirm; display only. */
   readonly orderNumber: string;
 }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const toast = useToast();
   const info = useStoreConsignee(orderId);
   const history = useStoreConsigneeHistory(orderId);
@@ -71,7 +75,7 @@ export function StoreConsigneePanel({
     // a perfectly normal stage of its life.
     const code = (info.error as { body?: { code?: string } } | undefined)?.body?.code;
     if (code === 'NO_LIVE_PARCEL') return <div />;
-    return <ErrorState message={serverVerdict(info.error)} retry={() => void info.refetch()} />;
+    return <ErrorState message={toVerdict(info.error, t)} retry={() => void info.refetch()} />;
   }
 
   const d = info.data;
@@ -86,11 +90,11 @@ export function StoreConsigneePanel({
 
   // What the request below will carry — for the confirm to restate.
   const asked: ReadonlyArray<readonly [string, string]> = [
-    ...(name === null || name === d.currentName ? [] : [['Name', name] as const]),
-    ...(phone === null || phone === d.currentPhone ? [] : [['Phone', phone] as const]),
+    ...(name === null || name === d.currentName ? [] : [[t('consignee.name'), name] as const]),
+    ...(phone === null || phone === d.currentPhone ? [] : [[t('consignee.phone'), phone] as const]),
     ...(address === null || address === d.currentAddressLine1
       ? []
-      : [['Address', address] as const]),
+      : [[t('consignee.address'), address] as const]),
   ];
 
   // A const arrow, not a `function`: a hoisted declaration loses the
@@ -106,7 +110,7 @@ export function StoreConsigneePanel({
         ...(address === null || address === d.currentAddressLine1 ? {} : { addressLine1: address }),
       });
       if (res.accepted) {
-        toast.success('The courier took the change. This is where the parcel is now going.');
+        toast.success(t('consignee.toast.accepted'));
         setName(null);
         setPhone(null);
         setAddress(null);
@@ -114,51 +118,48 @@ export function StoreConsigneePanel({
         // NOT a toast: the store has a customer waiting on this answer
         // and needs to be able to read the courier's words back.
         setVerdict(
-          `The courier refused it, so the parcel is still going to the address it had.${
-            res.message === null ? '' : ` They said: “${res.message}”.`
-          }`,
+          res.message === null
+            ? t('consignee.refused')
+            : t('consignee.refusedSaid', { message: res.message }),
         );
       }
     } catch (err) {
       // Verbatim (FE-2): STORE_ACTION_NOT_ALLOWED,
       // STORE_ACTION_NEEDS_SELLER_NOW, COURIER_WILL_NOT_ACCEPT_CHANGES…
-      setVerdict(serverVerdict(err));
+      setVerdict(toVerdict(err, t));
     }
   };
 
   return (
-    <RoSection
-      title="Ask the courier to correct the address"
-      note="The courier already has this parcel. Only they can change where it goes, and the change is stored only if they accept it."
-    >
+    <RoSection title={t('consignee.title')} note={t('consignee.note')}>
       <div className="ro-stack ro-stack--tight">
         <p className="ro-p">{d.reason}</p>
         <div className="ro-grid-2">
           <TextField
             id="consignee-name"
-            label="Name"
+            label={t('consignee.name')}
             disabled={!d.editable}
             value={val(name, d.currentName)}
             onChange={(e) => setName(e.target.value)}
           />
           <TextField
             id="consignee-phone"
-            label="Phone"
+            label={t('consignee.phone')}
             disabled={!d.editable}
             value={val(phone, d.currentPhone)}
             onChange={(e) => setPhone(e.target.value)}
           />
           <TextField
             id="consignee-address"
-            label="Address"
-            hint="The street address only — the city, state and PIN are what the parcel was routed on and cannot change."
+            label={t('consignee.address')}
+            hint={t('consignee.addressHint')}
             disabled={!d.editable}
             value={val(address, d.currentAddressLine1)}
             onChange={(e) => setAddress(e.target.value)}
           />
           <TextField
             id="consignee-routing"
-            label="Routed to"
+            label={t('consignee.routedTo')}
             disabled
             value={`${d.city}, ${d.stateProvince} ${d.postalCode}`}
           />
@@ -175,7 +176,7 @@ export function StoreConsigneePanel({
             variant="secondary"
             icon={<Send size={15} />}
             state={change.isPending ? 'busy' : undefined}
-            labels={{ idle: 'Ask the courier', busy: 'Asking the courier…' }}
+            labels={{ idle: t('consignee.ask'), busy: t('consignee.asking') }}
             disabled={!d.editable || !changed || change.isPending}
             onClick={() => setConfirming(true)}
           />
@@ -185,10 +186,12 @@ export function StoreConsigneePanel({
           <ul className="ro-log">
             {history.data.map((r) => (
               <li key={r.id}>
-                {new Date(r.createdAt).toLocaleString()} —{' '}
+                {formatDateTimeBrowser(r.createdAt, locale)} —{' '}
                 {r.courierAcceptedAt === null
-                  ? `refused${r.courierMessage === null ? '' : `: ${r.courierMessage}`}`
-                  : 'accepted by the courier'}
+                  ? r.courierMessage === null
+                    ? t('consignee.history.refused')
+                    : t('consignee.history.refusedWith', { message: r.courierMessage })
+                  : t('consignee.history.accepted')}
               </li>
             ))}
           </ul>
@@ -198,12 +201,12 @@ export function StoreConsigneePanel({
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Ask the courier to change the address?"
+        title={t('consignee.confirm.title')}
         entity={orderNumber}
         entityIsIdentifier
-        consequence="The courier is asked at once. The change is stored only if they accept it; if they refuse, the parcel keeps going to the address it had."
-        confirmLabel="Ask the courier"
-        cancelLabel="Not yet"
+        consequence={t('consignee.confirm.consequence')}
+        confirmLabel={t('consignee.ask')}
+        cancelLabel={t('consignee.confirm.notYet')}
         // Resolves whatever the answer: the courier's reply (or a refusal)
         // is shown on the panel, exactly where it was shown before.
         onConfirm={() => ask()}

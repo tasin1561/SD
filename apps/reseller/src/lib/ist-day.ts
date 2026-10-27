@@ -4,6 +4,9 @@
  * exact. Windows are HALF-OPEN: `to` is midnight IST at the start of the
  * day AFTER the last one, so adjacent windows tile.
  */
+import type { Locale } from '@skydrop/ui/app/i18n';
+import { dateLocaleTag } from '@/i18n/format';
+
 const IST_OFFSET_MINUTES = 330;
 const IST_OFFSET = '+05:30';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -27,8 +30,8 @@ export function lastDays(days: number, now: Date = new Date()): { from: string; 
 }
 
 /** An instant as the Indian date it fell on, whatever the browser's zone. */
-export function istDateLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-IN', {
+export function istDateLabel(iso: string, locale: Locale = 'en'): string {
+  return new Date(iso).toLocaleDateString(dateLocaleTag(locale), {
     timeZone: 'Asia/Kolkata',
     day: 'numeric',
     month: 'short',
@@ -37,9 +40,9 @@ export function istDateLabel(iso: string): string {
 }
 
 /** "September 2026" for `2026-09`. */
-export function monthLabel(month: string): string {
+export function monthLabel(month: string, locale: Locale = 'en'): string {
   const [y, m] = month.split('-').map(Number);
-  return new Date(Date.UTC(y ?? 2000, (m ?? 1) - 1, 1)).toLocaleDateString('en-IN', {
+  return new Date(Date.UTC(y ?? 2000, (m ?? 1) - 1, 1)).toLocaleDateString(dateLocaleTag(locale), {
     month: 'long',
     year: 'numeric',
     timeZone: 'UTC',

@@ -25,7 +25,10 @@ import {
   type ExpenseCategory,
   type StoreExpenseView,
 } from '@/lib/report-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { richMessage, useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { RmSection } from '../wallet/_components/rm-parts';
 
 /**
@@ -34,7 +37,29 @@ import { RmSection } from '../wallet/_components/rm-parts';
  * no money moves and the seller never sees it. A mistake is removed with
  * a reason that stays on the record, never edited.
  */
+const CATEGORY_KEY: Readonly<Record<ExpenseCategory, MessageKey>> = {
+  AD_SPEND: 'exp.cat.AD_SPEND',
+  STAFF: 'exp.cat.STAFF',
+  SOFTWARE: 'exp.cat.SOFTWARE',
+  PHOTOGRAPHY: 'exp.cat.PHOTOGRAPHY',
+  PACKAGING: 'exp.cat.PACKAGING',
+  CUSTOMER_REFUNDS: 'exp.cat.CUSTOMER_REFUNDS',
+  RENT: 'exp.cat.RENT',
+  OTHER: 'exp.cat.OTHER',
+};
+
+/** The category in this console's language; the server's own label for one this build does not know. */
+function categoryName(
+  category: ExpenseCategory,
+  serverLabel: string,
+  t: Translate<MessageKey>,
+): string {
+  const key = CATEGORY_KEY[category] as MessageKey | undefined;
+  return key === undefined ? serverLabel : t(key);
+}
+
 export default function StoreExpensesPage(): ReactElement {
+  const t = useT();
   const identity = useStoreIdentity();
   const mayRecord = can(identity, 'expenses.manage');
   const initial = lastDays(90);
@@ -46,32 +71,34 @@ export default function StoreExpensesPage(): ReactElement {
 
   return (
     <div className="rm-page">
-      <PageHeader
-        title="Expenses"
-        subtitle="What your store spent. It counts in your profit and loss and return on ad spend; it moves no money and your client never sees it."
-      />
+      <PageHeader title={t('exp.title')} subtitle={t('exp.subtitle')} />
       {mayRecord && <RecordExpense />}
       <div className="rm-filters">
-        <DateField id="from" label="From" value={from} onChange={(e) => setFrom(e.target.value)} />
-        <DateField id="to" label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+        <DateField
+          id="from"
+          label={t('exp.from')}
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+        />
+        <DateField id="to" label={t('exp.to')} value={to} onChange={(e) => setTo(e.target.value)} />
       </div>
-      {list.isPending && <SkeletonRows rows={5} cols={4} label="Loading expenses" />}
+      {list.isPending && <SkeletonRows rows={5} cols={4} label={t('exp.loading')} />}
       {list.isError && (
-        <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+        <ErrorState message={verdict(list.error, t)} retry={() => void list.refetch()} />
       )}
       {list.data !== undefined && (
         <RmSection>
           <SectionHeading
-            title="Recorded"
+            title={t('exp.recorded')}
             note={
               <>
-                Total <Money amount={list.data.totalInr} />
+                {richMessage(t('exp.total'), { amount: <Money amount={list.data.totalInr} /> })}
                 {list.data.byCategory.length === 0
-                  ? ' · nothing yet'
+                  ? t('exp.nothingYet')
                   : list.data.byCategory.map((c) => (
                       <span key={c.category}>
                         {' · '}
-                        {c.label} <Money amount={c.amountInr} />
+                        {categoryName(c.category, c.label, t)} <Money amount={c.amountInr} />
                       </span>
                     ))}
               </>
@@ -80,19 +107,17 @@ export default function StoreExpensesPage(): ReactElement {
           {list.data.items.length === 0 ? (
             <EmptyState
               icon={<ReceiptText size={22} />}
-              title="No expenses in this window"
-              description={
-                mayRecord ? 'Record one above.' : 'Somebody with “Record expenses” can add them.'
-              }
+              title={t('exp.empty')}
+              description={mayRecord ? t('exp.empty.record') : t('exp.empty.permission')}
             />
           ) : (
-            <Table caption="Recorded expenses">
+            <Table caption={t('exp.caption')}>
               <THead>
                 <Tr>
-                  <Th>Date</Th>
-                  <Th>Category</Th>
-                  <Th>What</Th>
-                  <Th align="right">Amount</Th>
+                  <Th>{t('exp.col.date')}</Th>
+                  <Th>{t('exp.col.category')}</Th>
+                  <Th>{t('exp.col.what')}</Th>
+                  <Th align="right">{t('exp.col.amount')}</Th>
                   {mayRecord && <Th />}
                 </Tr>
               </THead>
@@ -100,18 +125,22 @@ export default function StoreExpensesPage(): ReactElement {
                 {list.data.items.map((x) => (
                   <Tr key={x.id}>
                     <Td className="rm-when sk-figure">{x.expenseDate}</Td>
-                    <Td>{x.categoryLabel}</Td>
+                    <Td>{categoryName(x.category, x.categoryLabel, t)}</Td>
                     <Td>
                       <span className={x.deletedAt === null ? '' : 'rm-struck'}>
                         {x.description}
                       </span>
                       {x.reference !== null && (
                         <span className="rm-faint rm-block">
-                          Ref <span className="sk-ident">{x.reference}</span>
+                          {richMessage(t('exp.ref'), {
+                            ref: <span className="sk-ident">{x.reference}</span>,
+                          })}
                         </span>
                       )}
                       {x.deleteReason !== null && (
-                        <span className="rm-faint rm-block">Removed: {x.deleteReason}</span>
+                        <span className="rm-faint rm-block">
+                          {t('exp.removedWhy', { reason: x.deleteReason })}
+                        </span>
                       )}
                     </Td>
                     <Td align="right">
@@ -126,7 +155,7 @@ export default function StoreExpensesPage(): ReactElement {
                             icon={<Trash2 size={14} />}
                             onClick={() => setRemoving(x)}
                           >
-                            Remove
+                            {t('exp.remove')}
                           </Button>
                         )}
                       </Td>
@@ -144,6 +173,7 @@ export default function StoreExpensesPage(): ReactElement {
 }
 
 function RecordExpense(): ReactElement {
+  const t = useT();
   const toast = useToast();
   const record = useRecordStoreExpense();
   const [category, setCategory] = useState<ExpenseCategory>('AD_SPEND');
@@ -155,7 +185,11 @@ function RecordExpense(): ReactElement {
   // IDEM-1: one key per form, reused on a retry, new after a success.
   const [key, setKey] = useState(() => crypto.randomUUID());
 
-  const categoryLabel = EXPENSE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
+  const categoryLabel = categoryName(
+    category,
+    EXPENSE_CATEGORIES.find((c) => c.value === category)?.label ?? category,
+    t,
+  );
 
   // The browser's own `required` checks run on submit; the confirmation
   // then reads the entry back before the same request is sent.
@@ -174,13 +208,13 @@ function RecordExpense(): ReactElement {
         ...(reference.trim() === '' ? {} : { reference: reference.trim() }),
         idempotencyKey: key,
       });
-      toast.success('Recorded.');
+      toast.success(t('exp.rec.toast'));
       setAmount('');
       setDescription('');
       setReference('');
       setKey(crypto.randomUUID());
     } catch (err) {
-      toast.error(serverVerdict(err));
+      toast.error(verdict(err, t));
     } finally {
       setConfirming(false);
     }
@@ -188,23 +222,23 @@ function RecordExpense(): ReactElement {
 
   return (
     <RmSection>
-      <SectionHeading title="Record an expense" />
+      <SectionHeading title={t('exp.rec.title')} />
       <form onSubmit={submit} className="rm-form rm-form--3 rm-card">
         <Select
           id="category"
-          label="Category"
+          label={t('exp.rec.category')}
           value={category}
           onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
         >
           {EXPENSE_CATEGORIES.map((c) => (
             <option key={c.value} value={c.value}>
-              {c.label}
+              {categoryName(c.value, c.label, t)}
             </option>
           ))}
         </Select>
         <TextField
           id="amount"
-          label="Amount (₹)"
+          label={t('exp.rec.amount')}
           inputMode="decimal"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
@@ -212,21 +246,21 @@ function RecordExpense(): ReactElement {
         />
         <DateField
           id="date"
-          label="Date spent"
+          label={t('exp.rec.date')}
           value={date}
           onChange={(e) => setDate(e.target.value)}
           required
         />
         <TextField
           id="description"
-          label="What it was for"
+          label={t('exp.rec.what')}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           required
         />
         <TextField
           id="reference"
-          label="Invoice or receipt number"
+          label={t('exp.rec.invoice')}
           inputClassName="sk-ident"
           value={reference}
           onChange={(e) => setReference(e.target.value)}
@@ -238,18 +272,18 @@ function RecordExpense(): ReactElement {
             size="md"
             icon={<Plus size={15} />}
             state={record.isPending ? 'busy' : 'idle'}
-            labels={{ idle: 'Record', busy: 'Recording…' }}
+            labels={{ idle: t('exp.rec.submit'), busy: t('exp.rec.recording') }}
           />
         </div>
       </form>
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Record this expense?"
+        title={t('exp.rec.confirmTitle')}
         entity={`${categoryLabel} · ${date} · ${description.trim()}`}
         amount={<Money amount={amount.trim() === '' ? '0' : amount.trim()} />}
-        consequence="It counts in your profit and loss and return on ad spend. It moves no money; a mistake is removed with a reason, never edited."
-        confirmLabel="Record"
+        consequence={t('exp.rec.confirmBody')}
+        confirmLabel={t('exp.rec.submit')}
         onConfirm={send}
       />
     </RmSection>
@@ -263,6 +297,7 @@ function RemoveExpense({
   expense: StoreExpenseView;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const remove = useRemoveStoreExpense();
   const [reason, setReason] = useState('');
@@ -276,34 +311,34 @@ function RemoveExpense({
       icon={<Trash2 size={18} />}
       size="sm"
       locked={remove.isPending}
-      title="Remove this expense?"
-      description={
-        <>
-          {expense.categoryLabel} · <Money amount={expense.amountInr} /> · {expense.expenseDate}. It
-          stays on the record with your reason; if its month has closed, the change is carried into
-          this month.
-        </>
-      }
+      title={t('exp.rm.title')}
+      description={richMessage(
+        t('exp.rm.desc', {
+          category: categoryName(expense.category, expense.categoryLabel, t),
+          date: expense.expenseDate,
+        }),
+        { amount: <Money amount={expense.amountInr} /> },
+      )}
       footer={
         <DialogFooter>
           <Button variant="secondary" onClick={onClose} disabled={remove.isPending}>
-            Keep it
+            {t('exp.rm.keep')}
           </Button>
           <AsyncButton
             variant="destructive"
             icon={<Trash2 size={15} />}
             disabled={reason.trim() === ''}
             state={remove.isPending ? 'busy' : 'idle'}
-            labels={{ idle: 'Remove', busy: 'Removing…' }}
+            labels={{ idle: t('exp.rm.submit'), busy: t('exp.rm.removing') }}
             onClick={() =>
               remove.mutate(
                 { id: expense.id, reason: reason.trim() },
                 {
                   onSuccess: () => {
-                    toast.success('Removed.');
+                    toast.success(t('exp.rm.toast'));
                     onClose();
                   },
-                  onError: (err) => toast.error(serverVerdict(err)),
+                  onError: (err) => toast.error(verdict(err, t)),
                 },
               )
             }
@@ -313,7 +348,7 @@ function RemoveExpense({
     >
       <TextField
         id="reason"
-        label="Why"
+        label={t('exp.rm.why')}
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         required

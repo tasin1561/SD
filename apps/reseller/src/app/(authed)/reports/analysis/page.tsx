@@ -23,7 +23,8 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { istDayRange, lastDays } from '@/lib/ist-day';
 import { useStoreAnalysis, useStoreCashFlow } from '@/lib/report-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { richMessage, useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { RmSection } from '../../wallet/_components/rm-parts';
 
 const pct = (v: string | null): string => (v === null ? '—' : `${v}%`);
@@ -35,6 +36,7 @@ const pct = (v: string | null): string => (v === null ? '—' : `${v}%`);
  * expects and when. Rates count only orders whose outcome is known.
  */
 export default function StoreAnalysisPage(): ReactElement {
+  const t = useT();
   const initial = lastDays(30);
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
@@ -45,117 +47,127 @@ export default function StoreAnalysisPage(): ReactElement {
   return (
     <div className="rm-page">
       <PageHeader
-        title="Analysis"
-        subtitle="How your orders are doing, what each product earns, where parcels come back from, and what you can expect to be credited."
+        title={t('repa.title')}
+        subtitle={t('repa.subtitle')}
         action={
           <Link href="/reports" className={buttonClassName('secondary', 'md')}>
             <span className="sk-btn__fx" aria-hidden />
             <span className="sk-btn__icon" aria-hidden>
               <ArrowLeft size={15} />
             </span>
-            <span className="sk-btn__label">Profit and loss</span>
+            <span className="sk-btn__label">{t('repa.back')}</span>
           </Link>
         }
       />
       <div className="rm-filters">
-        <DateField id="from" label="From" value={from} onChange={(e) => setFrom(e.target.value)} />
-        <DateField id="to" label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+        <DateField
+          id="from"
+          label={t('repa.from')}
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+        />
+        <DateField
+          id="to"
+          label={t('repa.to')}
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+        />
       </div>
 
-      {analysis.isPending && <SkeletonRows rows={6} cols={4} label="Loading the analysis" />}
+      {analysis.isPending && <SkeletonRows rows={6} cols={4} label={t('repa.loading')} />}
       {analysis.isError && (
-        <ErrorState message={serverVerdict(analysis.error)} retry={() => void analysis.refetch()} />
+        <ErrorState message={verdict(analysis.error, t)} retry={() => void analysis.refetch()} />
       )}
       {analysis.data !== undefined && (
         <>
           <RmSection>
-            <SectionHeading
-              title="Orders placed in the window"
-              note="Rates leave out orders whose outcome is not known yet."
-            />
+            <SectionHeading title={t('repa.orders.title')} note={t('repa.orders.note')} />
             <div className="rm-kpis">
               <KpiCard
-                label="Placed"
+                label={t('repa.placed')}
                 icon={<ShoppingBag size={14} />}
                 value={analysis.data.rates.placed}
                 format={(n) => `${n}`}
               />
               <KpiCard
-                label="Confirmed"
+                label={t('repa.confirmed')}
                 icon={<CheckCircle2 size={14} />}
                 figure={pct(analysis.data.rates.confirmationRatePct)}
-                hint={`${analysis.data.rates.confirmed} of ${analysis.data.rates.decided} decided`}
+                hint={t('repa.confirmedHint', {
+                  confirmed: analysis.data.rates.confirmed,
+                  decided: analysis.data.rates.decided,
+                })}
               />
               <KpiCard
-                label="Cancelled"
+                label={t('repa.cancelled')}
                 icon={<Ban size={14} />}
                 tone="pending"
                 figure={pct(analysis.data.rates.cancelRatePct)}
-                hint={`${analysis.data.rates.calledOff} orders`}
+                hint={t('repa.cancelledHint', { n: analysis.data.rates.calledOff })}
               />
               <KpiCard
-                label="Returned"
+                label={t('repa.returned')}
                 icon={<Undo2 size={14} />}
                 tone="debit"
                 figure={pct(analysis.data.rates.returnRatePct)}
-                hint={`${analysis.data.rates.returned} of ${analysis.data.rates.delivered + analysis.data.rates.returned + analysis.data.rates.lost}`}
+                hint={t('repa.returnedHint', {
+                  returned: analysis.data.rates.returned,
+                  total:
+                    analysis.data.rates.delivered +
+                    analysis.data.rates.returned +
+                    analysis.data.rates.lost,
+                })}
               />
             </div>
           </RmSection>
 
           <RmSection>
-            <SectionHeading
-              title="Return on ad spend"
-              note="Retail of orders delivered in the window, divided by the advertising you recorded for it."
-            />
+            <SectionHeading title={t('repa.roas.title')} note={t('repa.roas.note')} />
             <div className="rm-kpis">
               <KpiCard
-                label="Ad spend"
+                label={t('repa.adSpend')}
                 icon={<Megaphone size={14} />}
                 figure={<Money amount={analysis.data.roas.adSpendInr} />}
               />
               <KpiCard
-                label="Delivered sales"
+                label={t('repa.deliveredSales')}
                 icon={<PackageCheck size={14} />}
                 figure={<Money amount={analysis.data.roas.deliveredRetailInr} />}
-                hint={`${analysis.data.roas.deliveredOrders} orders`}
+                hint={t('repa.deliveredSalesHint', { n: analysis.data.roas.deliveredOrders })}
               />
               <KpiCard
-                label="ROAS"
+                label={t('repa.roas')}
                 icon={<Target size={14} />}
                 figure={analysis.data.roas.roas === null ? '—' : `${analysis.data.roas.roas}×`}
               />
               <KpiCard
-                label="Margin ROAS"
+                label={t('repa.marginRoas')}
                 icon={<Target size={14} />}
                 figure={
                   analysis.data.roas.marginRoas === null ? '—' : `${analysis.data.roas.marginRoas}×`
                 }
-                hint="Retail − transfer, per rupee of ads"
+                hint={t('repa.marginRoasHint')}
               />
             </div>
           </RmSection>
 
           <RmSection>
-            <SectionHeading
-              title="Profit per product"
-              note="Retail − transfer price on delivered units. Fee shares are per order and sit in the P&L."
-            />
+            <SectionHeading title={t('repa.products.title')} note={t('repa.products.note')} />
             {analysis.data.products.length === 0 ? (
               <EmptyState
                 bare
-                title="No delivered or returned orders yet"
-                description="Widen the window."
+                title={t('repa.products.empty')}
+                description={t('repa.products.emptyBody')}
               />
             ) : (
-              <Table caption="Profit per product">
+              <Table caption={t('repa.products.title')}>
                 <THead>
                   <Tr>
-                    <Th>Product</Th>
-                    <Th align="right">Delivered</Th>
-                    <Th align="right">Returned</Th>
-                    <Th align="right">Sales</Th>
-                    <Th align="right">Margin</Th>
+                    <Th>{t('repa.products.col.product')}</Th>
+                    <Th align="right">{t('repa.products.col.delivered')}</Th>
+                    <Th align="right">{t('repa.products.col.returned')}</Th>
+                    <Th align="right">{t('repa.products.col.sales')}</Th>
+                    <Th align="right">{t('repa.products.col.margin')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -185,20 +197,17 @@ export default function StoreAnalysisPage(): ReactElement {
           </RmSection>
 
           <RmSection>
-            <SectionHeading
-              title="Returns by pincode"
-              note="The 50 pincodes with the most parcels back."
-            />
+            <SectionHeading title={t('repa.pin.title')} note={t('repa.pin.note')} />
             {analysis.data.pincodes.length === 0 ? (
-              <EmptyState bare title="No outcomes yet" />
+              <EmptyState bare title={t('repa.pin.empty')} />
             ) : (
-              <Table caption="Returns by pincode">
+              <Table caption={t('repa.pin.title')}>
                 <THead>
                   <Tr>
-                    <Th>Pincode</Th>
-                    <Th align="right">Delivered</Th>
-                    <Th align="right">Returned</Th>
-                    <Th align="right">Return rate</Th>
+                    <Th>{t('repa.pin.col.pin')}</Th>
+                    <Th align="right">{t('repa.pin.col.delivered')}</Th>
+                    <Th align="right">{t('repa.pin.col.returned')}</Th>
+                    <Th align="right">{t('repa.pin.col.rate')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -224,34 +233,33 @@ export default function StoreAnalysisPage(): ReactElement {
       )}
 
       <RmSection>
-        <SectionHeading
-          title="Cash-flow forecast"
-          note="COD orders not yet credited to you: retail − transfer, before your fee shares and COD tax share, by when your terms credit them."
-        />
-        {cash.isPending && <SkeletonRows rows={3} cols={3} label="Loading the forecast" />}
+        <SectionHeading title={t('repa.cash.title')} note={t('repa.cash.note')} />
+        {cash.isPending && <SkeletonRows rows={3} cols={3} label={t('repa.cash.loading')} />}
         {cash.isError && (
-          <ErrorState message={serverVerdict(cash.error)} retry={() => void cash.refetch()} />
+          <ErrorState message={verdict(cash.error, t)} retry={() => void cash.refetch()} />
         )}
         {cash.data !== undefined &&
           (cash.data.rows.length === 0 ? (
-            <EmptyState bare tone="positive" title="Nothing waiting to be credited" />
+            <EmptyState bare tone="positive" title={t('repa.cash.empty')} />
           ) : (
             <>
               <p className="rm-muted">
-                Expected in total: <Money amount={cash.data.totalInr} direction="credit" />
+                {richMessage(t('repa.cash.total'), {
+                  amount: <Money amount={cash.data.totalInr} direction="credit" />,
+                })}
               </p>
-              <Table caption="Expected by week">
+              <Table caption={t('repa.cash.byWeek')}>
                 <THead>
                   <Tr>
-                    <Th>When</Th>
-                    <Th align="right">Orders</Th>
-                    <Th align="right">Expected</Th>
+                    <Th>{t('repa.cash.col.when')}</Th>
+                    <Th align="right">{t('repa.cash.col.orders')}</Th>
+                    <Th align="right">{t('repa.cash.col.expected')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
                   {cash.data.weeks.map((w) => (
                     <Tr key={w.weekStart}>
-                      <Td>Week of {w.weekStart}</Td>
+                      <Td>{t('repa.cash.weekOf', { date: w.weekStart })}</Td>
                       <Td align="right" className="sk-figure">
                         {w.count}
                       </Td>
@@ -273,13 +281,13 @@ export default function StoreAnalysisPage(): ReactElement {
                   ))}
                 </TBody>
               </Table>
-              <h3 className="rm-sub-heading">Order by order</h3>
-              <Table caption="Order by order">
+              <h3 className="rm-sub-heading">{t('repa.cash.byOrder')}</h3>
+              <Table caption={t('repa.cash.byOrder')}>
                 <THead>
                   <Tr>
-                    <Th>Order</Th>
-                    <Th>Credited</Th>
-                    <Th align="right">Expected</Th>
+                    <Th>{t('repa.cash.col.order')}</Th>
+                    <Th>{t('repa.cash.col.credited')}</Th>
+                    <Th align="right">{t('repa.cash.col.expected')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -292,18 +300,14 @@ export default function StoreAnalysisPage(): ReactElement {
                       </Td>
                       <Td className="rm-small">
                         {r.expectedOn === null ? (
-                          'Waiting for the order to move on'
+                          t('repa.cash.waiting')
                         ) : r.overdue ? (
                           <span className="rm-overdue">
                             <Clock size={12} aria-hidden />
-                            {'Due since '}
-                            {r.expectedOn}
+                            {t('repa.cash.dueSince', { date: r.expectedOn })}
                           </span>
                         ) : (
-                          <span>
-                            {'Around '}
-                            {r.expectedOn}
-                          </span>
+                          <span>{t('repa.cash.around', { date: r.expectedOn })}</span>
                         )}
                       </Td>
                       <Td align="right">

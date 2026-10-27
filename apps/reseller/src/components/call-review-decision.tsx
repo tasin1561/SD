@@ -11,7 +11,8 @@ import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
 import { ChoiceCards } from '@skydrop/ui/app/choice-cards';
 import { TextArea } from '@skydrop/ui/app/text-field';
 import { Notice } from '@/app/(authed)/orders/_components/orders-parts';
-import { serverVerdict } from '@/lib/server-verdict';
+import { richMessage, useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import {
   useDecideStoreCallReview,
   type CallReviewDecision as Decision,
@@ -52,7 +53,7 @@ import {
 export function CallReviewDecision({
   review,
   orderNumber,
-  triggerLabel = 'Answer',
+  triggerLabel,
   triggerVariant = 'secondary',
   mode,
 }: {
@@ -68,6 +69,7 @@ export function CallReviewDecision({
   readonly triggerLabel?: string;
   readonly triggerVariant?: 'primary' | 'secondary';
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const decide = useDecideStoreCallReview();
   const [open, setOpen] = useState(false);
@@ -77,8 +79,12 @@ export function CallReviewDecision({
 
   const releasing = decision === 'RELEASE';
   const heldForSeller = mode === 'ASK_SELLER';
-  const units = `${review.heldQty} unit${review.heldQty === 1 ? '' : 's'}`;
-  const tries = `${review.attemptCount} time${review.attemptCount === 1 ? '' : 's'}`;
+  const units = t(review.heldQty === 1 ? 'callrev.units.one' : 'callrev.units.other', {
+    n: review.heldQty,
+  });
+  const tries = t(review.attemptCount === 1 ? 'callrev.tries.one' : 'callrev.tries.other', {
+    n: review.attemptCount,
+  });
   // Only the destructive branch insists on one — see the note above —
   // unless Seller staff approve it, who need to know why either way.
   const missingReason = (releasing || heldForSeller) && note.trim() === '';
@@ -99,41 +105,39 @@ export function CallReviewDecision({
         ...(note.trim() === '' ? {} : { note: note.trim() }),
       });
       if (!out.applied) {
-        toast.success(
-          'Sent to Client staff to approve. Nothing changes on the order until they answer.',
-        );
+        toast.success(t('callrev.toast.sentToSeller'));
         setOpen(false);
         return;
       }
       toast.success(
         releasing
-          ? `${units} released back into stock, and the order is rejected.`
+          ? t('callrev.toast.released', { units })
           : out.result.orderMoved
-            ? 'We will keep trying to reach the customer.'
+            ? t('callrev.toast.keepTrying')
             : // Honest rather than cheerful: the answer is recorded and the
               // stock is still held, but the order had already moved on and
               // nobody is going to ring anyone.
-              'Recorded — but the order had already moved on, so calling did not restart.',
+              t('callrev.toast.movedOn'),
       );
       setOpen(false);
     } catch (err) {
       // Verbatim (FE-2): STORE_ACTION_NOT_ALLOWED when the seller keeps
       // this question, REVIEW_ALREADY_RESOLVED when somebody at the store
       // answered it first, EARLY_RESERVATION_REVIEW_NOT_FOUND.
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
   const commitLabel = heldForSeller
-    ? 'Send to your client to approve'
+    ? t('callrev.commit.seller')
     : releasing
-      ? 'Release the stock and reject the order'
-      : 'Keep trying';
+      ? t('callrev.commit.release')
+      : t('callrev.commit.keep');
 
   return (
     <>
       <Button variant={triggerVariant} size="sm" onClick={start}>
-        {triggerLabel}
+        {triggerLabel ?? t('callrev.answer')}
       </Button>
 
       <Dialog
@@ -147,10 +151,14 @@ export function CallReviewDecision({
         locked={decide.isPending}
         title={
           orderNumber === undefined
-            ? 'Keep trying to reach the customer?'
-            : `${orderNumber} — keep trying to reach the customer?`
+            ? t('callrev.title')
+            : t('callrev.titleOrder', { order: orderNumber })
         }
-        description={`We have tried them ${tries} without an answer, and ${units} of your client’s stock ${review.heldQty === 1 ? 'is' : 'are'} held for this order in the meantime.${heldForSeller ? ' Your client approves this answer first — nothing happens until Client staff say yes.' : ''}`}
+        description={`${t('callrev.desc', {
+          tries,
+          units,
+          verb: t(review.heldQty === 1 ? 'callrev.verb.one' : 'callrev.verb.other'),
+        })}${heldForSeller ? t('callrev.desc.seller') : ''}`}
         footer={
           <DialogFooter>
             <Button
@@ -159,13 +167,13 @@ export function CallReviewDecision({
               onClick={() => setOpen(false)}
               disabled={decide.isPending}
             >
-              Never mind
+              {t('callrev.neverMind')}
             </Button>
             <AsyncButton
               type="button"
               variant={releasing ? 'destructive' : 'primary'}
               state={decide.isPending ? 'busy' : undefined}
-              labels={{ idle: commitLabel, busy: 'Sending…' }}
+              labels={{ idle: commitLabel, busy: t('callrev.sending') }}
               disabled={decide.isPending || missingReason}
               onClick={() => void send()}
             />
@@ -174,7 +182,7 @@ export function CallReviewDecision({
       >
         <div className="ro-decide">
           <ChoiceCards
-            label="What should happen"
+            label={t('callrev.choose')}
             hideLegend
             name="call-review-decision"
             columns={1}
@@ -184,15 +192,14 @@ export function CallReviewDecision({
               {
                 value: 'REQUEST_MORE_ATTEMPTS',
                 icon: <PhoneCall size={16} />,
-                title: 'Keep trying',
-                description:
-                  'The order goes back into the call queue and we ring the customer again. The stock stays held for it in the meantime.',
+                title: t('callrev.keep.title'),
+                description: t('callrev.keep.desc'),
               },
               {
                 value: 'RELEASE',
                 icon: <PhoneOff size={16} />,
-                title: 'Give up on this order',
-                description: 'The held stock goes back so other orders can use it.',
+                title: t('callrev.release.title'),
+                description: t('callrev.release.desc'),
               },
             ]}
           />
@@ -203,23 +210,28 @@ export function CallReviewDecision({
           {releasing ? (
             <Notice tone="bad" role="status" icon={<TriangleAlert size={16} />}>
               <span>
-                This cannot be undone. {units} return to available stock,{' '}
-                <strong>and the order is rejected</strong> — nobody will call the customer again and
-                nothing will be sent to them. If you want to try them yourself first, choose “Keep
-                trying” instead.
+                {richMessage(t('callrev.release.note', { units }), {
+                  rejected: <strong>{t('callrev.release.noteBold')}</strong>,
+                })}
               </span>
             </Notice>
           ) : null}
 
           <TextArea
             id="call-review-note"
-            label={releasing ? 'Why you are giving up on it' : heldForSeller ? 'Why' : 'Note'}
+            label={
+              releasing
+                ? t('callrev.note.release')
+                : heldForSeller
+                  ? t('callrev.note.seller')
+                  : t('callrev.note.plain')
+            }
             hint={
               heldForSeller
-                ? 'Client staff read this before they approve or reject your answer.'
+                ? t('callrev.hint.seller')
                 : releasing
-                  ? 'Kept on the order. Your client reads this when they ask why the sale was rejected.'
-                  : 'Optional — anything the call centre should know.'
+                  ? t('callrev.hint.release')
+                  : t('callrev.hint.plain')
             }
             requiredMark={releasing || heldForSeller}
             rows={3}

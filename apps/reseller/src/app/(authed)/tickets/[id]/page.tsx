@@ -16,7 +16,11 @@ import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { richMessage, useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import { storeTicketKind } from '@/lib/ticket-kind';
 import {
   useReplyStoreTicket,
@@ -26,40 +30,36 @@ import {
 } from '@/lib/ticket-hooks';
 import '../_components/tickets.css';
 
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-function who(actor: ActorType): string {
+function who(actor: ActorType, tr: Translate<MessageKey>): string {
   switch (actor) {
     case 'STORE':
-      return 'You';
+      return tr('tkt.d.who.you');
     case 'SELLER':
     case 'API':
-      return 'The client';
+      return tr('tkt.d.who.client');
     default:
-      return 'Skydrop';
+      return tr('tkt.d.who.skydrop');
   }
 }
-
-const CRUMBS = [{ label: 'Tickets', href: '/tickets' }, { label: 'Ticket' }] as const;
 
 /** RS-7 — one of this store's disputes: what was said, and how it ended. */
 export default function TicketPage(): ReactElement {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? '';
   const ticket = useStoreTicket(id);
+  const tr = useT();
+  const crumbs = [{ label: tr('tkt.d.crumb'), href: '/tickets' }, { label: tr('tkt.d.ticket') }];
   return (
     <div className="rc-tkt-page">
       {ticket.isPending ? (
         <>
-          <PageHeader breadcrumbs={CRUMBS} Link={Link} title="Ticket" />
-          <SkeletonRows rows={4} cols={2} label="Loading the ticket" />
+          <PageHeader breadcrumbs={crumbs} Link={Link} title={tr('tkt.d.ticket')} />
+          <SkeletonRows rows={4} cols={2} label={tr('tkt.d.loading')} />
         </>
       ) : ticket.isError ? (
         <>
-          <PageHeader breadcrumbs={CRUMBS} Link={Link} title="Ticket" />
-          <ErrorState message={serverVerdict(ticket.error)} retry={() => void ticket.refetch()} />
+          <PageHeader breadcrumbs={crumbs} Link={Link} title={tr('tkt.d.ticket')} />
+          <ErrorState message={verdict(ticket.error, tr)} retry={() => void ticket.refetch()} />
         </>
       ) : (
         <TicketBody t={ticket.data} />
@@ -69,6 +69,8 @@ export default function TicketPage(): ReactElement {
 }
 
 function Outcome({ t }: { t: StoreTicketView }): ReactElement | null {
+  const tr = useT();
+  const locale = useLocale();
   if (t.resolvedAt === null) return null;
   const amount = t.resolutionAmountInr;
   const settled = (t.disputePayer === 'STORE' || t.disputePayer === 'SELLER') && amount !== null;
@@ -77,20 +79,22 @@ function Outcome({ t }: { t: StoreTicketView }): ReactElement | null {
       <p>
         {t.disputePayer === 'STORE' && amount !== null ? (
           <>
-            Settled: you paid the client <Money amount={amount} convert={false} />, taken from your
-            wallet.
+            {richMessage(tr('tkt.d.settled.store'), {
+              amount: <Money amount={amount} convert={false} />,
+            })}
           </>
         ) : t.disputePayer === 'SELLER' && amount !== null ? (
           <>
-            Settled: the client paid you <Money amount={amount} convert={false} />, credited to your
-            wallet.
+            {richMessage(tr('tkt.d.settled.seller'), {
+              amount: <Money amount={amount} convert={false} />,
+            })}
           </>
         ) : (
-          <>Closed {when(t.resolvedAt)}.</>
+          <>{tr('tkt.d.closed', { when: formatDateTime(t.resolvedAt, locale) })}</>
         )}
       </p>
       {t.resolutionNotes !== null ? (
-        <p className="rc-tkt-card__note">Skydrop’s note: {t.resolutionNotes}</p>
+        <p className="rc-tkt-card__note">{tr('tkt.d.note', { note: t.resolutionNotes })}</p>
       ) : null}
     </div>
   );
@@ -106,6 +110,8 @@ function Outcome({ t }: { t: StoreTicketView }): ReactElement | null {
  * questions, and only the first one explains what was asked for.
  */
 function Correction({ t }: { t: StoreTicketView }): ReactElement | null {
+  const tr = useT();
+  const locale = useLocale();
   if (t.disputeKind !== 'FIGURE_CORRECTION') return null;
   /*
     ASSOC-1 — an associate is not a party to what the store and the
@@ -117,19 +123,20 @@ function Correction({ t }: { t: StoreTicketView }): ReactElement | null {
   if (!t.figures.visible) {
     return (
       <section className="rc-tkt-section">
-        <SectionHeading
-          title="The figures"
-          note="What was claimed. The settlement between the store and the client is not shown to an associate."
-        />
+        <SectionHeading title={tr('tkt.d.figures')} note={tr('tkt.d.figures.hidden')} />
         <div className="rc-tkt-card">
           {t.disputeClaimAmountInr !== null ? (
             <p>
-              Claimed: <Money amount={t.disputeClaimAmountInr} convert={false} />
+              {richMessage(tr('tkt.d.claimed'), {
+                amount: <Money amount={t.disputeClaimAmountInr} convert={false} />,
+              })}
             </p>
           ) : null}
           {t.figures.codInr === null ? null : (
             <p className="rc-tkt-card__as-at">
-              The customer pays <Money amount={t.figures.codInr} convert={false} />
+              {richMessage(tr('tkt.d.customerPays'), {
+                amount: <Money amount={t.figures.codInr} convert={false} />,
+              })}
             </p>
           )}
         </div>
@@ -139,37 +146,44 @@ function Correction({ t }: { t: StoreTicketView }): ReactElement | null {
   const f = t.figures.snapshot;
   return (
     <section className="rc-tkt-section">
-      <SectionHeading
-        title="The figures"
-        note="What was claimed, and what the order’s money looked like when this was raised."
-      />
+      <SectionHeading title={tr('tkt.d.figures')} note={tr('tkt.d.figures.shown')} />
       <div className="rc-tkt-card">
         {t.disputeClaimAmountInr !== null ? (
           <p>
-            Claimed: <Money amount={t.disputeClaimAmountInr} convert={false} />{' '}
+            {richMessage(tr('tkt.d.claimed'), {
+              amount: <Money amount={t.disputeClaimAmountInr} convert={false} />,
+            })}{' '}
             <span className="rc-tkt-card__aside">
-              {t.disputeClaimPayer === 'STORE' ? '— we owe the client' : '— the client owes us'}
+              {t.disputeClaimPayer === 'STORE' ? tr('tkt.d.weOwe') : tr('tkt.d.theyOwe')}
             </span>
           </p>
         ) : null}
         {f === null ? (
-          <p className="rc-tkt-card__note">No figures were recorded with this one.</p>
+          <p className="rc-tkt-card__note">{tr('tkt.d.noFigures')}</p>
         ) : (
           <>
             <p className="rc-tkt-card__as-at">
-              As at {when(f.capturedAt)} · order <span className="sk-ident">{f.orderNumber}</span> ·{' '}
-              {f.paymentMode}
-              {f.codInr === null ? null : (
-                <>
-                  {' · COD '}
-                  <Money amount={f.codInr} convert={false} />
-                </>
+              {richMessage(
+                tr('tkt.d.asAt', {
+                  when: formatDateTime(f.capturedAt, locale),
+                  mode: f.paymentMode,
+                }),
+                { order: <span className="sk-ident">{f.orderNumber}</span> },
               )}
+              {f.codInr === null
+                ? null
+                : richMessage(tr('tkt.d.cod'), {
+                    amount: <Money amount={f.codInr} convert={false} />,
+                  })}
             </p>
             {f.parties.map((p) => (
               <p key={p.party}>
-                {p.party === 'STORE' ? 'Us' : 'The client'}: net{' '}
-                <Money amount={p.netInr} convert={false} />{' '}
+                {richMessage(
+                  tr('tkt.d.partyNet', {
+                    party: p.party === 'STORE' ? tr('tkt.d.party.us') : tr('tkt.d.party.client'),
+                  }),
+                  { amount: <Money amount={p.netInr} convert={false} /> },
+                )}{' '}
                 <span className="rc-tkt-card__aside">({p.status.toLowerCase()})</span>
               </p>
             ))}
@@ -181,6 +195,8 @@ function Correction({ t }: { t: StoreTicketView }): ReactElement | null {
 }
 
 function TicketBody({ t }: { t: StoreTicketView }): ReactElement {
+  const tr = useT();
+  const locale = useLocale();
   const me = useStoreIdentity();
   const events = useStoreTicketEvents(t.id);
   const reply = useReplyStoreTicket(t.id);
@@ -199,9 +215,9 @@ function TicketBody({ t }: { t: StoreTicketView }): ReactElement {
     try {
       await reply.mutateAsync({ note });
       setNote('');
-      toast.success('Reply sent.');
+      toast.success(tr('tkt.d.replySent'));
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, tr));
       throw err;
     }
   }
@@ -209,42 +225,44 @@ function TicketBody({ t }: { t: StoreTicketView }): ReactElement {
   return (
     <>
       <PageHeader
-        breadcrumbs={[{ label: 'Tickets', href: '/tickets' }, { label: t.ticketNumber }]}
+        breadcrumbs={[{ label: tr('tkt.d.crumb'), href: '/tickets' }, { label: t.ticketNumber }]}
         Link={Link}
         title={t.subject}
         subtitle={
           <span className="rc-tkt-sub">
             <span className="sk-ident">{t.ticketNumber}</span>
-            {t.orderId !== null ? (
-              <>
-                {' · order '}
-                <Link href={`/orders/${t.orderId}`} className="sk-ident">
-                  {t.orderNumber ?? t.orderId}
-                </Link>
-              </>
-            ) : null}
-            {' · opened '}
-            {when(t.createdAt)}
+            {t.orderId !== null
+              ? richMessage(tr('tkt.d.sub.order'), {
+                  order: (
+                    <Link href={`/orders/${t.orderId}`} className="sk-ident">
+                      {t.orderNumber ?? t.orderId}
+                    </Link>
+                  ),
+                })
+              : null}
+            {tr('tkt.d.sub.opened', { when: formatDateTime(t.createdAt, locale) })}
             {/* WHO is on the other end. Said on the thread itself and not
                 only in the list: somebody arriving from a link has not
                 seen the list, and what they write next depends on it. */}
-            {' · with '}
-            {storeTicketKind(t.ticketType).counterparty}
+            {tr('tkt.d.sub.with', { who: storeTicketKind(t.ticketType, tr).counterparty })}
           </span>
         }
         action={
-          <StatusChip kind={ticketStatusKind(t.status)} label={ticketStatusLabel(t.status)} />
+          <StatusChip
+            kind={ticketStatusKind(t.status)}
+            label={ticketStatusLabel(t.status, locale)}
+          />
         }
       />
       <Outcome t={t} />
       <Correction t={t} />
       <section className="rc-tkt-section">
-        <SectionHeading title="Conversation" />
+        <SectionHeading title={tr('tkt.d.conversation')} />
         {t.description !== null ? <p className="rc-tkt-opening">{t.description}</p> : null}
         {events.isPending ? (
-          <SkeletonRows rows={3} cols={1} label="Loading the conversation" />
+          <SkeletonRows rows={3} cols={1} label={tr('tkt.d.convLoading')} />
         ) : events.isError ? (
-          <ErrorState message={serverVerdict(events.error)} retry={() => void events.refetch()} />
+          <ErrorState message={verdict(events.error, tr)} retry={() => void events.refetch()} />
         ) : (
           <ol className="rc-tkt-thread">
             {events.data
@@ -255,7 +273,8 @@ function TicketBody({ t }: { t: StoreTicketView }): ReactElement {
                   <li key={e.id} className="rc-tkt-thread__row" data-mine={mine ? '1' : undefined}>
                     <div className="rc-tkt-bubble">
                       <p className="rc-tkt-bubble__who">
-                        {who(e.actorType)} · <span className="sk-figure">{when(e.at)}</span>
+                        {who(e.actorType, tr)} ·{' '}
+                        <span className="sk-figure">{formatDateTime(e.at, locale)}</span>
                       </p>
                       <div className="rc-tkt-bubble__text">{e.note}</div>
                     </div>
@@ -267,8 +286,8 @@ function TicketBody({ t }: { t: StoreTicketView }): ReactElement {
         {open && can(me, 'tickets.manage') ? (
           <div className="rc-tkt-reply">
             <TextArea
-              label="Your reply"
-              placeholder="Your reply"
+              label={tr('tkt.d.reply')}
+              placeholder={tr('tkt.d.reply')}
               rows={3}
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -284,10 +303,10 @@ function TicketBody({ t }: { t: StoreTicketView }): ReactElement {
             ) : null}
             <div className="rc-tkt-reply__actions">
               <PaperPlaneSendButton
-                label="Send"
-                busyLabel="Sending…"
-                doneLabel="Sent"
-                errorLabel="Not sent"
+                label={tr('tkt.d.send')}
+                busyLabel={tr('tkt.d.sending')}
+                doneLabel={tr('tkt.d.sent')}
+                errorLabel={tr('tkt.d.notSent')}
                 size="sm"
                 icon={<Send size={14} />}
                 disabled={reply.isPending || note.trim() === ''}

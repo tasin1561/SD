@@ -8,7 +8,9 @@ import { Table, TableToolbar, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/d
 import { Pagination } from '@skydrop/ui/app/pagination';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDate } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import { useStoreCustomers } from '@/lib/order-hooks';
 import './_components/customers.css';
 
@@ -34,6 +36,8 @@ import './_components/customers.css';
  * did: the box holds what is being typed, the list reads what was asked.
  */
 export default function CustomersPage(): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const router = useRouter();
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
@@ -42,12 +46,9 @@ export default function CustomersPage(): ReactElement {
 
   return (
     <div className="rc-cst-page">
-      <PageHeader
-        title="Customers"
-        subtitle="Everyone your store has sold to. No other store sees them. Your client does, and each of you is told when the other changes their details."
-      />
+      <PageHeader title={t('cst.title')} subtitle={t('cst.subtitle')} />
       <section className="rc-cst-section">
-        <SectionHeading title="Your customers" />
+        <SectionHeading title={t('cst.section')} />
         <form
           className="rc-cst-search"
           onSubmit={(e) => {
@@ -60,34 +61,30 @@ export default function CustomersPage(): ReactElement {
             search={{
               value: input,
               onChange: setInput,
-              label: 'Search customers',
-              placeholder: 'Name, phone or email',
+              label: t('cst.search.label'),
+              placeholder: t('cst.search.placeholder'),
             }}
           />
         </form>
         {list.isPending ? (
-          <SkeletonRows rows={5} cols={5} label="Loading customers" />
+          <SkeletonRows rows={5} cols={5} label={t('cst.loading')} />
         ) : list.isError ? (
-          <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+          <ErrorState message={verdict(list.error, t)} retry={() => void list.refetch()} />
         ) : list.data.items.length === 0 ? (
           <EmptyState
-            title={search === '' ? 'No customers yet' : 'Nobody matches'}
-            description={
-              search === ''
-                ? 'Everyone you place an order for appears here.'
-                : 'Try a different name, number or email.'
-            }
+            title={search === '' ? t('cst.empty.none') : t('cst.empty.noMatch')}
+            description={search === '' ? t('cst.empty.noneBody') : t('cst.empty.noMatchBody')}
           />
         ) : (
           <>
-            <Table caption="Your customers">
+            <Table caption={t('cst.caption')}>
               <THead>
                 <Tr>
-                  <Th>Name</Th>
-                  <Th>Phone</Th>
-                  <Th>Email</Th>
-                  <Th align="right">Orders</Th>
-                  <Th>Last order</Th>
+                  <Th>{t('cst.col.name')}</Th>
+                  <Th>{t('cst.col.phone')}</Th>
+                  <Th>{t('cst.col.email')}</Th>
+                  <Th align="right">{t('cst.col.orders')}</Th>
+                  <Th>{t('cst.col.lastOrder')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -95,7 +92,7 @@ export default function CustomersPage(): ReactElement {
                   <Tr key={c.id} onActivate={() => router.push(`/customers/${c.id}`)}>
                     <Td>
                       <Link href={`/customers/${c.id}`} className="rc-cst-name">
-                        {c.name ?? 'No name given'}
+                        {c.name ?? t('cst.noName')}
                       </Link>
                     </Td>
                     <Td>
@@ -109,11 +106,7 @@ export default function CustomersPage(): ReactElement {
                     </Td>
                     <Td>
                       <span className="rc-cst-muted sk-figure">
-                        {c.lastOrderAt === null
-                          ? '—'
-                          : new Date(c.lastOrderAt).toLocaleDateString('en-IN', {
-                              dateStyle: 'medium',
-                            })}
+                        {c.lastOrderAt === null ? '—' : formatDate(c.lastOrderAt, locale)}
                       </span>
                     </Td>
                   </Tr>
@@ -125,7 +118,7 @@ export default function CustomersPage(): ReactElement {
               pageSize={20}
               total={list.data.total}
               onPageChange={setPage}
-              label="Customer pages"
+              label={t('cst.pages')}
             />
           </>
         )}

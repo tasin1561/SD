@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import type { Metadata } from 'next';
 import { ButtonLink } from '@skydrop/ui/app/button';
 import { OtherPortals } from '@skydrop/ui/app/sign-in';
+import { getT } from '@/i18n/server';
 import { AuthFrame } from '@/components/auth-frame';
 
 /**
@@ -24,19 +25,20 @@ import { AuthFrame } from '@/components/auth-frame';
  * member". They are offered the public invite request rather than left
  * reading instructions for a thing they do not want.
  */
-export const metadata: Metadata = {
-  title: 'Get a store login',
-  description: 'How to get a login for a Skydrop member store.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return { title: t('auth.signUp.title'), description: t('auth.signUp.description') };
+}
 
-export default function SignUpPage(): ReactElement {
+export default async function SignUpPage(): Promise<ReactElement> {
+  const { t, locale } = await getT();
   return (
     <AuthFrame
-      title="Get a store login"
-      subtitle="Store logins are created by the business whose stock you sell."
+      title={t('auth.signUp.title')}
+      subtitle={t('auth.signUp.subtitle')}
       footer={
         <>
-          Already invited? The invitation email carries your link. <a href="/login">Sign in</a>
+          {t('auth.signUp.invited')} <a href="/login">{t('auth.signUp.signIn')}</a>
           {/*
             NOT wrapped in a <span>: `OtherPortals` renders a <nav>,
             and flow content inside phrasing content is invalid HTML.
@@ -47,26 +49,24 @@ export default function SignUpPage(): ReactElement {
             props, wiping the pinned theme. The footer slot is a <div>,
             so the nav belongs there directly.
           */}
-          <OtherPortals self="store" path="/sign-up" title="Looking for a different portal?" />
+          <OtherPortals
+            self="store"
+            path="/sign-up"
+            title={t('auth.signUp.otherPortal')}
+            locale={locale}
+          />
         </>
       }
     >
-      <p className="sk-signin__lead">
-        Ask them to invite you from their Skydrop account. The invitation sets your password and
-        opens your store&apos;s own portal — your catalogue, your orders and your wallet, under your
-        own name.
-      </p>
-      <p className="sk-signin__lead">
-        Wanting to send your own stock to India instead? That is a client account, and it starts
-        here.
-      </p>
+      <p className="sk-signin__lead">{t('auth.signUp.lead1')}</p>
+      <p className="sk-signin__lead">{t('auth.signUp.lead2')}</p>
       <ButtonLink
         variant="secondary"
         size="lg"
         fullWidth
         href="https://skydrop.global/request-invite"
       >
-        Request a client invite
+        {t('auth.signUp.requestClient')}
       </ButtonLink>
     </AuthFrame>
   );

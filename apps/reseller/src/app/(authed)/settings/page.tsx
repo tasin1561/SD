@@ -12,7 +12,8 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { useToast } from '@skydrop/ui/app/toast';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import {
   useRemoveStoreLogo,
   useStoreProfile,
@@ -30,6 +31,7 @@ import { RdCallout, RdCard, RdDl, phaseOf } from './_components/rd-parts';
  * preference lives on /account instead.
  */
 export default function StoreSettingsPage(): ReactElement {
+  const t = useT();
   const me = useStoreIdentity();
   const profile = useStoreProfile();
   const manage = can(me, 'store.profile.manage');
@@ -37,14 +39,11 @@ export default function StoreSettingsPage(): ReactElement {
   if (profile.isPending || profile.isError) {
     return (
       <div className="rd-page" data-width="narrow">
-        <PageHeader
-          title="Store settings"
-          subtitle="How your store presents itself to customers."
-        />
+        <PageHeader title={t('setg.title')} subtitle={t('setg.subtitle')} />
         {profile.isPending ? (
-          <SkeletonRows label="Loading store settings" rows={4} cols={2} />
+          <SkeletonRows label={t('setg.loading')} rows={4} cols={2} />
         ) : (
-          <ErrorState message={serverVerdict(profile.error)} retry={() => void profile.refetch()} />
+          <ErrorState message={verdict(profile.error, t)} retry={() => void profile.refetch()} />
         )}
       </div>
     );
@@ -53,7 +52,7 @@ export default function StoreSettingsPage(): ReactElement {
 
   return (
     <div className="rd-page" data-width="narrow">
-      <PageHeader title="Store settings" subtitle="How your store presents itself to customers." />
+      <PageHeader title={t('setg.title')} subtitle={t('setg.subtitle')} />
       {manage ? (
         <ProfileForm
           initial={{
@@ -64,12 +63,12 @@ export default function StoreSettingsPage(): ReactElement {
           storeName={p.name}
         />
       ) : (
-        <RdCard title="Profile">
+        <RdCard title={t('setg.profile')}>
           <RdDl
             items={[
-              { label: 'Customers see', value: p.displayName ?? p.name },
-              { label: 'Contact email', value: p.contactEmail ?? '—' },
-              { label: 'Contact phone', value: p.contactPhone ?? '—' },
+              { label: t('setg.customersSee'), value: p.displayName ?? p.name },
+              { label: t('setg.contactEmail'), value: p.contactEmail ?? '—' },
+              { label: t('setg.contactPhone'), value: p.contactPhone ?? '—' },
             ]}
           />
         </RdCard>
@@ -86,6 +85,7 @@ function ProfileForm({
   initial: { displayName: string; contactEmail: string; contactPhone: string };
   storeName: string;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const update = useUpdateStoreProfile();
   const [form, setForm] = useState(initial);
@@ -104,20 +104,20 @@ function ProfileForm({
     setError(null);
     try {
       await update.mutateAsync(form);
-      toast.success('Store settings saved.');
+      toast.success(t('setg.saved'));
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
   return (
-    <RdCard title="Profile">
+    <RdCard title={t('setg.profile')}>
       <form onSubmit={submit} className="rd-form">
         <TextField
           id="displayName"
-          label="Name customers see"
+          label={t('setg.displayName')}
           icon={<Store size={15} />}
-          hint={`Leave empty to use “${storeName}”.`}
+          hint={t('setg.displayNameHint', { store: storeName })}
           maxLength={80}
           showCount
           value={form.displayName}
@@ -126,7 +126,7 @@ function ProfileForm({
         <TextField
           id="contactEmail"
           type="email"
-          label="Contact email"
+          label={t('setg.contactEmail')}
           icon={<Mail size={15} />}
           value={form.contactEmail}
           onChange={(e) => setForm({ ...form, contactEmail: e.target.value })}
@@ -134,9 +134,9 @@ function ProfileForm({
         <TextField
           id="contactPhone"
           type="tel"
-          label="Contact phone"
+          label={t('setg.contactPhone')}
           icon={<Phone size={15} />}
-          hint="With the country code — +8801712345678 for Bangladesh, +919812345678 for India."
+          hint={t('setg.phoneHint')}
           value={form.contactPhone}
           onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
         />
@@ -150,7 +150,11 @@ function ProfileForm({
             type="submit"
             variant="primary"
             size="md"
-            labels={{ idle: 'Save', busy: 'Saving…', error: 'Not saved' }}
+            labels={{
+              idle: t('setg.save'),
+              busy: t('setg.saving'),
+              error: t('setg.notSaved'),
+            }}
             state={phaseOf(update.isPending, error)}
             disabled={update.isPending}
           />
@@ -161,6 +165,7 @@ function ProfileForm({
 }
 
 function LogoCard({ logoUrl, manage }: { logoUrl: string | null; manage: boolean }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const upload = useUploadStoreLogo();
   const remove = useRemoveStoreLogo();
@@ -171,22 +176,22 @@ function LogoCard({ logoUrl, manage }: { logoUrl: string | null; manage: boolean
     e.target.value = '';
     if (file === undefined) return;
     upload.mutate(file, {
-      onSuccess: () => toast.success('Logo updated.'),
-      onError: (err) => toast.error(serverVerdict(err)),
+      onSuccess: () => toast.success(t('setg.logo.updated')),
+      onError: (err) => toast.error(verdict(err, t)),
     });
   }
 
   return (
-    <RdCard title="Logo" note="JPEG, PNG or WebP, up to 1 MB.">
+    <RdCard title={t('setg.logo.title')} note={t('setg.logo.note')}>
       <div className="rd-logo">
         {logoUrl !== null ? (
           <span className="rd-logo__frame">
             {/* A 15-minute presigned Spaces URL: next/image would proxy and cache it past expiry. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={logoUrl} alt="Your store logo" />
+            <img src={logoUrl} alt={t('setg.logo.alt')} />
           </span>
         ) : (
-          <p className="rd-muted">No logo yet.</p>
+          <p className="rd-muted">{t('setg.logo.none')}</p>
         )}
         {manage ? (
           <div className="rd-logo__controls">
@@ -195,7 +200,7 @@ function LogoCard({ logoUrl, manage }: { logoUrl: string | null; manage: boolean
               htmlFor="logo-file"
               data-disabled={upload.isPending ? '1' : undefined}
             >
-              <span className="rd-sr">Choose a logo</span>
+              <span className="rd-sr">{t('setg.logo.choose')}</span>
               <input
                 id="logo-file"
                 type="file"
@@ -213,7 +218,7 @@ function LogoCard({ logoUrl, manage }: { logoUrl: string | null; manage: boolean
                   <ImagePlus size={14} />
                 </span>
                 <span className="sk-btn__label">
-                  {upload.isPending ? 'Uploading…' : 'Choose a logo'}
+                  {upload.isPending ? t('setg.logo.uploading') : t('setg.logo.choose')}
                 </span>
               </span>
             </label>
@@ -225,7 +230,7 @@ function LogoCard({ logoUrl, manage }: { logoUrl: string | null; manage: boolean
                 disabled={remove.isPending}
                 onClick={() => setConfirming(true)}
               >
-                Remove logo
+                {t('setg.logo.remove')}
               </Button>
             ) : null}
           </div>
@@ -234,17 +239,17 @@ function LogoCard({ logoUrl, manage }: { logoUrl: string | null; manage: boolean
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Remove your logo?"
-        entity="Your store logo"
-        consequence="Customers see your store’s name without a logo on tracking and anywhere else it shows, until you upload another."
-        confirmLabel="Remove logo"
+        title={t('setg.logo.removeTitle')}
+        entity={t('setg.logo.removeEntity')}
+        consequence={t('setg.logo.removeConsequence')}
+        confirmLabel={t('setg.logo.remove')}
         destructive
         onConfirm={async () => {
           try {
             await remove.mutateAsync();
-            toast.success('Logo removed.');
+            toast.success(t('setg.logo.removed'));
           } catch (err) {
-            toast.error(serverVerdict(err));
+            toast.error(verdict(err, t));
           }
           setConfirming(false);
         }}

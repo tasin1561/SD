@@ -14,6 +14,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { OrderStatus, type ShipmentStatus } from '@skydrop/db';
+import type { Locale } from '@skydrop/ui/app/i18n';
 import { useStoreIdentity } from '@skydrop/auth/client';
 // The layout mounts the legacy <Toaster>; the app `useToast` would throw
 // outside its own provider, so this keeps the legacy hook (same API).
@@ -37,7 +38,9 @@ import { Timeline, type TimelineStep, type TimelineTone } from '@skydrop/ui/app/
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { richMessage, useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import {
   useCancelStoreOrder,
   useStoreOrder,
@@ -56,10 +59,6 @@ import { OrderActions } from './_components/order-actions';
 import { AddressCorrection } from './_components/address-correction';
 import { BackLink, ConfirmSubject, Facts, Notice, RoSection } from '../_components/orders-parts';
 
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
-
 /**
  * RS-5 — one of this store's orders: who it is going to, what is in it,
  * what the store sold it for and what it pays the seller, the waybill
@@ -71,16 +70,17 @@ export default function StoreOrderPage(): ReactElement {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? '';
   const order = useStoreOrder(id);
+  const t = useT();
 
   return (
     <div className="ro-page">
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
-        Orders
+        {t('ordd.back')}
       </BackLink>
       {order.isPending ? (
-        <SkeletonRows rows={6} cols={3} label="Loading the order" />
+        <SkeletonRows rows={6} cols={3} label={t('ordd.loading')} />
       ) : order.isError ? (
-        <ErrorState message={serverVerdict(order.error)} retry={() => void order.refetch()} />
+        <ErrorState message={verdict(order.error, t)} retry={() => void order.refetch()} />
       ) : (
         <OrderBody order={order.data} />
       )}
@@ -89,6 +89,9 @@ export default function StoreOrderPage(): ReactElement {
 }
 
 function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
+  const when = (iso: string): string => formatDateTime(iso, locale);
   const me = useStoreIdentity();
   const toast = useToast();
   const cancel = useCancelStoreOrder();
@@ -117,19 +120,15 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
     try {
       const out = await cancel.mutateAsync({ id: o.id, note: note.trim() });
       // The REPLY says which happened, never the policy read on load.
-      toast.success(
-        out.applied
-          ? 'Order cancelled.'
-          : 'Sent to Client staff to approve. The order is not cancelled until they say yes.',
-      );
+      toast.success(out.applied ? t('ordd.toast.cancelled') : t('ordd.toast.sentToSeller'));
       setConfirming(false);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       setConfirming(false);
     }
   }
 
-  const cancelLabel = cancelNeedsSeller ? 'Send to your client' : 'Cancel the order';
+  const cancelLabel = cancelNeedsSeller ? t('ordd.cancelBtn.send') : t('ordd.cancelBtn.cancel');
   const parcels = o.shipments.filter((s) => s.awbNumber !== null);
 
   return (
@@ -138,15 +137,16 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
         title={<span className="sk-ident">{o.orderNumber}</span>}
         subtitle={
           o.sellerOrderRef === null ? (
-            `Placed ${when(o.placedAt)}`
+            t('ordd.placed', { when: when(o.placedAt) })
           ) : (
             <span>
-              Your reference <span className="sk-ident">{o.sellerOrderRef}</span> · placed{' '}
-              {when(o.placedAt)}
+              {richMessage(t('ordd.placedRef', { when: when(o.placedAt) }), {
+                ref: <span className="sk-ident">{o.sellerOrderRef}</span>,
+              })}
             </span>
           )
         }
-        meta={<StatusChip kind={orderStatusKind(o.status)} label={statusLabel(o.status)} />}
+        meta={<StatusChip kind={orderStatusKind(o.status)} label={statusLabel(o.status, locale)} />}
         action={
           // Only while the order's stage still allows a cancel (until it is
           // packed) — past that the button could only ever be refused.
@@ -156,7 +156,7 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
               icon={<XCircle size={15} />}
               onClick={() => setConfirming(true)}
             >
-              {cancelNeedsSeller ? 'Ask the client to cancel' : 'Cancel order'}
+              {cancelNeedsSeller ? t('ordd.askCancel') : t('ordd.cancelOrder')}
             </Button>
           ) : undefined
         }
@@ -168,12 +168,12 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
       ) : null}
 
       <div className="ro-split">
-        <RoSection title="Customer">
+        <RoSection title={t('ordd.customer')}>
           <Facts
             items={[
-              { label: 'Name', value: o.recipient.name },
+              { label: t('ordd.name'), value: o.recipient.name },
               {
-                label: 'Phone',
+                label: t('ordd.phone'),
                 value: (
                   <span className="sk-figure">
                     {o.recipient.phoneE164}
@@ -182,10 +182,10 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
                 ),
               },
               ...(o.recipient.email !== null
-                ? [{ label: 'Email', value: <span>{o.recipient.email}</span> }]
+                ? [{ label: t('ordd.email'), value: <span>{o.recipient.email}</span> }]
                 : []),
               {
-                label: 'Address',
+                label: t('ordd.address'),
                 value: (
                   <>
                     <div>{o.recipient.addressLine1}</div>
@@ -203,16 +203,16 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
           />
         </RoSection>
 
-        <RoSection title="Money">
+        <RoSection title={t('ordd.money')}>
           <div className="ro-stack ro-stack--tight">
             <Facts
               items={[
                 {
-                  label: 'Payment',
-                  value: o.paymentMode === 'COD' ? 'Cash on delivery' : 'Prepaid',
+                  label: t('ordd.payment'),
+                  value: o.paymentMode === 'COD' ? t('ordd.cod') : t('ordd.prepaid'),
                 },
                 {
-                  label: 'To collect',
+                  label: t('ordd.toCollect'),
                   value:
                     o.codAmountInr === null ? (
                       '—'
@@ -221,7 +221,7 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
                     ),
                 },
                 {
-                  label: 'You sold it for',
+                  label: t('ordd.soldFor'),
                   value: <Money amount={o.totals.retailInr} convert={false} />,
                 },
                 // ASSOC-1 — withheld from an associate, who is not a
@@ -231,33 +231,34 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
                 ...(o.totals.cost.visible
                   ? [
                       {
-                        label: 'You pay the client',
+                        label: t('ordd.youPayClient'),
                         value: <Money amount={o.totals.cost.transferInr} convert={false} />,
                       },
                     ]
                   : []),
                 {
-                  label: 'Terms',
-                  value: o.termsVersion === null ? '—' : `Version ${o.termsVersion}`,
+                  label: t('ordd.terms'),
+                  value:
+                    o.termsVersion === null
+                      ? '—'
+                      : t('ordd.termsVersion', { version: o.termsVersion }),
                 },
               ]}
             />
-            <p className="ro-faint">
-              Prices and terms are fixed as they were when the order was placed.
-            </p>
+            <p className="ro-faint">{t('ordd.fixedNote')}</p>
           </div>
         </RoSection>
       </div>
 
-      <RoSection title="Products" flush>
-        <Table caption="Products">
+      <RoSection title={t('ordd.products')} flush>
+        <Table caption={t('ordd.products')}>
           <THead>
             <Tr>
-              <Th>Product</Th>
-              <Th align="right">Qty</Th>
-              <Th align="right">Sold at</Th>
+              <Th>{t('ordd.col.product')}</Th>
+              <Th align="right">{t('ordd.col.qty')}</Th>
+              <Th align="right">{t('ordd.col.soldAt')}</Th>
               {/* ASSOC-1 — the column itself goes for an associate. */}
-              {showsCost ? <Th align="right">You pay</Th> : null}
+              {showsCost ? <Th align="right">{t('ordd.col.youPay')}</Th> : null}
             </Tr>
           </THead>
           <TBody>
@@ -301,17 +302,19 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
       </RoSection>
 
       {parcels.length > 0 ? (
-        <RoSection title="Parcel">
+        <RoSection title={t('ordd.parcel')}>
           <ul className="ro-offers">
             {parcels.map((s) => (
               <li key={s.awbNumber ?? s.courierCode} className="ro-offer">
                 <Truck size={15} aria-hidden />
                 <span>
-                  Waybill <span className="sk-ident">{s.awbNumber}</span> · {s.courierCode}
+                  {richMessage(t('ordd.waybill', { courier: s.courierCode }), {
+                    awb: <span className="sk-ident">{s.awbNumber}</span>,
+                  })}
                 </span>
                 <StatusChip
                   kind={shipmentStatusKind(s.status as ShipmentStatus)}
-                  label={statusLabel(s.status as ShipmentStatus)}
+                  label={statusLabel(s.status as ShipmentStatus, locale)}
                   size="sm"
                 />
               </li>
@@ -388,8 +391,8 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
         onOpenChange={setConfirming}
         title={
           cancelNeedsSeller
-            ? `Ask the client to cancel ${o.orderNumber}?`
-            : `Cancel ${o.orderNumber}?`
+            ? t('ordd.dlg.titleAsk', { order: o.orderNumber })
+            : t('ordd.dlg.titleCancel', { order: o.orderNumber })
         }
         tone="critical"
         icon={<TriangleAlert size={18} />}
@@ -402,12 +405,12 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
               onClick={() => setConfirming(false)}
               disabled={cancel.isPending}
             >
-              Keep it
+              {t('ordd.dlg.keepIt')}
             </Button>
             <AsyncButton
               variant="destructive"
               state={cancel.isPending ? 'busy' : undefined}
-              labels={{ idle: cancelLabel, busy: 'Sending…' }}
+              labels={{ idle: cancelLabel, busy: t('ordd.dlg.sending') }}
               disabled={cancel.isPending || (cancelNeedsSeller && note.trim() === '')}
               onClick={() => void doCancel()}
             />
@@ -418,20 +421,18 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
           entity={o.orderNumber}
           entityIsIdentifier
           amount={
-            o.codAmountInr === null ? undefined : (
-              <>
-                <Money amount={o.codAmountInr} convert={false} /> to collect
-              </>
-            )
+            o.codAmountInr === null
+              ? undefined
+              : richMessage(t('ordd.dlg.toCollect'), {
+                  amount: <Money amount={o.codAmountInr} convert={false} />,
+                })
           }
-          consequence={`${
-            cancelNeedsSeller
-              ? 'Your client approves cancels for this store. Client staff read your reason and decide; the order is cancelled only if they say yes, and only until it is packed.'
-              : 'An order can be cancelled until it is packed.'
-          } The customer is not told by us — let them know yourself.`}
+          consequence={
+            cancelNeedsSeller ? t('ordd.dlg.consequence.ask') : t('ordd.dlg.consequence.direct')
+          }
         >
           <TextArea
-            label={cancelNeedsSeller ? 'Why (required)' : 'Why (optional)'}
+            label={cancelNeedsSeller ? t('ordd.dlg.why.required') : t('ordd.dlg.why.optional')}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={500}
@@ -466,38 +467,30 @@ function CallCapPanel({
 }): ReactElement {
   // The same query the nav count and the queue page use, so this is
   // served from cache on a store that has either of them open.
+  const t = useT();
   const reviews = useStoreCallReviews({ enabled: mode !== 'OFF' });
   const review = (reviews.data ?? []).find((r) => r.orderId === orderId);
 
   if (mode === 'OFF') {
     return (
-      <RoSection
-        title="We could not reach your customer"
-        note="Nothing happens on this order until it is answered. The stock stays held in the meantime."
-      >
-        <p className="ro-p">
-          Client staff answer this question for your store. Ask your client whether to keep trying.
-        </p>
+      <RoSection title={t('ordd.callcap.title')} note={t('ordd.callcap.note.off')}>
+        <p className="ro-p">{t('ordd.callcap.body.off')}</p>
       </RoSection>
     );
   }
 
   return (
-    <RoSection
-      title="We could not reach your customer"
-      note="Nothing happens on this order until you answer. The stock stays held in the meantime."
-      bare
-    >
+    <RoSection title={t('ordd.callcap.title')} note={t('ordd.callcap.note.on')} bare>
       {reviews.isPending ? (
-        <SkeletonRows rows={1} cols={2} label="Loading the question" />
+        <SkeletonRows rows={1} cols={2} label={t('ordd.callcap.loading')} />
       ) : reviews.isError ? (
-        <ErrorState message={serverVerdict(reviews.error)} retry={() => void reviews.refetch()} />
+        <ErrorState message={verdict(reviews.error, t)} retry={() => void reviews.refetch()} />
       ) : review === undefined ? (
         <Notice tone="warn" icon={<PhoneMissed size={16} />}>
           <span>
-            This order is waiting on an answer about further call attempts.{' '}
+            {t('ordd.callcap.waiting')}{' '}
             <Link href="/orders/call-reviews" className="ro-link">
-              See everything waiting on you
+              {t('ordd.callcap.seeAll')}
             </Link>
           </span>
         </Notice>
@@ -505,15 +498,28 @@ function CallCapPanel({
         <Notice tone="warn" icon={<PhoneMissed size={16} />}>
           <div className="ro-row ro-row--between">
             <span>
-              We have rung them {review.attemptCount} time
-              {review.attemptCount === 1 ? '' : 's'} without an answer, and {review.heldQty} unit
-              {review.heldQty === 1 ? '' : 's'} of your client’s stock{' '}
-              {review.heldQty === 1 ? 'is' : 'are'} held for this order.
+              {t('ordd.callcap.rung', {
+                attempts: t(
+                  review.attemptCount === 1
+                    ? 'ordd.callcap.attempts.one'
+                    : 'ordd.callcap.attempts.other',
+                  { n: review.attemptCount },
+                ),
+                held: t(
+                  review.heldQty === 1 ? 'ordd.callcap.units.one' : 'ordd.callcap.units.other',
+                  {
+                    n: review.heldQty,
+                  },
+                ),
+                verb: t(review.heldQty === 1 ? 'ordd.callcap.verb.one' : 'ordd.callcap.verb.other'),
+              })}
             </span>
             <CallReviewDecision
               review={review}
               orderNumber={orderNumber}
-              triggerLabel={mode === 'ASK_SELLER' ? 'Propose an answer' : 'Answer this'}
+              triggerLabel={
+                mode === 'ASK_SELLER' ? t('ordd.callcap.propose') : t('ordd.callcap.answer')
+              }
               triggerVariant="primary"
               mode={mode}
             />
@@ -545,24 +551,23 @@ function RaiseTicketLinks({
   orderId: string;
   chase: StoreActionMode | undefined;
 }): ReactElement {
+  const t = useT();
   return (
     <Notice tone="neutral" icon={<Flag size={16} />}>
       <p className="ro-body">
-        Something wrong with this order that the client should put right?{' '}
+        {t('ordd.raise.client')}{' '}
         <Link href={`/tickets/new?orderId=${orderId}&with=seller`} className="ro-link">
-          Raise it with your client
+          {t('ordd.raise.clientLink')}
         </Link>
       </p>
       {chase === 'OFF' ? null : (
         <p className="ro-body">
-          Damaged, lost or stuck with Skydrop?{' '}
+          {t('ordd.raise.skydrop')}{' '}
           <Link href={`/tickets/new?orderId=${orderId}&with=skydrop`} className="ro-link">
-            Raise it with Skydrop
+            {t('ordd.raise.skydropLink')}
           </Link>
           <span className="ro-faint">
-            {chase === 'ASK_SELLER'
-              ? ' — Client staff approve it first; it reaches Skydrop once they say yes.'
-              : ' — your client is not told.'}
+            {chase === 'ASK_SELLER' ? t('ordd.raise.approveFirst') : t('ordd.raise.clientNotTold')}
           </span>
         </p>
       )}
@@ -577,28 +582,26 @@ function RaiseTicketLinks({
  * not answered in time (then it is closed and you should follow up).
  */
 function HeldRequests({ orderId }: { orderId: string }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const requests = useStoreOrderRequests(orderId);
   if (requests.isPending) {
-    return <SkeletonRows rows={1} cols={3} label="Loading what you asked the client" />;
+    return <SkeletonRows rows={1} cols={3} label={t('ordd.held.loading')} />;
   }
   if (requests.isError) {
     return (
-      <ErrorState message={serverVerdict(requests.error)} retry={() => void requests.refetch()} />
+      <ErrorState message={verdict(requests.error, t)} retry={() => void requests.refetch()} />
     );
   }
   if (requests.data.length === 0) return <></>;
   return (
-    <RoSection
-      title="Sent to your client to approve"
-      note="Nothing on these happens until Client staff answer. A request nobody answers closes after a few days — follow up with your client if that happens."
-      flush
-    >
-      <Table caption="Sent to your client to approve">
+    <RoSection title={t('ordd.held.title')} note={t('ordd.held.note')} flush>
+      <Table caption={t('ordd.held.title')}>
         <THead>
           <Tr>
-            <Th>What you asked</Th>
-            <Th>When</Th>
-            <Th>Where it got to</Th>
+            <Th>{t('ordd.held.col.asked')}</Th>
+            <Th>{t('ordd.held.col.when')}</Th>
+            <Th>{t('ordd.held.col.state')}</Th>
           </Tr>
         </THead>
         <TBody>
@@ -609,7 +612,7 @@ function HeldRequests({ orderId }: { orderId: string }): ReactElement {
                 {r.note !== null ? <span className="ro-sub">{r.note}</span> : null}
               </Td>
               <Td>
-                <span className="ro-muted sk-figure">{when(r.createdAt)}</span>
+                <span className="ro-muted sk-figure">{formatDateTime(r.createdAt, locale)}</span>
               </Td>
               <Td>
                 <StatusChip
@@ -618,10 +621,12 @@ function HeldRequests({ orderId }: { orderId: string }): ReactElement {
                   size="sm"
                 />
                 {r.decisionNote !== null ? (
-                  <p className="ro-quote">They said: “{r.decisionNote}”</p>
+                  <p className="ro-quote">{t('ordd.held.theySaid', { note: r.decisionNote })}</p>
                 ) : null}
                 {r.failureReason !== null ? (
-                  <span className="ro-sub ro-tone-bad">Not done — {r.failureReason}</span>
+                  <span className="ro-sub ro-tone-bad">
+                    {t('ordd.held.notDone', { reason: r.failureReason })}
+                  </span>
                 ) : null}
               </Td>
             </Tr>
@@ -652,15 +657,18 @@ function toneOf(kind: StatusKind): TimelineTone {
  * exactly what the plain list printed: the status (or the event's own
  * description), the description beside a status, and `when()`.
  */
-function eventSteps(events: readonly StoreOrderEvent[]): TimelineStep[] {
+function eventSteps(events: readonly StoreOrderEvent[], locale: Locale): TimelineStep[] {
   return events.map((e, i): TimelineStep => {
     const current = i === events.length - 1;
     return {
       id: e.id,
-      label: e.toStatus !== null ? chipWords(statusLabel(e.toStatus)) : (e.description ?? e.type),
+      label:
+        e.toStatus !== null
+          ? chipWords(statusLabel(e.toStatus, locale))
+          : (e.description ?? e.type),
       state: current ? 'current' : 'done',
       ...(e.toStatus !== null && e.description !== null ? { description: e.description } : {}),
-      time: when(e.createdAt),
+      time: formatDateTime(e.createdAt, locale),
       ...(e.toStatus !== null ? { tone: toneOf(orderStatusKind(e.toStatus)) } : {}),
     };
   });
@@ -675,30 +683,32 @@ function OrderTimeline({
   orderNumber: string;
   status: OrderStatus;
 }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const events = useStoreOrderEvents(orderId);
   return (
-    <RoSection title="Timeline" bare>
+    <RoSection title={t('ordd.timeline')} bare>
       {events.isPending ? (
-        <SkeletonRows rows={3} cols={2} label="Loading the timeline" />
+        <SkeletonRows rows={3} cols={2} label={t('ordd.timeline.loading')} />
       ) : events.isError ? (
-        <ErrorState message={serverVerdict(events.error)} retry={() => void events.refetch()} />
+        <ErrorState message={verdict(events.error, t)} retry={() => void events.refetch()} />
       ) : events.data.length === 0 ? (
-        <EmptyState
-          bare
-          icon={<Route size={20} />}
-          title="Nothing has happened to this order yet."
-        />
+        <EmptyState bare icon={<Route size={20} />} title={t('ordd.timeline.empty')} />
       ) : (
         <div className="ro-card">
           <Timeline
-            label="Order timeline"
-            steps={eventSteps(events.data)}
+            label={t('ordd.timeline.label')}
+            steps={eventSteps(events.data, locale)}
             header={{
               icon: <Route size={16} />,
-              title: 'Order',
+              title: t('ordd.timeline.header'),
               id: orderNumber,
               status: (
-                <StatusChip kind={orderStatusKind(status)} label={statusLabel(status)} size="sm" />
+                <StatusChip
+                  kind={orderStatusKind(status)}
+                  label={statusLabel(status, locale)}
+                  size="sm"
+                />
               ),
             }}
           />

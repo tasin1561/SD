@@ -23,7 +23,10 @@ import { Select } from '@skydrop/ui/app/select';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { useToast } from '@skydrop/ui/app/toast';
-import { serverVerdict } from '@/lib/server-verdict';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { richMessage, useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import {
   useAssociatePrices,
   useAssociates,
@@ -52,6 +55,7 @@ import '../../_components/associates.css';
  * shown exactly where the figure that earned them is.
  */
 export default function AssociatePricesPage(): ReactElement {
+  const t = useT();
   const params = useParams<{ storeUserId: string }>();
   const storeUserId = params.storeUserId ?? '';
   const associates = useAssociates();
@@ -77,14 +81,18 @@ export default function AssociatePricesPage(): ReactElement {
         );
   }, [prices.data, search]);
 
-  const name = prices.data?.fullName ?? 'this associate';
+  const name = prices.data?.fullName ?? t('assocp.nameFallback');
   const priced = (prices.data?.rows ?? []).filter((r) => r.retailPriceInr !== null).length;
   const outOfRange = (prices.data?.rows ?? []).filter((r) => r.outOfRange).length;
 
   const header = (
     <PageHeader
-      title={prices.data === undefined ? 'Their prices' : `${prices.data.fullName}’s prices`}
-      subtitle="What this person sells each product at. Until a product has a price here, they cannot sell it."
+      title={
+        prices.data === undefined
+          ? t('assocp.titleUnknown')
+          : t('assocp.title', { name: prices.data.fullName })
+      }
+      subtitle={t('assocp.subtitle')}
       action={
         <div className="as-row-actions">
           <Link href="/associates" className={buttonClassName('secondary', 'md')}>
@@ -92,7 +100,7 @@ export default function AssociatePricesPage(): ReactElement {
             <span className="sk-btn__icon" aria-hidden>
               <ArrowLeft size={15} />
             </span>
-            <span className="sk-btn__label">All associates</span>
+            <span className="sk-btn__label">{t('assocp.all')}</span>
           </Link>
           {others.length > 0 ? (
             <Button
@@ -101,7 +109,7 @@ export default function AssociatePricesPage(): ReactElement {
               icon={<Copy size={15} />}
               onClick={() => setCopying(true)}
             >
-              Copy prices from…
+              {t('assocp.copyFrom')}
             </Button>
           ) : null}
         </div>
@@ -113,7 +121,7 @@ export default function AssociatePricesPage(): ReactElement {
     return (
       <div className="as-page">
         {header}
-        <SkeletonRows rows={6} cols={4} label="Loading their prices" />
+        <SkeletonRows rows={6} cols={4} label={t('assocp.loading')} />
       </div>
     );
   }
@@ -121,7 +129,7 @@ export default function AssociatePricesPage(): ReactElement {
     return (
       <div className="as-page">
         {header}
-        <ErrorState message={serverVerdict(prices.error)} retry={() => void prices.refetch()} />
+        <ErrorState message={verdict(prices.error, t)} retry={() => void prices.refetch()} />
       </div>
     );
   }
@@ -133,47 +141,45 @@ export default function AssociatePricesPage(): ReactElement {
       {header}
       <AsSection>
         <SectionHeading
-          title="Products"
+          title={t('assocp.section')}
           note={
             none
               ? undefined
-              : `${priced} of ${prices.data.rows.length} priced${outOfRange > 0 ? ` · ${outOfRange} now outside the client’s range` : ''}`
+              : outOfRange > 0
+                ? t('assocp.noteOut', { priced, total: prices.data.rows.length, out: outOfRange })
+                : t('assocp.note', { priced, total: prices.data.rows.length })
           }
         />
         <TableToolbar
           search={{
             value: search,
             onChange: setSearch,
-            label: 'Search by name or SKU',
-            placeholder: 'Search name or SKU',
+            label: t('assocp.search.label'),
+            placeholder: t('assocp.search.placeholder'),
           }}
         />
         {rows.length === 0 ? (
           <EmptyState
             icon={none ? <PackageOpen size={22} /> : <SearchX size={22} />}
-            title={none ? 'Nothing to price yet' : 'Nothing matches that search'}
-            description={
-              none
-                ? 'Your client has not turned any products on for this store yet, so there is nothing for an associate to sell.'
-                : undefined
-            }
+            title={none ? t('assocp.empty.none') : t('assocp.empty.noMatch')}
+            description={none ? t('assocp.empty.body') : undefined}
             action={
               none ? (
                 <Link href="/catalogue" className={buttonClassName('secondary', 'md')}>
                   <span className="sk-btn__fx" aria-hidden />
-                  <span className="sk-btn__label">Open your catalogue</span>
+                  <span className="sk-btn__label">{t('assocp.openCatalogue')}</span>
                 </Link>
               ) : undefined
             }
           />
         ) : (
-          <Table caption="Prices for this associate">
+          <Table caption={t('assocp.caption')}>
             <THead>
               <Tr>
-                <Th>Product</Th>
-                <Th>Sell between</Th>
-                <Th>Suggested</Th>
-                <Th>They sell at</Th>
+                <Th>{t('assocp.col.product')}</Th>
+                <Th>{t('assocp.col.between')}</Th>
+                <Th>{t('assocp.col.suggested')}</Th>
+                <Th>{t('assocp.col.theySell')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -207,22 +213,26 @@ function RangeCell({
   readonly min: string | null;
   readonly max: string | null;
 }): ReactElement {
-  if (min === null && max === null) return <>Any price</>;
+  const t = useT();
+  if (min === null && max === null) return <>{t('assocp.range.any')}</>;
+  const m = (v: string): ReactElement => <Money amount={v} convert={false} />;
   return (
     <span className="as-nowrap">
-      {min === null ? 'up to ' : <Money amount={min} convert={false} />}
-      {min !== null && max !== null ? ' – ' : null}
-      {max === null ? ' or more' : <Money amount={max} convert={false} />}
+      {min !== null && max !== null
+        ? richMessage(t('assocp.range.between'), { min: m(min), max: m(max) })
+        : min === null
+          ? richMessage(t('assocp.range.upTo'), { max: m(max ?? '0') })
+          : richMessage(t('assocp.range.atLeast'), { min: m(min) })}
     </span>
   );
 }
 
 /** "between ₹400 and ₹600" / "at least ₹400" / "at most ₹600". */
-function rangeWords(min: string | null, max: string | null): string {
-  if (min !== null && max !== null) return `between ₹${min} and ₹${max}`;
-  if (min !== null) return `at or above ₹${min}`;
-  if (max !== null) return `at or below ₹${max}`;
-  return 'at any price';
+function rangeWords(min: string | null, max: string | null, t: Translate<MessageKey>): string {
+  if (min !== null && max !== null) return t('assocp.words.between', { min, max });
+  if (min !== null) return t('assocp.words.atLeast', { min });
+  if (max !== null) return t('assocp.words.atMost', { max });
+  return t('assocp.words.any');
 }
 
 /**
@@ -240,6 +250,7 @@ function PriceRow({
   readonly row: AssociatePriceRow;
   readonly storeUserId: string;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const save = useSetAssociatePrice(storeUserId);
   const server = row.retailPriceInr ?? '';
@@ -264,9 +275,9 @@ function PriceRow({
     setError(null);
     try {
       await save.mutateAsync({ variantId: row.variantId, retailPriceInr: trimmed });
-      toast.success(`${row.productName} saved.`);
+      toast.success(t('assocp.saved', { product: row.productName }));
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -297,7 +308,7 @@ function PriceRow({
             <TextField
               className="as-price__field"
               id={`price-${row.variantId}`}
-              aria-label={`What they sell ${row.productName} at, in rupees`}
+              aria-label={t('assocp.price.aria', { product: row.productName })}
               inputMode="decimal"
               inputClassName="sk-figure"
               lead="₹"
@@ -311,7 +322,11 @@ function PriceRow({
               variant={dirty ? 'primary' : 'secondary'}
               size="sm"
               icon={<Check size={14} />}
-              labels={{ idle: 'Save', busy: 'Saving…', error: 'Not saved' }}
+              labels={{
+                idle: t('assocp.price.save'),
+                busy: t('assocp.price.saving'),
+                error: t('assocp.price.notSaved'),
+              }}
               state={phaseOf(save.isPending, error)}
               disabled={!dirty || save.isPending}
             />
@@ -319,15 +334,16 @@ function PriceRow({
           {row.retailPriceInr === null ? (
             <p className="as-price__note">
               <TriangleAlert size={12} aria-hidden />
-              No price yet — they cannot sell this.
+              {t('assocp.price.none')}
             </p>
           ) : null}
           {row.outOfRange ? (
             <p className="as-price__note">
               <TriangleAlert size={12} aria-hidden />
               <span>
-                Outside what your client now allows. Orders at this price are refused — set one{' '}
-                {rangeWords(row.minRetailInr, row.maxRetailInr)}.
+                {t('assocp.price.outside', {
+                  range: rangeWords(row.minRetailInr, row.maxRetailInr, t),
+                })}
               </span>
             </p>
           ) : null}
@@ -390,6 +406,7 @@ function CopyPricesDialog({
   readonly alreadyPriced: number;
   readonly others: ReadonlyArray<{ readonly storeUserId: string; readonly fullName: string }>;
 }): ReactElement {
+  const t = useT();
   const copy = useCopyAssociatePrices(storeUserId);
   const [from, setFrom] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -408,7 +425,7 @@ function CopyPricesDialog({
     try {
       setResult(await copy.mutateAsync({ fromStoreUserId: from }));
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -420,25 +437,29 @@ function CopyPricesDialog({
         else close();
       }}
       icon={<Copy size={18} />}
-      title={`Copy prices to ${toName}`}
+      title={t('assocp.copy.title', { name: toName })}
       size="lg"
-      description={
-        result === null
-          ? 'Every price the person you choose has becomes this person’s price too.'
-          : undefined
-      }
+      description={result === null ? t('assocp.copy.desc') : undefined}
     >
       {result !== null ? (
         <div className="as-form">
           <div className="as-report">
             <p>
-              Copied from <strong className="as-strong">{result.from.fullName}</strong> to{' '}
-              <strong className="as-strong">{result.to.fullName}</strong>: {result.created.length}{' '}
-              new, {result.overwritten.length} replaced, {result.unchanged.length} already the same,{' '}
-              {result.skipped.length} skipped.
+              {richMessage(
+                t('assocp.copy.report', {
+                  created: result.created.length,
+                  overwritten: result.overwritten.length,
+                  unchanged: result.unchanged.length,
+                  skipped: result.skipped.length,
+                }),
+                {
+                  from: <strong className="as-strong">{result.from.fullName}</strong>,
+                  to: <strong className="as-strong">{result.to.fullName}</strong>,
+                },
+              )}
             </p>
             <ReportList
-              title="Newly priced"
+              title={t('assocp.copy.created')}
               items={result.created.map((c) => ({
                 variantId: c.variantId,
                 text: (
@@ -450,7 +471,7 @@ function CopyPricesDialog({
               }))}
             />
             <ReportList
-              title="Replaced"
+              title={t('assocp.copy.replaced')}
               items={result.overwritten.map((o) => ({
                 variantId: o.variantId,
                 text: (
@@ -463,7 +484,7 @@ function CopyPricesDialog({
               }))}
             />
             <ReportList
-              title="Already the same"
+              title={t('assocp.copy.same')}
               items={result.unchanged.map((u) => ({
                 variantId: u.variantId,
                 text: (
@@ -475,7 +496,7 @@ function CopyPricesDialog({
               }))}
             />
             <ReportList
-              title="Skipped — still no price from this copy"
+              title={t('assocp.copy.skipped')}
               items={result.skipped.map((s) => ({
                 variantId: s.variantId,
                 text: (
@@ -488,7 +509,7 @@ function CopyPricesDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="primary" size="md" onClick={close}>
-              Done
+              {t('assocp.copy.done')}
             </Button>
           </DialogFooter>
         </div>
@@ -496,13 +517,13 @@ function CopyPricesDialog({
         <form onSubmit={submit} className="as-form">
           <Select
             id="copy-from"
-            label="Copy from"
+            label={t('assocp.copy.from')}
             required
             value={from}
             disabled={copy.isPending}
             onChange={(e) => setFrom(e.target.value)}
           >
-            <option value="">Choose an associate</option>
+            <option value="">{t('assocp.copy.choose')}</option>
             {others.map((o) => (
               <option key={o.storeUserId} value={o.storeUserId}>
                 {o.fullName}
@@ -511,8 +532,14 @@ function CopyPricesDialog({
           </Select>
           <p className="as-muted">
             {alreadyPriced === 0
-              ? `${toName} has no prices yet, so nothing of theirs is replaced.`
-              : `${toName} already has ${alreadyPriced} price${alreadyPriced === 1 ? '' : 's'}. Copying REPLACES every one the other person also has a price for, and the old figures are not kept — the reply names each one so you can put a figure back by hand.`}
+              ? t('assocp.copy.noPrices', { name: toName })
+              : t(
+                  alreadyPriced === 1 ? 'assocp.copy.hasPrices.one' : 'assocp.copy.hasPrices.other',
+                  {
+                    name: toName,
+                    n: alreadyPriced,
+                  },
+                )}
           </p>
           {error !== null ? (
             <RdCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
@@ -521,14 +548,18 @@ function CopyPricesDialog({
           ) : null}
           <DialogFooter>
             <Button type="button" variant="secondary" size="md" onClick={close}>
-              Cancel
+              {t('assocp.copy.cancel')}
             </Button>
             <AsyncButton
               type="submit"
               variant="primary"
               size="md"
               icon={<Copy size={15} />}
-              labels={{ idle: 'Copy prices', busy: 'Copying…', error: 'Not copied' }}
+              labels={{
+                idle: t('assocp.copy.submit'),
+                busy: t('assocp.copy.copying'),
+                error: t('assocp.copy.notCopied'),
+              }}
               state={phaseOf(copy.isPending, error)}
               disabled={copy.isPending || from === ''}
             />
