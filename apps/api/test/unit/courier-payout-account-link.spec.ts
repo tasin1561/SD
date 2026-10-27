@@ -86,6 +86,18 @@ describe('the courier payout link points from the courier at the bank account', 
       'utf8',
     );
     expect(modal).toContain('payoutBankAccountId');
-    expect(modal).toContain('COD payouts land in');
+    // The label moved into apps/admin's message catalogue when the
+    // console was translated (2026-10-27), so the sentence is no longer
+    // a literal in the component. Follow it: the field must still carry
+    // a label, and that label must still READ as the explanation. One
+    // half alone would pass while the picker sat on screen unlabelled.
+    const key = 'courierAccountsEditCourierAccountModal.codPayoutsLandIn';
+    expect(modal).toContain(key);
+    const catalogue = readFileSync(
+      join(__dirname, '../../../../apps/admin/src/i18n/messages/cour.ts'),
+      'utf8',
+    );
+    expect(catalogue).toContain(key);
+    expect(catalogue).toContain('COD payouts land in');
   });
 });
