@@ -20,8 +20,13 @@ import type {
   EarlyReservationReviewStatus,
   InboundFreightStatus,
   OrderStatus,
+  ResellerCreditStatus,
+  ResellerStoreStatus,
   ShipmentStatus,
   StockUnitStatus,
+  StoreAddressChangeStatus,
+  StoreOrderRequestStatus,
+  StoreWalletEntryDirection,
   TicketStatus,
   WithdrawalRequestStatus,
 } from '@skydrop/db';
@@ -92,6 +97,77 @@ export const WITHDRAWAL_STATUS_BN: Record<WithdrawalRequestStatus, string> = {
   APPROVED: 'অনুমোদিত',
   PAID: 'পরিশোধিত',
   REJECTED: 'প্রত্যাখ্যাত',
+};
+
+/** The seller's half of `withdrawalStatusLabel` — same three departures from
+ *  the staff words the English makes, for the same reason. */
+export const WITHDRAWAL_STATUS_SELLER_BN: Record<WithdrawalRequestStatus, string> = {
+  PENDING: 'অনুরোধ করা হয়েছে',
+  APPROVED: 'পেমেন্ট প্রক্রিয়াধীন',
+  PAID: 'পরিশোধিত',
+  REJECTED: 'প্রত্যাখ্যান করা হয়েছে',
+};
+
+/** `storeAddressChangeStatusLabel` in Bangla. Deliberately NOT in the flat lookup. */
+export const STORE_ADDRESS_CHANGE_STATUS_BN: Record<StoreAddressChangeStatus, string> = {
+  PENDING: 'ক্লায়েন্ট স্টাফের অপেক্ষায়',
+  APPROVED: 'অনুমোদিত',
+  APPLIED: 'সংশোধন করা হয়েছে',
+  REJECTED: 'প্রত্যাখ্যাত',
+  FAILED: 'প্রয়োগ করা যায়নি',
+  EXPIRED: 'সময়মতো উত্তর মেলেনি',
+  SUPERSEDED: 'ক্লায়েন্ট স্টাফ নিজেই সংশোধন করেছে',
+};
+
+/** `storeOrderRequestStatusLabel` in Bangla. Deliberately NOT in the flat lookup. */
+export const STORE_ORDER_REQUEST_STATUS_BN: Record<StoreOrderRequestStatus, string> = {
+  PENDING: 'ক্লায়েন্ট স্টাফের অপেক্ষায়',
+  APPROVED: 'অনুমোদিত',
+  EXECUTED: 'সম্পন্ন',
+  REJECTED: 'প্রত্যাখ্যাত',
+  FAILED: 'করা যায়নি',
+  EXPIRED: 'সময়মতো উত্তর মেলেনি',
+};
+
+/** `resellerStoreStatusLabel` in Bangla. Deliberately NOT in the flat lookup. */
+export const RESELLER_STORE_STATUS_BN: Record<ResellerStoreStatus, string> = {
+  PENDING_SELLER_APPROVAL: 'অনুমোদনের অপেক্ষায়',
+  ACTIVE: 'সক্রিয়',
+  PAUSED: 'স্থগিত',
+  CLOSED: 'বন্ধ',
+  REJECTED: 'প্রত্যাখ্যাত',
+};
+
+/** `resellerCreditStatusLabel` in Bangla. Deliberately NOT in the flat lookup. */
+export const RESELLER_CREDIT_STATUS_BN: Record<ResellerCreditStatus, string> = {
+  WAITING: 'অপেক্ষায়',
+  DUE: 'প্রদেয়',
+  CREDITED: 'জমা হয়েছে',
+  REVERSED: 'ফেরত নেওয়া হয়েছে',
+  SKIPPED: 'জমা হয়নি',
+};
+
+/** `storeWalletDirectionLabel` in Bangla. Functions, not strings: four of
+ *  these name the client, and Bangla puts the name in a different place. */
+export const STORE_WALLET_DIRECTION_BN: Record<
+  StoreWalletEntryDirection,
+  (seller: string) => string
+> = {
+  SELLER_TOPUP: (s) => `${s} টপ-আপ করেছে`,
+  SELLER_PAYOUT: (s) => `${s} পরিশোধ করেছে (রেকর্ড করা)`,
+  TOPUP: () => 'টপ-আপ জমা হয়েছে',
+  WITHDRAWAL: () => 'উইথড্রয়াল পরিশোধিত',
+  ORDER_CREDIT: () => 'অর্ডারের মার্জিন',
+  ORDER_CREDIT_REVERSAL: () => 'অর্ডারের মার্জিন ফেরত নেওয়া হয়েছে',
+  FEE_SHARE: () => 'Skydrop ফি-র অংশ',
+  COD_TAX_SHARE: () => 'COD করের অংশ',
+  SHARE_REFUND: () => 'ফি-র অংশ ফেরত',
+  PREPAID_DEBIT: () => 'প্রিপেইড অর্ডার',
+  PREPAID_REFUND: () => 'প্রিপেইড অর্ডার ফেরত',
+  TRANSFER_PRICE: (s) => `${s}-এর ট্রান্সফার প্রাইসে পণ্য`,
+  TRANSFER_PRICE_REFUND: () => 'ট্রান্সফার প্রাইস ফেরত দেওয়া হয়েছে',
+  DISPUTE_SETTLEMENT_IN: (s) => `বিরোধ নিষ্পত্তি — ${s} পরিশোধ করেছে`,
+  DISPUTE_SETTLEMENT_OUT: (s) => `বিরোধ নিষ্পত্তি — ${s}-কে পরিশোধ করা হয়েছে`,
 };
 
 export const EARLY_RESERVATION_STATUS_BN: Record<EarlyReservationReviewStatus, string> = {

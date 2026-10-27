@@ -45,9 +45,16 @@ import {
 import type { Locale } from '../app/i18n';
 import {
   DELIVERY_ACTION_STATUS_BN,
+  RESELLER_CREDIT_STATUS_BN,
+  RESELLER_STORE_STATUS_BN,
   STATUS_LABEL_BN,
+  STORE_ADDRESS_CHANGE_STATUS_BN,
+  STORE_ORDER_REQUEST_STATUS_BN,
+  STORE_WALLET_DIRECTION_BN,
   TICKET_STATUS_BN,
   UPLOAD_STATUS_BN,
+  WITHDRAWAL_STATUS_BN,
+  WITHDRAWAL_STATUS_SELLER_BN,
 } from './bn';
 
 /** The Bangla tables, for a consumer's own consistency spec. Additive. */
@@ -628,7 +635,11 @@ export function storeAddressChangeStatusKind(status: StoreAddressChangeStatus): 
 }
 
 /** The same five states in the words the store and seller staff read. */
-export function storeAddressChangeStatusLabel(status: StoreAddressChangeStatus): string {
+export function storeAddressChangeStatusLabel(
+  status: StoreAddressChangeStatus,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return STORE_ADDRESS_CHANGE_STATUS_BN[status];
   switch (status) {
     case StoreAddressChangeStatus.PENDING:
       return 'Waiting on client staff';
@@ -676,7 +687,11 @@ export function storeOrderRequestStatusKind(status: StoreOrderRequestStatus): St
   }
 }
 
-export function storeOrderRequestStatusLabel(status: StoreOrderRequestStatus): string {
+export function storeOrderRequestStatusLabel(
+  status: StoreOrderRequestStatus,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return STORE_ORDER_REQUEST_STATUS_BN[status];
   switch (status) {
     case StoreOrderRequestStatus.PENDING:
       return 'Waiting on client staff';
@@ -697,7 +712,11 @@ export function storeOrderRequestStatusLabel(status: StoreOrderRequestStatus): s
   }
 }
 
-export function resellerStoreStatusLabel(status: ResellerStoreStatus): string {
+export function resellerStoreStatusLabel(
+  status: ResellerStoreStatus,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return RESELLER_STORE_STATUS_BN[status];
   switch (status) {
     case ResellerStoreStatus.PENDING_SELLER_APPROVAL:
       return 'awaiting approval';
@@ -741,7 +760,11 @@ export function resellerCreditStatusKind(status: ResellerCreditStatus): StatusKi
 }
 
 /** The words a person reads for a reseller order credit's status. */
-export function resellerCreditStatusLabel(status: ResellerCreditStatus): string {
+export function resellerCreditStatusLabel(
+  status: ResellerCreditStatus,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return RESELLER_CREDIT_STATUS_BN[status];
   switch (status) {
     case ResellerCreditStatus.WAITING:
       return 'waiting';
@@ -881,7 +904,11 @@ export function statusLabel(
 export function withdrawalStatusLabel(
   status: WithdrawalRequestStatus,
   audience: 'staff' | 'seller' = 'staff',
+  locale: Locale = 'en',
 ): string {
+  if (locale === 'bn') {
+    return (audience === 'seller' ? WITHDRAWAL_STATUS_SELLER_BN : WITHDRAWAL_STATUS_BN)[status];
+  }
   switch (status) {
     case WithdrawalRequestStatus.PENDING:
       return audience === 'seller' ? 'Requested' : 'Pending';
@@ -1147,13 +1174,16 @@ export function isStoreWalletCredit(direction: StoreWalletEntryDirection): boole
  */
 export function storeWalletDirectionLabel(
   direction: StoreWalletEntryDirection,
-  seller = 'the client',
+  seller?: string,
+  locale: Locale = 'en',
 ): string {
+  if (locale === 'bn') return STORE_WALLET_DIRECTION_BN[direction](seller ?? 'ক্লায়েন্ট');
+  const who = seller ?? 'the client';
   switch (direction) {
     case StoreWalletEntryDirection.SELLER_TOPUP:
-      return `Topped up by ${seller}`;
+      return `Topped up by ${who}`;
     case StoreWalletEntryDirection.SELLER_PAYOUT:
-      return `Paid by ${seller} (recorded)`;
+      return `Paid by ${who} (recorded)`;
     case StoreWalletEntryDirection.TOPUP:
       return 'Top-up received';
     case StoreWalletEntryDirection.WITHDRAWAL:
@@ -1173,13 +1203,13 @@ export function storeWalletDirectionLabel(
     case StoreWalletEntryDirection.PREPAID_REFUND:
       return 'Prepaid order refunded';
     case StoreWalletEntryDirection.TRANSFER_PRICE:
-      return `Goods at ${seller}’s transfer price`;
+      return `Goods at ${who}’s transfer price`;
     case StoreWalletEntryDirection.TRANSFER_PRICE_REFUND:
       return 'Transfer price given back';
     case StoreWalletEntryDirection.DISPUTE_SETTLEMENT_IN:
-      return `Dispute settled — paid by ${seller}`;
+      return `Dispute settled — paid by ${who}`;
     case StoreWalletEntryDirection.DISPUTE_SETTLEMENT_OUT:
-      return `Dispute settled — paid to ${seller}`;
+      return `Dispute settled — paid to ${who}`;
     default: {
       const exhaustive: never = direction;
       throw new Error(`Unhandled StoreWalletEntryDirection: ${String(exhaustive)}`);
