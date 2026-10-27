@@ -229,7 +229,9 @@ export function CsvImportPanel({
    * copy of this screen has always done exactly that.
    */
   function save(text: string, fileName: string): void {
-    const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
+    const url = URL.createObjectURL(
+      new Blob(['\uFEFF', text.replace(/^\uFEFF/, '')], { type: 'text/csv' }),
+    );
     const a = document.createElement('a');
     a.href = url;
     a.download = fileName;

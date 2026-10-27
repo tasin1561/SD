@@ -15,6 +15,7 @@ import { buildCsvKey, parseCsvKey } from '../csv-import-key';
 import { CsvImportQueue } from '../queue/csv-import.queue';
 import { CsvMappingService } from './csv-mapping.service';
 import type { PresignCsvDto, PreviewCsvDto, ProcessCsvDto } from '../dto/csv-import.dto';
+import { CSV_TEMPLATE_PREFIX } from '../../../common/text/csv-separator-hint';
 
 const CSV_PRESIGN_CONTENT_TYPE = 'text/csv';
 
@@ -152,7 +153,7 @@ export class CsvImportService {
   buildTemplate(): string {
     const headers = TEMPLATE_COLUMNS.map(([h]) => h).join(',');
     const example = TEMPLATE_COLUMNS.map(([, v]) => (v.includes(',') ? `"${v}"` : v)).join(',');
-    return `${headers}\n${example}\n`;
+    return `${CSV_TEMPLATE_PREFIX}${headers}\n${example}\n`;
   }
 
   async presign(sellerId: string, _input: PresignCsvDto): Promise<CsvPresignResult> {

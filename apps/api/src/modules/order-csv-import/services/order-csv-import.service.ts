@@ -18,6 +18,7 @@ import type {
   PreviewOrderCsvDto,
   ProcessOrderCsvDto,
 } from '../dto/order-csv-import.dto';
+import { CSV_TEMPLATE_PREFIX } from '../../../common/text/csv-separator-hint';
 
 const CSV_PRESIGN_CONTENT_TYPE = 'text/csv';
 
@@ -147,7 +148,7 @@ export class OrderCsvImportService {
     const headers = TEMPLATE_COLUMNS.map(([h]) => h).join(',');
     const first = TEMPLATE_COLUMNS.map(([, a]) => cell(a)).join(',');
     const second = TEMPLATE_COLUMNS.map(([, , b]) => cell(b)).join(',');
-    return `${headers}\n${first}\n${second}\n`;
+    return `${CSV_TEMPLATE_PREFIX}${headers}\n${first}\n${second}\n`;
   }
 
   async presign(sellerId: string, _input: PresignOrderCsvDto): Promise<CsvPresignResult> {

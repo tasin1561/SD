@@ -9,6 +9,7 @@ import {
   suggestFieldForHeader,
   type OrderCsvField,
 } from '../order-csv-fields';
+import { stripCsvSeparatorHint } from '../../../common/text/csv-separator-hint';
 
 export interface ParsedCsv {
   headers: string[];
@@ -237,11 +238,12 @@ interface PendingGroup {
 export class OrderCsvParserService {
   /** Parse a CSV buffer (BOM-stripped, UTF-8, header row, trimmed). */
   parse(buffer: Buffer): ParsedCsv {
-    let text = buffer.toString('utf8');
-    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+    // BOM + Excel `sep=` hint line; delimiter stays unset (auto-detect) without one.
+    const { text, delimiter } = stripCsvSeparatorHint(buffer.toString('utf8'));
 
     const result = Papa.parse<Record<string, string>>(text, {
       header: true,
+      ...(delimiter !== undefined ? { delimiter } : {}),
       skipEmptyLines: 'greedy',
       transformHeader: (h) => h.trim(),
       transform: (v) => (typeof v === 'string' ? v.trim() : v),

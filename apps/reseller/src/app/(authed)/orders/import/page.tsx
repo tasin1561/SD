@@ -52,7 +52,9 @@ interface Preview {
 
 /** Save text the API returned as a file. The request carried the bearer token (FE-1). */
 function save(text: string, fileName: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
+  const url = URL.createObjectURL(
+    new Blob(['\uFEFF', text.replace(/^\uFEFF/, '')], { type: 'text/csv' }),
+  );
   const a = document.createElement('a');
   a.href = url;
   a.download = fileName;

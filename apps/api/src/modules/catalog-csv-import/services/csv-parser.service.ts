@@ -6,6 +6,7 @@ import {
   suggestFieldForHeader,
   type CsvTargetField,
 } from '../csv-fields';
+import { stripCsvSeparatorHint } from '../../../common/text/csv-separator-hint';
 
 export interface ParsedCsv {
   headers: string[];
@@ -55,11 +56,12 @@ export class CsvParserService {
    * handled by papaparse.
    */
   parse(buffer: Buffer): ParsedCsv {
-    let text = buffer.toString('utf8');
-    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // strip BOM
+    // BOM + Excel `sep=` hint line; delimiter stays unset (auto-detect) without one.
+    const { text, delimiter } = stripCsvSeparatorHint(buffer.toString('utf8'));
 
     const result = Papa.parse<Record<string, string>>(text, {
       header: true,
+      ...(delimiter !== undefined ? { delimiter } : {}),
       skipEmptyLines: 'greedy',
       transformHeader: (h) => h.trim(),
       transform: (v) => (typeof v === 'string' ? v.trim() : v),
