@@ -42,18 +42,21 @@ export default async function AuthedLayout({
 
   return (
     <QueryProvider>
-      {/* UAT field switches, fetched once per session. Inside
-          QueryProvider and outside everything that renders a form, so a
-          form never asks for itself. Each console reads its OWN origin
-          (FE-3). */}
-      <UatFieldsBoundary>
-        <AuthProvider<StoreMe> identityKind="store" initialIdentity={identity}>
+      <AuthProvider<StoreMe> identityKind="store" initialIdentity={identity}>
+        {/* UAT field switches, fetched once per session. Inside
+            QueryProvider for the cache and INSIDE AuthProvider for the
+            client — it needs BOTH. Mounted above the auth context on
+            2026-10-27 it threw `useAuthCtx` on first render, which took
+            out every authed page in this console. Still above everything
+            that renders a form, so a form never asks for itself. Each
+            console reads its OWN origin (FE-3). */}
+        <UatFieldsBoundary>
           <AuthedShell identity={identity}>
             {/* Cosmetic (FE-2): the API refuses regardless of what renders. */}
             <RoleBoundary permissions={identity.permissions}>{children}</RoleBoundary>
           </AuthedShell>
-        </AuthProvider>
-      </UatFieldsBoundary>
+        </UatFieldsBoundary>
+      </AuthProvider>
     </QueryProvider>
   );
 }

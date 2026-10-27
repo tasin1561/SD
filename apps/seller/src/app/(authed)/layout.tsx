@@ -64,12 +64,15 @@ export default async function AuthedLayout({
 
   return (
     <QueryProvider>
-      {/* UAT field switches, fetched once per session. Inside
-          QueryProvider and outside everything that renders a form, so a
-          form never asks for itself. Each console reads its OWN origin
-          (FE-3). */}
-      <UatFieldsBoundary>
-        <AuthProvider<SellerMe> identityKind="seller" initialIdentity={identity}>
+      <AuthProvider<SellerMe> identityKind="seller" initialIdentity={identity}>
+        {/* UAT field switches, fetched once per session. Inside
+            QueryProvider for the cache and INSIDE AuthProvider for the
+            client — it needs BOTH. Mounted above the auth context on
+            2026-10-27 it threw `useAuthCtx` on first render, which took
+            out every authed page in this console. Still above everything
+            that renders a form, so a form never asks for itself. Each
+            console reads its OWN origin (FE-3). */}
+        <UatFieldsBoundary>
           {/* Every figure in the app is rendered in the money this seller
             thinks in. INR stays canonical everywhere it is STORED and
             everywhere it is TYPED — this turns the display over, and
@@ -96,8 +99,8 @@ export default async function AuthedLayout({
               <RoleBoundary permissions={identity.permissions}>{children}</RoleBoundary>
             </AuthedShell>
           </MoneyDisplayProvider>
-        </AuthProvider>
-      </UatFieldsBoundary>
+        </UatFieldsBoundary>
+      </AuthProvider>
     </QueryProvider>
   );
 }
