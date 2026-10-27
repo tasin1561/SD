@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
  */
 
 const PANEL = join(__dirname, '../app/(authed)/orders/_components/csv-import-panel.tsx');
-const src = readEnglish(PANEL, 'utf8');
+const src = readEnglish(PANEL);
 
 describe('the preview happens before the import', () => {
   it('calls /preview after the upload', () => {

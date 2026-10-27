@@ -119,8 +119,10 @@ export function NotificationSettingsView(): ReactElement {
   const allTopics = topics.data ?? [];
   const onCount = allTopics.filter((t) => !muted.has(t.topic)).length;
 
-  const rows = prefs.data ?? [];
-  const quiet = useMemo(() => summariseQuietHours(t, rows), [t, rows]);
+  const prefRows = prefs.data;
+  const rows = prefRows ?? [];
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `rows` is `prefRows` or a fresh [], keyed by prefRows
+  const quiet = useMemo(() => summariseQuietHours(t, rows), [t, prefRows]);
 
   return (
     <div className="set-page">
@@ -694,6 +696,7 @@ function TimezoneCard({
   // is motion for its own sake, and this only has to answer "which side
   // of the window are we on".
   const [now] = useState(() => new Date());
+  // Deliberately NOT localised: the string is parsed by isInsideWindow() below.
   const local = new Intl.DateTimeFormat(undefined, {
     timeZone: timezone,
     hour: '2-digit',

@@ -20,7 +20,7 @@ import { ShipmentStatus } from '@skydrop/db';
 const SOURCE = join(process.cwd(), 'src/app/(authed)/tracking/_components/tracking-index.tsx');
 
 describe('the tracking screen’s status filters', () => {
-  const src = readEnglish(SOURCE, 'utf8');
+  const src = readEnglish(SOURCE);
 
   it('names only values the ShipmentStatus enum has', () => {
     const block = /const filtersOf\s*=[\s\S]*?=>\s*\[([\s\S]*?)\n\];/.exec(src);

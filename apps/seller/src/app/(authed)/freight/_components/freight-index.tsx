@@ -18,6 +18,7 @@ import { useSellerFreight } from '@/lib/ops-hooks';
 import './freight.css';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /** The filter tab that means "no status filter". */
 const ALL = 'all';
@@ -267,12 +268,12 @@ export function SellerFreightIndex(): ReactElement {
                         <Ident value={r.receiptNumber ?? `${r.goodsReceiptId.slice(0, 8)}…`} />
                       </Link>
                       <span className="frt-faint sk-figure">
-                        {new Date(r.createdAt).toLocaleDateString()}
+                        {new Date(r.createdAt).toLocaleDateString(dateTag(locale))}
                       </span>
                       {r.voidedAt !== null && (
                         <span className="frt-muted">
                           {t('freight.withdrawnBillWrong', {
-                            date: new Date(r.voidedAt).toLocaleDateString(),
+                            date: new Date(r.voidedAt).toLocaleDateString(dateTag(locale)),
                           })}
                           {r.voidReason === null ? '' : ` ${r.voidReason}`}
                         </span>

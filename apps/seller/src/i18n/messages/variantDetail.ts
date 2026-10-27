@@ -139,4 +139,5 @@ export const variantDetail = defineMessages({
   'variantDetail.thisSku': ['This SKU', 'এই SKU'],
   'variantDetail.on': ['On', 'চালু'],
   'variantDetail.off': ['Off', 'বন্ধ'],
+  'variantDetail.s3Returned': ['S3 returned {status}', 'S3 থেকে ফেরত এসেছে {status}'],
 });

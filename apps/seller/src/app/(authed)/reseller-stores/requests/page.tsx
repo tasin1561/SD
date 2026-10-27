@@ -42,9 +42,14 @@ import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+function when(iso: string, locale: Locale = 'en'): string {
+  return new Date(iso).toLocaleString(dateTag(locale, 'en-IN'), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
 }
 
 /** What the store asked for, in the seller's words rather than an enum. */
@@ -353,6 +358,7 @@ function OrderRequestRow({
   request: StoreOrderRequestRow;
   onReject: () => void;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const decide = useDecideStoreOrderRequest();
   const toast = useToast();
@@ -392,7 +398,7 @@ function OrderRequestRow({
       <Td>
         <span className="rs-small rs-wrap">{request.note ?? '—'}</span>
       </Td>
-      <Td className="rs-when sk-figure">{when(request.createdAt)}</Td>
+      <Td className="rs-when sk-figure">{when(request.createdAt, locale)}</Td>
       <Td>
         <AnswerCell
           busy={decide.isPending}
@@ -594,6 +600,7 @@ function RequestRow({
   request: StoreActionRequestRow;
   onReject: () => void;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const decide = useDecideStoreAction();
   const toast = useToast();
@@ -637,7 +644,7 @@ function RequestRow({
       <Td>
         <span className="rs-small rs-wrap">{request.reason}</span>
       </Td>
-      <Td className="rs-when sk-figure">{when(request.createdAt)}</Td>
+      <Td className="rs-when sk-figure">{when(request.createdAt, locale)}</Td>
       <Td>
         <AnswerCell
           busy={decide.isPending}
@@ -828,6 +835,7 @@ function AddressRow({
   request: StoreAddressChangeRow;
   onReject: () => void;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const decide = useDecideStoreAddressChange();
   const toast = useToast();
@@ -913,7 +921,7 @@ function AddressRow({
       <Td>
         <span className="rs-small rs-wrap">{request.reason}</span>
       </Td>
-      <Td className="rs-when sk-figure">{when(request.createdAt)}</Td>
+      <Td className="rs-when sk-figure">{when(request.createdAt, locale)}</Td>
       <Td>
         <AnswerCell
           busy={decide.isPending}

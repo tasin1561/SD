@@ -117,7 +117,8 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
         method: 'GET',
         credentials: 'include',
       });
-      if (!res.ok) throw new Error(`Error report download failed: ${res.status}`);
+      if (!res.ok)
+        throw new Error(t('orderImport.errorReportDownloadFailed', { status: res.status }));
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

@@ -126,7 +126,7 @@ export function VariantImageUpload({
           headers: { 'content-type': item.file.type },
         });
         if (!putRes.ok) {
-          throw new Error(`S3 returned ${putRes.status}`);
+          throw new Error(t('variantDetail.s3Returned', { status: putRes.status }));
         }
 
         // 3. Register.

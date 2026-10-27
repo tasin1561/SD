@@ -206,4 +206,8 @@ export const profile = defineMessages({
   'profile.notUploaded': ['Not uploaded', 'আপলোড হয়নি'],
   'profile.chooseFile': ['Choose file', 'ফাইল বেছে নিন'],
   'profile.logoUpdatedShort': ['Logo updated', 'লোগো হালনাগাদ হয়েছে'],
+  'profile.spacesUploadFailed': [
+    'Spaces upload failed: {status}',
+    'Spaces-এ আপলোড ব্যর্থ হয়েছে: {status}',
+  ],
 });

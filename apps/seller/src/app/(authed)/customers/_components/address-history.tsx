@@ -8,7 +8,8 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useRecipientAddresses } from '@/lib/account-hooks';
 import { verdict } from '@/i18n/verdict';
 import './customers.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
 
 /**
  * Where this customer has actually taken delivery.
@@ -23,6 +24,7 @@ import { useT } from '@/i18n/client';
  * than an RTO afterwards.
  */
 export function AddressHistory({ customerId }: { readonly customerId: string }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const list = useRecipientAddresses({ customerId });
   const items = list.data ?? [];
@@ -83,7 +85,7 @@ export function AddressHistory({ customerId }: { readonly customerId: string }):
               </Td>
               <Td>
                 <span className="cst-date sk-figure">
-                  {new Date(a.lastSeenAt).toLocaleDateString('en-IN')}
+                  {new Date(a.lastSeenAt).toLocaleDateString(dateTag(locale, 'en-IN'))}
                 </span>
               </Td>
             </Tr>

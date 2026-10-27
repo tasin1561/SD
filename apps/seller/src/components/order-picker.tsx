@@ -80,7 +80,7 @@ export function OrderPicker({
         label: o.orderNumber,
         description: `${o.recipientName} · ${o.recipientPhoneE164} · ${statusLabel(o.status, locale)}`,
       })),
-    [list.data],
+    [list.data, locale],
   );
 
   return (

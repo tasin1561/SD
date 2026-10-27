@@ -16,6 +16,7 @@ import { useLocale, useT } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import type { Locale } from '@skydrop/ui/app/i18n';
+import { dateTag } from '@/i18n/format';
 
 /**
  * The order journey, drawn as the u17 timeline.
@@ -29,9 +30,9 @@ import type { Locale } from '@skydrop/ui/app/i18n';
  */
 
 /** `12 Sep 2026, 2:52 pm` — the ladder's own format, unchanged. */
-function fmt(at: string | null): string {
+function fmt(at: string | null, locale: Locale = 'en'): string {
   if (at === null) return '—';
-  return new Date(at).toLocaleString(undefined, {
+  return new Date(at).toLocaleString(dateTag(locale, undefined), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -41,9 +42,9 @@ function fmt(at: string | null): string {
 }
 
 /** `12 Sep 2026` — for an estimated date, which has no time. */
-function fmtDate(at: string | null): string {
+function fmtDate(at: string | null, locale: Locale = 'en'): string {
   if (at === null) return '—';
-  return new Date(at).toLocaleDateString(undefined, {
+  return new Date(at).toLocaleDateString(dateTag(locale, undefined), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -80,7 +81,9 @@ export function milestoneSteps(
       ...(m.at === null
         ? {}
         : {
-            time: m.estimated ? t('orderDetail.estimatedDate', { date: fmtDate(m.at) }) : fmt(m.at),
+            time: m.estimated
+              ? t('orderDetail.estimatedDate', { date: fmtDate(m.at, locale) })
+              : fmt(m.at, locale),
           }),
     };
   });

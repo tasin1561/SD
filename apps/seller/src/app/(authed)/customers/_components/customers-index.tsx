@@ -17,10 +17,11 @@ import { AddressHistory } from './address-history';
 import { CustomerDetailPanel } from './customer-detail-panel';
 import { verdict } from '@/i18n/verdict';
 import './customers.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
 
 const PAGE_SIZE = 25;
 
@@ -53,6 +54,7 @@ const PAGE_SIZE = 25;
  * is risky is how the badge and the number come to disagree.
  */
 export function CustomersIndex(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -311,7 +313,7 @@ export function CustomersIndex(): ReactElement {
                         <span className="cst-date sk-figure">
                           {c.lastOrderAt === null
                             ? '—'
-                            : new Date(c.lastOrderAt).toLocaleDateString('en-IN')}
+                            : new Date(c.lastOrderAt).toLocaleDateString(dateTag(locale, 'en-IN'))}
                         </span>
                       </Td>
                       <Td align="right">

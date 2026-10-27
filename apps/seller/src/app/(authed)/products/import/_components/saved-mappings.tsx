@@ -26,7 +26,8 @@ import {
   type CsvMappingView,
 } from '@/lib/account-hooks';
 import { verdict } from '@/i18n/verdict';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
 
 /**
  * Saved column mappings for CSV import.
@@ -43,6 +44,7 @@ import { useT } from '@/i18n/client';
  * can be saved.
  */
 export function SavedMappings(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const list = useCsvMappings();
   const remove = useDeleteCsvMapping();
@@ -121,7 +123,7 @@ export function SavedMappings(): ReactElement {
                       <span className="inv-faint">never</span>
                     ) : (
                       <span className="sk-figure">
-                        {new Date(m.lastUsedAt).toLocaleDateString('en-IN')}
+                        {new Date(m.lastUsedAt).toLocaleDateString(dateTag(locale, 'en-IN'))}
                       </span>
                     )}
                   </Td>

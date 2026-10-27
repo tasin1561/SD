@@ -56,6 +56,8 @@ import { ResellerMoneyPanel } from '../[id]/_components/reseller-money-panel';
 import { UnreachableCustomerPanel } from '../[id]/_components/unreachable-customer-panel';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 /** The public tracking site. Env-driven so a domain change is a deploy
  *  variable rather than a code edit. */
@@ -155,8 +157,8 @@ function Dash(): ReactElement {
 }
 
 /** `21 Aug 2026` — a tile is a glance, not a timestamp. */
-function tileDate(value: string): string {
-  return new Date(value).toLocaleDateString('en-IN', {
+function tileDate(value: string, locale: Locale = 'en'): string {
+  return new Date(value).toLocaleDateString(dateTag(locale, 'en-IN'), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -434,9 +436,11 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             <KpiCard
               label={t('orderDetail.placed')}
               icon={<Clock size={14} />}
-              figure={<span>{tileDate(detail.data.placedAt)}</span>}
+              figure={<span>{tileDate(detail.data.placedAt, locale)}</span>}
               tone="neutral"
-              hint={t('orderDetail.lastMoved', { updatedAt: tileDate(detail.data.updatedAt) })}
+              hint={t('orderDetail.lastMoved', {
+                updatedAt: tileDate(detail.data.updatedAt, locale),
+              })}
             />
           </div>
 
@@ -462,7 +466,9 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             >
               <span className="ord-p">
                 {richMessage(t('orderDetail.sentTheOrderStays'), {
-                  createdAt: new Date(pendingRequest.createdAt).toLocaleString('en-IN'),
+                  createdAt: new Date(pendingRequest.createdAt).toLocaleString(
+                    dateTag(locale, 'en-IN'),
+                  ),
                 })}
               </span>
               <p className="ord-quote">“{pendingRequest.reason}”</p>
@@ -922,6 +928,7 @@ function OrderInvoiceSection({
   readonly orderNumber: string;
   readonly status: string;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const invoice = useOrderInvoice(orderId);
   const generate = useGenerateInvoice(orderId);
@@ -997,7 +1004,7 @@ function OrderInvoiceSection({
         <div className="sk-ident ord-strong">{invoice.data.invoiceNumber}</div>
         <span className="ord-sub">
           {richMessage(t('orderDetail.issuedTotal'), {
-            invoiceDate: new Date(invoice.data.invoiceDate).toLocaleString(),
+            invoiceDate: new Date(invoice.data.invoiceDate).toLocaleString(dateTag(locale)),
             totalInr: invoice.data.totalInr,
           })}
         </span>

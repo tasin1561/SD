@@ -27,7 +27,7 @@ const PRODUCT_DETAIL = join(
 );
 const DASHBOARD = join(__dirname, '../app/(authed)/dashboard/_components/dashboard-view.tsx');
 
-const read = (p: string): string => readEnglish(p, 'utf8');
+const read = (p: string): string => readEnglish(p);
 
 describe('the route is reachable and gated on what the server enforces', () => {
   it('/products/new needs catalog.manage, not merely catalog.view', () => {

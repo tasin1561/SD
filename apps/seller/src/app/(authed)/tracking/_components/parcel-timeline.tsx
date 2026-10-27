@@ -14,6 +14,7 @@ import type { TrackedShipmentDetail } from '@/lib/api-hooks';
 import '../../orders/_components/orders.css';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /**
  * One parcel's story, as the u17 timeline — the same one the public
@@ -93,7 +94,7 @@ export function ParcelTimeline({
       // arrived, when there is nothing left in progress.
       state: last && latestKind !== 'delivered' ? 'current' : 'done',
       tone,
-      time: new Date(e.eventAt).toLocaleString(),
+      time: new Date(e.eventAt).toLocaleString(dateTag(locale)),
       ...(e.location !== null ? { location: e.location } : {}),
       description:
         e.description === null &&
@@ -120,7 +121,7 @@ export function ParcelTimeline({
                     {richMessage(t('tracking.nextAttempt'), {
                       nextAttemptScheduledAt: new Date(
                         attempt.nextAttemptScheduledAt,
-                      ).toLocaleString(),
+                      ).toLocaleString(dateTag(locale)),
                     })}
                   </span>
                 )}

@@ -85,7 +85,7 @@ describe('both order forms read the same copy', () => {
   ];
 
   it.each(forms)('%s imports the shared module rather than inlining strings', (rel) => {
-    const src = readEnglish(join(__dirname, '../', rel), 'utf8');
+    const src = readEnglish(join(__dirname, '../', rel));
     expect(src).toContain("from '@/lib/address-guidance'");
     // The hints and the duplicate-lines error are catalogue keys now (so Bangla
     // can follow); the English behind each key is pinned to the lib constants
@@ -110,14 +110,14 @@ describe('both order forms read the same copy', () => {
   });
 
   it.each(forms)('%s no longer collects a separate landmark', (rel) => {
-    const src = readEnglish(join(__dirname, '../', rel), 'utf8');
+    const src = readEnglish(join(__dirname, '../', rel));
     expect(src).not.toContain('recipientLandmark');
     expect(src).not.toMatch(/label="Landmark"/);
   });
 
   it.each(forms)('%s no longer asks for city or state', (rel) => {
     // Delhivery routes on the PIN and resolves the locality itself.
-    const src = readEnglish(join(__dirname, '../', rel), 'utf8');
+    const src = readEnglish(join(__dirname, '../', rel));
     expect(src).not.toContain('recipientCity');
     expect(src).not.toContain('recipientStateProvince');
     expect(src).not.toContain('INDIAN_STATES');
@@ -126,14 +126,14 @@ describe('both order forms read the same copy', () => {
   it.each(forms)('%s requires the landmark before it will submit', (rel) => {
     // Marked required in the markup AND gated in code — a red asterisk
     // that nothing enforces is decoration.
-    const src = readEnglish(join(__dirname, '../', rel), 'utf8');
+    const src = readEnglish(join(__dirname, '../', rel));
     expect(src).toContain('the landmark) is required');
   });
 
   it('the edit form gates BOTH of its submit paths', () => {
     // "Save + submit" ran no validation at all, so it was a way around
     // the phone and address rules that "Save" enforces.
-    const src = readEnglish(join(__dirname, '../', forms[1]!), 'utf8');
+    const src = readEnglish(join(__dirname, '../', forms[1]!));
     const guards = src.match(/phoneProblem\(\) \?\? addressProblem\(\)/g) ?? [];
     expect(guards.length).toBe(2);
   });

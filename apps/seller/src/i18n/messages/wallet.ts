@@ -309,4 +309,5 @@ export const wallet = defineMessages({
     'Your rupee balance in taka{rate}',
     'টাকায় আপনার রুপির ব্যালেন্স{rate}',
   ],
+  'wallet.uploadFailedStatus': ['Upload failed ({status})', 'আপলোড ব্যর্থ হয়েছে ({status})'],
 });

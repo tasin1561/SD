@@ -58,7 +58,7 @@ import { useSellerIdentity } from '@skydrop/auth/client';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
 import { VariantPicker } from './variant-picker';
 import { productCount, routeWords, shortDate, statusWords } from './consignment-words';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 
 const PAGE_SIZE = 25;
@@ -95,6 +95,7 @@ interface StagedLine {
 
 export function InboundIndex(): ReactElement {
   const t = useT();
+  const locale = useLocale();
   const router = useRouter();
   const canManage = can(useSellerIdentity(), 'inbound.manage');
   const [status, setStatus] = useState<ConsignmentStatus | ''>('');
@@ -368,7 +369,7 @@ export function InboundIndex(): ReactElement {
                       </Td>
                       <Td>
                         <span className="sk-figure inv-muted">
-                          {shortDate(c.expectedArrivalAt)}
+                          {shortDate(c.expectedArrivalAt, locale)}
                         </span>
                       </Td>
                       <Td>

@@ -51,6 +51,6 @@ function expandKeys(src: string): string {
   });
 }
 
-export function readEnglish(path: string, _encoding?: string): string {
+export function readEnglish(path: string): string {
   return expandKeys(expandCalls(readFileSync(path, 'utf8')));
 }

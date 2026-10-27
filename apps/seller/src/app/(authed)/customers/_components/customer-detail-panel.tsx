@@ -16,7 +16,8 @@ import { useCustomer, useDeleteCustomer, useUpdateCustomer } from '@/lib/account
 import { can } from '@/lib/page-access';
 import { verdict } from '@/i18n/verdict';
 import './customers.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
 
 /**
  * One customer record, and the two things you can do to it.
@@ -50,6 +51,7 @@ export function CustomerDetailPanel({
   /** Let the parent drop this panel — the record it is showing is gone. */
   readonly onDeleted?: () => void;
 }): ReactElement | null {
+  const locale = useLocale();
   const t = useT();
   // COSMETIC (FE-2), and TWO permissions rather than one: the server
   // guards the read on `customers.view` and both writes on
@@ -219,12 +221,16 @@ export function CustomerDetailPanel({
           </Fact>
           <Fact label={t('customers.firstOrder')}>
             <span className="sk-figure">
-              {c.firstOrderAt === null ? '—' : new Date(c.firstOrderAt).toLocaleDateString('en-IN')}
+              {c.firstOrderAt === null
+                ? '—'
+                : new Date(c.firstOrderAt).toLocaleDateString(dateTag(locale, 'en-IN'))}
             </span>
           </Fact>
           <Fact label={t('customers.lastOrder')}>
             <span className="sk-figure">
-              {c.lastOrderAt === null ? '—' : new Date(c.lastOrderAt).toLocaleDateString('en-IN')}
+              {c.lastOrderAt === null
+                ? '—'
+                : new Date(c.lastOrderAt).toLocaleDateString(dateTag(locale, 'en-IN'))}
             </span>
           </Fact>
           <Fact label={t('customers.notes')}>{c.riskNotes ?? '—'}</Fact>

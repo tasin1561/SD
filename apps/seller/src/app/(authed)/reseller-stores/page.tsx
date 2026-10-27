@@ -35,9 +35,11 @@ import {
 } from './_components/rs-parts';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
-function day(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-IN', { dateStyle: 'medium' });
+function day(iso: string, locale: Locale = 'en'): string {
+  return new Date(iso).toLocaleDateString(dateTag(locale, 'en-IN'), { dateStyle: 'medium' });
 }
 
 /**
@@ -286,7 +288,7 @@ function StoreTable({
             <Td align="right" className="sk-figure">
               {s.memberCount}
             </Td>
-            <Td className="rs-when sk-figure">{day(s.createdAt)}</Td>
+            <Td className="rs-when sk-figure">{day(s.createdAt, locale)}</Td>
           </Tr>
         ))}
       </TBody>

@@ -21,6 +21,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
 /**
  * Every parcel that has left, and where it got to.
  *
@@ -248,7 +249,7 @@ export function TrackingIndex(): ReactElement {
                           <>
                             <div>{r.lastScanDescription ?? r.lastScanStatus}</div>
                             <span className="ord-sub sk-figure">
-                              {new Date(r.lastScanAt).toLocaleString()}
+                              {new Date(r.lastScanAt).toLocaleString(dateTag(locale))}
                               {r.lastScanLocation !== null ? ` · ${r.lastScanLocation}` : ''}
                             </span>
                           </>

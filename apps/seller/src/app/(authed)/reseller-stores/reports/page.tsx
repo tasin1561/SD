@@ -92,7 +92,7 @@ export default function ResellerReportsPage(): ReactElement {
                 {stores.length} {stores.length === 1 ? 'store' : 'stores'}
               </RsFact>
               <RsFact>
-                {istDateLabel(window.from)} – {istDateLabel(window.to)}
+                {istDateLabel(window.from, locale)} – {istDateLabel(window.to, locale)}
               </RsFact>
               {autoPaused > 0 && (
                 <RsFact tone="warn">
@@ -383,7 +383,10 @@ export default function ResellerReportsPage(): ReactElement {
                           {s.rows[0] === undefined
                             ? ''
                             : t('resellerReports.latest', {
-                                at: istDateLabel(s.rows[s.rows.length - 1]?.at ?? s.rows[0].at),
+                                at: istDateLabel(
+                                  s.rows[s.rows.length - 1]?.at ?? s.rows[0].at,
+                                  locale,
+                                ),
                               })}
                         </span>
                       </Td>

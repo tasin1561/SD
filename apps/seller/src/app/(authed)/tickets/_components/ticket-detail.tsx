@@ -17,6 +17,8 @@ import { verdict } from '@/i18n/verdict';
 import { TicketConversation } from './ticket-conversation';
 import './tickets.css';
 import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 /**
  * One ticket, opened.
@@ -99,7 +101,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
               {ticket.subject}
             </span>
           }
-          subtitle={`${raisedBy} on ${formatDateTime(ticket.createdAt)}`}
+          subtitle={`${raisedBy} on ${formatDateTime(ticket.createdAt, locale)}`}
           /*
             Standing facts about THIS ticket, under its number.
 
@@ -168,12 +170,12 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
         <KpiCard
           label={t('tickets.raised')}
           icon={<CalendarClock size={14} />}
-          figure={<span className="tkt-tile-text">{formatDate(ticket.createdAt)}</span>}
+          figure={<span className="tkt-tile-text">{formatDate(ticket.createdAt, locale)}</span>}
           tone="neutral"
           hint={
             ticket.resolvedAt === null
               ? t('tickets.stillOpen')
-              : t('tickets.closed', { resolvedAt: formatDate(ticket.resolvedAt) })
+              : t('tickets.closed', { resolvedAt: formatDate(ticket.resolvedAt, locale) })
           }
         />
         <KpiCard
@@ -265,7 +267,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
               )}
             </FactItem>
             <FactItem label={t('tickets.closed2')}>
-              {ticket.resolvedAt === null ? <Dash /> : formatDateTime(ticket.resolvedAt)}
+              {ticket.resolvedAt === null ? <Dash /> : formatDateTime(ticket.resolvedAt, locale)}
             </FactItem>
           </dl>
 
@@ -310,6 +312,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
  * ticket provably the same event.
  */
 function RefundBanner({ ticket }: { readonly ticket: TicketView }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   return (
     <div className="tkt-refund">
@@ -325,7 +328,7 @@ function RefundBanner({ ticket }: { readonly ticket: TicketView }): ReactElement
           {ticket.resolvedAt === null
             ? t('tickets.creditedToYourSkydrop')
             : t('tickets.creditedToYourSkydrop2', {
-                resolvedAt: formatDateTime(ticket.resolvedAt),
+                resolvedAt: formatDateTime(ticket.resolvedAt, locale),
               })}{' '}
           {t('tickets.itIsPartOf')}
         </p>
@@ -437,13 +440,13 @@ function kpiTone(tone: 'neutral' | 'warn' | 'bad' | 'good'): KpiTone {
   }
 }
 
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString('en-IN');
+function formatDateTime(value: string, locale: Locale = 'en'): string {
+  return new Date(value).toLocaleString(dateTag(locale, 'en-IN'));
 }
 
 /** Day and month only — a tile is a glance, not a timestamp. */
-function formatDate(value: string): string {
-  return new Date(value).toLocaleDateString('en-IN', {
+function formatDate(value: string, locale: Locale = 'en'): string {
+  return new Date(value).toLocaleDateString(dateTag(locale, 'en-IN'), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',

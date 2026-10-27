@@ -24,8 +24,9 @@ import {
 } from '@/lib/notification-hooks';
 import { SetFact, SetPageHeader } from '../../settings/_components/settings-parts';
 import './notifications.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /** The tab id that means "every group" — a group name is never empty. */
 const ALL_GROUPS = '__all';
@@ -73,6 +74,7 @@ const ALL_GROUPS = '__all';
  * search, because it answers "nothing found" for something that exists.
  */
 export function NotificationsView(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   /** Pages accumulate — "load earlier" appends rather than replacing. */
   const [cursor, setCursor] = useState<string | undefined>(undefined);
@@ -337,7 +339,7 @@ export function NotificationsView(): ReactElement {
                         {agoLabel(n.createdAt, now)}
                         <span className="ntf-item__abs">
                           {' · '}
-                          {new Date(n.createdAt).toLocaleString('en-IN')}
+                          {new Date(n.createdAt).toLocaleString(dateTag(locale, 'en-IN'))}
                         </span>
                       </span>
                     </div>

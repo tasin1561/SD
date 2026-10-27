@@ -31,6 +31,7 @@ import { useHoldReviews, type ReviewView } from '@/lib/ops-hooks';
 import { useRouter } from 'next/navigation';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /**
  * Orders our agents could not confirm on the phone, waiting on the seller.
@@ -263,7 +264,7 @@ export function HoldReviewsIndex(): ReactElement {
                         <Ident value={r.orderNumber ?? `${r.orderId.slice(0, 8)}…`} />
                       </Link>
                       <span className="inv-sub sk-figure">
-                        {new Date(r.createdAt).toLocaleDateString()}
+                        {new Date(r.createdAt).toLocaleDateString(dateTag(locale))}
                       </span>
                     </Td>
                     {/* A dash, not a zero: the column is meaningful for
@@ -295,7 +296,7 @@ export function HoldReviewsIndex(): ReactElement {
                         <span className="inv-faint sk-figure">
                           {r.resolvedAt === null
                             ? '—'
-                            : new Date(r.resolvedAt).toLocaleDateString()}
+                            : new Date(r.resolvedAt).toLocaleDateString(dateTag(locale))}
                         </span>
                       )}
                     </Td>

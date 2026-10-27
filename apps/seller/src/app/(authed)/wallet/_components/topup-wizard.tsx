@@ -133,7 +133,7 @@ export function TopupWizard({
           body: proof,
           headers: { 'Content-Type': proof.type },
         });
-        if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+        if (!put.ok) throw new Error(t('wallet.uploadFailedStatus', { status: put.status }));
         proofSpacesKey = signed.spacesKey;
         proofMimeType = proof.type;
       }

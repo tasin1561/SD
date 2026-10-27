@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
  * dispatched, did it come back before, is it even ours.
  */
 
-const R = (p: string): string => readEnglish(join(__dirname, p), 'utf8');
+const R = (p: string): string => readEnglish(join(__dirname, p));
 
 /**
  * Source with runs of whitespace collapsed.

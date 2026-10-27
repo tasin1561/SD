@@ -31,8 +31,9 @@ import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
 import { CreditStandingCard } from './_components/credit-standing-card';
 import { WalFact, WalStripFact } from './_components/wallet-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 type WalletTab = 'ledger' | 'withdrawals' | 'topups';
 
@@ -407,12 +408,15 @@ export default function WalletPage(): ReactElement {
  * colour of the figure — so colour is never the only signal.
  */
 function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const isCredit = isWalletCredit(entry.direction);
   const currency = entry.currency === 'BDT' ? 'BDT' : 'INR';
   return (
     <Tr>
-      <Td className="wal-when sk-figure">{new Date(entry.createdAt).toLocaleString()}</Td>
+      <Td className="wal-when sk-figure">
+        {new Date(entry.createdAt).toLocaleString(dateTag(locale))}
+      </Td>
       <Td>
         <div className="wal-type">
           <span className="wal-dir" data-dir={isCredit ? 'credit' : 'debit'} aria-hidden>

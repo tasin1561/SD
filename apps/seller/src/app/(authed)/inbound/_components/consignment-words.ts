@@ -8,6 +8,8 @@ import type { ConsignmentLegView, ConsignmentView } from '@skydrop/api-client';
 import { englishT } from '@/i18n/english';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 /**
  * The consignment vocabulary, in the seller's words rather than the
@@ -239,16 +241,16 @@ export function lineLabel(line: {
 }
 
 /** A date, or an em dash. Dates are read, not sorted, on these screens. */
-export function shortDate(iso: string | null): string {
-  return iso === null ? '—' : new Date(iso).toLocaleDateString('en-IN');
+export function shortDate(iso: string | null, locale: Locale = 'en'): string {
+  return iso === null ? '—' : new Date(iso).toLocaleDateString(dateTag(locale, 'en-IN'));
 }
 
 /**
  * A timeline stamp. Date AND time, because two events on the same day
  * with no time between them read as one event.
  */
-export function stamp(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
+export function stamp(iso: string, locale: Locale = 'en'): string {
+  return new Date(iso).toLocaleString(dateTag(locale, 'en-IN'), {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

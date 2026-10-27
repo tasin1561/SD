@@ -16,6 +16,7 @@ import { useTopupBankAccounts, useTopupProofUrl, useTopupRequests } from '@/lib/
 import { TopupWizard } from './topup-wizard';
 import './wallet.css';
 import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
 
 /** The view type says `string`; this is what makes it safe to badge. */
 function isTopupStatus(value: string): value is TopupRequestStatus {
@@ -93,9 +94,9 @@ export function TopupCard({
                         the Status column beside it already carries one
                         — a row that dates two of its own events
                         differently reads as two different events. */}
-                  {new Date(r.createdAt).toLocaleDateString()}
+                  {new Date(r.createdAt).toLocaleDateString(dateTag(locale))}
                   <div className="wal-faint">
-                    {new Date(r.createdAt).toLocaleTimeString([], {
+                    {new Date(r.createdAt).toLocaleTimeString(dateTag(locale, []), {
                       hour: '2-digit',
                       minute: '2-digit',
                     })}
@@ -165,7 +166,9 @@ export function TopupCard({
                   {/* When it was decided. "REJECTED" with no date leaves
                         a seller unsure whether anyone has looked yet. */}
                   {r.reviewedAt !== null && (
-                    <div className="wal-faint">{new Date(r.reviewedAt).toLocaleString()}</div>
+                    <div className="wal-faint">
+                      {new Date(r.reviewedAt).toLocaleString(dateTag(locale))}
+                    </div>
                   )}
                   {/* A rejection is only useful if the reason travels
                         with it — otherwise the seller resubmits the same

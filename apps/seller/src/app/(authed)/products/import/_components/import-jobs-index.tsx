@@ -21,7 +21,9 @@ import {
 import { useCsvImports, type CsvImportView } from '@/lib/csv-import-hooks';
 import { verdict } from '@/i18n/verdict';
 import { ImportStatusBadge } from './import-status';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 /**
  * Every catalog import this seller has sent.
@@ -40,6 +42,7 @@ import { useT } from '@/i18n/client';
 const PAGE_SIZE = 20;
 
 export function ImportJobsIndex(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const router = useRouter();
   const sp = useSearchParams();
@@ -173,7 +176,9 @@ export function ImportJobsIndex(): ReactElement {
                         </span>
                       </Td>
                       <Td>
-                        <span className="sk-figure inv-faint">{formatDate(job.createdAt)}</span>
+                        <span className="sk-figure inv-faint">
+                          {formatDate(job.createdAt, locale)}
+                        </span>
                       </Td>
                     </Tr>
                   ))}
@@ -200,6 +205,6 @@ function written(created: number, updated: number): string {
   return updated === 0 ? String(created) : `${created} + ${updated}`;
 }
 
-function formatDate(value: CsvImportView['createdAt']): string {
-  return new Date(value).toLocaleString('en-IN');
+function formatDate(value: CsvImportView['createdAt'], locale: Locale = 'en'): string {
+  return new Date(value).toLocaleString(dateTag(locale, 'en-IN'));
 }

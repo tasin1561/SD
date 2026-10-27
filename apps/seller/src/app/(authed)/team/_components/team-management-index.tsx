@@ -40,10 +40,11 @@ import { verdict } from '@/i18n/verdict';
 import { roleChangeConsequence, roleLine, roleNamesOf } from '@/lib/role-words';
 import { SetCallout, SetFact, SetPageHeader } from '../../settings/_components/settings-parts';
 import './team.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
 
 // The hardcoded six are gone: roles are rows now, so the options come
 // from the server and include anything created under Team → Roles.
@@ -94,6 +95,7 @@ function inviteKind(state: InviteState): 'delivered' | 'pending' | 'cancelled' {
 }
 
 export function TeamManagementIndex(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const canWrite = can(useSellerIdentity(), 'team.manage');
   const roles = useRoles();
@@ -394,7 +396,7 @@ export function TeamManagementIndex(): ReactElement {
                           {t('team.lastLogin')}{' '}
                           <span className="sk-figure">
                             {m.lastLoginAt !== null
-                              ? new Date(m.lastLoginAt).toLocaleString()
+                              ? new Date(m.lastLoginAt).toLocaleString(dateTag(locale))
                               : '—'}
                           </span>
                         </span>
@@ -402,7 +404,7 @@ export function TeamManagementIndex(): ReactElement {
                           {richMessage(t('team.joined'), {
                             span: (
                               <span className="sk-figure">
-                                {new Date(m.createdAt).toLocaleDateString()}
+                                {new Date(m.createdAt).toLocaleDateString(dateTag(locale))}
                               </span>
                             ),
                           })}
@@ -532,7 +534,7 @@ export function TeamManagementIndex(): ReactElement {
                           />
                         </Td>
                         <Td className="set-cell-muted">
-                          {new Date(inv.expiresAt).toLocaleDateString()}
+                          {new Date(inv.expiresAt).toLocaleDateString(dateTag(locale))}
                         </Td>
                         <Td align="right">
                           {state !== 'USED' && (

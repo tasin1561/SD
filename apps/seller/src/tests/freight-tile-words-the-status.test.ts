@@ -53,7 +53,7 @@ function withoutComments(src: string): string {
 }
 
 describe('the consignment page’s inbound-freight tile', () => {
-  const src = withoutComments(readEnglish(DETAIL, 'utf8'));
+  const src = withoutComments(readEnglish(DETAIL));
 
   it('words the bill’s status through statusLabel', () => {
     // The sentence is in the catalogue; the status word fed into it is the

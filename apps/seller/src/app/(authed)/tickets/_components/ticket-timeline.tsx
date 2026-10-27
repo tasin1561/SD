@@ -4,7 +4,8 @@ import type { ReactElement } from 'react';
 import { Timeline } from '@skydrop/ui/app/timeline';
 import { useTicketTimeline } from '@/lib/ops-hooks';
 import './tickets.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
 
 /**
  * What has happened on a ticket, in the order it happened.
@@ -20,6 +21,7 @@ import { useT } from '@/i18n/client';
  * they cannot already see from the ticket sitting in front of them.
  */
 export function TicketTimeline({ ticketId }: { readonly ticketId: string }): ReactElement | null {
+  const locale = useLocale();
   const t = useT();
   const timeline = useTicketTimeline(ticketId);
   const entries = (timeline.data ?? []).filter((e) => e.note !== null && e.note.trim() !== '');
@@ -36,7 +38,7 @@ export function TicketTimeline({ ticketId }: { readonly ticketId: string }): Rea
           id: `${e.at}-${i}`,
           label: e.note,
           state: 'done' as const,
-          time: new Date(e.at).toLocaleString('en-IN', {
+          time: new Date(e.at).toLocaleString(dateTag(locale, 'en-IN'), {
             day: 'numeric',
             month: 'short',
             hour: '2-digit',

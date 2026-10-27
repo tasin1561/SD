@@ -7,7 +7,7 @@ import { useApiClient } from '@skydrop/auth/client';
 import type { SellerMe } from '@skydrop/api-client';
 import { MenuButton, StripFact, Toaster } from '@skydrop/ui/components';
 import { Shell, type NavGroup } from '@skydrop/ui/app/shell';
-import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
+import { PrefsControl } from '@/components/prefs-control';
 import { ToastProvider } from '@skydrop/ui/app/toast';
 import { RestrictionBanner } from './restriction-banner';
 import { ImpersonationBanner } from './impersonation-banner';
@@ -308,7 +308,7 @@ export function AuthedShell({
             void handleLogout();
           }}
           signingOut={loggingOut}
-          themeControl={<ThemeSwitch />}
+          themeControl={<PrefsControl />}
         >
           {/* FIRST, above everything, on every page: a staff member
             inside somebody else's account has to be told so before they

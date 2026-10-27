@@ -8,7 +8,8 @@ import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Checkbox } from '@skydrop/ui/app/checkbox';
 import '../../_components/orders.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
 
 /**
  * "You already have an order to this customer that hasn't shipped."
@@ -47,6 +48,7 @@ export function DuplicateOrderDialog({
   readonly onCancel: () => void;
   readonly onConfirm: () => void;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const [acknowledged, setAcknowledged] = useState(false);
   const anySharedItems = candidates.some((c) => c.sharesItems);
@@ -110,7 +112,7 @@ export function DuplicateOrderDialog({
                   {t(c.itemCount === 1 ? 'orderNew.itemCountOne' : 'orderNew.itemCountMany', {
                     count: c.itemCount,
                   })}{' '}
-                  · {new Date(c.placedAt).toLocaleDateString()}
+                  · {new Date(c.placedAt).toLocaleDateString(dateTag(locale))}
                 </span>
               </div>
               <div>

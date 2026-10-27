@@ -25,8 +25,9 @@ import {
 } from '@/app/(authed)/inventory/_components/stock-ui';
 import { useUnitDiscrepancies, type StuckUnitRow } from '@/lib/ops-hooks';
 import { UnitTracePanel } from './unit-trace-panel';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /**
  * Serialized-unit discrepancies (strict-mode SKUs only).
@@ -50,6 +51,7 @@ import { richMessage } from '@/i18n/rich';
  * therefore stops meaning anything.
  */
 export function UnitDiscrepanciesIndex(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const report = useUnitDiscrepancies();
   const data = report.data;
@@ -95,7 +97,7 @@ export function UnitDiscrepanciesIndex(): ReactElement {
               </MetaFact>
               <MetaFact>
                 {richMessage(t('inventoryUnits.read'), {
-                  generatedAt: new Date(data.generatedAt).toLocaleString('en-IN'),
+                  generatedAt: new Date(data.generatedAt).toLocaleString(dateTag(locale, 'en-IN')),
                 })}
               </MetaFact>
             </MetaFacts>
@@ -280,6 +282,7 @@ function UnitTable({
   readonly emptyTitle: string;
   readonly emptyDescription: string;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   if (rows.length === 0) {
     return (
@@ -327,7 +330,7 @@ function UnitTable({
                 <StatusChip kind="failed" label={t('inventoryUnits.neverScanned')} size="sm" />
               ) : (
                 <span className="sk-figure inv-muted" style={{ whiteSpace: 'nowrap' }}>
-                  {new Date(u.lastScanAt).toLocaleString('en-IN')}
+                  {new Date(u.lastScanAt).toLocaleString(dateTag(locale, 'en-IN'))}
                 </span>
               )}
             </Td>

@@ -38,9 +38,14 @@ import { verdict } from '@/i18n/verdict';
 import { RsError, RsSection, pendingPhase } from '../../_components/rs-parts';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+function when(iso: string, locale: Locale = 'en'): string {
+  return new Date(iso).toLocaleString(dateTag(locale, 'en-IN'), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
 }
 
 /**
@@ -189,7 +194,7 @@ export function StoreWalletSection({
                   const credit = isStoreWalletCredit(e.direction);
                   return (
                     <Tr key={e.id}>
-                      <Td className="rs-when sk-figure">{when(e.createdAt)}</Td>
+                      <Td className="rs-when sk-figure">{when(e.createdAt, locale)}</Td>
                       <Td>
                         {/* Which way the money went: an arrow chip beside
                             the sign and colour the figure already carries. */}

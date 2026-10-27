@@ -15,7 +15,8 @@ import {
 } from '@/app/(authed)/inventory/_components/stock-ui';
 import { verdict } from '@/i18n/verdict';
 import { useUnitTrace } from '@/lib/ops-hooks';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
 
 /**
  * Where one of your units has been.
@@ -31,6 +32,7 @@ import { useT } from '@/i18n/client';
  * companies may legitimately print the same number.
  */
 export function UnitTracePanel(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const [typed, setTyped] = useState('');
   const [serial, setSerial] = useState('');
@@ -104,7 +106,7 @@ export function UnitTracePanel(): ReactElement {
                     <Tr key={`${e.at}-${i}`}>
                       <Td>
                         <span className="sk-figure inv-muted" style={{ whiteSpace: 'nowrap' }}>
-                          {new Date(e.at).toLocaleString('en-IN')}
+                          {new Date(e.at).toLocaleString(dateTag(locale, 'en-IN'))}
                         </span>
                       </Td>
                       <Td>

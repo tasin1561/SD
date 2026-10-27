@@ -25,6 +25,7 @@ import './tickets.css';
 import { useT, useLocale } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
 
 /**
  * The seller's ticket list.
@@ -350,7 +351,7 @@ export function SellerTicketsIndex(): ReactElement {
                     </Td>
                     <Td>
                       <span className="tkt-muted sk-figure">
-                        {new Date(ticket.createdAt).toLocaleDateString()}
+                        {new Date(ticket.createdAt).toLocaleDateString(dateTag(locale))}
                       </span>
                     </Td>
                     <Td>

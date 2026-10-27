@@ -12,6 +12,7 @@ import { OrdSection } from '../../_components/orders-parts';
 import { useSellerTickets } from '@/lib/ops-hooks';
 import { RaiseTicketModal } from '../../../tickets/_components/raise-ticket-modal';
 import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
 
 /**
  * Every conversation open on this parcel, and a way to start another.
@@ -72,7 +73,7 @@ export function OrderTicketsPanel({
                   size="sm"
                 />
               }
-              age={new Date(t.createdAt).toLocaleDateString('en-IN', {
+              age={new Date(t.createdAt).toLocaleDateString(dateTag(locale, 'en-IN'), {
                 day: 'numeric',
                 month: 'short',
               })}

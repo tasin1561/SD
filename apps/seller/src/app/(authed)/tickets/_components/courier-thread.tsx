@@ -8,8 +8,9 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useCourierThreadForTicket, type CourierThreadMessage } from '@/lib/ops-hooks';
 import { verdict } from '@/i18n/verdict';
 import './tickets.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /**
  * The seller's conversation with the courier.
@@ -113,13 +114,16 @@ export function CourierThread({ ticketId }: { readonly ticketId: string }): Reac
 }
 
 function Message({ message }: { readonly message: CourierThreadMessage }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const fromCourier = message.direction === 'INBOUND';
   return (
     <div className="tkt-courier__msg" data-ours={fromCourier ? undefined : '1'}>
       <div className="tkt-courier__who">
         <strong>{fromCourier ? t('tickets.delhivery') : t('tickets.you')}</strong>
-        <span className="sk-figure">{new Date(message.occurredAt).toLocaleString('en-IN')}</span>
+        <span className="sk-figure">
+          {new Date(message.occurredAt).toLocaleString(dateTag(locale, 'en-IN'))}
+        </span>
         {message.state !== null ? (
           <StatusChip kind={badgeKind(message.state)} label={humanise(message.state)} size="sm" />
         ) : null}

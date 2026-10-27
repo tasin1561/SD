@@ -13,8 +13,9 @@ import { Notice, OrdSection } from '../../_components/orders-parts';
 import { useChangeConsignee, useConsignee, useConsigneeHistory } from '@/lib/ops-hooks';
 import { verdict } from '@/i18n/verdict';
 import { RaiseTicketModal } from '../../../tickets/_components/raise-ticket-modal';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /**
  * Correcting who the parcel is going to, while the courier still allows
@@ -41,6 +42,7 @@ export function ConsigneePanel({
   /** Put it away again. The Recipient card is what opens it. */
   readonly onClose?: () => void;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const toast = useToast();
   const info = useConsignee(orderId);
@@ -218,7 +220,7 @@ export function ConsigneePanel({
               {rows.map((r) => (
                 <li key={r.id}>
                   <span className="ord-log__when sk-figure">
-                    {new Date(r.createdAt).toLocaleString('en-IN', {
+                    {new Date(r.createdAt).toLocaleString(dateTag(locale, 'en-IN'), {
                       day: 'numeric',
                       month: 'short',
                       hour: '2-digit',

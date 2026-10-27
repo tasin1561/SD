@@ -168,4 +168,16 @@ export const orderImport = defineMessages({
     'Upload a CSV of orders. One row is one product line — give two rows the same reference and they become one order with two items. Re-uploading a reference you have already sent updates that order rather than placing it twice.',
     'অর্ডারের একটি CSV আপলোড করুন। একটি সারি মানে একটি পণ্যের লাইন — দুটি সারিতে একই রেফারেন্স দিলে সেগুলো দুটি পণ্যসহ একটি অর্ডার হবে। আগে পাঠানো কোনো রেফারেন্স আবার আপলোড করলে অর্ডারটি দুইবার না হয়ে হালনাগাদ হয়।',
   ],
+  'orderImport.templateDownloadFailed': [
+    'Template download failed',
+    'টেমপ্লেট ডাউনলোড ব্যর্থ হয়েছে',
+  ],
+  'orderImport.putToSpacesFailed': [
+    'PUT to Spaces failed: {status}',
+    'Spaces-এ PUT ব্যর্থ হয়েছে: {status}',
+  ],
+  'orderImport.errorReportDownloadFailed': [
+    'Error report download failed: {status}',
+    'ত্রুটির রিপোর্ট ডাউনলোড ব্যর্থ হয়েছে: {status}',
+  ],
 });

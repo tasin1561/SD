@@ -32,10 +32,12 @@ import {
 } from '@/lib/csv-import-hooks';
 import { verdict } from '@/i18n/verdict';
 import { ImportStatusBadge, humaniseStatus } from './import-status';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 /**
  * One catalog import, opened.
@@ -52,6 +54,7 @@ import type { MessageKey } from '@/i18n/catalog';
  * correct import would conclude rows went missing.
  */
 export function ImportDetail({ importId }: { readonly importId: string }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const query = useCsvImport(importId);
 
@@ -95,7 +98,7 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
         ]}
         Link={Link}
         title={<span className="sk-ident">{job.fileName}</span>}
-        subtitle={t('productImport.uploaded', { createdAt: formatDateTime(job.createdAt) })}
+        subtitle={t('productImport.uploaded', { createdAt: formatDateTime(job.createdAt, locale) })}
         meta={
           <MetaFacts>
             <MetaFact tone="accent">
@@ -209,14 +212,15 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
           <Facts
             columns={3}
             items={[
-              { label: t('productImport.uploaded2'), value: formatDateTime(job.createdAt) },
+              { label: t('productImport.uploaded2'), value: formatDateTime(job.createdAt, locale) },
               {
                 label: t('productImport.started'),
-                value: job.startedAt === null ? <Waiting /> : formatDateTime(job.startedAt),
+                value: job.startedAt === null ? <Waiting /> : formatDateTime(job.startedAt, locale),
               },
               {
                 label: t('productImport.finished'),
-                value: job.completedAt === null ? <Waiting /> : formatDateTime(job.completedAt),
+                value:
+                  job.completedAt === null ? <Waiting /> : formatDateTime(job.completedAt, locale),
               },
               { label: t('productImport.took'), value: duration(job) },
               { label: t('productImport.importId'), value: <Ident value={job.id} /> },
@@ -331,8 +335,8 @@ function duration(job: CsvImportView): string {
   return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString('en-IN');
+function formatDateTime(value: string, locale: Locale = 'en'): string {
+  return new Date(value).toLocaleString(dateTag(locale, 'en-IN'));
 }
 
 function DetailSkeleton(): ReactElement {

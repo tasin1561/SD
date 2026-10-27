@@ -206,7 +206,7 @@ export function CsvImportPanel({
    *  same verdict, then rethrows so the label ends on the real outcome. */
   async function downloadTemplateOrThrow(): Promise<void> {
     const ok = await downloadTemplate();
-    if (!ok) throw new Error('Template download failed');
+    if (!ok) throw new Error(t('orderImport.templateDownloadFailed'));
   }
 
   /**
@@ -284,7 +284,7 @@ export function CsvImportPanel({
         body: f,
       });
       if (!put.ok) {
-        throw new Error(`PUT to Spaces failed: ${put.status}`);
+        throw new Error(t('orderImport.putToSpacesFailed', { status: put.status }));
       }
 
       // Look at it BEFORE committing it. The file is in Spaces either

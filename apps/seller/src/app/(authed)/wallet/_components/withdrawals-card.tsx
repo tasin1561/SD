@@ -23,6 +23,7 @@ import { verdict } from '@/i18n/verdict';
 import { WalCallout } from './wallet-parts';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /**
  * Withdrawal requests, on the wallet page because that is where the balance
@@ -98,9 +99,9 @@ export function WithdrawalsCard({
             {rows.map((w) => (
               <Tr key={w.id}>
                 <Td className="wal-when sk-figure">
-                  {new Date(w.createdAt).toLocaleDateString()}
+                  {new Date(w.createdAt).toLocaleDateString(dateTag(locale))}
                   <div className="wal-faint">
-                    {new Date(w.createdAt).toLocaleTimeString([], {
+                    {new Date(w.createdAt).toLocaleTimeString(dateTag(locale, []), {
                       hour: '2-digit',
                       minute: '2-digit',
                     })}
@@ -122,7 +123,7 @@ export function WithdrawalsCard({
                     (w.resolvedAt === null
                       ? t('wallet.awaitingReview')
                       : t('wallet.paidAt', {
-                          when: new Date(w.resolvedAt).toLocaleString([], {
+                          when: new Date(w.resolvedAt).toLocaleString(dateTag(locale, []), {
                             dateStyle: 'short',
                             timeStyle: 'short',
                           }),

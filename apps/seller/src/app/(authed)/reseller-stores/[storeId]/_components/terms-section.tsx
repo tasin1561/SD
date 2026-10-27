@@ -27,11 +27,16 @@ import {
   type TermsVersion,
 } from '@/lib/reseller-terms-hooks';
 import { RsCallout, RsError, RsSection } from '../../_components/rs-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+function when(iso: string, locale: Locale = 'en'): string {
+  return new Date(iso).toLocaleString(dateTag(locale, 'en-IN'), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
 }
 
 function draftFrom(v: TermsVersion | null): TermsDraft {
@@ -98,6 +103,7 @@ export function TermsSection({
 }
 
 function CurrentTermsCard({ terms }: { terms: StoreTerms }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const c = terms.current;
   /*
@@ -139,13 +145,13 @@ function CurrentTermsCard({ terms }: { terms: StoreTerms }): ReactElement {
       note={
         c.acceptance === null
           ? t('resellerStoreDetail.publishedWaitingForTo', {
-              publishedAt: when(c.publishedAt),
+              publishedAt: when(c.publishedAt, locale),
               storeName: terms.storeName,
             })
           : t('resellerStoreDetail.publishedAcceptedByOn', {
-              publishedAt: when(c.publishedAt),
+              publishedAt: when(c.publishedAt, locale),
               acceptedByName: c.acceptance.acceptedByName,
-              acceptedAt: when(c.acceptance.acceptedAt),
+              acceptedAt: when(c.acceptance.acceptedAt, locale),
             })
       }
     >
@@ -405,6 +411,7 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
  * form is on the page above it.
  */
 function HistorySection({ terms }: { terms: StoreTerms }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   return (
     <RsSection
@@ -436,7 +443,7 @@ function HistorySection({ terms }: { terms: StoreTerms }): ReactElement {
                 <Td>
                   <span className="rs-version sk-figure">{v.version}</span>
                 </Td>
-                <Td className="rs-when sk-figure">{when(v.publishedAt)}</Td>
+                <Td className="rs-when sk-figure">{when(v.publishedAt, locale)}</Td>
                 <Td className="rs-small">
                   {v.shares.map((s) => `${s.label} ${Number(s.storePercent)}%`).join(' · ')}
                 </Td>
@@ -451,7 +458,7 @@ function HistorySection({ terms }: { terms: StoreTerms }): ReactElement {
                 <Td className="rs-small">
                   {v.acceptance === null
                     ? '—'
-                    : `${v.acceptance.acceptedByName}, ${when(v.acceptance.acceptedAt)}`}
+                    : `${v.acceptance.acceptedByName}, ${when(v.acceptance.acceptedAt, locale)}`}
                 </Td>
               </Tr>
             ))}

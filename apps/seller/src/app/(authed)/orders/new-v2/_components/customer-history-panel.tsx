@@ -8,9 +8,10 @@ import { Skeleton } from '@skydrop/ui/app/skeleton';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import '../../_components/orders.css';
 import { useCustomerLookup, type CustomerOrderSummary } from '@/lib/api-hooks';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import type { MessageKey } from '@/i18n/catalog';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /**
  * Who you are about to ship to.
@@ -53,13 +54,15 @@ function rateTone(pct: number): { tone: 'bad' | 'warn' | 'good'; labelKey: Messa
 }
 
 function OrderLine({ o }: { readonly o: CustomerOrderSummary }): ReactElement {
+  const locale = useLocale();
   return (
     <li>
       <Link href={`/orders/${o.orderId}`} className="ord-link sk-ident">
         {o.orderNumber}
       </Link>
       <span className="ord-faint">
-        {o.status.replaceAll('_', ' ').toLowerCase()} · {new Date(o.placedAt).toLocaleDateString()}
+        {o.status.replaceAll('_', ' ').toLowerCase()} ·{' '}
+        {new Date(o.placedAt).toLocaleDateString(dateTag(locale))}
       </span>
     </li>
   );
@@ -80,6 +83,7 @@ export function CustomerHistoryPanel({
     postalCode: string;
   }) => void;
 }): ReactElement | null {
+  const locale = useLocale();
   const t = useT();
   const q = useCustomerLookup(phoneE164);
 
@@ -214,7 +218,7 @@ export function CustomerHistoryPanel({
               address: last.addressLine1,
               postal: last.postalCode === '' ? '' : ` · ${last.postalCode}`,
               order: last.fromOrderNumber,
-              date: new Date(last.placedAt).toLocaleDateString('en-IN'),
+              date: new Date(last.placedAt).toLocaleDateString(dateTag(locale, 'en-IN')),
             })}
           </span>
         </div>

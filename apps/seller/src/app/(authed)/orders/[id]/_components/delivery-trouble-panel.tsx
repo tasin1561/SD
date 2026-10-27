@@ -26,6 +26,7 @@ import type { MessageKey } from '@/i18n/catalog';
 import { CATALOGS } from '@/i18n/catalog';
 import type { Locale } from '@skydrop/ui/app/i18n';
 import { CALL_OUTCOME_BN, DELIVERY_ACTION_STATUS_BN } from '@/i18n/enum-words';
+import { dateTag } from '@/i18n/format';
 
 /**
  * What happened to a parcel that could not be delivered, and what the
@@ -236,7 +237,7 @@ export function DeliveryTroublePanel({
                       {humanOutcome(c.outcome, locale, CALL_OUTCOME_BN)}
                     </span>
                     <span className="ord-callcard__time sk-figure">
-                      {new Date(c.calledAt).toLocaleString()}
+                      {new Date(c.calledAt).toLocaleString(dateTag(locale))}
                     </span>
                   </div>
                   {/*
@@ -257,7 +258,7 @@ export function DeliveryTroublePanel({
                   {c.rescheduledFor !== null && (
                     <span className="ord-faint">
                       {richMessage(t('orderDelivery.askedUsToCall'), {
-                        rescheduledFor: new Date(c.rescheduledFor).toLocaleString(),
+                        rescheduledFor: new Date(c.rescheduledFor).toLocaleString(dateTag(locale)),
                       })}
                     </span>
                   )}

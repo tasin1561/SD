@@ -66,6 +66,8 @@ import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 type StoreTab = 'overview' | 'catalogue' | 'terms' | 'actions';
 
@@ -73,17 +75,20 @@ function isStoreTab(id: string): id is StoreTab {
   return id === 'overview' || id === 'catalogue' || id === 'terms' || id === 'actions';
 }
 
-function when(iso: string | null): string {
+function when(iso: string | null, locale: Locale = 'en'): string {
   return iso === null
     ? '—'
-    : new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+    : new Date(iso).toLocaleString(dateTag(locale, 'en-IN'), {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
 }
 
 /** Day and month only — a tile is a glance, not a timestamp. */
-function day(iso: string | null): string {
+function day(iso: string | null, locale: Locale = 'en'): string {
   return iso === null
     ? '—'
-    : new Date(iso).toLocaleDateString('en-IN', {
+    : new Date(iso).toLocaleDateString(dateTag(locale, 'en-IN'), {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
@@ -285,7 +290,7 @@ export default function ResellerStorePage(): ReactElement {
           hint={
             s.statusChangedAt === null
               ? t('resellerStoreDetail.sinceItWasOpened')
-              : t('resellerStoreDetail.since', { statusChangedAt: day(s.statusChangedAt) })
+              : t('resellerStoreDetail.since', { statusChangedAt: day(s.statusChangedAt, locale) })
           }
         />
         <KpiCard
@@ -314,7 +319,7 @@ export default function ResellerStorePage(): ReactElement {
         <KpiCard
           label={t('resellerStoreDetail.opened')}
           icon={<CalendarClock size={14} />}
-          figure={day(s.createdAt)}
+          figure={day(s.createdAt, locale)}
           tone="neutral"
           hint={t(
             s.events.length === 1
@@ -372,6 +377,7 @@ function OverviewTab({
   open: boolean;
   final: boolean;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const details: ReadonlyArray<{ label: string; value: string }> = [
     { label: t('resellerStoreDetail.customersSee2'), value: s.displayName ?? s.name },
@@ -382,7 +388,7 @@ function OverviewTab({
     { label: t('resellerStoreDetail.contactEmail'), value: s.contactEmail ?? '—' },
     { label: t('resellerStoreDetail.contactPhone'), value: s.contactPhone ?? '—' },
     { label: t('resellerStoreDetail.note2'), value: s.note ?? '—' },
-    { label: t('resellerStoreDetail.statusSince'), value: when(s.statusChangedAt) },
+    { label: t('resellerStoreDetail.statusSince'), value: when(s.statusChangedAt, locale) },
   ];
   return (
     <>
@@ -427,7 +433,7 @@ function OverviewTab({
             <TBody>
               {s.events.map((e) => (
                 <Tr key={e.id}>
-                  <Td className="rs-when sk-figure">{when(e.createdAt)}</Td>
+                  <Td className="rs-when sk-figure">{when(e.createdAt, locale)}</Td>
                   <Td className="rs-strong">{eventWordsOf(t)[e.kind] ?? e.kind}</Td>
                   <Td className="rs-small">{actorWordsOf(t)[e.actorType] ?? e.actorType}</Td>
                   <Td className="rs-small">{e.note ?? '—'}</Td>
@@ -840,6 +846,7 @@ function TeamSection({
   store: ResellerStoreDetail;
   canInvite: boolean;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const toast = useToast();
   const invite = useInviteToResellerStore();
@@ -939,7 +946,7 @@ function TeamSection({
                 <Td className="rs-small">{roleLine(m, t('roleWords.noRole'))}</Td>
                 <Td className="rs-small">
                   {richMessage(t('resellerStoreDetail.lastSignedIn'), {
-                    lastLoginAt: when(m.lastLoginAt),
+                    lastLoginAt: when(m.lastLoginAt, locale),
                   })}
                 </Td>
                 {store.team.invitations.length > 0 ? <Td /> : null}
@@ -957,12 +964,16 @@ function TeamSection({
                     {i.expired ? (
                       <>
                         <AlertTriangle size={13} aria-hidden />
-                        {t('resellerStoreDetail.expiredNeverAccepted', { when: when(i.expiresAt) })}
+                        {t('resellerStoreDetail.expiredNeverAccepted', {
+                          when: when(i.expiresAt, locale),
+                        })}
                       </>
                     ) : (
                       <>
                         <Mail size={13} aria-hidden />
-                        {t('resellerStoreDetail.invitedExpires', { when: when(i.expiresAt) })}
+                        {t('resellerStoreDetail.invitedExpires', {
+                          when: when(i.expiresAt, locale),
+                        })}
                       </>
                     )}
                   </span>

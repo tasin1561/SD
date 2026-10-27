@@ -200,7 +200,7 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
             ? {}
             : {
                 hint: t('inboundDetail.expected', {
-                  expectedArrivalAt: shortDate(consignment.expectedArrivalAt),
+                  expectedArrivalAt: shortDate(consignment.expectedArrivalAt, locale),
                 }),
               })}
         />
@@ -326,7 +326,7 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
                 { label: t('inboundDetail.route'), value: routeWords(consignment.route, t).title },
                 {
                   label: t('inboundDetail.expectedArrival'),
-                  value: shortDate(consignment.expectedArrivalAt),
+                  value: shortDate(consignment.expectedArrivalAt, locale),
                 },
                 {
                   label: t('inboundDetail.yourReference'),
@@ -360,7 +360,7 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
                 <XCircle size={16} aria-hidden className="inv-callout__icon" />
                 <span>
                   {richMessage(t('inboundDetail.cancelled'), {
-                    cancelledAt: shortDate(consignment.cancelledAt),
+                    cancelledAt: shortDate(consignment.cancelledAt, locale),
                     cancelReason: consignment.cancelReason,
                   })}
                 </span>
@@ -435,6 +435,7 @@ function EventTimeline({
   consignment: ConsignmentView;
 }): ReactElement {
   const t = useT();
+  const locale = useLocale();
   if (events.length === 0) {
     return <Note>{t('inboundDetail.nothingHasHappenedYet')}</Note>;
   }
@@ -454,7 +455,7 @@ function EventTimeline({
         ? { tone: 'failed' as const }
         : {}),
       description: evt.description ?? undefined,
-      time: <span className="sk-figure">{stamp(evt.createdAt)}</span>,
+      time: <span className="sk-figure">{stamp(evt.createdAt, locale)}</span>,
     };
   });
   return (
@@ -491,6 +492,7 @@ function LegCard({
   readonly onCorrect: () => void;
 }): ReactElement {
   const t = useT();
+  const locale = useLocale();
   const counted = countedUnits(leg);
   const declared = declaredUnits(leg);
   /**
@@ -561,8 +563,8 @@ function LegCard({
                     : t('inboundDetail.received'),
                 value:
                   leg.dispatchedAt !== null
-                    ? shortDate(leg.dispatchedAt)
-                    : shortDate(leg.receivedAt),
+                    ? shortDate(leg.dispatchedAt, locale)
+                    : shortDate(leg.receivedAt, locale),
               },
             ]}
           />

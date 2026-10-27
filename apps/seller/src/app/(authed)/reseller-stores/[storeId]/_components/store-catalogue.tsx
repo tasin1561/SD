@@ -29,10 +29,12 @@ import {
 } from '@/lib/reseller-catalogue-hooks';
 import { PriceFields, draftFrom, priceBody, type PriceDraft } from '../../_components/price-fields';
 import { RsError, RsLink, RsProduct, RsSection, pendingPhase } from '../../_components/rs-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 const reasonWordsOf = (t: Translate<MessageKey>): Record<NotSellableReason, string> => ({
   NOT_ENABLED: t('resellerStoreDetail.notSoldHere'),
@@ -40,8 +42,11 @@ const reasonWordsOf = (t: Translate<MessageKey>): Record<NotSellableReason, stri
   VARIANT_NOT_RESELLABLE: t('resellerStoreDetail.productArchived'),
 });
 
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+function when(iso: string, locale: Locale = 'en'): string {
+  return new Date(iso).toLocaleString(dateTag(locale, 'en-IN'), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
 }
 
 /**
@@ -84,6 +89,7 @@ export function StoreCatalogue({
   storeName: string;
   final: boolean;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const identity = useSellerIdentity();
   const mayEdit = can(identity, 'stores.pricing') && !final;
@@ -264,7 +270,7 @@ export function StoreCatalogue({
             <TBody>
               {terms.data.recentShrinks.map((s) => (
                 <Tr key={s.id}>
-                  <Td className="rs-when sk-figure">{when(s.createdAt)}</Td>
+                  <Td className="rs-when sk-figure">{when(s.createdAt, locale)}</Td>
                   <Td>
                     <span className="sk-ident">{s.skuCode ?? '—'}</span>
                   </Td>

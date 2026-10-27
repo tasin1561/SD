@@ -14,10 +14,11 @@ import { useMyNsaOrders } from '@/lib/ops-hooks';
 import { useOrdersList } from '@/lib/api-hooks';
 import { verdict } from '@/i18n/verdict';
 import './needs-attention.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
 
 /**
  * THE SELLER'S side of the NSA worklist.
@@ -66,6 +67,7 @@ import type { MessageKey } from '@/i18n/catalog';
  * No SLA figure, no resolution rate: nothing measures either.
  */
 export function NeedsAttentionIndex(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const list = useMyNsaOrders();
   const rows = list.data ?? [];
@@ -252,7 +254,9 @@ export function NeedsAttentionIndex(): ReactElement {
                       </span>
                       <span className="nat-line nat-faint">
                         {richMessage(t('needsAttention.placed'), {
-                          placedAt: new Date(o.placedAt).toLocaleDateString('en-IN'),
+                          placedAt: new Date(o.placedAt).toLocaleDateString(
+                            dateTag(locale, 'en-IN'),
+                          ),
                         })}
                       </span>
                       {/* THE SENTENCE FOLLOWS THE CARD (2026-09-27).
@@ -364,7 +368,9 @@ export function NeedsAttentionIndex(): ReactElement {
                     ) : (
                       <span className="nat-next" data-picked="1">
                         {richMessage(t('needsAttention.weAreChasingThis'), {
-                          acknowledgedAt: new Date(r.acknowledgedAt).toLocaleString('en-IN'),
+                          acknowledgedAt: new Date(r.acknowledgedAt).toLocaleString(
+                            dateTag(locale, 'en-IN'),
+                          ),
                           span: r.note !== null && <span className="nat-faint"> · {r.note}</span>,
                         })}
                       </span>

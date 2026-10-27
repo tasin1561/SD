@@ -26,6 +26,8 @@ import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 /** The fee a split line is a share of, in words. */
 export function feeLabel(
@@ -67,7 +69,7 @@ export function skippedReasonWords(t: Translate<MessageKey>, reason: string | nu
   }
 }
 
-function when(t: Translate<MessageKey>, p: ResellerPartyCreditView): string {
+function when(t: Translate<MessageKey>, p: ResellerPartyCreditView, locale: Locale = 'en'): string {
   const d = p.reversedAt ?? p.creditedAt ?? p.dueAt;
   if (d === null) return '—';
   return t(
@@ -76,7 +78,7 @@ function when(t: Translate<MessageKey>, p: ResellerPartyCreditView): string {
       : p.creditedAt !== null
         ? 'orderResellerMoney.credited'
         : 'orderResellerMoney.due',
-    { when: new Date(d).toLocaleString() },
+    { when: new Date(d).toLocaleString(dateTag(locale)) },
   );
 }
 
@@ -168,7 +170,7 @@ export function ResellerMoneyPanel({
                 ),
               },
               { label: t('orderResellerMoney.when'), value: mine.timing },
-              { label: t('orderResellerMoney.date'), value: when(t, mine) },
+              { label: t('orderResellerMoney.date'), value: when(t, mine, locale) },
               ...(skippedReasonWords(t, mine.skippedReason) !== null
                 ? [
                     {
@@ -254,7 +256,7 @@ export function ResellerMoneyPanel({
                     </Td>
                     <Td>
                       <span className="sk-figure ord-muted">
-                        {new Date(l.createdAt).toLocaleString()}
+                        {new Date(l.createdAt).toLocaleString(dateTag(locale))}
                       </span>
                     </Td>
                     <Td align="right">

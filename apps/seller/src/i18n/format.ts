@@ -21,3 +21,13 @@ export function formatDateTime(iso: string | number | Date, locale: Locale): str
     timeStyle: 'short',
   });
 }
+
+/**
+ * The locale argument for `toLocaleDateString` / `toLocaleString` /
+ * `Intl.DateTimeFormat`. English keeps whatever the call always passed
+ * (`'en-IN'`, `undefined` = the browser's own, …) so English output is
+ * byte-identical; Bangla gets Bangla month names with Western digits.
+ */
+export function dateTag(locale: Locale, english?: Intl.LocalesArgument): Intl.LocalesArgument {
+  return locale === 'bn' ? dateLocaleTag('bn') : english;
+}

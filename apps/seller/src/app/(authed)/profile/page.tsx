@@ -55,10 +55,12 @@ import {
   SetPageHeader,
   phaseOf,
 } from '../settings/_components/settings-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 const crumbsOf = (t: Translate<MessageKey>) => [
   { label: t('profile.clientConsole') },
@@ -80,6 +82,7 @@ const crumbsOf = (t: Translate<MessageKey>) => [
  * does removing the logo.
  */
 export default function ProfilePage(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const detail = useSellerProfile();
 
@@ -178,7 +181,7 @@ export default function ProfilePage(): ReactElement {
             detail.data.approvedAt === null
               ? t('profile.notApprovedYet')
               : t('profile.approved', {
-                  approvedAt: new Date(detail.data.approvedAt).toLocaleDateString(),
+                  approvedAt: new Date(detail.data.approvedAt).toLocaleDateString(dateTag(locale)),
                 })
           }
         />
@@ -603,8 +606,11 @@ function liveBankValues(profile: SellerProfileView): BankValues {
   };
 }
 
-function whenLabel(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+function whenLabel(iso: string, locale: Locale = 'en'): string {
+  return new Date(iso).toLocaleString(dateTag(locale, undefined), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
 }
 
 /**
@@ -647,6 +653,7 @@ function BankDetailsSection({
 }: {
   readonly profile: SellerProfileWithBankChange;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const canManage = can(useSellerIdentity(), 'profile.manage');
   const [editing, setEditing] = useState(false);
@@ -779,7 +786,9 @@ function BankDetailsSection({
                     <span className="set-chips">
                       <StatusChip kind="failed" label={t('profile.changeRejected')} size="sm" />
                       {change.decidedAt !== null && (
-                        <span className="set-callout__aside">{whenLabel(change.decidedAt)}</span>
+                        <span className="set-callout__aside">
+                          {whenLabel(change.decidedAt, locale)}
+                        </span>
                       )}
                     </span>
                   }
@@ -809,7 +818,7 @@ function BankDetailsSection({
                       <StatusChip kind="pending" label={t('profile.awaitingApproval')} size="sm" />
                       <span className="set-callout__aside">
                         {richMessage(t('profile.sent'), {
-                          submittedAt: whenLabel(change.submittedAt),
+                          submittedAt: whenLabel(change.submittedAt, locale),
                         })}
                       </span>
                     </span>
@@ -995,11 +1004,11 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
     // reports the failure on itself rather than a success.
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       setError(t('profile.logoMustBeJpg'));
-      throw new Error('Logo must be JPG, PNG, or WEBP');
+      throw new Error(t('profile.logoMustBeJpg'));
     }
     if (file.size > 1_048_576) {
       setError(t('profile.logoMustBeUnder'));
-      throw new Error('Logo must be under 1 MB');
+      throw new Error(t('profile.logoMustBeUnder'));
     }
     setBusy(true);
     try {
@@ -1014,7 +1023,7 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
         body: file,
       });
       if (!put.ok) {
-        throw new Error(`Spaces upload failed: ${put.status}`);
+        throw new Error(t('profile.spacesUploadFailed', { status: put.status }));
       }
       await register.mutateAsync({
         storageKey: ps.storageKey,

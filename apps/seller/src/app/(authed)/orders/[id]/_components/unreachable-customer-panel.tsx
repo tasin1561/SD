@@ -9,8 +9,9 @@ import { HoldDecisionDialog } from '@/components/hold-decision-dialog';
 import { useHoldReviews } from '@/lib/ops-hooks';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /**
  * "We rang your customer and nobody answered" — ON THE ORDER, where the
@@ -52,6 +53,7 @@ export function UnreachableCustomerPanel({
   readonly orderId: string;
   readonly orderNumber: string;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const identity = useSellerIdentity();
   // COSMETIC (FE-2): this decides whether we ASK, and whether the button
@@ -93,7 +95,7 @@ export function UnreachableCustomerPanel({
         {review !== null && (
           <span className="ord-faint">
             {richMessage(t('orderUnreachable.raisedIfYouLeave'), {
-              createdAt: new Date(review.createdAt).toLocaleString('en-IN'),
+              createdAt: new Date(review.createdAt).toLocaleString(dateTag(locale, 'en-IN')),
             })}
           </span>
         )}

@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
  * more importantly, on the wire.
  */
 
-const R = (p: string): string => readEnglish(join(__dirname, p), 'utf8');
+const R = (p: string): string => readEnglish(join(__dirname, p));
 
 const PANEL = R(
   '../app/(authed)/products/[id]/variants/[variantId]/_components/stock-config-panel.tsx',

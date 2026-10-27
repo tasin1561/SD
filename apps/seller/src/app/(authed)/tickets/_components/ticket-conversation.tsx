@@ -20,7 +20,8 @@ import {
   type TicketView,
 } from '@/lib/ops-hooks';
 import './tickets.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { dateTag } from '@/i18n/format';
 
 type Side = 'SELLER' | 'US' | 'COURIER';
 
@@ -57,6 +58,7 @@ interface Bubble {
  * the messages harder to find, not the history clearer.
  */
 export function TicketConversation({ ticket }: { readonly ticket: TicketView }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const timeline = useTicketTimeline(ticket.id);
   const courier = useCourierThreadForTicket(ticket.id);
@@ -221,7 +223,7 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
               <div className="tkt-bubble" data-side={b.side}>
                 <p className="tkt-bubble__who">
                   {b.who} ·{' '}
-                  {new Date(b.at).toLocaleString('en-IN', {
+                  {new Date(b.at).toLocaleString(dateTag(locale, 'en-IN'), {
                     day: 'numeric',
                     month: 'short',
                     hour: '2-digit',

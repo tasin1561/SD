@@ -21,10 +21,11 @@ import { WebhookFormModal } from './webhook-form-modal';
 import { SecretRevealCard } from './secret-reveal-card';
 import { verdict } from '@/i18n/verdict';
 import { SetCallout, SetFact, SetPageHeader } from '../../_components/settings-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
 
 const crumbsOf = (t: Translate<MessageKey>) => [
   { label: t('settingsWebhooks.clientConsole') },
@@ -224,6 +225,7 @@ function EndpointRow({
   readonly onDeleteIntent: () => void;
   readonly onError: (s: string) => void;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const rotate = useRotateWebhookSecret(endpoint.id);
   const update = useUpdateWebhookEndpoint(endpoint.id);
@@ -332,7 +334,7 @@ function EndpointRow({
           <dt>{t('settingsWebhooks.lastSuccess')}</dt>
           <dd className="sk-figure">
             {endpoint.lastSuccessAt !== null ? (
-              new Date(endpoint.lastSuccessAt).toLocaleString()
+              new Date(endpoint.lastSuccessAt).toLocaleString(dateTag(locale))
             ) : (
               <span className="set-faint">—</span>
             )}
@@ -342,7 +344,7 @@ function EndpointRow({
           <dt>{t('settingsWebhooks.lastFailure')}</dt>
           <dd className="sk-figure">
             {endpoint.lastFailureAt !== null ? (
-              new Date(endpoint.lastFailureAt).toLocaleString()
+              new Date(endpoint.lastFailureAt).toLocaleString(dateTag(locale))
             ) : (
               <span className="set-faint">—</span>
             )}

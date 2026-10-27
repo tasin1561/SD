@@ -21,9 +21,10 @@ import {
 import { useApiKeysList, useCreateApiKey, useRevokeApiKey } from '@/lib/api-hooks';
 import { verdict } from '@/i18n/verdict';
 import { RevealCard, SetCallout, SetFact, SetPageHeader } from '../../_components/settings-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { dateTag } from '@/i18n/format';
 
 const crumbsOf = (t: Translate<MessageKey>) => [
   { label: t('settingsApiKeys.clientConsole') },
@@ -71,6 +72,7 @@ function stateKind(state: KeyState): 'delivered' | 'pending' | 'cancelled' {
  * and sends exactly the request the form (or the row) used to send.
  */
 export function ApiKeysIndex(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const list = useApiKeysList();
   const create = useCreateApiKey();
@@ -176,7 +178,7 @@ export function ApiKeysIndex(): ReactElement {
               {t('settingsApiKeys.thisIsTheOnly')}{' '}
               {revealed.expiresAt !== null
                 ? t('settingsApiKeys.expires', {
-                    expiresAt: new Date(revealed.expiresAt).toLocaleDateString(),
+                    expiresAt: new Date(revealed.expiresAt).toLocaleDateString(dateTag(locale)),
                   })
                 : t('settingsApiKeys.noExpirySet')}
             </>
@@ -308,11 +310,13 @@ export function ApiKeysIndex(): ReactElement {
                             : k.scopes.join(', ')}
                         </Td>
                         <Td className="set-cell-muted">
-                          {k.lastUsedAt !== null ? new Date(k.lastUsedAt).toLocaleString() : '—'}
+                          {k.lastUsedAt !== null
+                            ? new Date(k.lastUsedAt).toLocaleString(dateTag(locale))
+                            : '—'}
                         </Td>
                         <Td className="set-cell-muted">
                           {k.expiresAt !== null
-                            ? new Date(k.expiresAt).toLocaleDateString()
+                            ? new Date(k.expiresAt).toLocaleDateString(dateTag(locale))
                             : t('settingsApiKeys.noExpiry')}
                         </Td>
                         <Td>
