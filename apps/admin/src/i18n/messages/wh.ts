@@ -2044,6 +2044,32 @@ export const wh = defineMessages({
   ],
   'warehouseRtoRtoItemRow.damaged': ['Damaged', 'ক্ষতিগ্রস্ত'],
   'warehouseRtoRtoItemRow.missingFromTheBox': ['Missing from the box', 'বাক্সে নেই'],
+  'warehouseRtoRtoItemRow.putBackInStock': ['Put back in stock', 'স্টকে ফিরিয়ে দিন'],
+  'warehouseRtoRtoItemRow.sellableImmediatelyAtFinaliseIt': [
+    'Sellable immediately: at finalise it moves out of the returns hold onto the floor bin — or, when this warehouse tracks bins, back to the shelf it was picked from.',
+    'সঙ্গে সঙ্গে বিক্রয়যোগ্য: চূড়ান্ত করার সময় এটি রিটার্ন হোল্ড থেকে ফ্লোর বিনে যায় — অথবা এই ওয়্যারহাউস বিন ট্র্যাক করলে যে শেলফ থেকে পিক হয়েছিল সেখানে ফেরে।',
+  ],
+  'warehouseRtoRtoItemRow.keepAsideDamaged': [
+    'Keep aside (damaged)',
+    'আলাদা করে রাখুন (ক্ষতিগ্রস্ত)',
+  ],
+  'warehouseRtoRtoItemRow.movesFromTheReturnsHold': [
+    'Moves from the returns hold into this warehouse’s Damaged bin at finalise — kept for the client, never sellable, and no inbound freight is charged. Finalise refuses if the warehouse has no Damaged bin. To send it back or scrap it later: Inventory → Adjustments, a decrease from the Damaged bin with reason “returned to seller” or “damaged in warehouse”.',
+    'চূড়ান্ত করার সময় রিটার্ন হোল্ড থেকে এই ওয়্যারহাউসের Damaged বিনে যায় — ক্লায়েন্টের জন্য রাখা, কখনো বিক্রয়যোগ্য নয়, এবং ইনবাউন্ড ফ্রেইট চার্জ হয় না। ওয়্যারহাউসে Damaged বিন না থাকলে চূড়ান্ত করা প্রত্যাখ্যাত হয়। পরে ফেরত পাঠাতে বা স্ক্র্যাপ করতে: Inventory → Adjustments, Damaged বিন থেকে কমানো, কারণ “returned to seller” বা “damaged in warehouse” দিয়ে।',
+  ],
+  'warehouseRtoRtoItemRow.writeOffNotSellable': [
+    'Write off (not sellable)',
+    'অবলোপন করুন (বিক্রয়ের অযোগ্য)',
+  ],
+  'warehouseRtoRtoItemRow.removedFromTheReturnsHold': [
+    'Removed from the returns hold at finalise, and from stock for good. The client is charged this unit’s share of inbound freight; any refund for the goods is decided on the damage ticket.',
+    'চূড়ান্ত করার সময় রিটার্ন হোল্ড থেকে এবং চিরতরে স্টক থেকে সরে যায়। ক্লায়েন্টের কাছ থেকে এই ইউনিটের ইনবাউন্ড ফ্রেইটের অংশ নেওয়া হয়; পণ্যের জন্য কোনো ফেরত ড্যামেজ টিকিটে ঠিক হয়।',
+  ],
+  'warehouseRtoRtoItemRow.decideLater': ['Decide later', 'পরে সিদ্ধান্ত'],
+  'warehouseRtoRtoItemRow.staysInTheReturnsHold': [
+    'Stays in the returns hold, unsellable. The parcel cannot be finalised until every line has a decision.',
+    'রিটার্ন হোল্ডে থাকে, বিক্রয়ের অযোগ্য। প্রতিটি লাইনে সিদ্ধান্ত না থাকলে পার্সেল চূড়ান্ত করা যায় না।',
+  ],
   'warehouseRtoRtoItemRow.everythingReceivedWaitsInThe': [
     'Everything received waits in the returns hold until you decide. Put back in stock: sellable immediately (the floor bin, or its old shelf when bins are tracked). Keep aside (damaged): the Damaged bin, kept for the client and never sold. Write off: removed from the returns hold and from stock, and the client is charged its share of inbound freight. Decide later: stays in the returns hold; the parcel cannot be finalised until you choose.',
     'সিদ্ধান্ত না নেওয়া পর্যন্ত যা গ্রহণ করা হয়েছে সবই রিটার্ন হোল্ডে অপেক্ষা করে। স্টকে ফিরিয়ে দিন: সঙ্গে সঙ্গে বিক্রয়যোগ্য (ফ্লোর বিন, অথবা বিন ট্র্যাক করা হলে আগের শেলফ)। আলাদা করে রাখুন (ক্ষতিগ্রস্ত): Damaged বিন, ক্লায়েন্টের জন্য রাখা এবং কখনো বিক্রি হয় না। অবলোপন: রিটার্ন হোল্ড ও স্টক থেকে সরে যায়, এবং ক্লায়েন্টের কাছ থেকে ইনবাউন্ড ফ্রেইটের অংশ নেওয়া হয়। পরে সিদ্ধান্ত: রিটার্ন হোল্ডে থাকে; আপনি বেছে না নেওয়া পর্যন্ত পার্সেল চূড়ান্ত করা যায় না।',

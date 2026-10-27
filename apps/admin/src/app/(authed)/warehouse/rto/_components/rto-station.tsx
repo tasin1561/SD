@@ -31,6 +31,8 @@ import {
 import '../../_components/benches.css';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/client';
+import { tEn, type MessageKey } from '@/i18n/catalog';
+import type { Translate } from '@skydrop/ui/app/i18n';
 
 /**
  * RTO workspace — three phases:
@@ -110,30 +112,63 @@ function finalizeSummary(items: ReadonlyArray<RtoShipmentItem>): {
  * already says so; this says it in the headline rather than leaving the
  * consequence empty.
  */
+export function finalizeConsequenceIn(
+  tr: Translate<MessageKey>,
+  t: {
+    readonly restock: number;
+    readonly hold: number;
+    readonly writeOff: number;
+  },
+): string {
+  const unit = (n: number): string =>
+    tr(n === 1 ? 'warehouseRtoRtoStation.unitOne' : 'warehouseRtoRtoStation.unitOther', { n });
+  const clauses: string[] = [];
+  if (t.restock > 0) {
+    clauses.push(
+      tr(
+        t.restock === 1
+          ? 'warehouseRtoRtoStation.restockOne'
+          : 'warehouseRtoRtoStation.restockOther',
+        { units: unit(t.restock) },
+      ),
+    );
+  }
+  if (t.hold > 0) {
+    clauses.push(
+      tr(t.hold === 1 ? 'warehouseRtoRtoStation.holdOne' : 'warehouseRtoRtoStation.holdOther', {
+        units: unit(t.hold),
+      }),
+    );
+  }
+  if (t.writeOff > 0) {
+    clauses.push(
+      tr(
+        t.writeOff === 1
+          ? 'warehouseRtoRtoStation.writeOffOne'
+          : 'warehouseRtoRtoStation.writeOffOther',
+        { units: unit(t.writeOff) },
+      ),
+    );
+  }
+  if (clauses.length === 0) {
+    return tr('warehouseRtoRtoStation.nothingReady');
+  }
+  const listed =
+    clauses.length === 1
+      ? (clauses[0] ?? '')
+      : tr('warehouseRtoRtoStation.listJoin', {
+          head: clauses.slice(0, -1).join(tr('warehouseRtoRtoStation.listSeparator')),
+          last: clauses[clauses.length - 1] ?? '',
+        });
+  return tr('warehouseRtoRtoStation.consequenceTail', { listed });
+}
+
 export function finalizeConsequence(t: {
   readonly restock: number;
   readonly hold: number;
   readonly writeOff: number;
 }): string {
-  const unit = (n: number): string => `${n} unit${n === 1 ? '' : 's'}`;
-  const clauses: string[] = [];
-  if (t.restock > 0) {
-    clauses.push(`${unit(t.restock)} ${t.restock === 1 ? 'goes' : 'go'} back in stock`);
-  }
-  if (t.hold > 0) {
-    clauses.push(`${unit(t.hold)} ${t.hold === 1 ? 'is' : 'are'} kept aside damaged`);
-  }
-  if (t.writeOff > 0) {
-    clauses.push(`${unit(t.writeOff)} ${t.writeOff === 1 ? 'is' : 'are'} written off`);
-  }
-  if (clauses.length === 0) {
-    return 'Nothing is ready to move — every unit is still waiting on a decision.';
-  }
-  const listed =
-    clauses.length === 1
-      ? clauses[0]
-      : `${clauses.slice(0, -1).join(', ')} and ${clauses[clauses.length - 1]}`;
-  return `${listed} — stock moves now and this cannot be undone.`;
+  return finalizeConsequenceIn(tEn, t);
 }
 
 export function RtoStation(): ReactElement {
@@ -470,7 +505,8 @@ function FinalizeConfirm({
 }): ReactElement {
   const tr = useT();
   const t = finalizeSummary(items);
-  const unit = (n: number): string => `${n} unit${n === 1 ? '' : 's'}`;
+  const unit = (n: number): string =>
+    tr(n === 1 ? 'warehouseRtoRtoStation.unitOne' : 'warehouseRtoRtoStation.unitOther', { n });
   return (
     <ConfirmDialog
       open={open}
@@ -478,7 +514,7 @@ function FinalizeConfirm({
       title={tr('warehouseRtoRtoStation.finalizeThisReturn')}
       entity={shipmentNumber}
       entityIsIdentifier
-      consequence={finalizeConsequence(t)}
+      consequence={finalizeConsequenceIn(tr, t)}
       confirmLabel={tr('warehouseRtoRtoStation.finalizeDisposition')}
       destructive={t.writeOff > 0}
       error={error}

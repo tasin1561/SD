@@ -9,7 +9,7 @@ import { TextField } from '@skydrop/ui/app/text-field';
 import '../../_components/benches.css';
 import { useT } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
-import type { MessageKey } from '@/i18n/catalog';
+import { tEn, type MessageKey } from '@/i18n/catalog';
 
 export interface RtoItemRowInspection {
   readonly quantity: number;
@@ -94,32 +94,32 @@ export const CONDITION_OPTIONS = (tr: Translate<MessageKey>) =>
     { value: 'MISSING', label: tr('warehouseRtoRtoItemRow.missingFromTheBox') },
   ] as const;
 
-export const DISPOSITION_OPTIONS = [
-  {
-    value: 'RESTOCK',
-    label: 'Put back in stock',
-    effect:
-      'Sellable immediately: at finalise it moves out of the returns hold onto the floor bin — or, when this warehouse tracks bins, back to the shelf it was picked from.',
-  },
-  {
-    value: 'HOLD_DAMAGED',
-    label: 'Keep aside (damaged)',
-    effect:
-      'Moves from the returns hold into this warehouse’s Damaged bin at finalise — kept for the client, never sellable, and no inbound freight is charged. Finalise refuses if the warehouse has no Damaged bin. To send it back or scrap it later: Inventory → Adjustments, a decrease from the Damaged bin with reason “returned to seller” or “damaged in warehouse”.',
-  },
-  {
-    value: 'WRITE_OFF',
-    label: 'Write off (not sellable)',
-    effect:
-      'Removed from the returns hold at finalise, and from stock for good. The client is charged this unit’s share of inbound freight; any refund for the goods is decided on the damage ticket.',
-  },
-  {
-    value: 'INSPECT_LATER',
-    label: 'Decide later',
-    effect:
-      'Stays in the returns hold, unsellable. The parcel cannot be finalised until every line has a decision.',
-  },
-] as const;
+export const dispositionOptions = (tr: Translate<MessageKey>) =>
+  [
+    {
+      value: 'RESTOCK',
+      label: tr('warehouseRtoRtoItemRow.putBackInStock'),
+      effect: tr('warehouseRtoRtoItemRow.sellableImmediatelyAtFinaliseIt'),
+    },
+    {
+      value: 'HOLD_DAMAGED',
+      label: tr('warehouseRtoRtoItemRow.keepAsideDamaged'),
+      effect: tr('warehouseRtoRtoItemRow.movesFromTheReturnsHold'),
+    },
+    {
+      value: 'WRITE_OFF',
+      label: tr('warehouseRtoRtoItemRow.writeOffNotSellable'),
+      effect: tr('warehouseRtoRtoItemRow.removedFromTheReturnsHold'),
+    },
+    {
+      value: 'INSPECT_LATER',
+      label: tr('warehouseRtoRtoItemRow.decideLater'),
+      effect: tr('warehouseRtoRtoItemRow.staysInTheReturnsHold'),
+    },
+  ] as const;
+
+/** The English reading of the table above — what specs and non-React callers import. */
+export const DISPOSITION_OPTIONS = dispositionOptions(tEn);
 
 /**
  * WMS-8e: a received return is already IN the returns hold (booked at
@@ -132,22 +132,30 @@ const DISPOSITION_HINT = (tr: Translate<MessageKey>) =>
  * A combination that is allowed but usually a slip — said out loud, never
  * refused (the server is the only authority on what may be saved).
  */
-export function dispositionMismatch(condition: string, disposition: string): string | null {
+export function dispositionMismatchIn(
+  tr: Translate<MessageKey>,
+  condition: string,
+  disposition: string,
+): string | null {
   if (disposition === 'RESTOCK' && (condition === 'DAMAGED' || condition === 'MISSING')) {
     return condition === 'MISSING'
-      ? 'A missing unit cannot go back on the shelf — you probably mean Write off.'
-      : 'A damaged unit put back in stock will be sold to the next customer. Is it really sellable?';
+      ? tr('warehouseRtoRtoItemRow.mismatchMissingRestock')
+      : tr('warehouseRtoRtoItemRow.mismatchDamagedRestock');
   }
   if (disposition === 'HOLD_DAMAGED' && condition === 'GOOD') {
-    return 'Keeping a good unit aside means it can never be sold. Put it back in stock instead?';
+    return tr('warehouseRtoRtoItemRow.mismatchGoodHold');
   }
   if (disposition === 'HOLD_DAMAGED' && condition === 'MISSING') {
-    return 'A missing unit is not here to keep aside — you probably mean Write off.';
+    return tr('warehouseRtoRtoItemRow.mismatchMissingHold');
   }
   if (disposition === 'WRITE_OFF' && condition === 'GOOD') {
-    return 'Writing off a good unit removes sellable stock for good. Put it back in stock instead?';
+    return tr('warehouseRtoRtoItemRow.mismatchGoodWriteOff');
   }
   return null;
+}
+
+export function dispositionMismatch(condition: string, disposition: string): string | null {
+  return dispositionMismatchIn(tEn, condition, disposition);
 }
 
 interface SplitRowState {
@@ -165,12 +173,20 @@ function parseQty(raw: string): number | null {
 }
 
 /** The live arithmetic under a split: how many units still need a decision. */
-export function remainingLabel(lineQuantity: number, rows: readonly SplitRowState[]): string {
+export function remainingLabelIn(
+  tr: Translate<MessageKey>,
+  lineQuantity: number,
+  rows: readonly SplitRowState[],
+): string {
   const decided = rows.reduce((sum, r) => sum + (parseQty(r.quantity) ?? 0), 0);
   const left = lineQuantity - decided;
-  if (left === 0) return `All ${lineQuantity} units have a decision.`;
-  if (left > 0) return `${left} of ${lineQuantity} units still need a decision.`;
-  return `${-left} more than the ${lineQuantity} units on this line.`;
+  if (left === 0) return tr('warehouseRtoRtoItemRow.remainingAll', { lineQuantity });
+  if (left > 0) return tr('warehouseRtoRtoItemRow.remainingSome', { left, lineQuantity });
+  return tr('warehouseRtoRtoItemRow.remainingOver', { over: -left, lineQuantity });
+}
+
+export function remainingLabel(lineQuantity: number, rows: readonly SplitRowState[]): string {
+  return remainingLabelIn(tEn, lineQuantity, rows);
 }
 
 function initialSplit(item: RtoItemRowItem): SplitRowState[] | null {
@@ -201,8 +217,8 @@ export function RtoItemRow({
   const [split, setSplit] = useState<SplitRowState[] | null>(() => initialSplit(item));
 
   const inspected = item.rtoCondition !== null && item.rtoDisposition !== null;
-  const mismatch = dispositionMismatch(condition, disposition);
-  const selected = DISPOSITION_OPTIONS.find((o) => o.value === disposition);
+  const mismatch = dispositionMismatchIn(tr, condition, disposition);
+  const selected = dispositionOptions(tr).find((o) => o.value === disposition);
 
   function startSplit(): void {
     // Two rows to start: the first unit, and the rest of the line — the
@@ -299,7 +315,7 @@ export function RtoItemRow({
               aria-label={tr('warehouseRtoRtoItemRow.whatHappensToIt')}
             >
               <option value="">—</option>
-              {DISPOSITION_OPTIONS.map((o) => (
+              {dispositionOptions(tr).map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
@@ -326,11 +342,11 @@ export function RtoItemRow({
           aria-label={tr('warehouseRtoRtoItemRow.splitByQuantity')}
         >
           <p className="wh-note" role="status" aria-live="polite">
-            {remainingLabel(item.quantity, split)}
+            {remainingLabelIn(tr, item.quantity, split)}
           </p>
           {split.map((row, i) => {
-            const rowMismatch = dispositionMismatch(row.condition, row.disposition);
-            const rowEffect = DISPOSITION_OPTIONS.find((o) => o.value === row.disposition);
+            const rowMismatch = dispositionMismatchIn(tr, row.condition, row.disposition);
+            const rowEffect = dispositionOptions(tr).find((o) => o.value === row.disposition);
             return (
               <div key={i} className="wh-split-row">
                 <div className="wh-fields" data-cols="split">
@@ -366,7 +382,7 @@ export function RtoItemRow({
                     aria-label={tr('warehouseRtoRtoItemRow.whatHappensToThemRow', { value: i + 1 })}
                   >
                     <option value="">—</option>
-                    {DISPOSITION_OPTIONS.map((o) => (
+                    {dispositionOptions(tr).map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
                       </option>
