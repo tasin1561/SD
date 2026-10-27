@@ -26,6 +26,7 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { useT } from '@/i18n/client';
 
 /**
  * Which courier accounts carry THIS seller's parcels (CACC-1, R1).
@@ -50,6 +51,7 @@ export function SellerCourierLinksSection({
 }: {
   readonly sellerId: string;
 }): ReactElement | null {
+  const tr = useT();
   const canView = usePermission('courier.accounts.view');
   const canManage = usePermission('sellers.courier_links.manage');
   const links = useSellerCourierLinks(canView ? sellerId : null);
@@ -70,11 +72,11 @@ export function SellerCourierLinksSection({
 
   return (
     <AcSection
-      title="Courier accounts"
+      title={tr('sellersSellerCourierLinksSection.courierAccounts')}
       note={
         rows.length === 0
-          ? "No links: this client's parcels go to each courier's default account."
-          : "This client's parcels are split across these accounts by weight. Unlinking returns them to the default account."
+          ? tr('sellersSellerCourierLinksSection.noLinksThisClientS')
+          : tr('sellersSellerCourierLinksSection.thisClientSParcelsAre')
       }
       action={
         canManage ? (
@@ -84,7 +86,7 @@ export function SellerCourierLinksSection({
             icon={<Link2 size={14} />}
             onClick={() => setAdding(true)}
           >
-            Add link
+            {tr('sellersSellerCourierLinksSection.addLink')}
           </Button>
         ) : undefined
       }
@@ -94,29 +96,32 @@ export function SellerCourierLinksSection({
         <SkeletonRows rows={2} />
       ) : links.isError ? (
         <ErrorState
-          message={serverVerdict(links.error, 'Failed to load courier links.')}
+          message={serverVerdict(
+            links.error,
+            tr('sellersSellerCourierLinksSection.failedToLoadCourierLinks'),
+          )}
           retry={() => void links.refetch()}
         />
       ) : rows.length === 0 ? (
         <EmptyState
           bare
-          title="Uses the default accounts"
+          title={tr('sellersSellerCourierLinksSection.usesTheDefaultAccounts')}
           description={
             canManage
-              ? 'Add a link to route this client to a specific courier account.'
-              : 'A person with the courier-links permission can route this client to a specific account.'
+              ? tr('sellersSellerCourierLinksSection.addALinkToRoute')
+              : tr('sellersSellerCourierLinksSection.aPersonWithTheCourier')
           }
         />
       ) : (
-        <Table caption="Courier accounts for this client">
+        <Table caption={tr('sellersSellerCourierLinksSection.courierAccountsForThisClient')}>
           <THead>
             <Tr>
-              <Th>Account</Th>
-              <Th>Courier</Th>
-              <Th align="right">Weight</Th>
-              <Th align="right">Share</Th>
-              <Th>State</Th>
-              {canManage && <Th align="right">Actions</Th>}
+              <Th>{tr('sellersSellerCourierLinksSection.account')}</Th>
+              <Th>{tr('sellersSellerCourierLinksSection.courier')}</Th>
+              <Th align="right">{tr('sellersSellerCourierLinksSection.weight')}</Th>
+              <Th align="right">{tr('sellersSellerCourierLinksSection.share')}</Th>
+              <Th>{tr('sellersSellerCourierLinksSection.state')}</Th>
+              {canManage && <Th align="right">{tr('sellersSellerCourierLinksSection.actions')}</Th>}
             </Tr>
           </THead>
           <TBody>
@@ -185,6 +190,7 @@ function LinkRow({
   readonly onReweigh: () => void;
   readonly onUnlink: () => void;
 }): ReactElement {
+  const tr = useT();
   const update = useUpdateSellerCourierLink();
   const toast = useToast();
   const share =
@@ -199,7 +205,11 @@ function LinkRow({
         courierAccountId: link.courierAccountId,
         isActive: !link.isActive,
       });
-      toast.success(link.isActive ? 'Link paused.' : 'Link active again.');
+      toast.success(
+        link.isActive
+          ? tr('sellersSellerCourierLinksSection.linkPaused')
+          : tr('sellersSellerCourierLinksSection.linkActiveAgain'),
+      );
     } catch (err) {
       toast.error(serverVerdict(err));
     }
@@ -221,7 +231,11 @@ function LinkRow({
       <Td>
         <StatusChip
           kind={link.isActive ? 'confirmed' : 'cancelled'}
-          label={link.isActive ? 'Active' : 'Paused'}
+          label={
+            link.isActive
+              ? tr('sellersSellerCourierLinksSection.active')
+              : tr('sellersSellerCourierLinksSection.paused')
+          }
           size="sm"
         />
       </Td>
@@ -229,7 +243,7 @@ function LinkRow({
         <Td align="right">
           <div className="ac-buttons">
             <Button variant="ghost" size="sm" icon={<Scale size={14} />} onClick={onReweigh}>
-              Change weight
+              {tr('sellersSellerCourierLinksSection.changeWeight')}
             </Button>
             <Button
               variant="ghost"
@@ -238,10 +252,12 @@ function LinkRow({
               disabled={update.isPending}
               onClick={() => void toggleActive()}
             >
-              {link.isActive ? 'Pause' : 'Activate'}
+              {link.isActive
+                ? tr('sellersSellerCourierLinksSection.pause')
+                : tr('sellersSellerCourierLinksSection.activate')}
             </Button>
             <Button variant="ghost" size="sm" icon={<Link2Off size={14} />} onClick={onUnlink}>
-              Unlink
+              {tr('sellersSellerCourierLinksSection.unlink')}
             </Button>
           </div>
         </Td>
@@ -261,6 +277,7 @@ function AddLinkModal({
   readonly linkedIds: ReadonlySet<string>;
   readonly onClose: () => void;
 }): ReactElement {
+  const tr = useT();
   const link = useLinkSellerCourierAccount();
   const toast = useToast();
   const available = accounts.filter((a) => !linkedIds.has(a.id));
@@ -276,7 +293,7 @@ function AddLinkModal({
         courierAccountId: accountId,
         distributionWeight: Number(weight),
       });
-      toast.success('Courier account linked.');
+      toast.success(tr('sellersSellerCourierLinksSection.courierAccountLinked'));
       onClose();
     } catch (err) {
       setError(serverVerdict(err));
@@ -289,19 +306,23 @@ function AddLinkModal({
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
-      title="Link a courier account"
+      title={tr('sellersSellerCourierLinksSection.linkACourierAccount')}
       icon={<Link2 size={18} />}
       locked={link.isPending}
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={onClose}>
-            Cancel
+            {tr('sellersSellerCourierLinksSection.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
             state={phaseOf(link.isPending, error)}
-            labels={{ idle: 'Link account', busy: 'Linking…', error: 'Not linked' }}
+            labels={{
+              idle: tr('sellersSellerCourierLinksSection.linkAccount'),
+              busy: tr('sellersSellerCourierLinksSection.linking'),
+              error: tr('sellersSellerCourierLinksSection.notLinked'),
+            }}
             disabled={available.length === 0 || accountId === '' || link.isPending}
             onClick={() => void submit()}
           />
@@ -310,11 +331,13 @@ function AddLinkModal({
     >
       <div className="ac-form">
         {available.length === 0 ? (
-          <p className="ac-muted">Every courier account is already linked to this client.</p>
+          <p className="ac-muted">
+            {tr('sellersSellerCourierLinksSection.everyCourierAccountIsAlready')}
+          </p>
         ) : (
           <>
             <Select
-              label="Account"
+              label={tr('sellersSellerCourierLinksSection.account')}
               id="courier-link-account"
               requiredMark
               value={accountId}
@@ -323,14 +346,14 @@ function AddLinkModal({
               {available.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.label} — {a.courierCode} · {a.environment}
-                  {a.isActive ? '' : ' (switched off)'}
+                  {a.isActive ? '' : tr('sellersSellerCourierLinksSection.switchedOff')}
                 </option>
               ))}
             </Select>
             <TextField
-              label="Weight"
+              label={tr('sellersSellerCourierLinksSection.weight')}
               id="courier-link-weight"
-              hint="Relative share of this client's parcels sent to this account. Two links at 100 split evenly."
+              hint={tr('sellersSellerCourierLinksSection.relativeShareOfThisClient')}
               requiredMark
               inputMode="numeric"
               inputClassName="sk-figure"
@@ -356,6 +379,7 @@ function WeightModal({
   readonly accountName: string;
   readonly onClose: () => void;
 }): ReactElement {
+  const tr = useT();
   const update = useUpdateSellerCourierLink();
   const toast = useToast();
   const [weight, setWeight] = useState(String(link.distributionWeight));
@@ -369,7 +393,7 @@ function WeightModal({
         courierAccountId: link.courierAccountId,
         distributionWeight: Number(weight),
       });
-      toast.success('Weight updated.');
+      toast.success(tr('sellersSellerCourierLinksSection.weightUpdated'));
       onClose();
     } catch (err) {
       setError(serverVerdict(err));
@@ -382,19 +406,23 @@ function WeightModal({
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
-      title={`Weight for ${name}`}
+      title={tr('sellersSellerCourierLinksSection.weightFor', { name })}
       icon={<Scale size={18} />}
       locked={update.isPending}
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={onClose}>
-            Cancel
+            {tr('sellersSellerCourierLinksSection.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
             state={phaseOf(update.isPending, error)}
-            labels={{ idle: 'Save weight', busy: 'Saving…', error: 'Not saved' }}
+            labels={{
+              idle: tr('sellersSellerCourierLinksSection.saveWeight'),
+              busy: tr('sellersSellerCourierLinksSection.saving'),
+              error: tr('sellersSellerCourierLinksSection.notSaved'),
+            }}
             disabled={weight.trim() === '' || update.isPending}
             onClick={() => void submit()}
           />
@@ -403,9 +431,9 @@ function WeightModal({
     >
       <div className="ac-form">
         <TextField
-          label="Weight"
+          label={tr('sellersSellerCourierLinksSection.weight')}
           id="courier-link-weight-edit"
-          hint="0 keeps the link but sends it nothing."
+          hint={tr('sellersSellerCourierLinksSection.0KeepsTheLinkBut')}
           requiredMark
           inputMode="numeric"
           inputClassName="sk-figure"
@@ -429,6 +457,7 @@ function UnlinkModal({
   readonly accountName: string;
   readonly onClose: () => void;
 }): ReactElement {
+  const tr = useT();
   const unlink = useUnlinkSellerCourierAccount();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
@@ -437,7 +466,7 @@ function UnlinkModal({
     setError(null);
     try {
       await unlink.mutateAsync({ sellerId, courierAccountId: link.courierAccountId });
-      toast.success('Link removed.');
+      toast.success(tr('sellersSellerCourierLinksSection.linkRemoved'));
       onClose();
     } catch (err) {
       setError(serverVerdict(err));
@@ -452,11 +481,11 @@ function UnlinkModal({
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
-      title={`Unlink ${name}?`}
+      title={tr('sellersSellerCourierLinksSection.unlink2', { name })}
       entity={name}
-      consequence={`New parcels for this client stop going to ${name}. If no other link remains, they go to the courier's default account. Parcels already booked keep the account that carried them.`}
-      confirmLabel="Unlink"
-      cancelLabel="Keep it"
+      consequence={tr('sellersSellerCourierLinksSection.newParcelsForThisClient', { name })}
+      confirmLabel={tr('sellersSellerCourierLinksSection.unlink')}
+      cancelLabel={tr('sellersSellerCourierLinksSection.keepIt')}
       destructive
       error={error}
       onConfirm={submit}

@@ -13,6 +13,7 @@ import { useDeleteRole, usePermissionCatalogue, useRoles, type RoleView } from '
 import { ROLE_AXIS_GROUPS, rolesInGroup } from '@/lib/role-axes';
 import { serverVerdict } from '@/lib/server-verdict';
 import { RoleEditor } from './role-editor';
+import { useT } from '@/i18n/client';
 
 /**
  * Roles, and what each may do.
@@ -35,6 +36,7 @@ import { RoleEditor } from './role-editor';
  * else; every role appears somewhere, whatever its key.
  */
 export function RolesIndex(): ReactElement {
+  const t = useT();
   const toast = useToast();
   const roles = useRoles();
   const catalogue = usePermissionCatalogue();
@@ -69,10 +71,10 @@ export function RolesIndex(): ReactElement {
       <Table caption={caption}>
         <THead>
           <Tr>
-            <Th>Role</Th>
-            <Th>Covers</Th>
-            <Th align="right">People</Th>
-            <Th align="right">Actions</Th>
+            <Th>{t('rolesRolesIndex.role')}</Th>
+            <Th>{t('rolesRolesIndex.covers')}</Th>
+            <Th align="right">{t('rolesRolesIndex.people')}</Th>
+            <Th align="right">{t('rolesRolesIndex.actions')}</Th>
           </Tr>
         </THead>
         <TBody>
@@ -82,7 +84,11 @@ export function RolesIndex(): ReactElement {
                 <span className="ac-inline ac-cell-main">
                   {role.name}
                   {role.isSuperAdmin && (
-                    <Lock size={13} aria-label="Cannot be changed" className="ac-faint" />
+                    <Lock
+                      size={13}
+                      aria-label={t('rolesRolesIndex.cannotBeChanged')}
+                      className="ac-faint"
+                    />
                   )}
                 </span>
                 <span className="ac-cell-sub">{role.description ?? role.key}</span>
@@ -90,7 +96,7 @@ export function RolesIndex(): ReactElement {
               <Td>
                 <span className="ac-muted">
                   {role.isSuperAdmin
-                    ? 'Everything, including permissions added later'
+                    ? t('rolesRolesIndex.everythingIncludingPermissionsAddedLater')
                     : `${role.permissions.length} permission${role.permissions.length === 1 ? '' : 's'}`}
                 </span>
               </Td>
@@ -112,7 +118,7 @@ export function RolesIndex(): ReactElement {
                       setOpen(true);
                     }}
                   >
-                    Edit
+                    {t('rolesRolesIndex.edit')}
                   </Button>
                   <Button
                     variant="ghost"
@@ -121,7 +127,7 @@ export function RolesIndex(): ReactElement {
                     disabled={role.isSuperAdmin || role.isSystem || role.staffCount > 0}
                     onClick={() => onDelete(role)}
                   >
-                    Delete
+                    {t('rolesRolesIndex.delete')}
                   </Button>
                 </div>
               </Td>
@@ -135,15 +141,15 @@ export function RolesIndex(): ReactElement {
   return (
     <AcPage>
       <AcHeader
-        title="Roles"
-        subtitle="A role is a set of permissions. Create as many as the work needs — the permissions themselves are fixed by the system."
+        title={t('rolesRolesIndex.roles')}
+        subtitle={t('rolesRolesIndex.aRoleIsASet')}
         meta={
           <div className="ac-meta">
             <AcFact>
               <span className="sk-figure">{all.length}</span> role
               {all.length === 1 ? '' : 's'}
             </AcFact>
-            <AcFact>Somebody may hold several — what they may do is the union</AcFact>
+            <AcFact>{t('rolesRolesIndex.somebodyMayHoldSeveralWhat')}</AcFact>
           </div>
         }
         action={
@@ -157,16 +163,19 @@ export function RolesIndex(): ReactElement {
               setOpen(true);
             }}
           >
-            New role
+            {t('rolesRolesIndex.newRole')}
           </Button>
         }
       />
 
       {roles.isLoading || catalogue.isLoading ? (
-        <SkeletonRows rows={5} cols={4} label="Loading roles…" />
+        <SkeletonRows rows={5} cols={4} label={t('rolesRolesIndex.loadingRoles')} />
       ) : roles.isError || catalogue.isError ? (
         <ErrorState
-          message={serverVerdict(roles.error ?? catalogue.error, 'Could not load roles.')}
+          message={serverVerdict(
+            roles.error ?? catalogue.error,
+            t('rolesRolesIndex.couldNotLoadRoles'),
+          )}
           retry={() => {
             void roles.refetch();
             void catalogue.refetch();
@@ -184,11 +193,11 @@ export function RolesIndex(): ReactElement {
               {group.length === 0 ? (
                 <EmptyState
                   bare
-                  title="None yet."
-                  description="Create one when a job needs a combination of permissions the seeded roles do not cover."
+                  title={t('rolesRolesIndex.noneYet')}
+                  description={t('rolesRolesIndex.createOneWhenAJob')}
                 />
               ) : (
-                rolesTable(group, `Roles: ${g.title}`)
+                rolesTable(group, t('rolesRolesIndex.roles2', { title: g.title }))
               )}
             </AcSection>
           );
@@ -196,10 +205,7 @@ export function RolesIndex(): ReactElement {
       )}
 
       {all.length > 0 && (
-        <p className="ac-faint ac-text">
-          A person counted under “People” is counted once per role they hold, so the column adds up
-          to more than the size of the team.
-        </p>
+        <p className="ac-faint ac-text">{t('rolesRolesIndex.aPersonCountedUnderPeople')}</p>
       )}
 
       <ConfirmDialog
@@ -208,9 +214,9 @@ export function RolesIndex(): ReactElement {
           if (!o) setPendingDelete(null);
         }}
         title={`Delete ${pendingDelete?.name ?? 'this role'}?`}
-        entity={pendingDelete?.name ?? 'This role'}
-        consequence="This cannot be undone. Nobody holds the role now, so no one loses access."
-        confirmLabel="Delete role"
+        entity={pendingDelete?.name ?? t('rolesRolesIndex.thisRole')}
+        consequence={t('rolesRolesIndex.thisCannotBeUndoneNobody')}
+        confirmLabel={t('rolesRolesIndex.deleteRole')}
         destructive
         onConfirm={confirmDelete}
       />

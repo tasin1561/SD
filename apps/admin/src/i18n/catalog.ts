@@ -5,6 +5,7 @@ import { cour } from './messages/cour';
 import { extra } from './messages/extra';
 import { orders } from './messages/orders';
 import { ordersOps } from './messages/ordersOps';
+import { sell } from './messages/sell';
 import { shell } from './messages/shell';
 import { wh } from './messages/wh';
 
@@ -13,7 +14,7 @@ import { wh } from './messages/wh';
  * the unit spec asserts no key is defined twice (a spread would silently let
  * the later file win) and that every `{placeholder}` appears in both languages.
  */
-export const NAMESPACES = [common, shell, orders, extra, cc, cour, ordersOps, wh] as const;
+export const NAMESPACES = [common, shell, orders, extra, cc, cour, ordersOps, sell, wh] as const;
 
 const ALL = {
   ...common,
@@ -23,6 +24,7 @@ const ALL = {
   ...cc,
   ...cour,
   ...ordersOps,
+  ...sell,
   ...wh,
 };
 

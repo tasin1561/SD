@@ -13,6 +13,7 @@ import { unionPermissions } from '@/lib/role-axes';
 import type { RoleView } from '@/lib/rbac-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { AcAlert, AcCallout, phaseOf } from '../../settings/_components/ac-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * Which roles one staff member holds.
@@ -63,6 +64,7 @@ export function StaffRolesDialog({
   readonly onClose: () => void;
   readonly onSaved: (roleNames: readonly string[]) => void;
 }): ReactElement {
+  const t = useT();
   const setRoles = useSetStaffRoles();
   const [chosen, setChosen] = useState<readonly string[]>(user.roleIds);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +84,7 @@ export function StaffRolesDialog({
     description:
       r.description ??
       (r.isSuperAdmin
-        ? 'Everything, including permissions added later'
+        ? t('staffStaffRolesDialog.everythingIncludingPermissionsAddedLater')
         : `${r.permissions.length} permission${r.permissions.length === 1 ? '' : 's'}`),
   }));
 
@@ -105,7 +107,7 @@ export function StaffRolesDialog({
       const result = await setRoles.mutateAsync({ id: user.id, roleIds: chosen });
       onSaved(result.roleNames);
     } catch (e) {
-      setError(serverVerdict(e, 'Roles not changed.'));
+      setError(serverVerdict(e, t('staffStaffRolesDialog.rolesNotChanged')));
     } finally {
       setBusy(false);
     }
@@ -117,21 +119,25 @@ export function StaffRolesDialog({
       onOpenChange={(next) => {
         if (!next && !busy) onClose();
       }}
-      title={`Roles for ${user.emailDisplay}`}
-      description="A person may hold several. What they can do is every permission from every role they hold."
+      title={t('staffStaffRolesDialog.rolesFor', { emailDisplay: user.emailDisplay })}
+      description={t('staffStaffRolesDialog.aPersonMayHoldSeveral')}
       icon={<ShieldCheck size={18} />}
       size="md"
       locked={busy}
       footer={
         <DialogFooter>
           <Button type="button" variant="ghost" size="md" disabled={busy} onClick={onClose}>
-            Cancel
+            {t('staffStaffRolesDialog.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
             state={phaseOf(busy, error)}
-            labels={{ idle: 'Save roles', busy: 'Saving…', error: 'Not saved' }}
+            labels={{
+              idle: t('staffStaffRolesDialog.saveRoles'),
+              busy: t('staffStaffRolesDialog.saving'),
+              error: t('staffStaffRolesDialog.notSaved'),
+            }}
             // Only "nothing to do" and "already in flight" disable this.
             // Whether the SET is allowed is the server's call (FE-2).
             disabled={busy || unchanged}
@@ -142,7 +148,7 @@ export function StaffRolesDialog({
     >
       <div className="ac-form">
         <MultiSelect
-          label="Roles"
+          label={t('staffStaffRolesDialog.roles')}
           required
           options={options}
           value={chosen}
@@ -150,22 +156,21 @@ export function StaffRolesDialog({
             setError(null);
             setChosen(values);
           }}
-          placeholder="Type to find a role"
-          hint="Pick an access tier for how much of the console they reach, plus the job functions they do."
+          placeholder={t('staffStaffRolesDialog.typeToFindARole')}
+          hint={t('staffStaffRolesDialog.pickAnAccessTierFor')}
           disabled={busy}
         />
 
         {chosen.length === 0 ? (
           <AcCallout tone="critical" icon={<TriangleAlert size={15} />} role="alert">
-            Somebody holding no roles at all is signed out and cannot sign in again. The server
-            refuses this — the rule is its, not this screen&apos;s, so you will see its own words.
+            {t('staffStaffRolesDialog.somebodyHoldingNoRolesAt')}
           </AcCallout>
         ) : (
           <AcCallout tone="info" icon={<ShieldCheck size={15} />} role="status">
             {union.everything ? (
               <>
-                <strong>Everything.</strong> One of these grants the whole catalogue, including
-                permissions added later.
+                <strong>{t('staffStaffRolesDialog.everything')}</strong> One of these grants the
+                whole catalogue, including permissions added later.
               </>
             ) : catalogueSize > 0 ? (
               <>
@@ -187,12 +192,14 @@ export function StaffRolesDialog({
           <ul className="ac-list">
             {added.length > 0 && (
               <li>
-                <span className="ac-strong">Gains</span> {added.join(', ')}
+                <span className="ac-strong">{t('staffStaffRolesDialog.gains')}</span>{' '}
+                {added.join(', ')}
               </li>
             )}
             {removed.length > 0 && (
               <li>
-                <span className="ac-strong">Loses</span> {removed.join(', ')}
+                <span className="ac-strong">{t('staffStaffRolesDialog.loses')}</span>{' '}
+                {removed.join(', ')}
               </li>
             )}
           </ul>
