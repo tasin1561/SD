@@ -19,7 +19,8 @@ import { Pagination } from '@skydrop/ui/app/pagination';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { serverVerdict } from '@/lib/server-verdict';
+import { richMessage, useLocale, useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { BackLink, Notice, RoSection } from '../_components/orders-parts';
 
 const BASE = '/api/store/order-imports';
@@ -75,6 +76,8 @@ function save(text: string, fileName: string): void {
  * run is going — no second poll, no invented percentage.
  */
 export default function StoreOrderImportPage(): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const client = useApiClient();
   const qc = useQueryClient();
   const toast = useToast();
@@ -117,7 +120,7 @@ export default function StoreOrderImportPage(): ReactElement {
       const body = await client.request<unknown>(path);
       save(typeof body === 'string' ? body : JSON.stringify(body), fileName);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     } finally {
       setDownloading(null);
     }
@@ -127,7 +130,7 @@ export default function StoreOrderImportPage(): ReactElement {
     setError(null);
     const f = pickedFile ?? fileRef.current?.files?.[0];
     if (f === undefined) {
-      setError('Choose a CSV file first.');
+      setError(t('ordimp.chooseFirst'));
       return;
     }
     setBusy('checking');
@@ -141,14 +144,14 @@ export default function StoreOrderImportPage(): ReactElement {
         headers: { 'Content-Type': 'text/csv' },
         body: f,
       });
-      if (!put.ok) throw new Error(`The upload failed (${put.status}). Try again.`);
+      if (!put.ok) throw new Error(t('ordimp.uploadFailed', { status: put.status }));
       const preview = await client.request<Preview>(`${BASE}/preview`, {
         method: 'POST',
         body: { spacesKey: presign.spacesKey },
       });
       setPending({ spacesKey: presign.spacesKey, fileName: f.name, preview });
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     } finally {
       setBusy(null);
     }
@@ -163,7 +166,7 @@ export default function StoreOrderImportPage(): ReactElement {
         method: 'POST',
         body: { spacesKey: pending.spacesKey, fileName: pending.fileName },
       });
-      toast.success('Import started. Rows become orders in a moment.');
+      toast.success(t('ordimp.toast.started'));
       setWatching(typeof started?.id === 'string' ? started.id : null);
       setPending(null);
       setPicked('');
@@ -174,7 +177,7 @@ export default function StoreOrderImportPage(): ReactElement {
       void qc.invalidateQueries({ queryKey: ['store-order-imports'] });
       void qc.invalidateQueries({ queryKey: ['store-orders'] });
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     } finally {
       setBusy(null);
     }
@@ -186,22 +189,19 @@ export default function StoreOrderImportPage(): ReactElement {
   return (
     <div className="ro-page">
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
-        Orders
+        {t('ordimp.back')}
       </BackLink>
-      <PageHeader
-        title="Upload orders"
-        subtitle="One row is one product line — give two rows the same reference and they become one order with two items. Retail Price is what you sell the product for; leave it blank and we use your client’s suggested price. A reference you have already used comes back as an error row — re-uploading never changes an order you have already placed."
-      />
+      <PageHeader title={t('ordimp.title')} subtitle={t('ordimp.subtitle')} />
 
       <RoSection
-        title="Upload"
+        title={t('ordimp.upload')}
         action={
           <AsyncButton
             variant="ghost"
             size="sm"
             icon={<Download size={14} />}
             state={downloading === `${BASE}/template` ? 'busy' : undefined}
-            labels={{ idle: 'Download the template', busy: 'Downloading…' }}
+            labels={{ idle: t('ordimp.template'), busy: t('ordimp.downloading') }}
             onClick={() =>
               void downloadText(`${BASE}/template`, 'skydrop-store-order-template.csv')
             }
@@ -213,9 +213,9 @@ export default function StoreOrderImportPage(): ReactElement {
             key={zoneKey}
             ref={fileRef}
             accept=".csv,text/csv"
-            aria-label="Order CSV"
-            label={picked !== '' ? picked : 'Drop your CSV here'}
-            buttonText="Choose CSV…"
+            aria-label={t('ordimp.zone.aria')}
+            label={picked !== '' ? picked : t('ordimp.zone.label')}
+            buttonText={t('ordimp.zone.button')}
             showFiles={false}
             disabled={busy !== null}
             onFiles={(files) => {
@@ -230,7 +230,7 @@ export default function StoreOrderImportPage(): ReactElement {
               variant="primary"
               icon={<Upload size={15} />}
               state={busy === 'checking' ? 'busy' : undefined}
-              labels={{ idle: 'Upload and check', busy: 'Checking…' }}
+              labels={{ idle: t('ordimp.check'), busy: t('ordimp.checking') }}
               onClick={() => void check()}
               disabled={busy !== null || picked === ''}
             />
@@ -240,35 +240,51 @@ export default function StoreOrderImportPage(): ReactElement {
             <div className="ro-card">
               <div className="ro-stack ro-stack--tight">
                 <p className="ro-body">
-                  <span className="ro-file-name">{pending.fileName}</span>:{' '}
-                  {pending.preview.rowCount} row
-                  {pending.preview.rowCount === 1 ? '' : 's'}
-                  {pending.preview.orderCount !== pending.preview.rowCount
-                    ? `, making ${pending.preview.orderCount} order${pending.preview.orderCount === 1 ? '' : 's'}`
-                    : ''}
-                  .
+                  {richMessage(
+                    t('ordimp.preview', {
+                      rows: t(
+                        pending.preview.rowCount === 1 ? 'ordimp.rows.one' : 'ordimp.rows.other',
+                        { n: pending.preview.rowCount },
+                      ),
+                      making:
+                        pending.preview.orderCount !== pending.preview.rowCount
+                          ? t(
+                              pending.preview.orderCount === 1
+                                ? 'ordimp.making.one'
+                                : 'ordimp.making.other',
+                              { n: pending.preview.orderCount },
+                            )
+                          : '',
+                    }),
+                    { file: <span className="ro-file-name">{pending.fileName}</span> },
+                  )}
                 </p>
                 {pending.preview.rowsWithProblems > 0 && (
                   <Notice tone="warn" icon={<FileWarning size={15} />}>
                     <span>
-                      {pending.preview.rowsWithProblems} row
-                      {pending.preview.rowsWithProblems === 1 ? '' : 's'} will not import ·{' '}
-                      {pending.preview.problems
-                        .map((p) => `Row ${p.rowNumber}: ${p.reason}`)
-                        .join(' · ')}
+                      {t('ordimp.problems', {
+                        rows: t(
+                          pending.preview.rowsWithProblems === 1
+                            ? 'ordimp.rows.one'
+                            : 'ordimp.rows.other',
+                          { n: pending.preview.rowsWithProblems },
+                        ),
+                        list: pending.preview.problems
+                          .map((p) => t('ordimp.problemRow', { n: p.rowNumber, reason: p.reason }))
+                          .join(' · '),
+                      })}
                     </span>
                   </Notice>
                 )}
                 {pending.preview.missingRequired.length > 0 ? (
                   <Notice tone="bad" icon={<FileWarning size={16} />}>
                     <span>
-                      Missing columns: {pending.preview.missingRequired.join(', ')}. Fix the file
-                      and upload it again.
+                      {t('ordimp.missing', { columns: pending.preview.missingRequired.join(', ') })}
                     </span>
                   </Notice>
                 ) : pending.preview.exceedsRowLimit ? (
                   <Notice tone="bad" icon={<FileWarning size={16} />}>
-                    <span>More than {pending.preview.rowLimit} rows. Split the file.</span>
+                    <span>{t('ordimp.tooMany', { n: pending.preview.rowLimit })}</span>
                   </Notice>
                 ) : (
                   <div className="ro-row">
@@ -277,8 +293,8 @@ export default function StoreOrderImportPage(): ReactElement {
                       icon={<FileSpreadsheet size={15} />}
                       state={busy === 'importing' ? 'busy' : undefined}
                       labels={{
-                        idle: `Import ${pending.preview.orderCount} orders`,
-                        busy: 'Importing…',
+                        idle: t('ordimp.import', { n: pending.preview.orderCount }),
+                        busy: t('ordimp.importing'),
                       }}
                       onClick={() => setConfirmImport(true)}
                       disabled={busy !== null}
@@ -299,26 +315,26 @@ export default function StoreOrderImportPage(): ReactElement {
 
       {run !== undefined ? <ImportRunProgress job={run} /> : null}
 
-      <RoSection title="Recent uploads" bare>
+      <RoSection title={t('ordimp.recent')} bare>
         {uploads.isPending ? (
-          <SkeletonRows rows={3} cols={5} label="Loading uploads" />
+          <SkeletonRows rows={3} cols={5} label={t('ordimp.loading')} />
         ) : uploads.isError ? (
-          <ErrorState message={serverVerdict(uploads.error)} retry={() => void uploads.refetch()} />
+          <ErrorState message={verdict(uploads.error, t)} retry={() => void uploads.refetch()} />
         ) : uploads.data.items.length === 0 ? (
           <EmptyState
             icon={<Inbox size={20} />}
-            title="No uploads yet"
-            description="Upload a CSV above to place many orders at once."
+            title={t('ordimp.empty.title')}
+            description={t('ordimp.empty.body')}
           />
         ) : (
           <div className="ro-card" data-flush="1">
-            <Table caption="Recent uploads">
+            <Table caption={t('ordimp.recent')}>
               <THead>
                 <Tr>
-                  <Th>File</Th>
-                  <Th>Status</Th>
-                  <Th align="right">Orders</Th>
-                  <Th align="right">Failed</Th>
+                  <Th>{t('ordimp.col.file')}</Th>
+                  <Th>{t('ordimp.col.status')}</Th>
+                  <Th align="right">{t('ordimp.col.orders')}</Th>
+                  <Th align="right">{t('ordimp.col.failed')}</Th>
                   <Th />
                 </Tr>
               </THead>
@@ -331,7 +347,7 @@ export default function StoreOrderImportPage(): ReactElement {
                     <Td>
                       <StatusChip
                         kind={uploadStatusKind(u.status)}
-                        label={uploadStatusLabel(u.status)}
+                        label={uploadStatusLabel(u.status, locale)}
                         size="sm"
                       />
                     </Td>
@@ -350,7 +366,7 @@ export default function StoreOrderImportPage(): ReactElement {
                           state={
                             downloading === `${BASE}/${u.id}/error-report` ? 'busy' : undefined
                           }
-                          labels={{ idle: 'Error report', busy: 'Downloading…' }}
+                          labels={{ idle: t('ordimp.errorReport'), busy: t('ordimp.downloading') }}
                           onClick={() =>
                             void downloadText(
                               `${BASE}/${u.id}/error-report`,
@@ -370,7 +386,7 @@ export default function StoreOrderImportPage(): ReactElement {
                 pageSize={UPLOADS_PAGE_SIZE}
                 total={uploads.data.total}
                 onPageChange={setUploadsPage}
-                label="Upload pages"
+                label={t('ordimp.pages')}
               />
             </div>
           </div>
@@ -380,16 +396,25 @@ export default function StoreOrderImportPage(): ReactElement {
       <ConfirmDialog
         open={confirmImport}
         onOpenChange={setConfirmImport}
-        title="Import these orders?"
+        title={t('ordimp.confirm.title')}
         entity={pending?.fileName ?? ''}
         amount={
           pending === null
             ? undefined
-            : `${pending.preview.orderCount} ${pending.preview.orderCount === 1 ? 'order' : 'orders'}`
+            : t(
+                pending.preview.orderCount === 1
+                  ? 'ordimp.confirm.orders.one'
+                  : 'ordimp.confirm.orders.other',
+                { n: pending.preview.orderCount },
+              )
         }
-        consequence="Each row becomes one of your orders and goes to Skydrop’s call centre to be confirmed. A row that fails lands in the error report; nothing else is changed."
-        confirmLabel={pending === null ? 'Import' : `Import ${pending.preview.orderCount} orders`}
-        cancelLabel="Not yet"
+        consequence={t('ordimp.confirm.consequence')}
+        confirmLabel={
+          pending === null
+            ? t('ordimp.confirm.import')
+            : t('ordimp.import', { n: pending.preview.orderCount })
+        }
+        cancelLabel={t('ordimp.confirm.notYet')}
         // Closes at once: the import button on the page carries the busy
         // state (importIt() never throws — it reports on the page).
         onConfirm={() => {
@@ -407,6 +432,7 @@ export default function StoreOrderImportPage(): ReactElement {
  * counted, so the parachute says it does not know rather than guessing.
  */
 function ImportRunProgress({ job }: { readonly job: UploadRow }): ReactElement {
+  const t = useT();
   const handled = job.ordersCreated + job.rowsFailed;
   const running = job.status === 'PENDING' || job.status === 'PROCESSING';
   const state: ParachuteState = running
@@ -421,12 +447,15 @@ function ImportRunProgress({ job }: { readonly job: UploadRow }): ReactElement {
   return (
     <div className="ro-card">
       <ParachuteProgress
-        label={`Importing ${job.fileName}`}
+        label={t('ordimp.run.label', { file: job.fileName })}
         value={state === 'running' ? value : 100}
         state={state}
-        doneLabel="Import finished"
-        failedLabel="Import stopped"
-        detail={`${handled} of ${job.rowCount} ${job.rowCount === 1 ? 'row' : 'rows'} handled`}
+        doneLabel={t('ordimp.run.done')}
+        failedLabel={t('ordimp.run.failed')}
+        detail={t(job.rowCount === 1 ? 'ordimp.run.detail.one' : 'ordimp.run.detail.other', {
+          handled,
+          total: job.rowCount,
+        })}
       />
     </div>
   );

@@ -17,6 +17,8 @@ import { Money } from '@skydrop/ui/components';
 import { PageHeader } from '@skydrop/ui/app/page-header';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { resellerStoreStatusKind, resellerStoreStatusLabel } from '@skydrop/ui/status';
+import type { MessageKey } from '@/i18n/catalog';
+import { useT } from '@/i18n/client';
 import { can } from '@/lib/page-access';
 import { useStorePosition } from '@/lib/report-hooks';
 import { RdCallout, RdCard, RdDl } from '../settings/_components/rd-parts';
@@ -24,8 +26,8 @@ import { NewOrderLink, PositionTile, ShortcutCard } from './_components/dashboar
 
 interface Shortcut {
   readonly href: string;
-  readonly label: string;
-  readonly hint: string;
+  readonly label: MessageKey;
+  readonly hint: MessageKey;
   readonly permission: string;
   readonly icon: ReactNode;
 }
@@ -34,38 +36,38 @@ interface Shortcut {
 const SHORTCUTS: readonly Shortcut[] = [
   {
     href: '/orders',
-    label: 'Orders',
-    hint: 'Where each order has got to',
+    label: 'dash.shortcut.orders',
+    hint: 'dash.shortcut.ordersHint',
     permission: 'orders.view',
     icon: <ScrollText size={18} />,
   },
   {
     href: '/orders/new',
-    label: 'New order',
-    hint: 'Sell from your catalogue',
+    label: 'dash.shortcut.newOrder',
+    hint: 'dash.shortcut.newOrderHint',
     permission: 'orders.create',
     icon: <PackagePlus size={18} />,
   },
   {
     href: '/wallet',
-    label: 'Wallet',
-    hint: 'Balance and every movement',
+    label: 'dash.shortcut.wallet',
+    hint: 'dash.shortcut.walletHint',
     permission: 'wallet.view',
     icon: <Wallet size={18} />,
   },
   {
     href: '/reports',
-    label: 'Reports',
-    hint: 'Profit and loss by month',
+    label: 'dash.shortcut.reports',
+    hint: 'dash.shortcut.reportsHint',
     permission: 'reports.view',
     icon: <BarChart3 size={18} />,
   },
   {
     href: '/tickets',
-    label: 'Tickets',
+    label: 'dash.shortcut.tickets',
     // Two different conversations live behind this one link, and which
     // one a person wants decides what they say — so both are named.
-    hint: 'Problems raised with your client, or with Skydrop',
+    hint: 'dash.shortcut.ticketsHint',
     permission: 'tickets.view',
     icon: <LifeBuoy size={18} />,
   },
@@ -77,6 +79,7 @@ const SHORTCUTS: readonly Shortcut[] = [
  * the reports) and the pages a store user goes to next.
  */
 export default function DashboardPage(): ReactElement {
+  const t = useT();
   const me = useStoreIdentity();
   if (me === null) return <></>;
   const { store, seller } = me;
@@ -87,45 +90,42 @@ export default function DashboardPage(): ReactElement {
     <div className="rd-page">
       <PageHeader
         title={shownAs}
-        subtitle={`Reselling for ${seller.companyName}`}
+        subtitle={t('dash.reselling', { seller: seller.companyName })}
         action={can(me, 'orders.create') ? <NewOrderLink /> : undefined}
       />
 
       {store.status === 'PAUSED' ? (
         <RdCallout tone="warn" icon={<PauseCircle size={15} />} role="status">
-          <p>
-            {seller.companyName} has paused this store. It takes no new orders until they resume it;
-            anything already placed carries on.
-          </p>
+          <p>{t('dash.paused', { seller: seller.companyName })}</p>
         </RdCallout>
       ) : null}
 
       {can(me, 'reports.view') ? <PositionTiles /> : null}
 
       {shortcuts.length > 0 ? (
-        <nav aria-label="Go to" className="rd-section">
+        <nav aria-label={t('dash.goTo')} className="rd-section">
           <ul className="rd-db-shortcuts">
             {shortcuts.map((s) => (
               <ShortcutCard
                 key={s.href}
                 href={s.href}
                 icon={s.icon}
-                title={s.label}
-                body={s.hint}
+                title={t(s.label)}
+                body={t(s.hint)}
               />
             ))}
           </ul>
         </nav>
       ) : null}
 
-      <RdCard title="Your store">
+      <RdCard title={t('dash.store.title')}>
         <RdDl
           columns={2}
           items={[
-            { label: 'Store', value: store.name },
-            { label: 'Customers see', value: shownAs },
+            { label: t('dash.store.name'), value: store.name },
+            { label: t('dash.store.customersSee'), value: shownAs },
             {
-              label: 'Status',
+              label: t('dash.store.status'),
               value:
                 store.status === null ? (
                   '—'
@@ -137,9 +137,9 @@ export default function DashboardPage(): ReactElement {
                   />
                 ),
             },
-            { label: 'Reselling for', value: seller.companyName },
+            { label: t('dash.store.resellingFor'), value: seller.companyName },
             {
-              label: 'Wallet managed by',
+              label: t('dash.store.walletManagedBy'),
               value:
                 store.walletManagedBy === 'SKYDROP'
                   ? 'Skydrop'
@@ -149,18 +149,20 @@ export default function DashboardPage(): ReactElement {
             },
             // Every role held (see /account): `roleName` is the first
             // grant and would understate somebody holding two.
-            { label: 'Your roles', value: me.roleNames.join(' and ') || '—' },
+            {
+              label: t('dash.store.roles'),
+              value: me.roleNames.join(t('dash.store.rolesJoin')) || '—',
+            },
           ]}
         />
       </RdCard>
 
-      <RdCard title="What you can sell">
+      <RdCard title={t('dash.sell.title')}>
         <p className="rd-text">
-          {seller.companyName} decides which of their products you may sell, what you pay for each
-          and the price range you may sell at.{' '}
+          {t('dash.sell.body', { seller: seller.companyName })}{' '}
           {can(me, 'catalogue.view') ? (
             <Link href="/catalogue" className="rd-link">
-              See your catalogue →
+              {t('dash.sell.link')}
             </Link>
           ) : null}
         </p>
@@ -174,29 +176,30 @@ export default function DashboardPage(): ReactElement {
  * the tiles, never the page: the full figures (and a retry) are on /reports.
  */
 function PositionTiles(): ReactElement | null {
+  const t = useT();
   const position = useStorePosition();
   if (position.isError) return null;
   const loading = position.isPending;
   const p = position.data;
   return (
-    <section aria-label="Wallet" className="rd-section">
+    <section aria-label={t('dash.tiles.aria')} className="rd-section">
       <div className="rd-db-kpis">
         <PositionTile
-          label="Wallet balance"
+          label={t('dash.tile.balance')}
           icon={<Wallet size={16} />}
           tone="neutral"
           loading={loading}
           figure={p === undefined ? null : <Money amount={p.balanceInr} size="lg" />}
         />
         <PositionTile
-          label="You are owed"
+          label={t('dash.tile.owed')}
           icon={<ArrowDownLeft size={16} />}
           tone="credit"
           loading={loading}
           figure={p === undefined ? null : <Money amount={p.owedToStoreInr} size="lg" />}
         />
         <PositionTile
-          label="You owe your client"
+          label={t('dash.tile.owe')}
           icon={<ArrowUpRight size={16} />}
           tone={p === undefined || p.owedByStoreInr === '0.00' ? 'neutral' : 'pending'}
           loading={loading}

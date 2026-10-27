@@ -30,7 +30,10 @@ import { Checkbox } from '@skydrop/ui/app/checkbox';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { richMessage, useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { useStoreCatalogue, type StoreCatalogueItem } from '@/lib/catalogue-hooks';
 import { useCreateStoreOrder } from '@/lib/order-hooks';
 import { BackLink, LinkButton, Notice, RoSection } from '../_components/orders-parts';
@@ -43,20 +46,17 @@ interface Line {
   readonly retail: string;
 }
 
-function rangeWords(i: StoreCatalogueItem): ReactNode {
+function rangeWords(i: StoreCatalogueItem, t: Translate<MessageKey>): ReactNode {
   const m = (v: string): ReactNode => <Money amount={v} convert={false} />;
-  if (i.minRetailInr === null && i.maxRetailInr === null) return 'any price';
+  if (i.minRetailInr === null && i.maxRetailInr === null) return t('neworder.range.any');
   if (i.minRetailInr !== null && i.maxRetailInr !== null)
-    return (
-      <>
-        between {m(i.minRetailInr)} and {m(i.maxRetailInr)}
-      </>
-    );
-  return i.minRetailInr !== null ? (
-    <>{m(i.minRetailInr)} or more</>
-  ) : (
-    <>up to {m(i.maxRetailInr ?? '0')}</>
-  );
+    return richMessage(t('neworder.range.between'), {
+      min: m(i.minRetailInr),
+      max: m(i.maxRetailInr),
+    });
+  return i.minRetailInr !== null
+    ? richMessage(t('neworder.range.atLeast'), { min: m(i.minRetailInr) })
+    : richMessage(t('neworder.range.upTo'), { max: m(i.maxRetailInr ?? '0') });
 }
 
 /**
@@ -86,15 +86,17 @@ function rangeWords(i: StoreCatalogueItem): ReactNode {
  * an account the flag does not cover, which is the real boundary.
  */
 export default function NewStoreOrderPageV2(): ReactElement {
+  const t = useT();
   const gate = useOrderPageV2Enabled();
   // A failed check is not a reason to show an unproven page — the same
   // fail-closed rule the server gate uses.
-  if (gate.isPending) return <SkeletonRows rows={6} cols={2} label="Loading the order form…" />;
+  if (gate.isPending) return <SkeletonRows rows={6} cols={2} label={t('neworder.loadingForm')} />;
   if (gate.data?.enabled !== true) notFound();
   return <NewStoreOrderPageForm />;
 }
 
 function NewStoreOrderPageForm(): ReactElement {
+  const t = useT();
   const me = useStoreIdentity();
   const router = useRouter();
   const mayReadCatalogue = can(me, 'catalogue.view');
@@ -206,7 +208,7 @@ function NewStoreOrderPageForm(): ReactElement {
       // `placing` stays true: the van keeps driving while the page leaves.
       router.push(`/orders/${created.id}`);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       setPlaceFailed(true);
       setPlacing(false);
     }
@@ -218,12 +220,7 @@ function NewStoreOrderPageForm(): ReactElement {
     setConfirmPlace(true);
   }
 
-  const header = (
-    <PageHeader
-      title="New order"
-      subtitle="Pick products from your catalogue, set what you sell them for, and say who they are going to."
-    />
-  );
+  const header = <PageHeader title={t('neworder.title')} subtitle={t('neworder.subtitle')} />;
 
   // The picker IS the catalogue: without `catalogue.view` the query never
   // runs, and `isPending` would stay true for ever.
@@ -233,8 +230,8 @@ function NewStoreOrderPageForm(): ReactElement {
         {header}
         <EmptyState
           icon={<BookOpen size={20} />}
-          title="You cannot see the catalogue"
-          description="Placing an order starts from your store’s catalogue, and your role cannot open it. Ask an owner or admin of your store to change your role, or to place the order."
+          title={t('neworder.noAccess.title')}
+          description={t('neworder.noAccess.body')}
         />
       </div>
     );
@@ -243,7 +240,7 @@ function NewStoreOrderPageForm(): ReactElement {
     return (
       <div className="ro-page">
         {header}
-        <SkeletonRows rows={4} cols={3} label="Loading your catalogue" />
+        <SkeletonRows rows={4} cols={3} label={t('neworder.loadingCatalogue')} />
       </div>
     );
   }
@@ -251,10 +248,7 @@ function NewStoreOrderPageForm(): ReactElement {
     return (
       <div className="ro-page">
         {header}
-        <ErrorState
-          message={serverVerdict(catalogue.error)}
-          retry={() => void catalogue.refetch()}
-        />
+        <ErrorState message={verdict(catalogue.error, t)} retry={() => void catalogue.refetch()} />
       </div>
     );
   }
@@ -264,8 +258,8 @@ function NewStoreOrderPageForm(): ReactElement {
         {header}
         <EmptyState
           icon={<PackageSearch size={20} />}
-          title="Nothing to sell yet"
-          description="The client has not turned any products on for your store. Ask them to, then come back."
+          title={t('neworder.empty.title')}
+          description={t('neworder.empty.body')}
         />
       </div>
     );
@@ -280,7 +274,7 @@ function NewStoreOrderPageForm(): ReactElement {
       }}
     >
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
-        Orders
+        {t('neworder.back')}
       </BackLink>
       {header}
 
@@ -289,16 +283,24 @@ function NewStoreOrderPageForm(): ReactElement {
           or unmounted — every field stays in the one form. */}
       <Stepper
         mode="sections"
-        label="Order form sections"
+        label={t('neworder.stepper.label')}
         sticky
         steps={[
-          { id: 'ro-new-products', label: 'Products', icon: <PackageSearch size={15} /> },
-          { id: 'ro-new-customer', label: 'Customer', icon: <UserRound size={15} /> },
-          { id: 'ro-new-payment', label: 'Payment', icon: <Banknote size={15} /> },
+          {
+            id: 'ro-new-products',
+            label: t('neworder.step.products'),
+            icon: <PackageSearch size={15} />,
+          },
+          {
+            id: 'ro-new-customer',
+            label: t('neworder.step.customer'),
+            icon: <UserRound size={15} />,
+          },
+          { id: 'ro-new-payment', label: t('neworder.step.payment'), icon: <Banknote size={15} /> },
         ]}
       />
 
-      <RoSection id="ro-new-products" title="Products">
+      <RoSection id="ro-new-products" title={t('neworder.step.products')}>
         <div className="ro-stack ro-stack--tight">
           <ul className="ro-lines">
             {lines.map((l) => {
@@ -306,8 +308,8 @@ function NewStoreOrderPageForm(): ReactElement {
               return (
                 <li key={l.key} className="ro-line">
                   <Select
-                    label="Product"
-                    aria-label="Product"
+                    label={t('neworder.product')}
+                    aria-label={t('neworder.product')}
                     value={l.variantId}
                     onChange={(e) => {
                       const picked = byId.get(e.target.value);
@@ -320,32 +322,37 @@ function NewStoreOrderPageForm(): ReactElement {
                       });
                     }}
                   >
-                    <option value="">Choose a product</option>
+                    <option value="">{t('neworder.chooseProduct')}</option>
                     {items.map((i) => (
                       <option key={i.variantId} value={i.variantId} disabled={i.availableQty === 0}>
-                        {i.title}
-                        {i.variantLabel !== null ? ` · ${i.variantLabel}` : ''} ({i.skuCode}) —{' '}
-                        {i.availableQty} available
+                        {t('neworder.optionLabel', {
+                          label: `${i.title}${i.variantLabel !== null ? ` · ${i.variantLabel}` : ''} (${i.skuCode})`,
+                          n: i.availableQty,
+                        })}
                       </option>
                     ))}
                   </Select>
                   <NumberStepper
-                    label="Qty"
-                    aria-label="Quantity"
+                    label={t('neworder.qty')}
+                    aria-label={t('neworder.quantity')}
                     min={1}
                     value={l.quantity}
                     onChange={(e) => update(l.key, { quantity: e.target.value })}
                   />
                   <TextField
-                    label="Sell at (₹ each)"
-                    aria-label="Retail price per unit"
+                    label={t('neworder.sellAt')}
+                    aria-label={t('neworder.retailPerUnit')}
                     type="number"
                     inputMode="decimal"
                     min={0}
                     step="0.01"
                     value={l.retail}
                     onChange={(e) => update(l.key, { retail: e.target.value })}
-                    hint={item === undefined ? undefined : <>Sell {rangeWords(item)}</>}
+                    hint={
+                      item === undefined
+                        ? undefined
+                        : richMessage(t('neworder.sell'), { range: rangeWords(item, t) })
+                    }
                   />
                   <div className="ro-line__remove">
                     {lines.length > 1 ? (
@@ -353,15 +360,17 @@ function NewStoreOrderPageForm(): ReactElement {
                         type="button"
                         variant="ghost"
                         icon={<Trash2 size={15} />}
-                        aria-label="Remove this product"
+                        aria-label={t('neworder.removeLine')}
                         onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}
                       />
                     ) : null}
                   </div>
                   {item !== undefined ? (
                     <p className="ro-line__note">
-                      You pay the client <Money amount={item.transferPriceInr} convert={false} />{' '}
-                      each · {item.availableQty} available to your store
+                      {richMessage(t('neworder.lineNote'), {
+                        price: <Money amount={item.transferPriceInr} convert={false} />,
+                        n: item.availableQty,
+                      })}
                     </p>
                   ) : null}
                 </li>
@@ -381,54 +390,59 @@ function NewStoreOrderPageForm(): ReactElement {
                 setNextKey((k) => k + 1);
               }}
             >
-              Add another product
+              {t('neworder.addAnother')}
             </Button>
           </div>
         </div>
       </RoSection>
 
-      <RoSection id="ro-new-customer" title="Customer">
+      <RoSection id="ro-new-customer" title={t('neworder.step.customer')}>
         <div className="ro-grid-2">
           {/* The store's own order id, FIRST — owner, 2026-10-26. It is
               the number they already have in their own system and the
               one they quote when they ring about this parcel, so it is
               the first thing they copy across, not the last. */}
           <TextField
-            label="Order ID (optional)"
+            label={t('neworder.orderId')}
             value={reference}
             onChange={(e) => setReference(e.target.value)}
           />
-          <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} required />
           <TextField
-            label="Phone"
-            hint="With the country code, e.g. +919876543210"
+            label={t('neworder.name')}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+          <TextField
+            label={t('neworder.phone')}
+            hint={t('neworder.phoneHint')}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             inputMode="tel"
             required
           />
           <TextField
-            label="Email (optional)"
+            label={t('neworder.email')}
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
           <TextField
-            label="PIN code"
+            label={t('neworder.pin')}
             value={pin}
             onChange={(e) => setPin(e.target.value)}
             inputMode="numeric"
             required
           />
           <TextField
-            label="Address"
+            label={t('neworder.address')}
             value={line1}
             onChange={(e) => setLine1(e.target.value)}
             required
           />
           <TextField
-            label="Landmark"
-            hint="What a driver looks for to find the door"
+            label={t('neworder.landmark')}
+            hint={t('neworder.landmarkHint')}
             value={landmark}
             onChange={(e) => setLandmark(e.target.value)}
             required
@@ -436,10 +450,10 @@ function NewStoreOrderPageForm(): ReactElement {
         </div>
       </RoSection>
 
-      <RoSection id="ro-new-payment" title="Payment">
+      <RoSection id="ro-new-payment" title={t('neworder.step.payment')}>
         <div className="ro-stack ro-stack--tight">
           <ChoiceCards
-            label="How is this one paid for?"
+            label={t('neworder.paidQuestion')}
             name="store-order-payment"
             columns={2}
             value={payment}
@@ -448,16 +462,14 @@ function NewStoreOrderPageForm(): ReactElement {
               {
                 value: 'COD',
                 icon: <Banknote size={16} />,
-                title: 'Cash on delivery',
-                description:
-                  'The courier collects from your customer on the doorstep and the money comes back to you.',
+                title: t('neworder.cod.title'),
+                description: t('neworder.cod.desc'),
               },
               {
                 value: 'PREPAID',
                 icon: <Wallet size={16} />,
-                title: 'Prepaid',
-                description:
-                  'Your customer has already paid you. Your store wallet covers the goods and your share of the delivery fee when the order is confirmed.',
+                title: t('neworder.prepaid.title'),
+                description: t('neworder.prepaid.desc'),
               },
             ]}
           />
@@ -467,7 +479,7 @@ function NewStoreOrderPageForm(): ReactElement {
               <>
                 {showDeliveryFee ? (
                   <TextField
-                    label="Delivery charge to the customer (₹, optional)"
+                    label={t('neworder.deliveryFee')}
                     type="number"
                     inputMode="decimal"
                     min={0}
@@ -477,12 +489,10 @@ function NewStoreOrderPageForm(): ReactElement {
                   />
                 ) : null}
                 <TextField
-                  label="Cash to collect (₹)"
-                  hint={
-                    <>
-                      Leave blank to collect <Money amount={collectDefault} convert={false} />
-                    </>
-                  }
+                  label={t('neworder.cash')}
+                  hint={richMessage(t('neworder.cashHint'), {
+                    amount: <Money amount={collectDefault} convert={false} />,
+                  })}
                   type="number"
                   inputMode="decimal"
                   min={0}
@@ -494,7 +504,7 @@ function NewStoreOrderPageForm(): ReactElement {
             )}
           </div>
           <TextArea
-            label="Delivery Notes (optional)"
+            label={t('neworder.notes')}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             maxLength={2000}
@@ -503,23 +513,16 @@ function NewStoreOrderPageForm(): ReactElement {
           {prepaid ? (
             <Notice tone="info" icon={<Wallet size={16} />}>
               <span>
-                Nothing is collected on delivery. When this order is confirmed your wallet pays the
-                goods at your client’s transfer price
-                {prepaidGoods > 0 ? (
-                  <>
-                    {' '}
-                    — <Money amount={prepaidGoods} convert={false} /> for what is on this order
-                  </>
-                ) : null}
-                , plus your share of the delivery fee. If the wallet cannot cover it the order is
-                refused and nothing is placed.
+                {prepaidGoods > 0
+                  ? richMessage(t('neworder.prepaidNote.withGoods'), {
+                      amount: <Money amount={prepaidGoods} convert={false} />,
+                    })
+                  : t('neworder.prepaidNote.noGoods')}
               </span>
             </Notice>
           ) : (
             <Notice tone="info" icon={<Banknote size={16} />}>
-              <span>
-                Skydrop’s call centre confirms every order with the customer before it is packed.
-              </span>
+              <span>{t('neworder.codNote')}</span>
             </Notice>
           )}
         </div>
@@ -530,7 +533,7 @@ function NewStoreOrderPageForm(): ReactElement {
           <p className="ro-error">{error}</p>
           {error.includes('DUPLICATE_ORDER_SUSPECTED') ? (
             <Checkbox
-              label="This is a separate order — place it anyway"
+              label={t('neworder.duplicate')}
               checked={acknowledgeDuplicate}
               onChange={(e) => setAcknowledgeDuplicate(e.target.checked)}
             />
@@ -543,12 +546,20 @@ function NewStoreOrderPageForm(): ReactElement {
       <div className="ro-bar">
         <p className="ro-bar__summary">
           {chosenCount === 0
-            ? 'No products chosen yet'
-            : `${chosenCount} ${chosenCount === 1 ? 'product' : 'products'} · ${prepaid ? 'prepaid' : 'cash on delivery'}`}
+            ? t('neworder.summary.none')
+            : t('neworder.summary', {
+                products: t(
+                  chosenCount === 1 ? 'neworder.products.one' : 'neworder.products.other',
+                  {
+                    n: chosenCount,
+                  },
+                ),
+                mode: t(prepaid ? 'neworder.mode.prepaid' : 'neworder.mode.cod'),
+              })}
         </p>
         <div className="ro-bar__actions">
           <LinkButton href="/orders" variant="ghost">
-            Cancel
+            {t('neworder.cancel')}
           </LinkButton>
           <VanDriveOffButton
             type="submit"
@@ -556,9 +567,9 @@ function NewStoreOrderPageForm(): ReactElement {
             variant="primary"
             className="ro-nowrap"
             icon={<Send size={15} />}
-            label="Place order"
-            busyLabel="Placing…"
-            errorLabel="Not placed"
+            label={t('neworder.place')}
+            busyLabel={t('neworder.placing')}
+            errorLabel={t('neworder.notPlaced')}
             state={placing ? 'busy' : placeFailed ? 'error' : 'idle'}
             onAction={async () => {
               requestSubmit();
@@ -570,31 +581,31 @@ function NewStoreOrderPageForm(): ReactElement {
       <ConfirmDialog
         open={confirmPlace}
         onOpenChange={setConfirmPlace}
-        title="Place this order?"
+        title={t('neworder.confirm.title')}
         entity={`${name.trim()} · ${phone.trim()}`}
         amount={
-          prepaid ? (
-            <>
-              <Money amount={prepaidGoods} convert={false} /> of goods from your wallet
-            </>
-          ) : (
-            <>
-              {codAmount.trim() === '' ? (
-                <Money amount={collectDefault} convert={false} />
-              ) : (
-                <Money amount={codAmount.trim()} convert={false} />
-              )}{' '}
-              to collect
-            </>
-          )
+          prepaid
+            ? richMessage(t('neworder.confirm.prepaidAmount'), {
+                amount: <Money amount={prepaidGoods} convert={false} />,
+              })
+            : richMessage(t('neworder.confirm.toCollect'), {
+                amount:
+                  codAmount.trim() === '' ? (
+                    <Money amount={collectDefault} convert={false} />
+                  ) : (
+                    <Money amount={codAmount.trim()} convert={false} />
+                  ),
+              })
         }
-        consequence={`It is placed for ${
-          chosenCount === 1 ? 'one product' : `${chosenCount} products`
-        }, ${
-          prepaid ? 'paid from your wallet when it is confirmed' : 'cash on delivery'
-        }, and goes to Skydrop’s call centre, who confirm it with the customer before it is packed.`}
-        confirmLabel="Place order"
-        cancelLabel="Not yet"
+        consequence={t('neworder.confirm.consequence', {
+          products:
+            chosenCount === 1
+              ? t('neworder.confirm.products.one')
+              : t('neworder.confirm.products.other', { n: chosenCount }),
+          mode: t(prepaid ? 'neworder.confirm.mode.prepaid' : 'neworder.confirm.mode.cod'),
+        })}
+        confirmLabel={t('neworder.place')}
+        cancelLabel={t('neworder.confirm.notYet')}
         // Closes at once: the van on the page carries the busy state while
         // the order is created (submit() never throws — it reports on the page).
         onConfirm={() => {

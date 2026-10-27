@@ -2,6 +2,7 @@
 
 import type { ReactElement } from 'react';
 import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { useT } from '@/i18n/client';
 import './roles.css';
 
 export interface StoreRoleOption {
@@ -87,11 +88,12 @@ export function RolePicker({
 
 /** Every role somebody holds, read as a sentence. */
 export function RoleList({ names }: { readonly names: readonly string[] }): ReactElement {
+  const t = useT();
   if (names.length === 0) {
     // The server drops a soft-deleted role out of the union, so this is
     // somebody whose every role was deleted: they cannot sign in, and
     // saying so is more use than an empty cell.
-    return <span className="rd-roles__none">No live role — they cannot sign in</span>;
+    return <span className="rd-roles__none">{t('team.roles.none')}</span>;
   }
   return (
     <span className="rd-roles__held">

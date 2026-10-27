@@ -5,7 +5,8 @@ import { useState, type ReactElement } from 'react';
 import { MailCheck } from 'lucide-react';
 import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
-import { serverVerdict } from '@/lib/server-verdict';
+import { richMessage, useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { AuthNotice } from '../../../login/_components/rd-auth-notice';
 
 /**
@@ -13,6 +14,7 @@ import { AuthNotice } from '../../../login/_components/rd-auth-notice';
  * to inspect them, and a GET that spends a token would be spent by one.
  */
 export function VerifyPanel(): ReactElement {
+  const t = useT();
   const token = useSearchParams().get('token') ?? '';
   const [state, setState] = useState<'idle' | 'working' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -29,24 +31,26 @@ export function VerifyPanel(): ReactElement {
       });
       setState('done');
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       setState('idle');
     }
   }
 
   if (token === '') {
-    return <AuthNotice tone="neutral">This link is missing its token.</AuthNotice>;
+    return <AuthNotice tone="neutral">{t('auth.verify.missingToken')}</AuthNotice>;
   }
   if (state === 'done') {
     return (
       <AuthNotice tone="good" role="status">
-        Your email is confirmed. <a href="/dashboard">Go to your store</a>.
+        {richMessage(t('auth.verify.done'), {
+          link: <a href="/dashboard">{t('auth.verify.goToStore')}</a>,
+        })}
       </AuthNotice>
     );
   }
   return (
     <div className="rd-auth-form">
-      <p className="rd-auth-text">Confirm that this email address is yours.</p>
+      <p className="rd-auth-text">{t('auth.verify.prompt')}</p>
       {error !== null ? (
         <AuthNotice tone="critical" role="alert">
           {error}
@@ -57,7 +61,11 @@ export function VerifyPanel(): ReactElement {
         size="lg"
         fullWidth
         icon={<MailCheck size={15} />}
-        labels={{ idle: 'Confirm my email', busy: 'Confirming…', error: 'Not confirmed' }}
+        labels={{
+          idle: t('auth.verify.confirm'),
+          busy: t('auth.verify.confirming'),
+          error: t('auth.verify.notConfirmed'),
+        }}
         state={state === 'working' ? 'busy' : error !== null ? 'error' : 'idle'}
         disabled={state === 'working'}
         onClick={() => void confirm()}

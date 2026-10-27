@@ -25,7 +25,10 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Switch } from '@skydrop/ui/app/switch';
 import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { useToast } from '@skydrop/ui/app/toast';
-import { serverVerdict } from '@/lib/server-verdict';
+import type { MessageKey } from '@/i18n/catalog';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import {
   useCreateStoreApiKey,
   useCreateStoreWebhook,
@@ -46,20 +49,14 @@ import {
 } from '../settings/_components/rd-parts';
 import { DEFAULT_EVENTS, EditWebhookModal, EventPicker } from './_components/webhook-form';
 
-function when(iso: string | null): string {
-  return iso === null
-    ? 'never'
-    : new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
-
 /** Choices for how long a new key works. `''` = until revoked. */
-const EXPIRY_CHOICES: ReadonlyArray<{ value: string; label: string }> = [
-  { value: '', label: 'Until I revoke it' },
-  { value: '30', label: '30 days' },
-  { value: '90', label: '90 days' },
-  { value: '180', label: '180 days' },
-  { value: '365', label: '1 year' },
-  { value: '730', label: '2 years' },
+const EXPIRY_CHOICES: ReadonlyArray<{ value: string; label: MessageKey }> = [
+  { value: '', label: 'intg.expiry.never' },
+  { value: '30', label: 'intg.expiry.30' },
+  { value: '90', label: 'intg.expiry.90' },
+  { value: '180', label: 'intg.expiry.180' },
+  { value: '365', label: 'intg.expiry.365' },
+  { value: '730', label: 'intg.expiry.730' },
 ];
 
 /**
@@ -69,12 +66,10 @@ const EXPIRY_CHOICES: ReadonlyArray<{ value: string; label: string }> = [
  * the seller's account.
  */
 export default function IntegrationsPage(): ReactElement {
+  const t = useT();
   return (
     <div className="rd-page">
-      <PageHeader
-        title="Integrations"
-        subtitle="Let your own systems place orders and hear when they move."
-      />
+      <PageHeader title={t('intg.title')} subtitle={t('intg.subtitle')} />
       <ApiKeysSection />
       <WebhooksSection />
     </div>
@@ -82,6 +77,10 @@ export default function IntegrationsPage(): ReactElement {
 }
 
 function ApiKeysSection(): ReactElement {
+  const t = useT();
+  const locale = useLocale();
+  const when = (iso: string | null): string =>
+    iso === null ? t('intg.never') : formatDateTime(iso, locale);
   const keys = useStoreApiKeys();
   const create = useCreateStoreApiKey();
   const revoke = useRevokeStoreApiKey();
@@ -94,7 +93,8 @@ function ApiKeysSection(): ReactElement {
   // What the confirmation restates, fixed when it opens.
   const [asked, setAsked] = useState({ name: '', works: '' });
   const [error, setError] = useState<string | null>(null);
-  const expiryLabel = EXPIRY_CHOICES.find((c) => c.value === expiry)?.label ?? '';
+  const expiryChoice = EXPIRY_CHOICES.find((c) => c.value === expiry);
+  const expiryLabel = expiryChoice === undefined ? '' : t(expiryChoice.label);
 
   // The form submit only ASKS; the key is made from the confirmation.
   function add(e: FormEvent): void {
@@ -102,7 +102,7 @@ function ApiKeysSection(): ReactElement {
     setError(null);
     setAsked({
       name: name.trim(),
-      works: expiry === '' ? 'until you revoke it' : `for ${expiryLabel}`,
+      works: expiry === '' ? t('intg.works.forever') : t('intg.works.for', { label: expiryLabel }),
     });
     setCreating(true);
   }
@@ -116,37 +116,34 @@ function ApiKeysSection(): ReactElement {
       setShown(created.plaintext);
       setName('');
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
   return (
-    <RdSection
-      title="API keys"
-      note="A key places and reads this store’s orders — POST /store-api/v1/orders with “Authorization: Bearer sks_…”. Every rule the portal applies (your catalogue, the retail range, what is available) applies to it too."
-    >
+    <RdSection title={t('intg.keys.title')} note={t('intg.keys.note')}>
       <RdCard>
         <form onSubmit={add} className="rd-form-grid" data-cols="key">
           <TextField
             id="key-name"
-            label="Name the key"
+            label={t('intg.keys.name')}
             icon={<Tag size={15} />}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Shopify connector"
+            placeholder={t('intg.keys.namePlaceholder')}
             maxLength={80}
             showCount
           />
           <Select
             id="key-expiry"
-            label="Works for"
+            label={t('intg.keys.worksFor')}
             icon={<Clock size={15} />}
             value={expiry}
             onChange={(e) => setExpiry(e.target.value)}
           >
             {EXPIRY_CHOICES.map((c) => (
               <option key={c.value} value={c.value}>
-                {c.label}
+                {t(c.label)}
               </option>
             ))}
           </Select>
@@ -155,12 +152,16 @@ function ApiKeysSection(): ReactElement {
             variant="primary"
             size="md"
             icon={<KeyRound size={15} />}
-            labels={{ idle: 'Create key', busy: 'Creating…', error: 'Not created' }}
+            labels={{
+              idle: t('intg.keys.create'),
+              busy: t('intg.keys.creating'),
+              error: t('intg.keys.notCreated'),
+            }}
             state={phaseOf(create.isPending, create.isError ? error : null)}
             disabled={create.isPending || name.trim() === ''}
           />
         </form>
-        {shown !== null ? <RdOneTimeSecret label="Your new API key" value={shown} /> : null}
+        {shown !== null ? <RdOneTimeSecret label={t('intg.keys.newKey')} value={shown} /> : null}
         {error !== null ? (
           <RdCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
             <p>{error}</p>
@@ -168,22 +169,22 @@ function ApiKeysSection(): ReactElement {
         ) : null}
       </RdCard>
       {keys.isPending ? (
-        <SkeletonRows label="Loading keys" rows={2} cols={6} />
+        <SkeletonRows label={t('intg.keys.loading')} rows={2} cols={6} />
       ) : keys.isError ? (
-        <ErrorState message={serverVerdict(keys.error)} retry={() => void keys.refetch()} />
+        <ErrorState message={verdict(keys.error, t)} retry={() => void keys.refetch()} />
       ) : keys.data.length === 0 ? (
-        <EmptyState title="No keys yet" description="Create one when you connect a system." />
+        <EmptyState title={t('intg.keys.none')} description={t('intg.keys.noneBody')} />
       ) : (
         <Table>
           <THead>
             <Tr>
-              <Th>Name</Th>
-              <Th>Key</Th>
-              <Th>Last used</Th>
-              <Th>Expires</Th>
-              <Th>State</Th>
+              <Th>{t('intg.keys.col.name')}</Th>
+              <Th>{t('intg.keys.col.key')}</Th>
+              <Th>{t('intg.keys.col.lastUsed')}</Th>
+              <Th>{t('intg.keys.col.expires')}</Th>
+              <Th>{t('intg.keys.col.state')}</Th>
               <Th align="right">
-                <span className="rd-sr">Actions</span>
+                <span className="rd-sr">{t('intg.keys.col.actions')}</span>
               </Th>
             </Tr>
           </THead>
@@ -198,18 +199,18 @@ function ApiKeysSection(): ReactElement {
                   <Td className="rd-cell-ident sk-ident">{k.keyPrefix}…</Td>
                   <Td className="rd-cell-muted">{when(k.lastUsedAt)}</Td>
                   <Td className="rd-cell-muted">
-                    {k.expiresAt === null ? 'Never' : when(k.expiresAt)}
+                    {k.expiresAt === null ? t('intg.neverCap') : when(k.expiresAt)}
                   </Td>
                   <Td>
                     {k.revokedAt !== null ? (
                       <>
-                        <StatusChip kind="cancelled" size="sm" label="Revoked" />{' '}
+                        <StatusChip kind="cancelled" size="sm" label={t('intg.keys.revoked')} />{' '}
                         <span className="rd-cell-sub">{when(k.revokedAt)}</span>
                       </>
                     ) : expired ? (
-                      <StatusChip kind="failed" size="sm" label="Expired" />
+                      <StatusChip kind="failed" size="sm" label={t('intg.keys.expired')} />
                     ) : (
-                      <StatusChip kind="delivered" size="sm" label="Live" />
+                      <StatusChip kind="delivered" size="sm" label={t('intg.keys.live')} />
                     )}
                   </Td>
                   <Td align="right">
@@ -223,7 +224,7 @@ function ApiKeysSection(): ReactElement {
                           setRevokeOpen(true);
                         }}
                       >
-                        Revoke
+                        {t('intg.keys.revoke')}
                       </Button>
                     ) : null}
                   </Td>
@@ -236,10 +237,10 @@ function ApiKeysSection(): ReactElement {
       <ConfirmDialog
         open={creating}
         onOpenChange={setCreating}
-        title="Create this API key?"
+        title={t('intg.keys.confirmTitle')}
         entity={asked.name}
-        consequence={`It works ${asked.works} and can place and read this store’s orders. The key is shown once, straight after — copy it then.`}
-        confirmLabel="Create key"
+        consequence={t('intg.keys.confirmBody', { works: asked.works })}
+        confirmLabel={t('intg.keys.create')}
         onConfirm={async () => {
           await createKey();
           setCreating(false);
@@ -248,17 +249,17 @@ function ApiKeysSection(): ReactElement {
       <ConfirmDialog
         open={revokeOpen}
         onOpenChange={setRevokeOpen}
-        title={`Revoke “${revoking?.name ?? ''}”?`}
+        title={t('intg.keys.revokeTitle', { name: revoking?.name ?? '' })}
         entity={revoking?.name ?? ''}
-        consequence="Anything still using this key stops working at once. This cannot be undone."
-        confirmLabel="Revoke"
+        consequence={t('intg.keys.revokeBody')}
+        confirmLabel={t('intg.keys.revoke')}
         destructive
         onConfirm={async () => {
           if (revoking === null) return;
           try {
             await revoke.mutateAsync({ id: revoking.id });
           } catch (err) {
-            setError(serverVerdict(err));
+            setError(verdict(err, t));
           }
           setRevokeOpen(false);
         }}
@@ -268,6 +269,10 @@ function ApiKeysSection(): ReactElement {
 }
 
 function WebhooksSection(): ReactElement {
+  const t = useT();
+  const locale = useLocale();
+  const when = (iso: string | null): string =>
+    iso === null ? t('intg.never') : formatDateTime(iso, locale);
   const toast = useToast();
   const hooks = useStoreWebhooks();
   const create = useCreateStoreWebhook();
@@ -305,7 +310,7 @@ function WebhooksSection(): ReactElement {
       setName('');
       setDescription('');
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -319,25 +324,22 @@ function WebhooksSection(): ReactElement {
     setError(null);
     try {
       await update.mutateAsync({ id: h.id, isActive: next });
-      toast.success(next ? 'Webhook switched on.' : 'Webhook switched off.');
+      toast.success(next ? t('intg.hooks.toastOn') : t('intg.hooks.toastOff'));
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
   const label = (h: StoreWebhook): string => h.name ?? h.url;
 
   return (
-    <RdSection
-      title="Webhooks"
-      note="We POST a signed message (HMAC-SHA256 with the endpoint’s secret) to your URL when one of your orders moves. Only your store’s orders are sent."
-    >
+    <RdSection title={t('intg.hooks.title')} note={t('intg.hooks.note')}>
       <RdCard>
         <form onSubmit={(e) => void add(e)} className="rd-form">
           <div className="rd-form-grid" data-cols="2">
             <TextField
               id="wh-url"
-              label="Your https URL"
+              label={t('intg.hooks.url')}
               icon={<Link2 size={15} />}
               requiredMark
               value={url}
@@ -348,18 +350,18 @@ function WebhooksSection(): ReactElement {
             />
             <TextField
               id="wh-name"
-              label="Name (optional)"
+              label={t('intg.hooks.name')}
               icon={<Tag size={15} />}
               value={name}
               maxLength={160}
               showCount
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Order sync"
+              placeholder={t('intg.hooks.namePlaceholder')}
             />
           </div>
           <TextArea
             id="wh-description"
-            label="Description (optional)"
+            label={t('intg.hooks.description')}
             icon={<FileText size={15} />}
             value={description}
             maxLength={2000}
@@ -373,13 +375,17 @@ function WebhooksSection(): ReactElement {
               variant="primary"
               size="md"
               icon={<Plus size={15} />}
-              labels={{ idle: 'Add webhook', busy: 'Adding…', error: 'Not added' }}
+              labels={{
+                idle: t('intg.hooks.add'),
+                busy: t('intg.hooks.adding'),
+                error: t('intg.hooks.notAdded'),
+              }}
               state={phaseOf(create.isPending, create.isError ? error : null)}
               disabled={create.isPending || url.trim() === '' || events.length === 0}
             />
           </div>
         </form>
-        {secret !== null ? <RdOneTimeSecret label="Signing secret" value={secret} /> : null}
+        {secret !== null ? <RdOneTimeSecret label={t('intg.hooks.secret')} value={secret} /> : null}
         {error !== null ? (
           <RdCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
             <p>{error}</p>
@@ -387,24 +393,21 @@ function WebhooksSection(): ReactElement {
         ) : null}
       </RdCard>
       {hooks.isPending ? (
-        <SkeletonRows label="Loading webhooks" rows={2} cols={5} />
+        <SkeletonRows label={t('intg.hooks.loading')} rows={2} cols={5} />
       ) : hooks.isError ? (
-        <ErrorState message={serverVerdict(hooks.error)} retry={() => void hooks.refetch()} />
+        <ErrorState message={verdict(hooks.error, t)} retry={() => void hooks.refetch()} />
       ) : hooks.data.length === 0 ? (
-        <EmptyState
-          title="No webhooks yet"
-          description="Add one to hear about your orders as they move."
-        />
+        <EmptyState title={t('intg.hooks.none')} description={t('intg.hooks.noneBody')} />
       ) : (
         <Table>
           <THead>
             <Tr>
-              <Th>Endpoint</Th>
-              <Th>Events</Th>
-              <Th>Last delivered</Th>
-              <Th>On</Th>
+              <Th>{t('intg.hooks.col.endpoint')}</Th>
+              <Th>{t('intg.hooks.col.events')}</Th>
+              <Th>{t('intg.hooks.col.lastDelivered')}</Th>
+              <Th>{t('intg.hooks.col.on')}</Th>
               <Th align="right">
-                <span className="rd-sr">Actions</span>
+                <span className="rd-sr">{t('intg.keys.col.actions')}</span>
               </Th>
             </Tr>
           </THead>
@@ -423,9 +426,12 @@ function WebhooksSection(): ReactElement {
                 <Td className="rd-cell-muted">
                   {h.autoDisabledAt !== null ? (
                     <span className="rd-cell-warn">
-                      Switched off after repeated failures
-                      {h.autoDisabledReason !== null ? ` — ${h.autoDisabledReason}` : ''}. Fix the
-                      endpoint, then switch it back on.
+                      {t('intg.hooks.autoOff', {
+                        reason:
+                          h.autoDisabledReason !== null
+                            ? t('intg.hooks.autoOffReason', { reason: h.autoDisabledReason })
+                            : '',
+                      })}
                     </span>
                   ) : (
                     when(h.lastSuccessAt)
@@ -435,7 +441,7 @@ function WebhooksSection(): ReactElement {
                   <Switch
                     checked={h.isActive && h.autoDisabledAt === null}
                     onCheckedChange={(next) => toggle(h, next)}
-                    aria-label={`Deliver to ${h.name ?? h.url}`}
+                    aria-label={t('intg.hooks.deliverAria', { target: h.name ?? h.url })}
                     disabled={update.isPending}
                   />
                 </Td>
@@ -447,7 +453,7 @@ function WebhooksSection(): ReactElement {
                       icon={<Pencil size={14} />}
                       onClick={() => setEditing(h)}
                     >
-                      Edit
+                      {t('intg.hooks.edit')}
                     </Button>
                     <Button
                       variant="ghost"
@@ -458,7 +464,7 @@ function WebhooksSection(): ReactElement {
                         setRotateOpen(true);
                       }}
                     >
-                      New secret
+                      {t('intg.hooks.newSecret')}
                     </Button>
                     <Button
                       variant="ghost"
@@ -469,7 +475,7 @@ function WebhooksSection(): ReactElement {
                         setRemoveOpen(true);
                       }}
                     >
-                      Remove
+                      {t('intg.hooks.remove')}
                     </Button>
                   </div>
                 </Td>
@@ -484,15 +490,19 @@ function WebhooksSection(): ReactElement {
       <ConfirmDialog
         open={switchOpen}
         onOpenChange={setSwitchOpen}
-        title={switching?.next === true ? 'Switch this webhook on?' : 'Switch this webhook off?'}
+        title={
+          switching?.next === true ? t('intg.hooks.switchOnTitle') : t('intg.hooks.switchOffTitle')
+        }
         entity={switching === null ? '' : label(switching.hook)}
         entityIsIdentifier={switching !== null && switching.hook.name === null}
         consequence={
           switching?.next === true
-            ? `Your order updates are sent to ${switching.hook.url} again.`
-            : `Nothing more is sent to ${switching?.hook.url ?? ''} until you switch it back on.`
+            ? t('intg.hooks.switchOnBody', { url: switching.hook.url })
+            : t('intg.hooks.switchOffBody', { url: switching?.hook.url ?? '' })
         }
-        confirmLabel={switching?.next === true ? 'Switch on' : 'Switch off'}
+        confirmLabel={
+          switching?.next === true ? t('intg.hooks.switchOn') : t('intg.hooks.switchOff')
+        }
         destructive={switching?.next === false}
         onConfirm={async () => {
           if (switching === null) return;
@@ -503,11 +513,11 @@ function WebhooksSection(): ReactElement {
       <ConfirmDialog
         open={rotateOpen}
         onOpenChange={setRotateOpen}
-        title="Make a new signing secret?"
+        title={t('intg.hooks.rotateTitle')}
         entity={rotating === null ? '' : label(rotating)}
         entityIsIdentifier={rotating !== null && rotating.name === null}
-        consequence="The old secret keeps working for 24 hours, then only the new one does. Update your system before then."
-        confirmLabel="Make a new secret"
+        consequence={t('intg.hooks.rotateBody')}
+        confirmLabel={t('intg.hooks.rotateConfirm')}
         onConfirm={async () => {
           if (rotating === null) return;
           setError(null);
@@ -515,7 +525,7 @@ function WebhooksSection(): ReactElement {
             const r = await rotate.mutateAsync({ id: rotating.id });
             setSecret(r.secretKey);
           } catch (err) {
-            setError(serverVerdict(err));
+            setError(verdict(err, t));
           }
           setRotateOpen(false);
         }}
@@ -523,11 +533,11 @@ function WebhooksSection(): ReactElement {
       <ConfirmDialog
         open={removeOpen}
         onOpenChange={setRemoveOpen}
-        title="Remove this webhook?"
+        title={t('intg.hooks.removeTitle')}
         entity={removing === null ? '' : label(removing)}
         entityIsIdentifier={removing !== null && removing.name === null}
-        consequence={`Nothing more is sent to ${removing?.url ?? ''}. This cannot be undone — add it again to start over.`}
-        confirmLabel="Remove"
+        consequence={t('intg.hooks.removeBody', { url: removing?.url ?? '' })}
+        confirmLabel={t('intg.hooks.remove')}
         destructive
         onConfirm={async () => {
           if (removing === null) return;
@@ -535,7 +545,7 @@ function WebhooksSection(): ReactElement {
           try {
             await remove.mutateAsync({ id: removing.id });
           } catch (err) {
-            setError(serverVerdict(err));
+            setError(verdict(err, t));
           }
           setRemoveOpen(false);
         }}

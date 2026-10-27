@@ -9,13 +9,11 @@ import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import { useStoreWalletEntries } from '@/lib/store-wallet-hooks';
 import { RmAlert, RmDir, RmSection } from './rm-parts';
-
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
 
 /**
  * Every movement of the store's wallet, newest first, a page at a time.
@@ -33,6 +31,8 @@ export function LedgerSection({
   readonly sellerCompanyName: string;
   readonly emptyDescription: string;
 }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const entries = useStoreWalletEntries();
   const items = entries.data?.pages.flatMap((p) => p.items) ?? [];
   // Read before the success branch narrows the union: inside it the type
@@ -41,25 +41,25 @@ export function LedgerSection({
 
   return (
     <RmSection>
-      <SectionHeading title="Every movement" note="Newest first." />
+      <SectionHeading title={t('walled.title')} note={t('walled.note')} />
       {entries.isPending ? (
-        <SkeletonRows rows={4} cols={4} label="Loading the ledger" />
+        <SkeletonRows rows={4} cols={4} label={t('walled.loading')} />
       ) : entries.isError ? (
         <ErrorState
-          message={serverVerdict(entries.failureReason)}
+          message={verdict(entries.failureReason, t)}
           retry={() => void entries.refetch()}
         />
       ) : items.length === 0 ? (
-        <EmptyState title="Nothing has moved yet" description={emptyDescription} />
+        <EmptyState title={t('walled.empty')} description={emptyDescription} />
       ) : (
         <>
-          <Table caption="Wallet ledger">
+          <Table caption={t('walled.caption')}>
             <THead>
               <Tr>
-                <Th>When</Th>
-                <Th>What</Th>
-                <Th align="right">Amount</Th>
-                <Th align="right">Balance after</Th>
+                <Th>{t('walled.col.when')}</Th>
+                <Th>{t('walled.col.what')}</Th>
+                <Th align="right">{t('walled.col.amount')}</Th>
+                <Th align="right">{t('walled.col.balance')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -67,7 +67,7 @@ export function LedgerSection({
                 const credit = isStoreWalletCredit(e.direction);
                 return (
                   <Tr key={e.id}>
-                    <Td className="rm-when sk-figure">{when(e.createdAt)}</Td>
+                    <Td className="rm-when sk-figure">{formatDateTime(e.createdAt, locale)}</Td>
                     <Td>
                       <div className="rm-type">
                         <RmDir credit={credit} />
@@ -75,7 +75,7 @@ export function LedgerSection({
                           <div>{storeWalletDirectionLabel(e.direction, sellerCompanyName)}</div>
                           {e.linkedOrderId !== null ? (
                             <Link href={`/orders/${e.linkedOrderId}`} className="rm-ref">
-                              See the order
+                              {t('walled.seeOrder')}
                             </Link>
                           ) : null}
                           {e.note !== null ? <div className="rm-faint">{e.note}</div> : null}
@@ -96,20 +96,20 @@ export function LedgerSection({
           <div className="rm-more">
             <p className="rm-muted">
               {entries.hasNextPage
-                ? `Showing the latest ${items.length} movements.`
-                : `Showing all ${items.length} movements.`}
+                ? t('walled.showingLatest', { n: items.length })
+                : t('walled.showingAll', { n: items.length })}
             </p>
             {entries.hasNextPage ? (
               <AsyncButton
                 variant="secondary"
                 size="sm"
                 state={entries.isFetchingNextPage ? 'busy' : 'idle'}
-                labels={{ idle: 'Show older', busy: 'Loading…' }}
+                labels={{ idle: t('walled.older'), busy: t('walled.olderLoading') }}
                 onClick={() => void entries.fetchNextPage()}
               />
             ) : null}
           </div>
-          {olderFailed !== null ? <RmAlert>{serverVerdict(olderFailed)}</RmAlert> : null}
+          {olderFailed !== null ? <RmAlert>{verdict(olderFailed, t)}</RmAlert> : null}
         </>
       )}
     </RmSection>

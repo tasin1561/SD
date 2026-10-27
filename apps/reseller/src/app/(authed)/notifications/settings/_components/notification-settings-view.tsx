@@ -20,31 +20,32 @@ import {
   type StoreCategoryView,
   type TopicDef,
 } from '@/lib/notification-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import type { MessageKey } from '@/i18n/catalog';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import '../../_components/notifications.css';
 
 /** What each category means, in words a person reads. */
-const CATEGORY_LABEL: Record<string, { title: string; description: string }> = {
+const CATEGORY_LABEL: Record<string, { title: MessageKey; description: MessageKey }> = {
   ORDER_UPDATES: {
-    title: 'Your orders and your requests',
-    description:
-      'Answers to what you asked the client, and changes somebody else made to one of your orders.',
+    title: 'rnts.cat.ORDER_UPDATES.title',
+    description: 'rnts.cat.ORDER_UPDATES.desc',
   },
   MONEY: {
-    title: 'Money',
-    description: 'Credits, fee shares, what you prepaid, and decisions about your wallet.',
+    title: 'rnts.cat.MONEY.title',
+    description: 'rnts.cat.MONEY.desc',
   },
   SUPPORT: {
-    title: 'Disputes and issues',
-    description: 'Replies and outcomes on the tickets you raise with the client or with Skydrop.',
+    title: 'rnts.cat.SUPPORT.title',
+    description: 'rnts.cat.SUPPORT.desc',
   },
   TERMS: {
-    title: 'The client’s terms',
-    description: 'A new version to accept — who pays which fee, and when each side is credited.',
+    title: 'rnts.cat.TERMS.title',
+    description: 'rnts.cat.TERMS.desc',
   },
   ANNOUNCEMENTS: {
-    title: 'Announcements',
-    description: 'Skydrop speaking to everybody, not only to this store.',
+    title: 'rnts.cat.ANNOUNCEMENTS.title',
+    description: 'rnts.cat.ANNOUNCEMENTS.desc',
   },
 };
 
@@ -77,6 +78,7 @@ const CATEGORY_LABEL: Record<string, { title: string; description: string }> = {
  * with an explanation does not.
  */
 export function NotificationSettingsView(): ReactElement {
+  const t = useT();
   const identity = useStoreIdentity();
   // Cosmetic only (FE-2). This decides whether we render a section they
   // could not use, not whether they may use it.
@@ -94,44 +96,47 @@ export function NotificationSettingsView(): ReactElement {
     [subs.data],
   );
   const allTopics = topics.data ?? [];
-  const onCount = allTopics.filter((t) => !muted.has(t.topic)).length;
-  const lockedCount = allTopics.filter((t) => t.mutable === false).length;
+  const onCount = allTopics.filter((tp) => !muted.has(tp.topic)).length;
+  const lockedCount = allTopics.filter((tp) => tp.mutable === false).length;
 
   return (
     <div className="rc-ntf-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Notifications', href: '/notifications' }, { label: 'Settings' }]}
+        breadcrumbs={[
+          { label: t('rntf.title'), href: '/notifications' },
+          { label: t('rnts.crumb.settings') },
+        ]}
         Link={Link}
-        title="Notification settings"
-        subtitle={
-          mayReadStoreHalf
-            ? 'Two separate choices: what reaches YOU, and what this STORE is told at all. Both only ever remove a message — neither can turn one on that the other switched off. Some messages cannot be switched off by either; they are marked.'
-            : 'What reaches YOUR inbox and your email. Some messages cannot be switched off; they are marked.'
-        }
+        title={t('rnts.title')}
+        subtitle={mayReadStoreHalf ? t('rnts.subtitle.store') : t('rnts.subtitle.own')}
       />
 
       <div className="rc-ntf-kpis">
         <KpiCard
-          label="Reaching you"
+          label={t('rnts.kpi.reaching')}
           icon={<BellRing size={14} />}
-          figure={topics.isLoading ? '—' : `${onCount} of ${allTopics.length}`}
-          hint="topics you have not silenced"
+          figure={
+            topics.isLoading
+              ? '—'
+              : t('rnts.kpi.reachingFigure', { on: onCount, total: allTopics.length })
+          }
+          hint={t('rnts.kpi.reachingHint')}
           tone="credit"
         />
         {mayReadStoreHalf && (
           <KpiCard
-            label="Store-wide"
+            label={t('rnts.kpi.storeWide')}
             icon={<Store size={14} />}
             figure={categories.isLoading ? '—' : String(categories.data?.length ?? 0)}
-            hint="categories, set for everybody here"
+            hint={t('rnts.kpi.storeWideHint')}
             tone="info"
           />
         )}
         <KpiCard
-          label="Always sent"
+          label={t('rnts.kpi.always')}
           icon={<Lock size={14} />}
           figure={topics.isLoading ? '—' : String(lockedCount)}
-          hint="answers, money and order changes"
+          hint={t('rnts.kpi.alwaysHint')}
           tone="pending"
         />
       </div>
@@ -192,24 +197,25 @@ function YourTopics({
   readonly loading: boolean;
   readonly muted: ReadonlySet<string>;
 }): ReactElement {
+  const t = useT();
   const setSub = useSetNotificationSubscription();
   const clearSub = useClearNotificationSubscription();
   const [error, setError] = useState<string | null>(null);
 
-  const grouped = topics.reduce<Record<string, TopicDef[]>>((acc, t) => {
-    (acc[t.group] ??= []).push(t);
+  const grouped = topics.reduce<Record<string, TopicDef[]>>((acc, tp) => {
+    (acc[tp.group] ??= []).push(tp);
     return acc;
   }, {});
 
   return (
     <SettingsCard
       icon={<UserRound size={14} />}
-      title="What reaches you"
-      subtitle="Your own choices, for your own inbox and email. Nobody else at this store sees them, and changing one here does not change what your colleagues receive."
+      title={t('rnts.yours.title')}
+      subtitle={t('rnts.yours.sub')}
     >
       {error !== null && <p className="rc-ntf-error">{error}</p>}
       {loading ? (
-        <SkeletonRows rows={3} cols={2} label="Loading topics…" />
+        <SkeletonRows rows={3} cols={2} label={t('rnts.yours.loading')} />
       ) : (
         Object.entries(grouped).map(([group, defs]) => {
           const { Icon } = notificationKindStyle(group);
@@ -222,7 +228,7 @@ function YourTopics({
                   {group}
                 </span>
                 <span className="rc-ntf-group__count sk-figure">
-                  {on} of {defs.length} on
+                  {t('rnts.yours.count', { on, total: defs.length })}
                 </span>
               </div>
               <ul className="rc-ntf-rows">
@@ -246,24 +252,26 @@ function YourTopics({
                              mute either way (FE-2). */
                           <div className="rc-ntf-row__lock">
                             <Lock size={12} aria-hidden />
-                            <span>Always sent. {d.immutableReason ?? ''}</span>
+                            <span>
+                              {t('rnts.yours.locked', { reason: d.immutableReason ?? '' })}
+                            </span>
                           </div>
                         ) : null}
                       </div>
                       <Switch
                         checked={isOn}
                         disabled={locked}
-                        aria-label={`Notify me about: ${d.label}`}
+                        aria-label={t('rnts.yours.aria', { label: d.label })}
                         onCheckedChange={() => {
                           setError(null);
                           if (isOn) {
                             setSub.mutate(
                               { topic: d.topic, mode: 'MUTED' },
-                              { onError: (e) => setError(serverVerdict(e)) },
+                              { onError: (e) => setError(verdict(e, t)) },
                             );
                           } else {
                             clearSub.mutate(d.topic, {
-                              onError: (e) => setError(serverVerdict(e)),
+                              onError: (e) => setError(verdict(e, t)),
                             });
                           }
                         }}
@@ -291,28 +299,26 @@ function StoreCategories({
   readonly loading: boolean;
   readonly mayManage: boolean;
 }): ReactElement {
+  const t = useT();
   const set = useSetStoreNotificationCategory();
   const [error, setError] = useState<string | null>(null);
 
   return (
     <SettingsCard
       icon={<Store size={14} />}
-      title="What this store is told"
-      subtitle={
-        mayManage
-          ? 'Applies to EVERYBODY here, not only you — switching a category off stops it reaching your colleagues too. Changes save instantly.'
-          : 'Set for the whole store. Somebody who can edit the store profile can change these.'
-      }
+      title={t('rnts.store.title')}
+      subtitle={mayManage ? t('rnts.store.sub.manage') : t('rnts.store.sub.view')}
     >
       {error !== null && <p className="rc-ntf-error">{error}</p>}
       {loading ? (
-        <SkeletonRows rows={3} cols={2} label="Loading categories…" />
+        <SkeletonRows rows={3} cols={2} label={t('rnts.store.loading')} />
       ) : (
         <ul className="rc-ntf-rows">
           {rows.map((row) => {
-            const label = CATEGORY_LABEL[row.category] ?? {
-              title: row.category,
-              description: '',
+            const known = CATEGORY_LABEL[row.category];
+            const label = {
+              title: known === undefined ? row.category : t(known.title),
+              description: known === undefined ? '' : t(known.description),
             };
             return (
               <li key={row.category} className="rc-ntf-row">
@@ -324,8 +330,8 @@ function StoreCategories({
                       <Lock size={12} aria-hidden />
                       <span>
                         {row.lockedTopics.length === 0
-                          ? 'Nothing is sent under this yet, so there is nothing to switch off.'
-                          : 'Everything here is something Skydrop never silences, so there is nothing to switch off.'}
+                          ? t('rnts.store.lock.empty')
+                          : t('rnts.store.lock.never')}
                       </span>
                     </div>
                   )}
@@ -334,7 +340,7 @@ function StoreCategories({
                   <Switch
                     checked={row.emailEnabled}
                     disabled={!mayManage || !row.mutable}
-                    aria-label={`Email the store about ${label.title}`}
+                    aria-label={t('rnts.store.emailAria', { title: label.title })}
                     onCheckedChange={(v) => {
                       setError(null);
                       set.mutate(
@@ -343,14 +349,14 @@ function StoreCategories({
                           emailEnabled: v,
                           inAppEnabled: row.inAppEnabled,
                         },
-                        { onError: (e) => setError(serverVerdict(e)) },
+                        { onError: (e) => setError(verdict(e, t)) },
                       );
                     }}
                   />
                   <Switch
                     checked={row.inAppEnabled}
                     disabled={!mayManage || !row.mutable}
-                    aria-label={`Show ${label.title} in the store's inboxes`}
+                    aria-label={t('rnts.store.inAppAria', { title: label.title })}
                     onCheckedChange={(v) => {
                       setError(null);
                       set.mutate(
@@ -359,7 +365,7 @@ function StoreCategories({
                           emailEnabled: row.emailEnabled,
                           inAppEnabled: v,
                         },
-                        { onError: (e) => setError(serverVerdict(e)) },
+                        { onError: (e) => setError(verdict(e, t)) },
                       );
                     }}
                   />
@@ -369,10 +375,7 @@ function StoreCategories({
           })}
         </ul>
       )}
-      <p className="rc-ntf-foot">
-        Left switch: email. Right switch: the bell. A message has to pass BOTH this and your own
-        choice above to reach you.
-      </p>
+      <p className="rc-ntf-foot">{t('rnts.store.foot')}</p>
     </SettingsCard>
   );
 }
@@ -384,33 +387,34 @@ function AlwaysOn(): ReactElement {
    * The owner's three kinds (2026-09-19) plus NOTIF-9's credential rule.
    * Saying so is what stops somebody hunting for the switch.
    */
+  const t = useT();
   const items: ReadonlyArray<{ Icon: typeof ShieldCheck; title: string; body: string }> = [
     {
       Icon: BellOff,
-      title: 'Answers to what you asked',
-      body: 'Approved, rejected, or nobody answered in time. Your customer is waiting on that answer.',
+      title: t('rnts.always.answers.title'),
+      body: t('rnts.always.answers.body'),
     },
     {
       Icon: BellOff,
-      title: 'Anything about your money',
-      body: 'Credits, fee shares, what you prepaid, and a settled dispute that moves money between your wallet and the client’s.',
+      title: t('rnts.always.money.title'),
+      body: t('rnts.always.money.body'),
     },
     {
       Icon: BellOff,
-      title: 'Changes to your orders',
-      body: 'Including a courier refusing an address change the client had already agreed to.',
+      title: t('rnts.always.orders.title'),
+      body: t('rnts.always.orders.body'),
     },
     {
       Icon: ShieldCheck,
-      title: 'Account and sign-in',
-      body: 'Password resets, email verification and team invitations only ever go to your email — an in-app one is unreadable when you are locked out.',
+      title: t('rnts.always.account.title'),
+      body: t('rnts.always.account.body'),
     },
   ];
   return (
     <SettingsCard
       icon={<Lock size={14} />}
-      title="Cannot be switched off"
-      subtitle="Neither by you nor store-wide. A warning you can silence is one you find out about too late."
+      title={t('rnts.always.title')}
+      subtitle={t('rnts.always.sub')}
     >
       <ul className="rc-ntf-always">
         {items.map(({ Icon, title, body }) => (

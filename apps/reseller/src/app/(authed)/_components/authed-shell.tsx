@@ -7,7 +7,6 @@ import { useApiClient } from '@skydrop/auth/client';
 import type { StoreMe } from '@skydrop/api-client';
 import { Toaster } from '@skydrop/ui/components';
 import { Shell, type NavGroup } from '@skydrop/ui/app/shell';
-import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
 import { ToastProvider } from '@skydrop/ui/app/toast';
 import {
   BarChart3,
@@ -27,6 +26,8 @@ import {
   UsersRound,
   Wallet,
 } from 'lucide-react';
+import { useT } from '@/i18n/client';
+import { PrefsControl } from '@/components/prefs-control';
 import { can, canSeePath } from '@/lib/page-access';
 import { NotificationBellContainer } from '@/components/notification-bell-container';
 import { useStoreCallReviews } from '@/lib/review-hooks';
@@ -45,6 +46,7 @@ export function AuthedShell({
   identity: StoreMe;
   children: ReactNode;
 }): ReactElement {
+  const t = useT();
   const pathname = usePathname();
   const client = useApiClient();
   const [signingOut, setSigningOut] = useState(false);
@@ -75,13 +77,13 @@ export function AuthedShell({
 
   const navGroups: NavGroup[] = [
     {
-      heading: 'Store',
+      heading: t('nav.store'),
       items: [
-        { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
-        { href: '/orders', label: 'Orders', icon: <ShoppingBag size={15} /> },
+        { href: '/dashboard', label: t('nav.dashboard'), icon: <LayoutDashboard size={15} /> },
+        { href: '/orders', label: t('nav.orders'), icon: <ShoppingBag size={15} /> },
         {
           href: '/orders/call-reviews',
-          label: 'Unreachable customers',
+          label: t('nav.unreachable'),
           icon: <PhoneOff size={15} />,
           ...(waitingCalls > 0
             ? {
@@ -93,38 +95,38 @@ export function AuthedShell({
               }
             : {}),
         },
-        { href: '/customers', label: 'Customers', icon: <Contact size={15} /> },
-        { href: '/catalogue', label: 'Catalogue', icon: <Package size={15} /> },
+        { href: '/customers', label: t('nav.customers'), icon: <Contact size={15} /> },
+        { href: '/catalogue', label: t('nav.catalogue'), icon: <Package size={15} /> },
         // ASSOC-1 — the store's own sales people. Under "Store" rather
         // than "Setup": an associate is not a one-off configuration
         // step, they are somebody whose prices and performance are
         // looked at as often as the orders they place.
-        { href: '/associates', label: 'Associates', icon: <UsersRound size={15} /> },
-        { href: '/terms', label: 'Terms', icon: <FileSignature size={15} /> },
-        { href: '/wallet', label: 'Wallet', icon: <Wallet size={15} /> },
-        { href: '/reports', label: 'Reports', icon: <BarChart3 size={15} /> },
-        { href: '/expenses', label: 'Expenses', icon: <ReceiptText size={15} /> },
+        { href: '/associates', label: t('nav.associates'), icon: <UsersRound size={15} /> },
+        { href: '/terms', label: t('nav.terms'), icon: <FileSignature size={15} /> },
+        { href: '/wallet', label: t('nav.wallet'), icon: <Wallet size={15} /> },
+        { href: '/reports', label: t('nav.reports'), icon: <BarChart3 size={15} /> },
+        { href: '/expenses', label: t('nav.expenses'), icon: <ReceiptText size={15} /> },
         // Two conversations live here since 2026-09-16 — with the seller,
         // and with Skydrop — so the label can no longer be "Disputes".
-        { href: '/tickets', label: 'Tickets', icon: <MessagesSquare size={15} /> },
+        { href: '/tickets', label: t('nav.tickets'), icon: <MessagesSquare size={15} /> },
       ],
     },
     {
-      heading: 'Setup',
+      heading: t('nav.setup'),
       items: [
-        { href: '/team', label: 'Team', icon: <Users size={15} /> },
-        { href: '/integrations', label: 'Integrations', icon: <PlugZap size={15} /> },
-        { href: '/settings', label: 'Store settings', icon: <Settings size={15} /> },
+        { href: '/team', label: t('nav.team'), icon: <Users size={15} /> },
+        { href: '/integrations', label: t('nav.integrations'), icon: <PlugZap size={15} /> },
+        { href: '/settings', label: t('nav.settings'), icon: <Settings size={15} /> },
       ],
     },
     {
-      heading: 'You',
+      heading: t('nav.you'),
       items: [
         // Ungated on purpose (NOTIF-11): a person's own inbox is
         // self-service, so it is absent from PAGE_PERMISSIONS and
         // `canSeePath` lets everybody through.
-        { href: '/notifications', label: 'Notifications', icon: <Bell size={15} /> },
-        { href: '/account', label: 'My account', icon: <UserRound size={15} /> },
+        { href: '/notifications', label: t('nav.notifications'), icon: <Bell size={15} /> },
+        { href: '/account', label: t('nav.account'), icon: <UserRound size={15} /> },
       ],
     },
   ];
@@ -139,8 +141,8 @@ export function AuthedShell({
     <Toaster>
       <ToastProvider>
         <Shell
-          subtitle="Store"
-          sectionLabel="Member store portal"
+          subtitle={t('shell.subtitle')}
+          sectionLabel={t('shell.section')}
           navGroups={visible}
           identityPrimary={identity.store.displayName ?? identity.store.name}
           identitySecondary={identity.emailDisplay}
@@ -154,7 +156,7 @@ export function AuthedShell({
             void signOut();
           }}
           signingOut={signingOut}
-          themeControl={<ThemeSwitch />}
+          themeControl={<PrefsControl />}
         >
           {/* FIRST, above everything, on every page: a staff member
             inside somebody else's store has to be told so before they

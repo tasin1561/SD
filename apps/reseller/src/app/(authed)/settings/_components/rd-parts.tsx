@@ -6,6 +6,7 @@ import type { AsyncPhase } from '@skydrop/ui/app/async-button';
 import { Button } from '@skydrop/ui/app/button';
 import { SectionHeading } from '@skydrop/ui/app/page-header';
 import { useToast } from '@skydrop/ui/app/toast';
+import { useT } from '@/i18n/client';
 import './rd.css';
 
 /**
@@ -134,6 +135,7 @@ export function RdOneTimeSecret({
   readonly label: string;
   readonly value: string;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   return (
     <section className="rd-reveal" aria-live="polite">
@@ -143,9 +145,7 @@ export function RdOneTimeSecret({
         </span>
         {label}
       </h3>
-      <p className="rd-muted">
-        Copy it now — it is shown only this once. We keep only a fingerprint of it.
-      </p>
+      <p className="rd-muted">{t('secret.once')}</p>
       <div className="rd-reveal__value">
         <code className="rd-reveal__code sk-ident">{value}</code>
         <Button
@@ -153,10 +153,10 @@ export function RdOneTimeSecret({
           size="sm"
           icon={<Copy size={14} />}
           onClick={() => {
-            void navigator.clipboard.writeText(value).then(() => toast.success('Copied.'));
+            void navigator.clipboard.writeText(value).then(() => toast.success(t('secret.copied')));
           }}
         >
-          Copy
+          {t('secret.copy')}
         </Button>
       </div>
     </section>

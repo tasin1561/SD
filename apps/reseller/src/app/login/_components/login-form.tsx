@@ -6,7 +6,8 @@ import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { PasswordField } from '@skydrop/ui/app/password-field';
 import { TextField } from '@skydrop/ui/app/text-field';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { AuthNotice } from './rd-auth-notice';
 
 /**
@@ -21,6 +22,7 @@ import { AuthNotice } from './rd-auth-notice';
  * runs (the rolling label is visual; the login spec finds it by that name).
  */
 export function LoginForm(): ReactElement {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -37,13 +39,13 @@ export function LoginForm(): ReactElement {
       window.location.assign('/dashboard');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        setError('Invalid email or password.');
+        setError(t('auth.signIn.invalid'));
       } else if (err instanceof ApiError && err.status === 429) {
-        setError('Too many attempts. Try again in a few minutes.');
+        setError(t('auth.signIn.tooMany'));
       } else {
         // A closed or not-yet-approved store says so in the server's own
         // words (FE-2).
-        setError(serverVerdict(err, 'Sign-in failed. Please try again.'));
+        setError(verdict(err, t, t('auth.signIn.failed')));
       }
       setSubmitting(false);
     }
@@ -61,7 +63,7 @@ export function LoginForm(): ReactElement {
       <TextField
         id="email"
         type="email"
-        label="Email"
+        label={t('auth.signIn.email')}
         icon={<Mail size={15} />}
         autoComplete="email"
         required
@@ -71,7 +73,7 @@ export function LoginForm(): ReactElement {
       />
       <PasswordField
         id="password"
-        label="Password"
+        label={t('auth.signIn.password')}
         autoComplete="current-password"
         required
         value={password}
@@ -88,7 +90,11 @@ export function LoginForm(): ReactElement {
         variant="primary"
         size="lg"
         fullWidth
-        labels={{ idle: 'Sign in', busy: 'Signing in…', error: 'Try again' }}
+        labels={{
+          idle: t('auth.signIn.button'),
+          busy: t('auth.signIn.busy'),
+          error: t('auth.signIn.tryAgain'),
+        }}
         state={submitting ? 'busy' : error !== null ? 'error' : 'idle'}
         disabled={submitting}
       />

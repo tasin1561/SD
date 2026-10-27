@@ -14,15 +14,13 @@ import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { serverVerdict } from '@/lib/server-verdict';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { richMessage, useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import { useStoreOrderMoney } from '@/lib/order-hooks';
 import { Facts, Notice, RoSection } from '../../_components/orders-parts';
-
-function when(iso: string | null): string {
-  return iso === null
-    ? '—'
-    : new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
 
 /** A signed amount (`-12.50` / `12.50`) as a Money with its direction. */
 function Signed({ amount }: { amount: string }): ReactElement {
@@ -36,14 +34,14 @@ function Signed({ amount }: { amount: string }): ReactElement {
   );
 }
 
-function feeName(fee: WalletEntryDirection): string {
+function feeName(fee: WalletEntryDirection, t: Translate<MessageKey>): string {
   switch (fee) {
     case 'ORDER_CHARGES':
-      return 'Delivery fee';
+      return t('ordm.fee.delivery');
     case 'RTO_FEE':
-      return 'Return fee';
+      return t('ordm.fee.rto');
     case 'CUSTOMER_RETURN_FEE':
-      return 'Customer return fee';
+      return t('ordm.fee.customerReturn');
     default:
       return fee.toLowerCase().replace(/_/g, ' ');
   }
@@ -57,13 +55,14 @@ function feeName(fee: WalletEntryDirection): string {
  * recomputes a share.
  */
 export function OrderMoney({ orderId }: { orderId: string }): ReactElement {
+  const t = useT();
   const money = useStoreOrderMoney(orderId);
   return (
-    <RoSection title="What this order earns you" bare>
+    <RoSection title={t('ordm.title')} bare>
       {money.isPending ? (
-        <SkeletonRows rows={4} cols={2} label="Loading the money" />
+        <SkeletonRows rows={4} cols={2} label={t('ordm.loading')} />
       ) : money.isError ? (
-        <ErrorState message={serverVerdict(money.error)} retry={() => void money.refetch()} />
+        <ErrorState message={verdict(money.error, t)} retry={() => void money.refetch()} />
       ) : (
         <MoneyBody m={money.data} />
       )}
@@ -72,6 +71,9 @@ export function OrderMoney({ orderId }: { orderId: string }): ReactElement {
 }
 
 function MoneyBody({ m }: { m: ResellerOrderMoneyView }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
+  const when = (iso: string): string => formatDateTime(iso, locale);
   const store = m.parties.find((p) => p.party === 'STORE') ?? null;
   const lines = m.storeLines ?? [];
   return (
@@ -91,36 +93,36 @@ function MoneyBody({ m }: { m: ResellerOrderMoneyView }): ReactElement {
               alignEnd
               items={[
                 {
-                  label: 'COD collected for you',
+                  label: t('ordm.cod'),
                   value: <Money amount={store.grossInr} convert={false} />,
                 },
                 {
-                  label: 'Goods at the client’s transfer price',
+                  label: t('ordm.transfer'),
                   value: <Money amount={store.transferInr} direction="debit" convert={false} />,
                 },
                 {
-                  label: 'Your share of the COD tax',
+                  label: t('ordm.taxShare'),
                   value: <Money amount={store.taxShareInr} direction="debit" convert={false} />,
                 },
                 {
-                  label: 'Your share of the COD fee',
+                  label: t('ordm.codFeeShare'),
                   value: <Money amount={store.codFeeShareInr} direction="debit" convert={false} />,
                 },
                 {
-                  label: 'Your share of the Instant Pay fee',
+                  label: t('ordm.instantShare'),
                   value: (
                     <Money amount={store.instantFeeShareInr} direction="debit" convert={false} />
                   ),
                 },
                 {
-                  label: 'You are credited',
+                  label: t('ordm.credited'),
                   value: <Signed amount={store.netInr} />,
                   total: true,
                 },
                 ...(store.dueAt !== null
                   ? [
                       {
-                        label: 'Due',
+                        label: t('ordm.due'),
                         value: <span className="sk-figure">{when(store.dueAt)}</span>,
                       },
                     ]
@@ -128,7 +130,7 @@ function MoneyBody({ m }: { m: ResellerOrderMoneyView }): ReactElement {
                 ...(store.creditedAt !== null
                   ? [
                       {
-                        label: 'Credited',
+                        label: t('ordm.creditedAt'),
                         value: <span className="sk-figure">{when(store.creditedAt)}</span>,
                       },
                     ]
@@ -136,7 +138,7 @@ function MoneyBody({ m }: { m: ResellerOrderMoneyView }): ReactElement {
                 ...(store.reversedAt !== null
                   ? [
                       {
-                        label: 'Taken back',
+                        label: t('ordm.takenBack'),
                         value: <span className="sk-figure">{when(store.reversedAt)}</span>,
                       },
                     ]
@@ -147,30 +149,27 @@ function MoneyBody({ m }: { m: ResellerOrderMoneyView }): ReactElement {
         </div>
       ) : m.paymentMode === 'PREPAID' ? (
         <Notice tone="info" icon={<Wallet size={16} />}>
-          <span>
-            A prepaid order is paid from your wallet at confirmation: the goods at the client’s
-            transfer price and your share of the delivery fee. The lines are below.
-          </span>
+          <span>{t('ordm.prepaidNote')}</span>
         </Notice>
       ) : (
         <Notice tone="neutral" icon={<Wallet size={16} />}>
-          <span>The money for this order is worked out once it is confirmed.</span>
+          <span>{t('ordm.notYet')}</span>
         </Notice>
       )}
 
       {m.fees.length > 0 ? (
         <div className="ro-card" data-flush="1">
-          <Table caption="Skydrop fees and your share">
+          <Table caption={t('ordm.fees.caption')}>
             <THead>
               <Tr>
-                <Th>Skydrop fee</Th>
-                <Th align="right">Your share</Th>
+                <Th>{t('ordm.fees.fee')}</Th>
+                <Th align="right">{t('ordm.fees.share')}</Th>
               </Tr>
             </THead>
             <TBody>
               {m.fees.map((f) => (
                 <Tr key={f.fee}>
-                  <Td>{feeName(f.fee)}</Td>
+                  <Td>{feeName(f.fee, t)}</Td>
                   <Td align="right">
                     <Money amount={f.storeInr} direction="debit" convert={false} />
                   </Td>
@@ -182,15 +181,15 @@ function MoneyBody({ m }: { m: ResellerOrderMoneyView }): ReactElement {
       ) : null}
 
       {lines.length === 0 ? (
-        <p className="ro-faint">Nothing has moved in your wallet for this order yet.</p>
+        <p className="ro-faint">{t('ordm.lines.none')}</p>
       ) : (
         <div className="ro-card" data-flush="1">
-          <Table caption="Your wallet lines for this order">
+          <Table caption={t('ordm.lines.caption')}>
             <THead>
               <Tr>
-                <Th>When</Th>
-                <Th>In your wallet</Th>
-                <Th align="right">Amount</Th>
+                <Th>{t('ordm.lines.when')}</Th>
+                <Th>{t('ordm.lines.in')}</Th>
+                <Th align="right">{t('ordm.lines.amount')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -219,7 +218,7 @@ function MoneyBody({ m }: { m: ResellerOrderMoneyView }): ReactElement {
       )}
       {m.storeNetInr !== null && lines.length > 0 ? (
         <p className="ro-body">
-          Net in your wallet for this order: <Signed amount={m.storeNetInr} />
+          {richMessage(t('ordm.net'), { amount: <Signed amount={m.storeNetInr} /> })}
         </p>
       ) : null}
     </div>

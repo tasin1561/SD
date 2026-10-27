@@ -13,7 +13,10 @@ import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { useStoreCallReviews, type StoreCallReview } from '@/lib/review-hooks';
 import { useStoreActionPolicy, useStoreOrders, type StoreOrderListItem } from '@/lib/order-hooks';
 import { CallReviewDecision } from '@/components/call-review-decision';
@@ -24,13 +27,13 @@ const CONTEXT_PAGE_SIZE = 100;
 /** How long this has been sitting here. Read from the REVIEW's own
  *  `createdAt` — when the question was raised — never from a row
  *  timestamp that anything else can touch. */
-function waitedFor(iso: string): string {
+function waitedFor(iso: string, t: Translate<MessageKey>): string {
   const ms = Date.now() - new Date(iso).getTime();
   if (Number.isNaN(ms) || ms < 0) return '—';
   const hours = Math.floor(ms / 3_600_000);
-  if (hours < 1) return 'less than an hour';
-  if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'}`;
-  return `${Math.floor(hours / 24)} days`;
+  if (hours < 1) return t('callq.wait.lessThanHour');
+  if (hours < 48) return t(hours === 1 ? 'callq.wait.hour' : 'callq.wait.hours', { n: hours });
+  return t('callq.wait.days', { n: Math.floor(hours / 24) });
 }
 
 /**
@@ -49,6 +52,7 @@ function waitedFor(iso: string): string {
  * own words (FE-2) — a sentence naming who answers instead.
  */
 export default function CallReviewsPage(): ReactElement {
+  const t = useT();
   const me = useStoreIdentity();
   const mayAnswer = can(me, 'orders.actions');
   const mayReadOrders = can(me, 'orders.view');
@@ -77,33 +81,33 @@ export default function CallReviewsPage(): ReactElement {
   return (
     <div className="ro-page">
       <PageHeader
-        title="Customers we could not reach"
-        subtitle="Orders where we rang the customer as often as your client allows and never got through. Until you answer, the stock stays held and nothing is sent."
+        title={t('callq.title')}
+        subtitle={t('callq.subtitle')}
         action={
           <LinkButton href="/orders" variant="ghost" icon={<ArrowRight size={15} />}>
-            All orders
+            {t('callq.allOrders')}
           </LinkButton>
         }
       />
 
       <div className="ro-kpis">
         <KpiCard
-          label="Units held waiting on you"
+          label={t('callq.kpi.units')}
           icon={<Boxes size={14} />}
           tone={heldUnits > 0 ? 'pending' : 'credit'}
           figure={reviews.isPending ? '—' : <Num value={heldUnits} />}
-          hint="Your client cannot sell these to anyone else meanwhile"
+          hint={t('callq.kpi.unitsHint')}
         />
         <KpiCard
-          label="Orders waiting on an answer"
+          label={t('callq.kpi.orders')}
           icon={<PhoneMissed size={14} />}
           tone="neutral"
           figure={reviews.isPending ? '—' : <Num value={rows.length} />}
-          hint="Each has a customer who has not heard from you"
+          hint={t('callq.kpi.ordersHint')}
         />
       </div>
 
-      <RoSection title="Waiting on you" bare>
+      <RoSection title={t('callq.section')} bare>
         {answeredBySeller || isAnsweredBySeller(reviews.error) ? (
           // NOT an error (2026-09-17): the seller keeps these questions for
           // themselves. A red box read as something broken. The server's
@@ -111,39 +115,39 @@ export default function CallReviewsPage(): ReactElement {
           <Notice tone="info" icon={<PhoneOff size={16} />}>
             <span>
               {reviews.error instanceof ApiError
-                ? serverVerdictMessage(reviews.error)
-                : 'The client answers call-attempt questions for this store. Ask them whether to keep trying.'}
+                ? serverVerdictMessage(reviews.error, t('callq.answeredBySeller'))
+                : t('callq.answeredBySeller')}
             </span>
           </Notice>
         ) : reviews.isPending ? (
-          <SkeletonRows rows={4} cols={6} label="Loading the orders we could not confirm" />
+          <SkeletonRows rows={4} cols={6} label={t('callq.loading')} />
         ) : reviews.isError ? (
           // Verbatim (FE-2). The common one here is not a fault:
           // STORE_ACTION_NOT_ALLOWED says the seller answers these, and
           // says it in a sentence that tells the reader what to do.
-          <ErrorState message={serverVerdict(reviews.error)} retry={() => void reviews.refetch()} />
+          <ErrorState message={verdict(reviews.error, t)} retry={() => void reviews.refetch()} />
         ) : rows.length === 0 ? (
           <EmptyState
             tone="positive"
-            title="Nothing waiting"
-            description="When we run out of call attempts on one of your orders without reaching the customer, it appears here for you to decide: keep trying, or give the stock back."
+            title={t('callq.empty.title')}
+            description={t('callq.empty.body')}
             action={
               <LinkButton href="/orders" variant="secondary">
-                Go to your orders
+                {t('callq.empty.go')}
               </LinkButton>
             }
           />
         ) : (
           <div className="ro-card" data-flush="1">
-            <Table caption="Orders waiting on your answer">
+            <Table caption={t('callq.caption')}>
               <THead>
                 <Tr>
-                  <Th>Order</Th>
-                  <Th>Customer</Th>
-                  <Th align="right">Units held</Th>
-                  <Th align="right">Calls made</Th>
-                  <Th>Waiting</Th>
-                  <Th align="right">Your answer</Th>
+                  <Th>{t('callq.col.order')}</Th>
+                  <Th>{t('callq.col.customer')}</Th>
+                  <Th align="right">{t('callq.col.units')}</Th>
+                  <Th align="right">{t('callq.col.calls')}</Th>
+                  <Th>{t('callq.col.waiting')}</Th>
+                  <Th align="right">{t('callq.col.answer')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -170,13 +174,13 @@ function isAnsweredBySeller(err: unknown): boolean {
 }
 
 /** The server's sentence without the `[CODE]` prefix, for a plain explanation. */
-function serverVerdictMessage(err: ApiError): string {
+function serverVerdictMessage(err: ApiError, fallback: string): string {
   const body = err.body;
   if (typeof body === 'object' && body !== null && 'message' in body) {
     const m = (body as { message: unknown }).message;
     if (typeof m === 'string' && m !== '') return m;
   }
-  return 'The client answers call-attempt questions for this store. Ask them whether to keep trying.';
+  return fallback;
 }
 
 function ReviewRow({
@@ -189,6 +193,7 @@ function ReviewRow({
   /** The seller's callCapDecision policy; ASK_SELLER sends the answer to Seller staff. */
   readonly mode: 'OFF' | 'ASK_SELLER' | 'DIRECT' | undefined;
 }): ReactElement {
+  const t = useT();
   return (
     <Tr>
       <Td>
@@ -204,7 +209,7 @@ function ReviewRow({
       </Td>
       <Td>
         {order === undefined ? (
-          <span className="ro-faint">Open the order</span>
+          <span className="ro-faint">{t('callq.openOrder')}</span>
         ) : (
           <>
             <div>{order.recipientName}</div>
@@ -221,14 +226,14 @@ function ReviewRow({
         <Num value={review.attemptCount} />
       </Td>
       <Td>
-        <span className="ro-muted">{waitedFor(review.createdAt)}</span>
+        <span className="ro-muted">{waitedFor(review.createdAt, t)}</span>
       </Td>
       <Td align="right">
         <CallReviewDecision
           review={review}
           orderNumber={order?.orderNumber}
           triggerVariant="primary"
-          triggerLabel={mode === 'ASK_SELLER' ? 'Propose an answer' : 'Answer'}
+          triggerLabel={mode === 'ASK_SELLER' ? t('callq.propose') : t('callq.answer')}
           mode={mode}
         />
       </Td>

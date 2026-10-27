@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowRight, Plus } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 import { buttonClassName } from '@skydrop/ui/app/button';
+import { useT } from '@/i18n/client';
 import { KpiCard, type KpiTone } from '@skydrop/ui/app/kpi-card';
 import { LabelIntoParcel } from '@skydrop/ui/app/label-into-parcel';
 import { Skeleton } from '@skydrop/ui/app/skeleton';
@@ -17,13 +18,14 @@ import './rd-dashboard.css';
 
 /** The app button's look on a Next link; takes the icon LabelIntoParcel hands it. */
 function NewOrderLinkInner({ icon }: { readonly icon?: ReactNode }): ReactElement {
+  const t = useT();
   return (
     <Link href="/orders/new" className={buttonClassName('primary', 'md')}>
       <span className="sk-btn__fx" aria-hidden />
       <span className="sk-btn__icon" aria-hidden>
         {icon ?? <Plus size={15} />}
       </span>
-      <span className="sk-btn__label">New order</span>
+      <span className="sk-btn__label">{t('dash.newOrder')}</span>
     </Link>
   );
 }
@@ -79,6 +81,7 @@ export function ShortcutCard({
   readonly title: string;
   readonly body: string;
 }): ReactElement {
+  const t = useT();
   return (
     <li>
       <Link href={href} className="rd-db-shortcut">
@@ -88,7 +91,7 @@ export function ShortcutCard({
         <span className="rd-db-shortcut__title">{title}</span>
         <span className="rd-db-shortcut__body">{body}</span>
         <span className="rd-db-shortcut__go">
-          Go <ArrowRight size={14} aria-hidden />
+          {t('dash.go')} <ArrowRight size={14} aria-hidden />
         </span>
       </Link>
     </li>

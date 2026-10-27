@@ -8,7 +8,8 @@ import { Checkbox } from '@skydrop/ui/app/checkbox';
 import { ChoiceCards } from '@skydrop/ui/app/choice-cards';
 import { Select } from '@skydrop/ui/app/select';
 import { TextArea, TextField } from '@skydrop/ui/app/text-field';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { storeTicketKind } from '@/lib/ticket-kind';
 import '../../_components/tickets.css';
 
@@ -69,6 +70,7 @@ export function NewTicketForm({
    */
   readonly skydropMode?: 'OFF' | 'ASK_SELLER' | 'DIRECT' | undefined;
 }): ReactElement {
+  const t = useT();
   const offerSkydrop = skydropMode !== 'OFF';
   const heldForSeller = skydropMode === 'ASK_SELLER';
   const [audience, setAudience] = useState<TicketAudience>(
@@ -87,8 +89,8 @@ export function NewTicketForm({
   const [claimPayer, setClaimPayer] = useState<'STORE' | 'SELLER'>('SELLER');
   const correcting = audience === 'seller' && correction;
 
-  const withSeller = storeTicketKind(TicketType.STORE_DISPUTE);
-  const withSkydrop = storeTicketKind(TicketType.STORE_ISSUE);
+  const withSeller = storeTicketKind(TicketType.STORE_DISPUTE, t);
+  const withSkydrop = storeTicketKind(TicketType.STORE_ISSUE, t);
 
   async function onSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
@@ -109,7 +111,7 @@ export function NewTicketForm({
       });
       onDone(result);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -119,14 +121,14 @@ export function NewTicketForm({
   const submitLabel =
     audience === 'skydrop'
       ? heldForSeller
-        ? 'Send it to your client to approve'
-        : 'Raise it with Skydrop'
-      : 'Raise it with your client';
+        ? t('tktn.submit.held')
+        : t('tktn.submit.skydrop')
+      : t('tktn.submit.client');
 
   return (
     <form onSubmit={(e) => void onSubmit(e)} className="rc-tkt-form">
       <ChoiceCards
-        label="Who is this for?"
+        label={t('tktn.who')}
         name="ticket-audience"
         columns={offerSkydrop ? 2 : 1}
         value={audience}
@@ -135,7 +137,7 @@ export function NewTicketForm({
           {
             value: 'seller',
             icon: <Store size={16} />,
-            title: 'Your client',
+            title: t('tktn.opt.client'),
             description: withSeller.blurb,
           },
           ...(offerSkydrop
@@ -143,10 +145,8 @@ export function NewTicketForm({
                 {
                   value: 'skydrop',
                   icon: <LifeBuoy size={16} />,
-                  title: 'Skydrop',
-                  description: heldForSeller
-                    ? 'Skydrop reads it — something damaged in our hands, lost, or sitting in our warehouse. Your client approves these first: it reaches Skydrop only once Client staff say yes.'
-                    : withSkydrop.blurb,
+                  title: t('tktn.opt.skydrop'),
+                  description: heldForSeller ? t('tktn.opt.skydropHeld') : withSkydrop.blurb,
                 },
               ]
             : []),
@@ -155,8 +155,8 @@ export function NewTicketForm({
 
       <TextField
         id="ticket-order"
-        label="Order"
-        hint="The order this is about."
+        label={t('tktn.order')}
+        hint={t('tktn.orderHint')}
         value={orderId}
         onChange={(e) => setOrderId(e.target.value)}
         required
@@ -166,21 +166,15 @@ export function NewTicketForm({
           <Checkbox
             checked={correction}
             onChange={(e) => setCorrection(e.target.checked)}
-            label="This is about the money worked out on the order"
-            description={
-              <>
-                Say what you think is owed and who owes it. Skydrop checks it against the figures
-                that were on the order when you raised this, and settles it between your wallet and
-                your client&rsquo;s.
-              </>
-            }
+            label={t('tktn.money')}
+            description={t('tktn.moneyHint')}
           />
           {correction ? (
             <div className="rc-tkt-claim">
               <TextField
                 id="ticket-claim-amount"
-                label="How much"
-                hint="₹, up to 2 decimals"
+                label={t('tktn.howMuch')}
+                hint={t('tktn.howMuchHint')}
                 inputMode="decimal"
                 value={claimAmount}
                 onChange={(e) => setClaimAmount(e.target.value)}
@@ -189,12 +183,12 @@ export function NewTicketForm({
               />
               <Select
                 id="ticket-claim-payer"
-                label="Who owes it"
+                label={t('tktn.whoOwes')}
                 value={claimPayer}
                 onChange={(e) => setClaimPayer(e.target.value === 'STORE' ? 'STORE' : 'SELLER')}
               >
-                <option value="SELLER">The client owes us</option>
-                <option value="STORE">We owe the client</option>
+                <option value="SELLER">{t('tktn.clientOwes')}</option>
+                <option value="STORE">{t('tktn.weOwe')}</option>
               </Select>
             </div>
           ) : null}
@@ -203,10 +197,10 @@ export function NewTicketForm({
 
       <TextField
         id="ticket-subject"
-        label="What is wrong"
+        label={t('tktn.subject')}
         // The accessible name without the required mark the field draws
         // beside its label — the same words the old label carried.
-        aria-label="What is wrong"
+        aria-label={t('tktn.subject')}
         value={subject}
         onChange={(e) => setSubject(e.target.value)}
         maxLength={200}
@@ -215,7 +209,7 @@ export function NewTicketForm({
       />
       <TextArea
         id="ticket-description"
-        label="Tell us more"
+        label={t('tktn.more')}
         rows={4}
         value={description}
         onChange={(e) => setDescription(e.target.value)}
@@ -237,9 +231,9 @@ export function NewTicketForm({
           disabled={pending}
           labels={{
             idle: submitLabel,
-            busy: audience === 'skydrop' && heldForSeller ? 'Sending…' : 'Raising…',
-            done: 'Raised',
-            error: 'Not raised',
+            busy: audience === 'skydrop' && heldForSeller ? t('tktn.sending') : t('tktn.raising'),
+            done: t('tktn.raised'),
+            error: t('tktn.notRaised'),
           }}
         />
       </div>

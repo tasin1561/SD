@@ -1,4 +1,6 @@
 import { TicketType } from '@skydrop/db';
+import { makeTranslator, type Translate } from '@skydrop/ui/app/i18n';
+import { CATALOGS, type MessageKey } from '@/i18n/catalog';
 
 /**
  * WHICH CONVERSATION IS THIS — the seller, or Skydrop?
@@ -41,52 +43,57 @@ export interface StoreTicketKind {
   readonly blurb: string;
 }
 
-export function storeTicketKind(type: TicketType): StoreTicketKind {
-  switch (type) {
-    case TicketType.STORE_DISPUTE:
-      return {
-        label: 'With your client',
-        counterparty: 'your client',
-        blurb:
-          'Your client reads it and Skydrop referees. If it is settled with money, it moves between your wallet and theirs.',
-      };
-    case TicketType.STORE_ISSUE:
-      return {
-        label: 'With Skydrop',
-        counterparty: 'Skydrop',
-        blurb:
-          'Skydrop reads it — something damaged in our hands, lost, or sitting in our warehouse. Your client is not told and is not part of it.',
-      };
-    // Raised by Skydrop or the seller rather than by the store. Named
-    // rather than blank: if the store-readable list ever widens to one
-    // of these, a person still reads a word instead of an empty cell.
-    case TicketType.SCRAP_DAMAGE:
-      return {
-        label: 'Damage found',
-        counterparty: 'Skydrop',
-        blurb: 'Raised by Skydrop after a returned parcel was inspected.',
-      };
-    case TicketType.SELLER_RAISED_ISSUE:
-      return {
-        label: 'Raised by your client',
-        counterparty: 'Skydrop',
-        blurb: 'Raised by your client with Skydrop about a parcel.',
-      };
-    case TicketType.COURIER_NDR_ESCALATION:
-      return {
-        label: 'Delivery escalation',
-        counterparty: 'the courier',
-        blurb: 'Raised by Skydrop with the courier after a failed delivery.',
-      };
-    case TicketType.RECEIPT_SHORTFALL:
-      return {
-        label: 'Stock count short',
-        counterparty: 'Skydrop',
-        blurb: 'Raised by Skydrop when stock arrived short or damaged.',
-      };
-    default: {
-      const exhaustive: never = type;
-      throw new Error(`Unhandled TicketType: ${String(exhaustive)}`);
-    }
-  }
+/**
+ * The words live in the message catalogue (`tktk.*`), one entry per type, so
+ * the English half is the single source for English and Bangla sits beside it.
+ * A `Record<TicketType, …>` keeps the F2 rule: a new `TicketType` fails to
+ * compile here rather than rendering a blank label.
+ */
+const KINDS: Readonly<
+  Record<
+    TicketType,
+    { readonly label: MessageKey; readonly counterparty: MessageKey; readonly blurb: MessageKey }
+  >
+> = {
+  [TicketType.STORE_DISPUTE]: {
+    label: 'tktk.client.label',
+    counterparty: 'tktk.client.who',
+    blurb: 'tktk.client.blurb',
+  },
+  [TicketType.STORE_ISSUE]: {
+    label: 'tktk.skydrop.label',
+    counterparty: 'tktk.skydrop.who',
+    blurb: 'tktk.skydrop.blurb',
+  },
+  [TicketType.SCRAP_DAMAGE]: {
+    label: 'tktk.damage.label',
+    counterparty: 'tktk.skydrop.who',
+    blurb: 'tktk.damage.blurb',
+  },
+  [TicketType.SELLER_RAISED_ISSUE]: {
+    label: 'tktk.sellerRaised.label',
+    counterparty: 'tktk.skydrop.who',
+    blurb: 'tktk.sellerRaised.blurb',
+  },
+  [TicketType.COURIER_NDR_ESCALATION]: {
+    label: 'tktk.ndr.label',
+    counterparty: 'tktk.ndr.who',
+    blurb: 'tktk.ndr.blurb',
+  },
+  [TicketType.RECEIPT_SHORTFALL]: {
+    label: 'tktk.shortfall.label',
+    counterparty: 'tktk.skydrop.who',
+    blurb: 'tktk.shortfall.blurb',
+  },
+};
+
+const ENGLISH: Translate<MessageKey> = makeTranslator<MessageKey>(CATALOGS.en, CATALOGS.en);
+
+/** The kind's words in the caller's language; English when no translator is passed. */
+export function storeTicketKind(
+  type: TicketType,
+  t: Translate<MessageKey> = ENGLISH,
+): StoreTicketKind {
+  const k = KINDS[type];
+  return { label: t(k.label), counterparty: t(k.counterparty), blurb: t(k.blurb) };
 }
