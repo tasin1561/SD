@@ -1,8 +1,5 @@
 import type { ReactElement } from 'react';
-import Link from 'next/link';
-import { PageHeader } from '@skydrop/ui/app/page-header';
 import { CsvImportPanel } from '../_components/csv-import-panel';
-import { getT } from '@/i18n/server';
 
 /**
  * Bulk import orders from a CSV. The flow:
@@ -18,21 +15,9 @@ import { getT } from '@/i18n/server';
  * lines of one order (ORD-9). Delhivery's own bulk template imports as
  * it comes — see ORD-9b.
  */
-export default async function OrderImportPage(): Promise<ReactElement> {
-  const { t } = await getT();
+export default function OrderImportPage(): ReactElement {
   return (
     <div className="ord-page">
-      <PageHeader
-        breadcrumbs={[
-          { label: t('orderImport.clientConsole') },
-          { label: t('orderImport.fulfilment') },
-          { label: t('orderImport.orders'), href: '/orders' },
-          { label: t('orderImport.csvImport') },
-        ]}
-        Link={Link}
-        title={t('orderImport.bulkOrderImport')}
-        subtitle={t('orderImport.uploadACsvOf')}
-      />
       <CsvImportPanel
         kind="orders"
         endpointBase="/api/seller/order-imports"
