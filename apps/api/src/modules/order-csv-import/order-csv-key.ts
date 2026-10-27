@@ -60,3 +60,8 @@ export function parseStoreOrderCsvKey(key: string): ParsedStoreOrderCsvKey | nul
   if (!sellerId || !storeId || !token || token.endsWith('.errors')) return null;
   return { sellerId, storeId, token };
 }
+
+/** The `.xlsx` twin of a CSV error report: `{token}.errors.csv` → `{token}.errors.xlsx`. */
+export function xlsxReportKeyFor(csvReportKey: string): string {
+  return csvReportKey.replace(/\.errors\.csv$/, '.errors.xlsx');
+}

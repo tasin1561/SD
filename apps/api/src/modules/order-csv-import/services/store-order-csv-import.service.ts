@@ -24,6 +24,9 @@ import type {
   CsvPresignResult,
   OrderCsvPreviewResult,
 } from './order-csv-import.service';
+import { buildTemplateXlsx, XLSX_CONTENT_TYPE } from '../order-xlsx';
+import { xlsxReportKeyFor } from '../order-csv-key';
+import { presignContentType } from './order-csv-import.service';
 import { CSV_TEMPLATE_PREFIX } from '../../../common/text/csv-separator-hint';
 
 /**
@@ -118,6 +121,14 @@ export class StoreOrderCsvImportService {
     private readonly orders: ResellerOrderService,
   ) {}
 
+  /** The same sheet as the CSV, as `.xlsx`, with the phone column formatted as Text. */
+  buildTemplateXlsx(): Promise<Buffer> {
+    return buildTemplateXlsx(
+      STORE_TEMPLATE_COLUMNS.map(([h]) => h),
+      [1, 2].map((n) => STORE_TEMPLATE_COLUMNS.map((c) => c[n] ?? '')),
+    );
+  }
+
   buildTemplate(): string {
     const cell = (v: string): string => (v.includes(',') ? `"${v}"` : v);
     const headers = STORE_TEMPLATE_COLUMNS.map(([h]) => h).join(',');
@@ -127,16 +138,16 @@ export class StoreOrderCsvImportService {
     return `${CSV_TEMPLATE_PREFIX}${headers}\n${first}\n${second}\n`;
   }
 
-  async presign(user: StoreUserRef, _input: PresignOrderCsvDto): Promise<CsvPresignResult> {
+  async presign(user: StoreUserRef, input: PresignOrderCsvDto): Promise<CsvPresignResult> {
     const key = buildStoreOrderCsvKey(user.sellerId, user.storeId);
     const ttl = this.env.csvPresignTtlSeconds;
-    const uploadUrl = await this.spaces.presignPutUrl(key, 'text/csv', ttl);
+    const uploadUrl = await this.spaces.presignPutUrl(key, presignContentType(input), ttl);
     return { spacesKey: key, uploadUrl, expiresInSeconds: ttl };
   }
 
   async preview(user: StoreUserRef, input: PreviewOrderCsvDto): Promise<OrderCsvPreviewResult> {
     const buffer = await this.loadOwnedCsv(user, input.spacesKey);
-    const parsed = this.parser.parse(buffer);
+    const parsed = await this.parser.parseUpload(buffer, this.env.csvMaxRows);
     const detected = this.parser.detectMapping(parsed.headers);
     const mapping = resolveMapping(parsed.headers, detected.mapping, input.mappingOverride);
     // The importer's OWN grouping, over the whole file — the only way a
@@ -181,7 +192,7 @@ export class StoreOrderCsvImportService {
     await this.orders.assertMayPlaceOrders({ storeId: user.storeId, storeUserId: user.id });
     const buffer = await this.loadOwnedCsv(user, input.spacesKey);
     const head = await this.spaces.headObject(input.spacesKey);
-    const parsed = this.parser.parse(buffer);
+    const parsed = await this.parser.parseUpload(buffer, this.env.csvMaxRows);
     const detected = this.parser.detectMapping(parsed.headers);
     const mapping = resolveMapping(parsed.headers, detected.mapping, input.mappingOverride);
     const missing = ORDER_CSV_STORE_REQUIRED_FIELDS.filter((f) => mapping[f] === undefined);
@@ -274,7 +285,8 @@ export class StoreOrderCsvImportService {
     storeId: string,
     id: string,
     viewer?: StoreUploadViewer,
-  ): Promise<{ buffer: Buffer; fileName: string }> {
+    format: 'csv' | 'xlsx' = 'csv',
+  ): Promise<{ buffer: Buffer; fileName: string; contentType: string }> {
     const upload = await this.prisma.client.bulkOrderUpload.findFirst({
       where: { id, ...ownUploads(storeId, viewer) },
       select: { fileName: true, errorReportKey: true },
@@ -291,6 +303,11 @@ export class StoreOrderCsvImportService {
         message: 'This import has no error report (no failed rows)',
       });
     }
+    const base = upload.fileName.replace(/\.(csv|xlsx)$/i, '');
+    if (format === 'xlsx') {
+      const x = await this.spaces.getObject(xlsxReportKeyFor(upload.errorReportKey));
+      if (x) return { buffer: x, fileName: `${base}-errors.xlsx`, contentType: XLSX_CONTENT_TYPE };
+    }
     const buffer = await this.spaces.getObject(upload.errorReportKey);
     if (!buffer) {
       throw new NotFoundException({
@@ -298,7 +315,7 @@ export class StoreOrderCsvImportService {
         message: 'Error report could not be read from storage',
       });
     }
-    return { buffer, fileName: `${upload.fileName.replace(/\.csv$/i, '')}-errors.csv` };
+    return { buffer, fileName: `${base}-errors.csv`, contentType: 'text/csv; charset=utf-8' };
   }
 
   /** The key must be THIS store's (not merely this seller's) and the file must exist. */

@@ -11,16 +11,22 @@ import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderCsvParserService } from './order-csv-parser.service';
 import { ORDER_CSV_REQUIRED_FIELDS, type OrderCsvField } from '../order-csv-fields';
-import { buildOrderCsvKey, parseOrderCsvKey } from '../order-csv-key';
+import { buildOrderCsvKey, parseOrderCsvKey, xlsxReportKeyFor } from '../order-csv-key';
 import { OrderCsvImportQueue } from '../queue/order-csv-import.queue';
 import type {
   PresignOrderCsvDto,
   PreviewOrderCsvDto,
   ProcessOrderCsvDto,
 } from '../dto/order-csv-import.dto';
+import { buildTemplateXlsx, XLSX_CONTENT_TYPE } from '../order-xlsx';
 import { CSV_TEMPLATE_PREFIX } from '../../../common/text/csv-separator-hint';
 
 const CSV_PRESIGN_CONTENT_TYPE = 'text/csv';
+
+/** The content type a presigned PUT is signed for: the file name decides, the bytes are re-checked on read. */
+export function presignContentType(input: PresignOrderCsvDto): string {
+  return /\.xlsx$/i.test(input.fileName) ? XLSX_CONTENT_TYPE : CSV_PRESIGN_CONTENT_TYPE;
+}
 
 /**
  * The order template, exactly as the owner supplied it (2026-10-27).
@@ -280,16 +286,21 @@ export class OrderCsvImportService {
     private readonly queue: OrderCsvImportQueue,
   ) {}
 
+  /** The same sheet as the CSV, as `.xlsx`, with the phone column formatted as Text. */
+  buildTemplateXlsx(): Promise<Buffer> {
+    return buildTemplateXlsx(TEMPLATE_HEADERS, TEMPLATE_ROWS);
+  }
+
   buildTemplate(): string {
     const cell = (v: string): string => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
     const line = (cells: readonly string[]): string => cells.map(cell).join(',');
     return `${CSV_TEMPLATE_PREFIX}${[TEMPLATE_HEADERS, ...TEMPLATE_ROWS].map(line).join('\n')}\n`;
   }
 
-  async presign(sellerId: string, _input: PresignOrderCsvDto): Promise<CsvPresignResult> {
+  async presign(sellerId: string, input: PresignOrderCsvDto): Promise<CsvPresignResult> {
     const key = buildOrderCsvKey(sellerId);
     const ttl = this.env.csvPresignTtlSeconds;
-    const uploadUrl = await this.spaces.presignPutUrl(key, CSV_PRESIGN_CONTENT_TYPE, ttl);
+    const uploadUrl = await this.spaces.presignPutUrl(key, presignContentType(input), ttl);
     return { spacesKey: key, uploadUrl, expiresInSeconds: ttl };
   }
 
@@ -311,7 +322,7 @@ export class OrderCsvImportService {
 
   async preview(sellerId: string, input: PreviewOrderCsvDto): Promise<OrderCsvPreviewResult> {
     const buffer = await this.loadOwnedCsv(sellerId, input.spacesKey);
-    const parsed = this.parser.parse(buffer);
+    const parsed = await this.parser.parseUpload(buffer, this.env.csvMaxRows);
     const detected = this.parser.detectMapping(parsed.headers);
     const mapping = this.resolveMapping(parsed.headers, detected.mapping, input.mappingOverride);
     const missingRequired = ORDER_CSV_REQUIRED_FIELDS.filter((f) => mapping[f] === undefined);
@@ -348,7 +359,7 @@ export class OrderCsvImportService {
   ): Promise<BulkOrderUploadView> {
     const buffer = await this.loadOwnedCsv(sellerId, input.spacesKey);
     const head = await this.spaces.headObject(input.spacesKey);
-    const parsed = this.parser.parse(buffer);
+    const parsed = await this.parser.parseUpload(buffer, this.env.csvMaxRows);
     const detected = this.parser.detectMapping(parsed.headers);
     const mapping = this.resolveMapping(parsed.headers, detected.mapping, input.mappingOverride);
 
@@ -443,7 +454,8 @@ export class OrderCsvImportService {
   async getErrorReport(
     sellerId: string,
     id: string,
-  ): Promise<{ buffer: Buffer; fileName: string }> {
+    format: 'csv' | 'xlsx' = 'csv',
+  ): Promise<{ buffer: Buffer; fileName: string; contentType: string }> {
     const upload = await this.prisma.client.bulkOrderUpload.findFirst({
       where: { id, sellerId, resellerStoreId: null, deletedAt: null },
       select: { id: true, fileName: true, errorReportKey: true },
@@ -460,6 +472,13 @@ export class OrderCsvImportService {
         message: 'This import has no error report (no failed rows)',
       });
     }
+    const base = upload.fileName.replace(/\.(csv|xlsx)$/i, '');
+    // The `.xlsx` report sits beside the CSV one; an import that predates it
+    // simply has none, and the CSV is returned instead rather than a 404.
+    if (format === 'xlsx') {
+      const x = await this.spaces.getObject(xlsxReportKeyFor(upload.errorReportKey));
+      if (x) return { buffer: x, fileName: `${base}-errors.xlsx`, contentType: XLSX_CONTENT_TYPE };
+    }
     const buffer = await this.spaces.getObject(upload.errorReportKey);
     if (!buffer) {
       throw new NotFoundException({
@@ -467,8 +486,7 @@ export class OrderCsvImportService {
         message: 'Error report could not be read from storage',
       });
     }
-    const base = upload.fileName.replace(/\.csv$/i, '');
-    return { buffer, fileName: `${base}-errors.csv` };
+    return { buffer, fileName: `${base}-errors.csv`, contentType: 'text/csv; charset=utf-8' };
   }
 
   async loadOwnedCsv(sellerId: string, spacesKey: string): Promise<Buffer> {

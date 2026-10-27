@@ -344,6 +344,28 @@ describe('OrderService.create', () => {
     expect(data.totalWeightGrams).toBe(1000); // 500 × 2
   });
 
+  // Owner, 2026-10-27: CATALOGUE FIRST, the stated weight only when the
+  // catalogue is silent. This reverses the earlier "explicit beats catalogue".
+  it('weight: the catalogue wins when the variant HAS a weight and the row states one', async () => {
+    const { svc, orderCreate } = makeService();
+    await svc.create('s1', baseDto({ totalWeightGrams: 9999 }), ACTOR, CTX);
+    expect((orderCreate.mock.calls[0]![0].data as AnyArgs).totalWeightGrams).toBe(1000);
+  });
+  it('weight: the stated figure lands when the variant has NO weight', async () => {
+    const { svc, orderCreate } = makeService({
+      variants: new Map([['v1', resolvedVariant({ weightGrams: null })]]),
+    });
+    await svc.create('s1', baseDto({ totalWeightGrams: 170 }), ACTOR, CTX);
+    expect((orderCreate.mock.calls[0]![0].data as AnyArgs).totalWeightGrams).toBe(170);
+  });
+  it('weight: neither stated nor in the catalogue stays null (no invented default)', async () => {
+    const { svc, orderCreate } = makeService({
+      variants: new Map([['v1', resolvedVariant({ weightGrams: null })]]),
+    });
+    await svc.create('s1', baseDto(), ACTOR, CTX);
+    expect((orderCreate.mock.calls[0]![0].data as AnyArgs).totalWeightGrams).toBeNull();
+  });
+
   it('does NOT feed the address cache for non-MANUAL sources', async () => {
     const { svc, addressCache } = makeService();
     await svc.create('s1', baseDto(), ACTOR, CTX, { source: OrderSource.BULK_UPLOAD });

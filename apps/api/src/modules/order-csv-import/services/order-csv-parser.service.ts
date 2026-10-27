@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PaymentMode } from '@skydrop/db';
 import Papa from 'papaparse';
+import { isXlsxBuffer, parseXlsx } from '../order-xlsx';
 import {
   ORDER_CSV_REQUIRED_FIELDS,
   ignoredReasonForHeader,
@@ -279,6 +280,15 @@ interface PendingGroup {
 
 @Injectable()
 export class OrderCsvParserService {
+  /**
+   * Parse an UPLOAD: `.xlsx` (recognised by its zip magic bytes, never by the
+   * file name) or CSV. Both come out as the same `ParsedCsv`, so everything
+   * after this point is one importer.
+   */
+  async parseUpload(buffer: Buffer, maxRows: number): Promise<ParsedCsv> {
+    return isXlsxBuffer(buffer) ? parseXlsx(buffer, maxRows) : this.parse(buffer);
+  }
+
   /** Parse a CSV buffer (BOM-stripped, UTF-8, header row, trimmed). */
   parse(buffer: Buffer): ParsedCsv {
     // BOM + Excel `sep=` hint line; delimiter stays unset (auto-detect) without one.

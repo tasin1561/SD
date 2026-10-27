@@ -137,6 +137,27 @@ export default function StoreOrderImportPage(): ReactElement {
     }
   }
 
+  /** A binary download (`.xlsx`): `request` reads text and would corrupt a zip. */
+  async function downloadBlob(path: string, fileName: string): Promise<void> {
+    setError(null);
+    setDownloading(path);
+    try {
+      const blob = await client.requestBlob(path);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(verdict(err, t));
+    } finally {
+      setDownloading(null);
+    }
+  }
+
   async function check(): Promise<void> {
     setError(null);
     const f = pickedFile ?? fileRef.current?.files?.[0];
@@ -152,7 +173,11 @@ export default function StoreOrderImportPage(): ReactElement {
       );
       const put = await fetch(presign.uploadUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': 'text/csv' },
+        headers: {
+          'Content-Type': f.name.toLowerCase().endsWith('.xlsx')
+            ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            : 'text/csv',
+        },
         body: f,
       });
       if (!put.ok) throw new Error(t('ordimp.uploadFailed', { status: put.status }));
@@ -207,16 +232,28 @@ export default function StoreOrderImportPage(): ReactElement {
       <RoSection
         title={t('ordimp.upload')}
         action={
-          <AsyncButton
-            variant="ghost"
-            size="sm"
-            icon={<Download size={14} />}
-            state={downloading === `${BASE}/template` ? 'busy' : undefined}
-            labels={{ idle: t('ordimp.template'), busy: t('ordimp.downloading') }}
-            onClick={() =>
-              void downloadText(`${BASE}/template`, 'skydrop-store-order-template.csv')
-            }
-          />
+          <>
+            <AsyncButton
+              variant="primary"
+              size="sm"
+              icon={<Download size={14} />}
+              state={downloading === `${BASE}/template/xlsx` ? 'busy' : undefined}
+              labels={{ idle: t('ordimp.templateXlsx'), busy: t('ordimp.downloading') }}
+              onClick={() =>
+                void downloadBlob(`${BASE}/template/xlsx`, 'skydrop-store-order-template.xlsx')
+              }
+            />
+            <AsyncButton
+              variant="ghost"
+              size="sm"
+              icon={<Download size={14} />}
+              state={downloading === `${BASE}/template` ? 'busy' : undefined}
+              labels={{ idle: t('ordimp.templateCsv'), busy: t('ordimp.downloading') }}
+              onClick={() =>
+                void downloadText(`${BASE}/template`, 'skydrop-store-order-template.csv')
+              }
+            />
+          </>
         }
       >
         <div className="ro-stack ro-stack--tight">
@@ -273,7 +310,7 @@ export default function StoreOrderImportPage(): ReactElement {
           <DropZone
             key={zoneKey}
             ref={fileRef}
-            accept=".csv,text/csv"
+            accept=".csv,.xlsx,text/csv"
             aria-label={t('ordimp.zone.aria')}
             label={picked !== '' ? picked : t('ordimp.zone.label')}
             buttonText={t('ordimp.zone.button')}
@@ -420,21 +457,46 @@ export default function StoreOrderImportPage(): ReactElement {
                     </Td>
                     <Td align="right">
                       {u.errorReportKey !== null ? (
-                        <AsyncButton
-                          variant="ghost"
-                          size="sm"
-                          icon={<Download size={14} />}
-                          state={
-                            downloading === `${BASE}/${u.id}/error-report` ? 'busy' : undefined
-                          }
-                          labels={{ idle: t('ordimp.errorReport'), busy: t('ordimp.downloading') }}
-                          onClick={() =>
-                            void downloadText(
-                              `${BASE}/${u.id}/error-report`,
-                              `errors-${u.fileName}`,
-                            )
-                          }
-                        />
+                        <>
+                          <AsyncButton
+                            variant="ghost"
+                            size="sm"
+                            icon={<Download size={14} />}
+                            state={
+                              downloading === `${BASE}/${u.id}/error-report?format=xlsx`
+                                ? 'busy'
+                                : undefined
+                            }
+                            labels={{
+                              idle: t('ordimp.errorReportXlsx'),
+                              busy: t('ordimp.downloading'),
+                            }}
+                            onClick={() =>
+                              void downloadBlob(
+                                `${BASE}/${u.id}/error-report?format=xlsx`,
+                                `errors-${u.fileName.replace(/\.(csv|xlsx)$/i, '')}.xlsx`,
+                              )
+                            }
+                          />
+                          <AsyncButton
+                            variant="ghost"
+                            size="sm"
+                            icon={<Download size={14} />}
+                            state={
+                              downloading === `${BASE}/${u.id}/error-report` ? 'busy' : undefined
+                            }
+                            labels={{
+                              idle: t('ordimp.errorReport'),
+                              busy: t('ordimp.downloading'),
+                            }}
+                            onClick={() =>
+                              void downloadText(
+                                `${BASE}/${u.id}/error-report`,
+                                `errors-${u.fileName}`,
+                              )
+                            }
+                          />
+                        </>
                       ) : null}
                     </Td>
                   </Tr>

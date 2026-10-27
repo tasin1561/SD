@@ -1,6 +1,7 @@
 import { BadRequestException, HttpException, Injectable, Logger } from '@nestjs/common';
 import { ActorType, BulkUploadStatus, OrderSource, OrderStatus, PaymentMode } from '@skydrop/db';
 import Papa from 'papaparse';
+import { buildErrorReportXlsx, XLSX_CONTENT_TYPE } from '../order-xlsx';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { EnvService } from '../../../config/env.service';
@@ -15,7 +16,7 @@ import type { CreateStoreOrderDto } from '../../order/dto/create-store-order.dto
 import type { UpdateOrderDto } from '../../order/dto/update-order.dto';
 import { OrderCsvParserService, type CoercedOrderGroup } from './order-csv-parser.service';
 import type { OrderCsvField } from '../order-csv-fields';
-import { orderErrorReportKeyFor } from '../order-csv-key';
+import { orderErrorReportKeyFor, xlsxReportKeyFor } from '../order-csv-key';
 
 interface ErrorRow {
   rowNumber: number;
@@ -134,7 +135,7 @@ export class OrderCsvImportProcessorService {
       await this.fail(uploadId, 'Uploaded CSV could not be read from storage');
       return;
     }
-    const parsed = this.parser.parse(buffer);
+    const parsed = await this.parser.parseUpload(buffer, this.env.csvMaxRows);
     if (parsed.rowCount > this.env.csvMaxRows) {
       await this.fail(
         uploadId,
@@ -295,7 +296,12 @@ export class OrderCsvImportProcessorService {
 
     let errorReportKey: string | null = null;
     if (errorRows.length > 0) {
-      errorReportKey = await this.writeErrorReport(upload.spacesKey, parsed.headers, errorRows);
+      errorReportKey = await this.writeErrorReport(
+        upload.spacesKey,
+        parsed.headers,
+        errorRows,
+        mapping,
+      );
     }
 
     const status =
@@ -666,6 +672,7 @@ export class OrderCsvImportProcessorService {
     sourceKey: string,
     headers: string[],
     errorRows: ErrorRow[],
+    mapping: Partial<Record<string, string>>,
   ): Promise<string | null> {
     const key = orderErrorReportKeyFor(sourceKey);
     if (!key) return null;
@@ -681,6 +688,22 @@ export class OrderCsvImportProcessorService {
     });
     const csv = Papa.unparse({ fields: outCols, data: records });
     await this.spaces.putObject(key, Buffer.from(csv, 'utf8'), 'text/csv');
+    // The `.xlsx` twin: same rows, offending cells red, reason on the cell. A
+    // failure to build it must never lose the CSV report that already exists.
+    try {
+      const xlsx = await buildErrorReportXlsx(
+        headers,
+        errorRows.map((er) => ({
+          rowNumber: er.rowNumber,
+          errorHeader: mapping[er.errorField] ?? null,
+          reason: er.errorReason,
+          original: er.original,
+        })),
+      );
+      await this.spaces.putObject(xlsxReportKeyFor(key), xlsx, XLSX_CONTENT_TYPE);
+    } catch (err) {
+      this.logger.warn({ err: String(err) }, 'Order CSV import: .xlsx error report not written');
+    }
     return key;
   }
 

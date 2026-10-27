@@ -131,7 +131,7 @@ describe('OrderCsvImportProcessorService.process', () => {
     const data = lastUpdateData(update);
     expect(data.rowsFailed).toBe(1);
     expect(data.status).toBe(BulkUploadStatus.FAILED); // only row failed
-    expect(spaces.putObject).toHaveBeenCalledTimes(1); // error report written
+    expect(spaces.putObject).toHaveBeenCalledTimes(2); // error report: the CSV and its .xlsx twin
   });
 
   it('writes an error row for an unresolvable SKU', async () => {
@@ -256,7 +256,7 @@ describe('OrderCsvImportProcessorService.process — a RESELLER STORE upload (RS
     });
     await svc.process('u1', storeMapping());
     expect(lastUpdateData(update).rowsFailed).toBe(1);
-    expect(spaces.putObject).toHaveBeenCalledTimes(1);
+    expect(spaces.putObject).toHaveBeenCalledTimes(2); // the CSV report and its .xlsx twin
   });
 
   it('a reference already CONFIRMED is an error row, never a patch', async () => {

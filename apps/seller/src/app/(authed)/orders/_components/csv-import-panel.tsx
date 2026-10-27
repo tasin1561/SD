@@ -251,6 +251,39 @@ export function CsvImportPanel({
     URL.revokeObjectURL(url);
   }
 
+  /** A binary download (`.xlsx`) — `request` reads text and would corrupt a zip. */
+  function saveBlob(blob: Blob, fileName: string): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  /** The Excel template: the primary download on the orders importer. */
+  async function downloadTemplateXlsx(): Promise<void> {
+    setError(null);
+    try {
+      const blob = await client.requestBlob(`${endpointBase}/template/xlsx`);
+      saveBlob(blob, templateFileName.replace(/\.csv$/i, '.xlsx'));
+    } catch (err) {
+      setError(fmtError(err));
+      throw new Error(t('orderImport.templateDownloadFailed'));
+    }
+  }
+
+  async function downloadErrorReportXlsx(uploadId: string): Promise<void> {
+    try {
+      const blob = await client.requestBlob(`${endpointBase}/${uploadId}/error-report?format=xlsx`);
+      saveBlob(blob, `error-report-${uploadId}.xlsx`);
+    } catch (err) {
+      setError(fmtError(err));
+    }
+  }
+
   async function downloadTemplate(): Promise<boolean> {
     setError(null);
     try {
@@ -276,8 +309,12 @@ export function CsvImportPanel({
       setError(t('orderImport.pickACsvFile'));
       return;
     }
-    if (!f.name.toLowerCase().endsWith('.csv')) {
-      setError(t('orderImport.fileMustBeA'));
+    // Only the ORDER importer reads a workbook; the catalogue one is CSV only.
+    const isXlsx = kind === 'orders' && f.name.toLowerCase().endsWith('.xlsx');
+    if (!isXlsx && !f.name.toLowerCase().endsWith('.csv')) {
+      setError(
+        kind === 'orders' ? t('orderImport.fileMustBeCsvOrXlsx') : t('orderImport.fileMustBeA'),
+      );
       return;
     }
     setBusy('uploading');
@@ -292,7 +329,11 @@ export function CsvImportPanel({
 
       const put = await fetch(presign.uploadUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': 'text/csv' },
+        headers: {
+          'Content-Type': isXlsx
+            ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            : 'text/csv',
+        },
         body: f,
       });
       if (!put.ok) {
@@ -363,17 +404,44 @@ export function CsvImportPanel({
           kind === 'orders' ? t('orderImport.oneRowIsOne') : t('orderImport.oneRowIsOne2')
         }
         action={
-          <AsyncButton
-            variant="ghost"
-            size="sm"
-            icon={<Download size={14} />}
-            labels={{
-              idle: t('orderImport.downloadTemplate'),
-              busy: t('orderImport.downloading'),
-              done: t('orderImport.downloaded'),
-            }}
-            onAction={() => downloadTemplateOrThrow()}
-          />
+          kind === 'orders' ? (
+            <div className="ord-row">
+              <AsyncButton
+                variant="primary"
+                size="sm"
+                icon={<Download size={14} />}
+                labels={{
+                  idle: t('orderImport.downloadTemplateXlsx'),
+                  busy: t('orderImport.downloading'),
+                  done: t('orderImport.downloaded'),
+                }}
+                onAction={() => downloadTemplateXlsx()}
+              />
+              <AsyncButton
+                variant="ghost"
+                size="sm"
+                icon={<Download size={14} />}
+                labels={{
+                  idle: t('orderImport.downloadTemplateCsv'),
+                  busy: t('orderImport.downloading'),
+                  done: t('orderImport.downloaded'),
+                }}
+                onAction={() => downloadTemplateOrThrow()}
+              />
+            </div>
+          ) : (
+            <AsyncButton
+              variant="ghost"
+              size="sm"
+              icon={<Download size={14} />}
+              labels={{
+                idle: t('orderImport.downloadTemplate'),
+                busy: t('orderImport.downloading'),
+                done: t('orderImport.downloaded'),
+              }}
+              onAction={() => downloadTemplateOrThrow()}
+            />
+          )
         }
       >
         <div className="ord-stack ord-stack--tight">
@@ -433,8 +501,13 @@ export function CsvImportPanel({
           <DropZone
             key={zoneKey}
             ref={fileRef}
-            accept=".csv,text/csv"
-            label={selectedName || t('orderImport.dropYourCsvHere')}
+            accept={kind === 'orders' ? '.csv,.xlsx,text/csv' : '.csv,text/csv'}
+            label={
+              selectedName ||
+              (kind === 'orders'
+                ? t('orderImport.dropYourSheetHere')
+                : t('orderImport.dropYourCsvHere'))
+            }
             buttonText={t('orderImport.chooseCsv')}
             showFiles={false}
             onFiles={onPickFiles}
@@ -685,14 +758,26 @@ export function CsvImportPanel({
                     </Td>
                     <Td>
                       {u.errorReportKey && (
-                        <button
-                          type="button"
-                          onClick={() => void downloadErrorReport(u.id)}
-                          className="ord-expand"
-                        >
-                          <Download size={14} aria-hidden />
-                          {t('orderImport.errorsCsv')}
-                        </button>
+                        <div className="ord-row">
+                          {kind === 'orders' ? (
+                            <button
+                              type="button"
+                              onClick={() => void downloadErrorReportXlsx(u.id)}
+                              className="ord-expand"
+                            >
+                              <Download size={14} aria-hidden />
+                              {t('orderImport.errorsXlsx')}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => void downloadErrorReport(u.id)}
+                            className="ord-expand"
+                          >
+                            <Download size={14} aria-hidden />
+                            {t('orderImport.errorsCsv')}
+                          </button>
+                        </div>
                       )}
                     </Td>
                   </Tr>

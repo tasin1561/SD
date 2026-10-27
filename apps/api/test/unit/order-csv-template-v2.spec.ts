@@ -168,7 +168,16 @@ describe('a phone Excel turned into a number', () => {
       kind: 'lossless',
       digits: '919876543210',
     });
+    // 11 stated digits for a 12-digit number: the last digit could be 0-4 once
+    // rounded, so the true phone is NOT recoverable and it is refused. (A
+    // "round-trip" test would accept it AND 9.19877E+11 alike — re-rendering the
+    // expansion in the file's own form reproduces the input by construction.)
     expect(expandExcelScientificPhone('9.1987654321E+11').kind).toBe('lossy');
+    // A stated trailing zero is a stated digit.
+    expect(expandExcelScientificPhone('9.19876543210E+11')).toEqual({
+      kind: 'lossless',
+      digits: '919876543210',
+    });
     expect(expandExcelScientificPhone('9.19877E+11').kind).toBe('lossy');
     expect(expandExcelScientificPhone('9876543210').kind).toBe('not-scientific');
   });
