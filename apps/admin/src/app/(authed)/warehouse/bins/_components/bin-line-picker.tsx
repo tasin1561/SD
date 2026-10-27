@@ -5,6 +5,8 @@ import { Select } from '@skydrop/ui/app/select';
 import { useBinContents, type BinStockLine } from '@/lib/bin-contents-hooks';
 import { Note } from '../../../inventory/_components/stock-kit';
 import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * WHICH line in this bin is moving — asked by NAME, never typed.
@@ -40,11 +42,17 @@ import { useT } from '@/i18n/client';
 /** A bin holds at most this many distinct lines on one page (the API caps at 200). */
 const PAGE_SIZE = 200;
 
-export function binLineLabel(line: BinStockLine): string {
-  const name = line.productName ?? 'Unnamed product';
+export function binLineLabel(t: Translate<MessageKey>, line: BinStockLine): string {
+  const name = line.productName ?? t('warehouseBinsBinLinePicker.unnamedProduct');
   const sku = line.skuCode === null ? '' : `${line.skuCode} — `;
   const variant = line.variantLabel === null ? '' : ` (${line.variantLabel})`;
-  return `${sku}${name}${variant} · batch ${line.batchCode} · ${line.qtyOnHand} on hand`;
+  return t('warehouseBinsBinLinePicker.batchOnHand', {
+    sku,
+    name,
+    variant,
+    batchCode: line.batchCode,
+    qtyOnHand: line.qtyOnHand,
+  });
 }
 
 export interface PickedBinLine {
@@ -90,6 +98,7 @@ function LoadedBinLinePicker({
   readonly onChange: (picked: PickedBinLine | null) => void;
 }): ReactElement {
   const t = useT();
+
   const contents = useBinContents(binId, 1, PAGE_SIZE);
   const items = contents.data?.items ?? [];
   const truncated = (contents.data?.total ?? 0) > items.length;
@@ -123,7 +132,7 @@ function LoadedBinLinePicker({
         <option value="">{placeholder()}</option>
         {items.map((l) => (
           <option key={l.stockLevelId} value={l.stockLevelId}>
-            {binLineLabel(l)}
+            {binLineLabel(t, l)}
           </option>
         ))}
       </Select>

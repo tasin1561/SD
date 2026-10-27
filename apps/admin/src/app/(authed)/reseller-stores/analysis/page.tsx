@@ -24,6 +24,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { PauseStoreModal } from '../_components/pause-store-modal';
 import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Reseller stores across sellers (RS-9): fraud flags (a threshold crossed,
@@ -286,8 +287,10 @@ export default function ResellerAnalysisPage(): ReactElement {
                         <Td>
                           <span className="ac-strong">{s.sellerName}</span>
                           <span className="ac-cell-sub">
-                            own <Money amount={s.sellerWalletInr} /> · group{' '}
-                            <Money amount={s.groupInr} />
+                            {richMessage(tr('resellerStoresAnalysisPage.ownGroup'), {
+                              money: <Money amount={s.sellerWalletInr} />,
+                              money2: <Money amount={s.groupInr} />,
+                            })}
                           </span>
                         </Td>
                         <Td align="right">
@@ -297,7 +300,9 @@ export default function ResellerAnalysisPage(): ReactElement {
                         <Td align="right">
                           <Money amount={s.instantPayAdvanceInr} />
                           <span className="ac-cell-sub">
-                            <span className="sk-figure">{s.instantPayAdvanceOrders}</span> orders
+                            {richMessage(tr('resellerStoresAnalysisPage.orders'), {
+                              span: <span className="sk-figure">{s.instantPayAdvanceOrders}</span>,
+                            })}
                           </span>
                         </Td>
                       </Tr>,
@@ -325,8 +330,11 @@ export default function ResellerAnalysisPage(): ReactElement {
                           <Td align="right">
                             <Money amount={st.creditedBeforePayoutInr} />
                             <span className="ac-cell-sub">
-                              <span className="sk-figure">{st.creditedBeforePayoutOrders}</span>{' '}
-                              orders
+                              {richMessage(tr('resellerStoresAnalysisPage.orders'), {
+                                span: (
+                                  <span className="sk-figure">{st.creditedBeforePayoutOrders}</span>
+                                ),
+                              })}
                             </span>
                           </Td>
                           <Td />

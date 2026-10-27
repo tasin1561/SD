@@ -22,6 +22,7 @@ import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { FreightChip, MkCallout, MkCard } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Inbound (BD → India) freight bills — R3.
@@ -410,9 +411,10 @@ function CostBreakdown({
         {d.lines.length > 0 && Math.abs(splitTotal - Number(billedInr)) > 0.01 && (
           <MkCallout tone="warn" icon={<TriangleAlert size={16} />}>
             <p>
-              The lines come to <Money amount={splitTotal.toFixed(2)} convert={false} /> but the
-              bill is <Money amount={billedInr} convert={false} />. Part of this bill is attached to
-              no line, so it will never be recovered as those units sell.
+              {richMessage(tr('freightFreightIndex.theLinesComeToBut'), {
+                money: <Money amount={splitTotal.toFixed(2)} convert={false} />,
+                money2: <Money amount={billedInr} convert={false} />,
+              })}
             </p>
           </MkCallout>
         )}
@@ -426,8 +428,9 @@ function CostBreakdown({
             {d.ourCostInr !== null && (
               <>
                 {' '}
-                Our cost is noted as <Money amount={d.ourCostInr} convert={false} />, but no payment
-                sits behind it.
+                {richMessage(tr('freightFreightIndex.ourCostIsNotedAs'), {
+                  money: <Money amount={d.ourCostInr} convert={false} />,
+                })}
               </>
             )}
           </p>

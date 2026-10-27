@@ -10,6 +10,7 @@ import { useRevealSellerBankAccount, useSellerDetail } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { useSellerHoldings, useTreasuryOverview } from '@/lib/ops-hooks';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * WHERE the money goes, and WHETHER we can send it — on the screen that
@@ -48,6 +49,7 @@ export function PayoutInstructionPanel({
   readonly amount: string;
 }): ReactElement {
   const t = useT();
+
   // This page is gated on `money.view`, which is WEAKER than either of
   // these. Without the checks, an operator who may record a remittance
   // but not read the treasury or reveal an account number would get a
@@ -207,10 +209,10 @@ export function PayoutInstructionPanel({
         )}
         {mayReadTreasury && shortfall && (
           <p className="mk-text mk-small" data-tone="warn">
-            No single {currency} account holds{' '}
-            <Money amount={amount} currency={currency} convert={false} /> on its own. Move money
-            between our accounts on Treasury first — a payout leaves ONE account, so the total
-            across all of them is not the test.
+            {richMessage(t('remittancesPayoutInstructionPanel.noSingleAccountHoldsOn'), {
+              currency,
+              money: <Money amount={amount} currency={currency} convert={false} />,
+            })}
           </p>
         )}
       </div>

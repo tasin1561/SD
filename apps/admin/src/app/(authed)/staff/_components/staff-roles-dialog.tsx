@@ -14,6 +14,7 @@ import type { RoleView } from '@/lib/rbac-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { AcAlert, AcCallout, phaseOf } from '../../settings/_components/ac-parts';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Which roles one staff member holds.
@@ -65,6 +66,7 @@ export function StaffRolesDialog({
   readonly onSaved: (roleNames: readonly string[]) => void;
 }): ReactElement {
   const t = useT();
+
   const setRoles = useSetStaffRoles();
   const [chosen, setChosen] = useState<readonly string[]>(user.roleIds);
   const [error, setError] = useState<string | null>(null);
@@ -169,20 +171,25 @@ export function StaffRolesDialog({
           <AcCallout tone="info" icon={<ShieldCheck size={15} />} role="status">
             {union.everything ? (
               <>
-                <strong>{t('staffStaffRolesDialog.everything')}</strong> One of these grants the
-                whole catalogue, including permissions added later.
+                {richMessage(t('staffStaffRolesDialog.oneOfTheseGrantsThe'), {
+                  strong: <strong>{t('staffStaffRolesDialog.everything')}</strong>,
+                })}
               </>
             ) : catalogueSize > 0 ? (
               <>
-                Together these grant <span className="sk-figure">{union.count}</span> of{' '}
-                <span className="sk-figure">{catalogueSize}</span> permissions.
+                {richMessage(t('staffStaffRolesDialog.togetherTheseGrantOfPermissions'), {
+                  span: <span className="sk-figure">{union.count}</span>,
+                  span2: <span className="sk-figure">{catalogueSize}</span>,
+                })}
               </>
             ) : (
               // The catalogue is behind its own permission and may not
               // have loaded. "N of 0" is worse than no denominator.
               <>
-                Together these grant <span className="sk-figure">{union.count}</span> permission
-                {union.count === 1 ? '' : 's'}.
+                {richMessage(t('staffStaffRolesDialog.togetherTheseGrantPermission'), {
+                  span: <span className="sk-figure">{union.count}</span>,
+                  value: union.count === 1 ? '' : t('common.pluralS'),
+                })}
               </>
             )}
           </AcCallout>

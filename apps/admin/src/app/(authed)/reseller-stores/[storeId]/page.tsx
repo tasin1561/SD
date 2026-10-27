@@ -31,6 +31,7 @@ import { StartImpersonationDialog } from '../../impersonation/_components/start-
 import { useT } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { richMessage } from '@/i18n/client';
 
 function when(iso: string | null): string {
   return iso === null
@@ -89,8 +90,10 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
         <AcCard flush>
           <div className="ac-pad">
             <p className="ac-text">
-              Version <span className="sk-figure">{c.version}</span>, published{' '}
-              {when(c.publishedAt)} —{' '}
+              {richMessage(tr('resellerStoresStoreIdPage.versionPublished'), {
+                span: <span className="sk-figure">{c.version}</span>,
+                value: when(c.publishedAt),
+              })}{' '}
               {c.acceptance === null
                 ? tr('resellerStoresStoreIdPage.notAcceptedByTheStore')
                 : tr('resellerStoresStoreIdPage.acceptedByOn', {

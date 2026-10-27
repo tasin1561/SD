@@ -36,6 +36,7 @@ import {
   StockPageHeader,
 } from '../../../inventory/_components/stock-kit';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /** The server's own floors, mirrored for the counter and nothing else. */
 const MIN_REASON_LEN = 30;
@@ -74,6 +75,7 @@ const MIN_REASON_LEN = 30;
  */
 export function BinCollapseIndex(): ReactElement {
   const t = useT();
+
   const mayCollapse = usePermission('warehouse.bins.collapse');
   const warehouses = useWarehouses();
   const [warehouseId, setWarehouseId] = useState('');
@@ -89,9 +91,9 @@ export function BinCollapseIndex(): ReactElement {
         title={t('warehouseCollapseBinCollapseIndex.collapseAWarehouseSBins')}
         subtitle={
           <>
-            Merges every shelf into <Code>FLOOR</Code>. A backup of the layout is taken first, and
-            the goods keep selling while it is being put back — so a restore is a head start, not a
-            rewind.
+            {richMessage(t('warehouseCollapseBinCollapseIndex.mergesEveryShelfIntoA'), {
+              code: <Code>FLOOR</Code>,
+            })}
           </>
         }
       />
@@ -155,6 +157,7 @@ export function SnapshotList({
   readonly mayRestore: boolean;
 }): ReactElement {
   const t = useT();
+
   const snapshots = useBinSnapshots(warehouseId);
   const restore = useRestoreBinSnapshot(warehouseId);
   const [confirming, setConfirming] = useState<BinLayoutSnapshot | null>(null);
@@ -166,11 +169,9 @@ export function SnapshotList({
       <Panel>
         <PanelPad>
           <Note>
-            One is taken automatically before every collapse, BEFORE anything moves — a crash
-            between the two leaves a complete backup and an untouched warehouse. They are swept once
-            they expire; how long they are kept is the{' '}
-            <Code>ops.bin_snapshot_retention_months</Code> setting, and each row below shows the
-            date its own copy goes.
+            {richMessage(t('warehouseCollapseBinCollapseIndex.oneIsTakenAutomaticallyBefore'), {
+              code: <Code>ops.bin_snapshot_retention_months</Code>,
+            })}
           </Note>
 
           {error !== null && <InlineError message={error} />}
@@ -183,7 +184,9 @@ export function SnapshotList({
               {result.skippedLines.length > 0 ? (
                 <>
                   {' '}
-                  {result.skippedLines.length} could not be:
+                  {t('warehouseCollapseBinCollapseIndex.couldNotBe', {
+                    skippedLinesLength: result.skippedLines.length,
+                  })}
                   <ul>
                     {result.skippedLines.map((s) => (
                       <li key={`${s.binCode}:${s.variantId}`}>
@@ -191,8 +194,7 @@ export function SnapshotList({
                       </li>
                     ))}
                   </ul>
-                  Stock sells between a collapse and a restore, so this is expected rather than a
-                  fault: the goods that are still here went back where they were.
+                  {t('warehouseCollapseBinCollapseIndex.stockSellsBetweenACollapse')}
                 </>
               ) : null}
             </Callout>
@@ -336,6 +338,7 @@ function DangerZone({
   readonly warehouseCode: string;
 }): ReactElement {
   const t = useT();
+
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState<CollapseResult | null>(null);
 
@@ -344,16 +347,16 @@ function DangerZone({
       <Panel tone="critical">
         <PanelPad>
           <Callout tone="bad">
-            <strong>{t('warehouseCollapseBinCollapseIndex.thisMergesEveryShelfIn')}</strong> Where
-            each thing was is then only in the backup above. Bins a picker can never reach are left
-            alone — hold, damaged, quarantine, and goods still in transit between two of our
-            warehouses. Those are about not selling stock rather than finding it, and sweeping them
-            into FLOOR would put broken or not-yet-arrived goods into the pickable pool.
+            {richMessage(t('warehouseCollapseBinCollapseIndex.whereEachThingWasIs'), {
+              strong: (
+                <strong>{t('warehouseCollapseBinCollapseIndex.thisMergesEveryShelfIn')}</strong>
+              ),
+            })}
           </Callout>
           <Note>
-            Two steps, and the first moves nothing: it reports how many bins and units WOULD merge
-            and emails a six-digit code to you. You then type that code and this warehouse&rsquo;s
-            own code, <Code>{warehouseCode}</Code>, exactly.
+            {richMessage(t('warehouseCollapseBinCollapseIndex.twoStepsAndTheFirst'), {
+              code: <Code>{warehouseCode}</Code>,
+            })}
           </Note>
 
           {done !== null && (
@@ -414,6 +417,7 @@ export function CollapseDialog({
   readonly onDone: (result: CollapseResult) => void;
 }): ReactElement {
   const t = useT();
+
   const request = useRequestBinCollapse(warehouseId);
   const confirm = useConfirmBinCollapse(warehouseId);
 
@@ -566,17 +570,22 @@ export function CollapseDialog({
       ) : (
         <>
           <Callout tone="bad">
-            <strong>
-              {t('warehouseCollapseBinCollapseIndex.binSHoldingUnitS', {
-                binsAffected: challenge.binsAffected,
-                unitsAffected: challenge.unitsAffected,
-              })}
-            </strong>{' '}
-            would merge into FLOOR.
+            {richMessage(t('warehouseCollapseBinCollapseIndex.wouldMergeIntoFloor'), {
+              strong: (
+                <strong>
+                  {t('warehouseCollapseBinCollapseIndex.binSHoldingUnitS', {
+                    binsAffected: challenge.binsAffected,
+                    unitsAffected: challenge.unitsAffected,
+                  })}
+                </strong>
+              ),
+            })}
           </Callout>
           <Note>
-            A six-digit code has been emailed to <Code>{challenge.sentToEmail}</Code>. It is good
-            until {fmt(challenge.expiresAt)}.
+            {richMessage(t('warehouseCollapseBinCollapseIndex.aSixDigitCodeHas'), {
+              code: <Code>{challenge.sentToEmail}</Code>,
+              value: fmt(challenge.expiresAt),
+            })}
           </Note>
           <FieldGrid>
             <TextField

@@ -24,6 +24,8 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { AfCard, MetaFact, Notice } from '@/app/(authed)/system/_components/af-parts';
 import './system-issues.css';
 import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /** The order an issue is about, when its metadata names one. */
 /** The `source` every `auto-pickup:<courier>:<warehouse>` issue carries
@@ -45,12 +47,12 @@ function severityOf(sev: SystemIssueView['severity']): 'critical' | 'high' | 'me
 }
 
 /** How long it has been going on, said the way a person would. */
-function since(iso: string): string {
+function since(t: Translate<MessageKey>, iso: string): string {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) return t('systemIssuesSystemIssuesIndex.mAgo', { mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 48) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)} days ago`;
+  if (hours < 48) return t('systemIssuesSystemIssuesIndex.hAgo', { hours });
+  return t('systemIssuesSystemIssuesIndex.daysAgo', { value: Math.floor(hours / 24) });
 }
 
 /**
@@ -79,6 +81,7 @@ function since(iso: string): string {
  */
 export function SystemIssuesIndex(): ReactElement {
   const t = useT();
+
   const mayResolve = usePermission('system.settings.manage');
   const canManagePickups = usePermission('courier.pickups.manage');
   const [includeResolved, setIncludeResolved] = useState(false);
@@ -247,11 +250,13 @@ export function SystemIssuesIndex(): ReactElement {
                       <MetaFact>
                         <Clock size={11} aria-hidden />{' '}
                         {t('systemIssuesSystemIssuesIndex.firstSeen', {
-                          value: since(r.firstSeenAt),
+                          value: since(t, r.firstSeenAt),
                         })}
                       </MetaFact>
                       <span className="af-faint">
-                        {t('systemIssuesSystemIssuesIndex.last', { value: since(r.lastSeenAt) })}
+                        {t('systemIssuesSystemIssuesIndex.last', {
+                          value: since(t, r.lastSeenAt),
+                        })}
                       </span>
                       {/* Seen many times is a different problem from seen
                           once: it means it is not a blip. */}
@@ -268,7 +273,7 @@ export function SystemIssuesIndex(): ReactElement {
                   <div className="af-qcard__actions si-actions">
                     {r.resolvedAt !== null ? (
                       <span className="af-faint">
-                        closed {since(r.resolvedAt)}
+                        closed {since(t, r.resolvedAt)}
                         {r.resolutionNote !== null && ` · ${r.resolutionNote}`}
                       </span>
                     ) : (
@@ -298,7 +303,7 @@ export function SystemIssuesIndex(): ReactElement {
                         ) : (
                           <MetaFact tone="accent" dot>
                             {t('systemIssuesSystemIssuesIndex.beingLookedAt', {
-                              value: since(r.acknowledgedAt),
+                              value: since(t, r.acknowledgedAt),
                             })}
                           </MetaFact>
                         )}

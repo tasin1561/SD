@@ -48,6 +48,7 @@ export function StoreDisputeSettle({
   readonly claimPayer?: Payer | null;
 }): ReactElement {
   const t = useT();
+
   const toast = useToast();
   const settle = useSettleStoreDispute();
   const [payer, setPayer] = useState<Payer | ''>(claimPayer ?? '');
@@ -88,7 +89,9 @@ export function StoreDisputeSettle({
             {t('ticketsStoreDisputeSettle.filledInFromWhatWas', {
               claimAmountInr,
               value:
-                claimPayer === 'STORE' ? `${store} owes the client` : `the client owes ${store}`,
+                claimPayer === 'STORE'
+                  ? t('ticketsStoreDisputeSettle.owesTheClient', { store })
+                  : t('ticketsStoreDisputeSettle.theClientOwes', { store }),
             })}
           </>
         ) : null}

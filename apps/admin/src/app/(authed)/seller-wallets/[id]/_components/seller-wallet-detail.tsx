@@ -24,6 +24,7 @@ import { usePermission } from '@/lib/use-permission';
 import { MoveSellerCashModal, type HoldingRef } from './move-seller-cash-modal';
 import { MkCard } from '../../_components/money-parts';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * One seller's wallet, from our side — the same three views they have,
@@ -35,6 +36,7 @@ import { useT } from '@/i18n/client';
  */
 export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string }): ReactElement {
   const t = useT();
+
   // The bank book is a narrower permission than the wallet — gated here
   // rather than left to 403, so somebody without it sees a page that
   // works instead of one that looks broken.
@@ -204,8 +206,9 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
 
       {Number(d.minimumBalanceInr) > 0 && (
         <p className="mk-small">
-          This account must leave <Money amount={d.minimumBalanceInr} currency="INR" /> in the
-          wallet — it is the only security we hold against an unpaid delivery fee.
+          {richMessage(t('sellerWalletsIdSellerWalletDetail.thisAccountMustLeaveIn'), {
+            money: <Money amount={d.minimumBalanceInr} currency="INR" />,
+          })}
         </p>
       )}
 

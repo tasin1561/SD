@@ -16,6 +16,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { localNow } from '@/lib/datetime-local';
 import { Notice } from './money-parts';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Money moving between two of our own accounts.
@@ -42,6 +43,7 @@ export function TransferModal({
   readonly onOpenChange: (next: boolean) => void;
 }): ReactElement {
   const t = useT();
+
   const accounts = usePlatformBankAccounts(usePermission('money.view'));
   // Seeds the quoted rate. Gated: this page is `money.treasury.view` and
   // reading FX is its own permission, so an operator who may move money
@@ -365,13 +367,15 @@ export function TransferModal({
               <p>
                 {Number(quotedRate) > 0 ? (
                   <>
-                    The client would be credited{' '}
-                    <Money
-                      amount={(Number(amountOut) * Number(quotedRate)).toFixed(2)}
-                      currency={to?.currency === 'BDT' ? 'BDT' : 'INR'}
-                      convert={false}
-                    />{' '}
-                    and the remainder booked to us.
+                    {richMessage(t('treasuryTransferModal.theClientWouldBeCredited'), {
+                      money: (
+                        <Money
+                          amount={(Number(amountOut) * Number(quotedRate)).toFixed(2)}
+                          currency={to?.currency === 'BDT' ? 'BDT' : 'INR'}
+                          convert={false}
+                        />
+                      ),
+                    })}
                   </>
                 ) : (
                   /* A zero rate is not a quote, it is an unfilled field. Stated

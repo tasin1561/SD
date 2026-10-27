@@ -27,6 +27,7 @@ import {
 } from '@/lib/ops-hooks';
 import { MkAlert, MkCard, TopupChip } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * The queue where money enters a seller's wallet.
@@ -347,7 +348,9 @@ export function TopupsIndex(): ReactElement {
                 {reviewing.transactionRef !== null ? (
                   <>
                     {' '}
-                    · ref <span className="sk-ident">{reviewing.transactionRef}</span>
+                    {richMessage(tr('topupsTopupsIndex.ref'), {
+                      span: <span className="sk-ident">{reviewing.transactionRef}</span>,
+                    })}
                   </>
                 ) : null}
               </span>

@@ -30,6 +30,7 @@ import {
 } from '@/lib/api-hooks';
 import '../../_components/benches.css';
 import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * RTO workspace — three phases:
@@ -356,10 +357,14 @@ export function RtoStation(): ReactElement {
             <div className="wh-row wh-row--between">
               <div>
                 <div className="wh-title">
-                  Shipment <span className="sk-ident">{detail.data.shipmentNumber}</span>
+                  {richMessage(tr('warehouseRtoRtoStation.shipment'), {
+                    span: <span className="sk-ident">{detail.data.shipmentNumber}</span>,
+                  })}
                 </div>
                 <div className="wh-faint">
-                  <span className="sk-figure">{detail.data.items.length}</span> line(s)
+                  {richMessage(tr('warehouseRtoRtoStation.lineS'), {
+                    span: <span className="sk-figure">{detail.data.items.length}</span>,
+                  })}
                 </div>
               </div>
               {detail.data.orderStatus !== null && (

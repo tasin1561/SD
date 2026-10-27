@@ -231,7 +231,7 @@ function SpendingTab({
                   items.length === 1
                     ? tr('expensesExpensesIndex.entry')
                     : tr('expensesExpensesIndex.entries'),
-                value2: categoryId === '' ? '' : ' in this category',
+                value2: categoryId === '' ? '' : tr('expensesExpensesIndex.inThisCategory'),
               })}
             </span>
             {/* The sum of what is ON SCREEN, said so plainly. A total
@@ -437,8 +437,8 @@ function AttributeModal({
                             totalInr: f.totalInr,
                             value2:
                               f.ourCostInr === null
-                                ? ' · no cost recorded'
-                                : ` · cost ${f.ourCostInr}`,
+                                ? tr('expensesExpensesIndex.noCostRecorded')
+                                : tr('expensesExpensesIndex.cost', { ourCostInr: f.ourCostInr }),
                           })}
                         </span>
                       </button>

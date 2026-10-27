@@ -32,6 +32,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { Facts } from './order-ops-parts';
 import './order-shipping.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 const MIN_CANCEL_REASON = 10;
 
@@ -178,6 +179,7 @@ function CourierOpsBody({
   readonly onClose: () => void;
 }): ReactElement {
   const t = useT();
+
   const toast = useToast();
   const insight = useShipmentInsight(shipmentId);
   const readiness = useNdrReadiness(shipmentId);
@@ -346,8 +348,10 @@ function CourierOpsBody({
                 : t('ordersCourierOpsPanel.requestAnotherDeliveryAttempt')}
             </Button>
             <span className="os-note">
-              after <span className="sk-figure">{readiness.data.attemptCount}</span> failed attempt
-              {readiness.data.attemptCount === 1 ? '' : 's'}
+              {richMessage(t('ordersCourierOpsPanel.afterFailedAttempt'), {
+                span: <span className="sk-figure">{readiness.data.attemptCount}</span>,
+                value: readiness.data.attemptCount === 1 ? '' : t('common.pluralS'),
+              })}
               {readiness.data.nslCode !== null && (
                 <>
                   {' · '}
@@ -471,6 +475,7 @@ function VoidedWaybill({
   readonly courierCancelledAt: string | null;
 }): ReactElement {
   const t = useT();
+
   const toast = useToast();
   const cancel = useCancelWithCourier();
   const recordOutside = useRecordCancelledOutside();
@@ -484,11 +489,13 @@ function VoidedWaybill({
   if (courierCancelledAt !== null) {
     return (
       <p className="os-note">
-        Voided with its order. Waybill cancelled with the courier on{' '}
-        <span className="sk-figure">
-          {new Date(courierCancelledAt).toISOString().slice(0, 16).replace('T', ' ')}
-        </span>{' '}
-        UTC.
+        {richMessage(t('ordersCourierOpsPanel.voidedWithItsOrderWaybill'), {
+          span: (
+            <span className="sk-figure">
+              {new Date(courierCancelledAt).toISOString().slice(0, 16).replace('T', ' ')}
+            </span>
+          ),
+        })}
       </p>
     );
   }
@@ -524,8 +531,9 @@ function VoidedWaybill({
   return (
     <div className="os-panel">
       <p className="os-warn-line">
-        Voided with its order, but waybill <Ident value={awbNumber} /> is still live with the
-        courier. Cancel it so the booking charge is credited back.
+        {richMessage(t('ordersCourierOpsPanel.voidedWithItsOrderBut'), {
+          ident: <Ident value={awbNumber} />,
+        })}
       </p>
       <div className="os-tools">
         <Button

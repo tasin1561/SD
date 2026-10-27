@@ -41,6 +41,7 @@ import { downloadPdf, printPdf } from '@/lib/print-pdf';
 import { SelectionTable } from './selection-table';
 import '../../_components/benches.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 type Tab = 'labels' | 'reprint' | 'picking' | 'batches' | 'locate';
 
@@ -287,6 +288,7 @@ function LabelTab(): ReactElement {
 
 function PickingTab(): ReactElement {
   const t = useT();
+
   const queue = usePickPrintQueue();
   const createBatch = useCreatePickBatch();
   const buildList = useBuildPickList();
@@ -440,9 +442,11 @@ function PickingTab(): ReactElement {
         {list !== null && (
           <div className="wh-stack">
             <p className="wh-title">
-              <span className="sk-ident">{list.batchNumber}</span> —{' '}
-              <span className="sk-figure">{list.lineCount}</span> line
-              {list.lineCount === 1 ? '' : 's'} to walk.
+              {richMessage(t('warehousePrintingPrintingStation.lineToWalk'), {
+                span: <span className="sk-ident">{list.batchNumber}</span>,
+                span2: <span className="sk-figure">{list.lineCount}</span>,
+                value: list.lineCount === 1 ? '' : t('common.pluralS'),
+              })}
             </p>
             {list.strictMode && (
               <p className="wh-note">

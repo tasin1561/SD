@@ -13,6 +13,7 @@ import { useUnitTrace, useUnitTriage } from '@/lib/ops-hooks';
 import { InlineError, Note, Panel, Stack } from '../../inventory/_components/stock-kit';
 import './units.css';
 import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Where one unit has been.
@@ -30,8 +31,8 @@ import { useT, useLocale } from '@/i18n/client';
  * meant it would eventually show somebody another company's unit.
  */
 export function UnitTracePanel(): ReactElement {
-  const locale = useLocale();
   const t = useT();
+  const locale = useLocale();
   const triage = useUnitTriage();
   const [sellerId, setSellerId] = useState('');
   const [typed, setTyped] = useState('');
@@ -70,7 +71,9 @@ export function UnitTracePanel(): ReactElement {
         </Select>
         <label className="unit-trace__serial">
           <span className="stk-field-label">
-            Serial <span aria-hidden>*</span>
+            {richMessage(t('inventoryUnitsUnitTracePanel.serial'), {
+              span: <span aria-hidden>*</span>,
+            })}
           </span>
           <input
             className="stk-input"

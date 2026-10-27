@@ -26,6 +26,7 @@ import {
 import { UnitTracePanel } from './unit-trace-panel';
 import './units.css';
 import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Serialized-unit discrepancies, from the warehouse's side.
@@ -46,6 +47,7 @@ import { useT, useLocale } from '@/i18n/client';
  */
 export function UnitTriageIndex(): ReactElement {
   const t = useT();
+
   const [selected, setSelected] = useState<string | null>(null);
   const triage = useUnitTriage();
   const data = triage.data;
@@ -186,10 +188,9 @@ export function UnitTriageIndex(): ReactElement {
 
           <Callout tone="info">
             <p className="unit-note">
-              Thresholds are per client and overridable, so &ldquo;stuck&rdquo; means past{' '}
-              <em>that</em> client&apos;s SLA. Retired units — written off or lost — are
-              deliberately excluded from the totals: they are settled facts rather than work, and
-              counting them would mean the queue never reaches zero.
+              {richMessage(t('inventoryUnitsUnitTriageIndex.thresholdsArePerClientAnd'), {
+                em: <em>that</em>,
+              })}
             </p>
           </Callout>
         </>

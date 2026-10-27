@@ -17,6 +17,8 @@ import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { AcAlert, AcHeader, AcPage, AcSection } from '../../settings/_components/ac-parts';
 import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /** The server caps this at 200. A review screen, not an export. */
 const LIMIT = 200;
@@ -271,7 +273,7 @@ export function ImpersonationReview(): ReactElement {
                       <span className="sk-figure ac-faint">
                         {new Date(s.createdAt).toLocaleString()}
                       </span>
-                      <span className="ac-cell-sub">{describeWindow(s, now)}</span>
+                      <span className="ac-cell-sub">{describeWindow(tr, s, now)}</span>
                     </Td>
                     <Td align="right">
                       <span className="sk-figure">{s.requestCount}</span>
@@ -345,21 +347,30 @@ function isLive(s: ImpersonationSessionSummary, now: number): boolean {
 }
 
 /** "running 4m 12s — ends in 5m 48s", or how long a finished one lasted. */
-function describeWindow(s: ImpersonationSessionSummary, now: number): string {
+function describeWindow(
+  tr: Translate<MessageKey>,
+  s: ImpersonationSessionSummary,
+  now: number,
+): string {
   const opened = Date.parse(s.createdAt);
   if (isLive(s, now)) {
-    return `running ${describeSpan(now - opened)} — ends in ${describeSpan(
-      Date.parse(s.expiresAt) - now,
-    )}`;
+    return tr('impersonationImpersonationReview.runningEndsIn', {
+      value: describeSpan(now - opened),
+      value2: describeSpan(Date.parse(s.expiresAt) - now),
+    });
   }
   if (s.endedAt !== null)
-    return `lasted ${describeSpan(Date.parse(s.endedAt) - opened)}, then ended`;
+    return tr('impersonationImpersonationReview.lastedThenEnded', {
+      value: describeSpan(Date.parse(s.endedAt) - opened),
+    });
   // Never entered: how long it "ran" is not a fact about anything.
-  if (s.otpVerifiedAt === null) return 'never started';
+  if (s.otpVerifiedAt === null) return tr('impersonationImpersonationReview.neverStarted');
   // No end row and the window is past: it ran out rather than being
   // closed by anybody. Said that way round, because "ended" would imply
   // somebody decided.
-  return `ran its full ${describeSpan(Date.parse(s.expiresAt) - opened)} and expired`;
+  return tr('impersonationImpersonationReview.ranItsFullAndExpired', {
+    value: describeSpan(Date.parse(s.expiresAt) - opened),
+  });
 }
 
 /**

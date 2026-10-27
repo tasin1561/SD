@@ -26,6 +26,7 @@ import { SerialScanner } from '@/components/ui/serial-scanner';
 import { PackQueueList } from './pack-queue-list';
 import '../../_components/benches.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * The pack bench.
@@ -75,6 +76,7 @@ function verdictCode(err: unknown): string | null {
 
 export function PackStation(): ReactElement {
   const t = useT();
+
   const toast = useToast();
   const block = useScanBlock();
   const forceComplete = useForceCompletePack();
@@ -305,11 +307,13 @@ export function PackStation(): ReactElement {
           <p>{block.data.title}</p>
           <p className="wh-pre">{block.data.detail}</p>
           <p>
-            Put the box aside and get an admin. They clear it on{' '}
-            <Link href="/system-issues" className="wh-link">
-              {t('warehousePackPackStation.systemIssues')}
-            </Link>
-            , after checking whether there are two of them.
+            {richMessage(t('warehousePackPackStation.putTheBoxAsideAnd'), {
+              link: (
+                <Link href="/system-issues" className="wh-link">
+                  {t('warehousePackPackStation.systemIssues')}
+                </Link>
+              ),
+            })}
           </p>
         </div>
       )}
@@ -348,9 +352,11 @@ export function PackStation(): ReactElement {
           />
           {box !== null && (
             <div className="wh-scan__meta">
-              Box open on <span className="sk-ident">{box.awbNumber}</span> —{' '}
-              <span className="sk-figure">{done}</span> of{' '}
-              <span className="sk-figure">{total}</span> scanned
+              {richMessage(t('warehousePackPackStation.boxOpenOnOfScanned'), {
+                span: <span className="sk-ident">{box.awbNumber}</span>,
+                span2: <span className="sk-figure">{done}</span>,
+                span3: <span className="sk-figure">{total}</span>,
+              })}
             </div>
           )}
         </section>
@@ -366,7 +372,9 @@ export function PackStation(): ReactElement {
         <section className="wh-card wh-stack">
           <div>
             <div className="wh-title">
-              One step left on <span className="sk-ident">{pending.awbNumber}</span>
+              {richMessage(t('warehousePackPackStation.oneStepLeftOn'), {
+                span: <span className="sk-ident">{pending.awbNumber}</span>,
+              })}
             </div>
             <p className="wh-note">{t('warehousePackPackStation.theBoxIsClosedAnd')}</p>
           </div>

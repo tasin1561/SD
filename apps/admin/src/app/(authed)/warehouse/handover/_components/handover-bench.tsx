@@ -15,6 +15,7 @@ import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
 import { HandoverQueue } from './handover-queue';
 import '../../_components/benches.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * The last look at a parcel before a driver takes it.
@@ -30,6 +31,7 @@ import { useT } from '@/i18n/client';
  */
 export function HandoverBench(): ReactElement {
   const t = useT();
+
   const scan = useHandoverScan();
   const block = useScanBlock();
   const canManagePickups = usePermission('courier.pickups.manage');
@@ -111,11 +113,13 @@ export function HandoverBench(): ReactElement {
           <p>{block.data.title}</p>
           <p className="wh-pre">{block.data.detail}</p>
           <p>
-            Put the box aside and get an admin. They clear it on{' '}
-            <Link href="/system-issues" className="wh-link">
-              {t('warehouseHandoverHandoverBench.systemIssues')}
-            </Link>
-            , after checking whether there are two of them.
+            {richMessage(t('warehouseHandoverHandoverBench.putTheBoxAsideAnd'), {
+              link: (
+                <Link href="/system-issues" className="wh-link">
+                  {t('warehouseHandoverHandoverBench.systemIssues')}
+                </Link>
+              ),
+            })}
           </p>
         </div>
       )}
@@ -163,11 +167,13 @@ export function HandoverBench(): ReactElement {
             pack bench, is arranged on the pickups screen. */}
         {canManagePickups && (
           <p className="wh-faint">
-            No van coming?{' '}
-            <Link href="/warehouse/pickups" className="wh-link">
-              {t('warehouseHandoverHandoverBench.pickups')}
-            </Link>{' '}
-            — retry a failed day or ask for one by hand.
+            {richMessage(t('warehouseHandoverHandoverBench.noVanComingRetryA'), {
+              link: (
+                <Link href="/warehouse/pickups" className="wh-link">
+                  {t('warehouseHandoverHandoverBench.pickups')}
+                </Link>
+              ),
+            })}
           </p>
         )}
       </section>

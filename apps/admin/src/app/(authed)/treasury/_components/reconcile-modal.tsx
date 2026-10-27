@@ -12,6 +12,7 @@ import { useReconcileAccount } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { Notice } from './money-parts';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * The book disagreed with the bank. Say so, in writing.
@@ -39,6 +40,7 @@ export function ReconcileModal({
   readonly onClose: () => void;
 }): ReactElement {
   const t = useT();
+
   const reconcile = useReconcileAccount();
   // '' means OUR money. A seller id corrects what we hold for them.
   const [sellerId, setSellerId] = useState('');
@@ -157,11 +159,13 @@ export function ReconcileModal({
             </Select>
           )}
           <p className="mo-p">
-            Our book says <Money amount={currentBook} currency={currency} convert={false} /> is{' '}
+            {richMessage(t('treasuryReconcileModal.ourBookSaysIs'), {
+              money: <Money amount={currentBook} currency={currency} convert={false} />,
+            })}{' '}
             {sellerId === ''
               ? 'ours'
               : `held for ${bySeller.find((b) => b.sellerId === sellerId)?.companyName ?? 'them'}`}{' '}
-            in this account.
+            {t('treasuryReconcileModal.inThisAccount')}
           </p>
           <TextField
             label={t('treasuryReconcileModal.whatTheStatementSays')}
@@ -178,18 +182,20 @@ export function ReconcileModal({
           {delta !== null && delta !== 0 && (
             <Notice tone="warn" icon={<AlertTriangle size={16} />}>
               <p>
-                An adjustment of{' '}
-                <Money
-                  amount={delta.toFixed(2)}
-                  currency={currency}
-                  convert={false}
-                  direction={delta < 0 ? 'debit' : 'credit'}
-                />{' '}
-                will be posted against{' '}
-                {sellerId === ''
-                  ? t('treasuryReconcileModal.ourOwnMoney')
-                  : t('treasuryReconcileModal.theirHolding')}
-                .
+                {richMessage(t('treasuryReconcileModal.anAdjustmentOfWillBe'), {
+                  money: (
+                    <Money
+                      amount={delta.toFixed(2)}
+                      currency={currency}
+                      convert={false}
+                      direction={delta < 0 ? 'debit' : 'credit'}
+                    />
+                  ),
+                  value:
+                    sellerId === ''
+                      ? t('treasuryReconcileModal.ourOwnMoney')
+                      : t('treasuryReconcileModal.theirHolding'),
+                })}
               </p>
             </Notice>
           )}
@@ -213,8 +219,9 @@ export function ReconcileModal({
               onChange={(e) => setOpening(e.target.checked)}
               label={
                 <span>
-                  This is the account&apos;s{' '}
-                  <strong>{t('treasuryReconcileModal.openingBalance')}</strong>
+                  {richMessage(t('treasuryReconcileModal.thisIsTheAccountS'), {
+                    strong: <strong>{t('treasuryReconcileModal.openingBalance')}</strong>,
+                  })}
                 </span>
               }
               description={t('treasuryReconcileModal.moneyTheBusinessAlreadyHad')}

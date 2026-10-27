@@ -278,6 +278,7 @@ function humanise(value: string): string {
  */
 function PortalModeSwitch({ current }: { readonly current: string | null }): ReactElement {
   const t = useT();
+
   const setMode = useSetPortalMode();
   const toast = useToast();
   const canManage = usePermission('courier.accounts.manage');
@@ -331,10 +332,10 @@ function PortalModeSwitch({ current }: { readonly current: string | null }): Rea
           <p className="af-title">
             {t('courierEscalationPortalPortalIndex.browserChannel', {
               value: live
-                ? 'LIVE — it clicks'
+                ? t('courierEscalationPortalPortalIndex.liveItClicks')
                 : off
-                  ? 'OFF — nothing runs at all'
-                  : 'SHADOW — it withholds every click',
+                  ? t('courierEscalationPortalPortalIndex.offNothingRunsAtAll')
+                  : t('courierEscalationPortalPortalIndex.shadowItWithholdsEveryClick'),
             })}
           </p>
           <p className="af-small">

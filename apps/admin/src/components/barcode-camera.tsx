@@ -5,6 +5,8 @@ import { Camera, X } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
 import { Dialog } from '@skydrop/ui/app/dialog';
 import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Read a barcode with the device camera.
@@ -38,6 +40,7 @@ export function BarcodeCamera({
   title?: string;
 }): ReactElement {
   const t = useT();
+
   const title = titleProp ?? t('barcodeCamera.scanWithTheCamera');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stopRef = useRef<(() => void) | null>(null);
@@ -82,7 +85,7 @@ export function BarcodeCamera({
           is another app already holding it, and an absent
           `mediaDevices` is a page that is not a secure context.
         */
-        if (!cancelled) setError(cameraFailure(err));
+        if (!cancelled) setError(cameraFailure(t, err));
       }
     })();
 
@@ -130,9 +133,9 @@ export function BarcodeCamera({
 }
 
 /** What actually went wrong, and what to do about it. */
-function cameraFailure(err: unknown): string {
+function cameraFailure(t: Translate<MessageKey>, err: unknown): string {
   const name = err instanceof Error ? err.name : '';
-  const tail = ' You can type or scan the code into the field instead.';
+  const tail = t('barcodeCamera.youCanTypeOrScan');
   if (typeof navigator === 'undefined' || navigator.mediaDevices === undefined) {
     return 'This page is not served over https, so the browser will not give it a camera.' + tail;
   }

@@ -13,6 +13,7 @@ import { useCapacityReport, type CapacityMetric, type CapacityStatus } from '@/l
 import { useT } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { richMessage } from '@/i18n/client';
 
 /**
  * What is running out, how fast, and what to do about it.
@@ -139,6 +140,7 @@ function MetricCard({ m }: { readonly m: CapacityMetric }): ReactElement {
 
 export function CapacityMonitor(): ReactElement {
   const t = useT();
+
   const q = useCapacityReport(REFRESH_MS);
   const [now, setNow] = useState<string>('');
 
@@ -242,10 +244,10 @@ export function CapacityMonitor(): ReactElement {
           {topology.note}
         </p>
         <p className="af-small">
-          To add instances: raise <code className="af-code">capacity.api_instances</code> in
-          settings so the connection gauge stays honest, and start every additional process with{' '}
-          <code className="af-code">WORKERS_ENABLED=false</code> so only one owns the background
-          queues. Two processes running the same crons would double every sweep.
+          {richMessage(t('systemCapacityCapacityMonitor.toAddInstancesRaiseIn'), {
+            code: <code className="af-code">capacity.api_instances</code>,
+            code2: <code className="af-code">WORKERS_ENABLED=false</code>,
+          })}
         </p>
       </AfCard>
     </div>

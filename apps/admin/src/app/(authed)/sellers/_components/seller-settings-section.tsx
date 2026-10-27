@@ -34,6 +34,7 @@ import {
   hasMultiChoice,
 } from '@/components/setting-guide-ui';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Per-seller setting overrides (SET-1).
@@ -226,6 +227,7 @@ function OverrideDialog({
   onClose: () => void;
 }): ReactElement {
   const t = useT();
+
   const save = useSetOverride(sellerId);
   const [raw, setRaw] = useState('');
   const [note, setNote] = useState('');
@@ -281,11 +283,14 @@ function OverrideDialog({
       description={
         setting === null ? undefined : (
           <span>
-            Currently <strong>{current}</strong> (
-            {setting.source === 'SELLER_OVERRIDE'
-              ? t('sellersSellerSettingsSection.setForThisClient')
-              : t('sellersSellerSettingsSection.theSystemDefault')}
-            ). <code className="sk-ident">{setting.key}</code>
+            {richMessage(t('sellersSellerSettingsSection.currently'), {
+              strong: <strong>{current}</strong>,
+              value:
+                setting.source === 'SELLER_OVERRIDE'
+                  ? t('sellersSellerSettingsSection.setForThisClient')
+                  : t('sellersSellerSettingsSection.theSystemDefault'),
+              code: <code className="sk-ident">{setting.key}</code>,
+            })}
           </span>
         )
       }

@@ -74,6 +74,7 @@ export function AuthedShell({
   children: ReactNode;
 }): ReactElement {
   const t = useT();
+
   const pathname = usePathname();
   const client = useApiClient();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -218,8 +219,8 @@ export function AuthedShell({
           label: t('nav.courierAccounts'),
           icon: <Building2 size={15} />,
         },
-        { href: '/delhivery', label: 'Delhivery', icon: <Gauge size={15} /> },
-        { href: '/shiprocket', label: 'Shiprocket', icon: <Gauge size={15} /> },
+        { href: '/delhivery', label: t('authedShell.delhivery'), icon: <Gauge size={15} /> },
+        { href: '/shiprocket', label: t('authedShell.shiprocket'), icon: <Gauge size={15} /> },
         { href: '/cost-sync', label: t('nav.courierCostSync'), icon: <RefreshCw size={15} /> },
         { href: '/courier-escalation', label: t('nav.escalations'), icon: <Inbox size={15} /> },
       ],

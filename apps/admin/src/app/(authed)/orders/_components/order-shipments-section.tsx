@@ -15,6 +15,7 @@ import { ManualPlacementPanel } from './manual-placement-panel';
 import { OoCard } from './order-ops-parts';
 import './order-shipping.css';
 import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 const TRACK_URL = process.env.NEXT_PUBLIC_TRACK_URL ?? 'https://track.skydrop.global';
 
@@ -47,6 +48,7 @@ export function OrderShipmentsSection({
   readonly orderStatus: string;
 }): ReactElement {
   const t = useT();
+
   const shipments = useAdminOrderShipments(orderId);
 
   if (shipments.isLoading)
@@ -110,7 +112,9 @@ export function OrderShipmentsSection({
                 </div>
                 {s.awbNumber && (
                   <div className="os-item__awb">
-                    AWB <span className="sk-ident">{s.awbNumber}</span>
+                    {richMessage(t('ordersOrderShipmentsSection.awb'), {
+                      span: <span className="sk-ident">{s.awbNumber}</span>,
+                    })}
                   </div>
                 )}
               </div>

@@ -12,6 +12,8 @@ import { usePermission } from '@/lib/use-permission';
 import { BackLink, MoCard, Notice } from '../../../treasury/_components/money-parts';
 import './bank-account-history.css';
 import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Every change to the accounts sellers pay into.
@@ -28,10 +30,10 @@ import { useT } from '@/i18n/client';
  * audit log IS the history, and a second copy is one more thing that
  * can disagree with it.
  */
-function actionLabel(action: string): string {
-  if (action.endsWith('.created')) return 'Added';
-  if (action.endsWith('.updated')) return 'Edited';
-  if (action.endsWith('.retired')) return 'Retired';
+function actionLabel(t: Translate<MessageKey>, action: string): string {
+  if (action.endsWith('.created')) return t('bankAccountsHistoryBankAccountHistoryIndex.added');
+  if (action.endsWith('.updated')) return t('bankAccountsHistoryBankAccountHistoryIndex.edited');
+  if (action.endsWith('.retired')) return t('bankAccountsHistoryBankAccountHistoryIndex.retired');
   // Not hidden. An action we have no words for is still a change
   // somebody made, and dropping it would make the history look quieter
   // than it was.
@@ -100,6 +102,7 @@ function ChangeSummary({ row }: { readonly row: BankAccountChangeView }): ReactE
 
 export function BankAccountHistoryIndex(): ReactElement {
   const t = useT();
+
   const history = useBankAccountHistory(usePermission('money.view'));
 
   return (
@@ -172,7 +175,7 @@ export function BankAccountHistoryIndex(): ReactElement {
                                 ? 'cancelled'
                                 : 'confirmed'
                           }
-                          label={actionLabel(r.action)}
+                          label={actionLabel(t, r.action)}
                           size="sm"
                         />
                       </Td>

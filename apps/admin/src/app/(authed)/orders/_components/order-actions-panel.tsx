@@ -22,6 +22,9 @@ import { ReleaseReservationsDialog } from './release-reservations-dialog';
 import { RestoreReservationsDialog } from './restore-reservations-dialog';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 const TERMINAL_STATUSES: readonly OrderStatus[] = [
   OrderStatus.DELIVERED,
@@ -46,24 +49,48 @@ const TERMINAL_STATUSES: readonly OrderStatus[] = [
 // a disabled button and told to contact a super admin. The permission is
 // the thing the server actually checks, so it is the thing to ask about.
 
-const CANCELLATION_REASONS: ReadonlyArray<{
+const CANCELLATION_REASONS = (
+  t: Translate<MessageKey>,
+): ReadonlyArray<{
   value: OrderCancellationReason;
   label: string;
-}> = [
-  { value: OrderCancellationReason.CUSTOMER_REQUESTED, label: 'Customer requested' },
-  { value: OrderCancellationReason.CUSTOMER_UNREACHABLE, label: 'Customer unreachable' },
-  { value: OrderCancellationReason.WRONG_ADDRESS, label: 'Wrong address' },
-  { value: OrderCancellationReason.OUT_OF_STOCK, label: 'Out of stock' },
-  { value: OrderCancellationReason.FAKE_ORDER, label: 'Fake order' },
-  { value: OrderCancellationReason.HIGH_RISK_CUSTOMER, label: 'High-risk customer' },
-  { value: OrderCancellationReason.DUPLICATE_ORDER, label: 'Duplicate order' },
-  { value: OrderCancellationReason.NO_COURIER_AVAILABLE, label: 'No courier available' },
-  { value: OrderCancellationReason.SELLER_REQUESTED, label: 'Client requested' },
-  { value: OrderCancellationReason.OTHER, label: 'Other' },
+}> => [
+  {
+    value: OrderCancellationReason.CUSTOMER_REQUESTED,
+    label: t('ordersOrderActionsPanel.customerRequested'),
+  },
+  {
+    value: OrderCancellationReason.CUSTOMER_UNREACHABLE,
+    label: t('ordersOrderActionsPanel.customerUnreachable'),
+  },
+  {
+    value: OrderCancellationReason.WRONG_ADDRESS,
+    label: t('ordersOrderActionsPanel.wrongAddress'),
+  },
+  { value: OrderCancellationReason.OUT_OF_STOCK, label: t('ordersOrderActionsPanel.outOfStock') },
+  { value: OrderCancellationReason.FAKE_ORDER, label: t('ordersOrderActionsPanel.fakeOrder') },
+  {
+    value: OrderCancellationReason.HIGH_RISK_CUSTOMER,
+    label: t('ordersOrderActionsPanel.highRiskCustomer'),
+  },
+  {
+    value: OrderCancellationReason.DUPLICATE_ORDER,
+    label: t('ordersOrderActionsPanel.duplicateOrder'),
+  },
+  {
+    value: OrderCancellationReason.NO_COURIER_AVAILABLE,
+    label: t('ordersOrderActionsPanel.noCourierAvailable'),
+  },
+  {
+    value: OrderCancellationReason.SELLER_REQUESTED,
+    label: t('ordersOrderActionsPanel.clientRequested'),
+  },
+  { value: OrderCancellationReason.OTHER, label: t('ordersOrderActionsPanel.other') },
 ];
 
 export function OrderActionsPanel({ order }: { readonly order: OrderView }): ReactElement {
   const t = useT();
+
   const canOverride = usePermission('orders.override');
   const canCancel = usePermission('orders.cancel');
 
@@ -160,10 +187,10 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
           {t('ordersOrderActionsPanel.godModeOrd2')}
         </p>
         <p className="oc-god-panel__body">
-          Bypass the state machine and edit rules. Audited{' '}
-          <span className="sk-ident">CRITICAL</span>. The order will be marked with{' '}
-          <span className="sk-ident">hasAdminOverride</span> permanently — a flag that is set once
-          and never cleared.
+          {richMessage(t('ordersOrderActionsPanel.bypassTheStateMachineAnd'), {
+            span: <span className="sk-ident">CRITICAL</span>,
+            span2: <span className="sk-ident">hasAdminOverride</span>,
+          })}
         </p>
         <div className="oo-row">
           <Button
@@ -270,7 +297,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
             onChange={(e) => setReason(e.target.value as OrderCancellationReason)}
             disabled={cancel.isPending}
           >
-            {CANCELLATION_REASONS.map((r) => (
+            {CANCELLATION_REASONS(t).map((r) => (
               <option key={r.value} value={r.value}>
                 {r.label}
               </option>
@@ -439,6 +466,7 @@ function ReleaseResultPanel({
   readonly onDismiss: () => void;
 }): ReactElement {
   const t = useT();
+
   return (
     <div className="oc-result" role="status">
       <div className="oc-result__head">
@@ -448,15 +476,19 @@ function ReleaseResultPanel({
         </button>
       </div>
       <p className="oo-p">
-        Released <span className="sk-figure oo-strong">{result.releasedCount}</span> reservation(s).
+        {richMessage(t('ordersOrderActionsPanel.releasedReservationS'), {
+          span: <span className="sk-figure oo-strong">{result.releasedCount}</span>,
+        })}
       </p>
       {result.released.length > 0 && (
         <ul className="oc-outcomes">
           {result.released.map((r) => (
             <li key={r.reservationId} className="oo-muted">
               <span className="oc-outcomes__text">
-                <span className="sk-ident">{r.reservationId.slice(0, 8)}…</span> · qty{' '}
-                <span className="sk-figure">{r.qtyReleased}</span>
+                {richMessage(t('ordersOrderActionsPanel.qty'), {
+                  span: <span className="sk-ident">{r.reservationId.slice(0, 8)}…</span>,
+                  span2: <span className="sk-figure">{r.qtyReleased}</span>,
+                })}
                 {r.alreadyInactive && (
                   <span className="oo-faint"> {t('ordersOrderActionsPanel.alreadyInactive')}</span>
                 )}

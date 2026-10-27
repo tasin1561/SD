@@ -14,6 +14,8 @@ import { SETTING_GROUP_ORDER, settingGuide, settingValueLabel } from '@/lib/syst
 import { AcFact, AcHeader, AcPage, AcSection } from './ac-parts';
 import { EditSettingDialog } from './edit-setting-dialog';
 import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Admin /settings — every system setting, grouped by what it is about.
@@ -34,6 +36,7 @@ import { useT } from '@/i18n/client';
  */
 export function SettingsIndex(): ReactElement {
   const t = useT();
+
   const list = useSystemSettingsList();
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
@@ -57,7 +60,10 @@ export function SettingsIndex(): ReactElement {
           description={t('settingsSettingsIndex.theSeedShouldProvisionThese')}
         />
       ) : (
-        groupByGuide(list.data.flatMap((g) => g.items)).map((group) => (
+        groupByGuide(
+          t,
+          list.data.flatMap((g) => g.items),
+        ).map((group) => (
           <AcSection
             key={group.title}
             title={group.title}
@@ -86,10 +92,15 @@ interface SettingGroupView {
 }
 
 /** The guide's groups in page order, then any unknown key under its category. */
-function groupByGuide(items: readonly SystemSettingView[]): readonly SettingGroupView[] {
+function groupByGuide(
+  t: Translate<MessageKey>,
+  items: readonly SystemSettingView[],
+): readonly SettingGroupView[] {
   const byTitle = new Map<string, SystemSettingView[]>();
   for (const s of [...items].sort((a, b) => compareByGuide(a.key, b.key))) {
-    const title = settingGuide(s.key)?.group ?? `Other — ${categoryLabel(s.category)}`;
+    const title =
+      settingGuide(s.key)?.group ??
+      t('settingsSettingsIndex.other', { value: categoryLabel(s.category) });
     const bucket = byTitle.get(title);
     if (bucket === undefined) byTitle.set(title, [s]);
     else bucket.push(s);

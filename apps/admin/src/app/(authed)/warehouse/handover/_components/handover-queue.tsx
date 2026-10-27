@@ -9,6 +9,7 @@ import { Package } from 'lucide-react';
 import '../../_components/benches.css';
 import { useHandoverQueue, type WaitingHandover } from '@/lib/ops-hooks';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * What is standing at the bench, waiting for a van.
@@ -25,8 +26,8 @@ import { useT } from '@/i18n/client';
  * somebody needs to.
  */
 export function HandoverQueue(): ReactElement {
-  const tr = useT();
   const t = useT();
+
   const q = useHandoverQueue();
 
   if (q.isLoading) {
@@ -66,12 +67,14 @@ export function HandoverQueue(): ReactElement {
     <section className="wh-card" data-flush="1">
       <div className="wh-card__head">
         <h2 className="wh-card__title">
-          <span className="sk-figure">{waiting.length}</span> waiting for a van
+          {richMessage(t('warehouseHandoverHandoverQueue.waitingForAVan'), {
+            span: <span className="sk-figure">{waiting.length}</span>,
+          })}
         </h2>
         <div className="wh-card__sub">
           {t('warehouseHandoverHandoverQueue.oldestFirst', {
             value:
-              scanned > 0 ? tr('warehouseHandoverHandoverQueue.alreadyChecked', { scanned }) : '',
+              scanned > 0 ? t('warehouseHandoverHandoverQueue.alreadyChecked', { scanned }) : '',
           })}
         </div>
       </div>

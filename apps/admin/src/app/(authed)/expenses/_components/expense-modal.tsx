@@ -23,6 +23,7 @@ import { localNow } from '@/lib/datetime-local';
 import '../../treasury/_components/money.css';
 import './expenses.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Money leaving for something we bought.
@@ -41,6 +42,7 @@ export function ExpenseModal({
   readonly onOpenChange: (next: boolean) => void;
 }): ReactElement {
   const t = useT();
+
   const accounts = usePlatformBankAccounts(usePermission('money.view'));
   const categories = useExpenseCategories(false);
   const record = useRecordBankEntry();
@@ -319,10 +321,13 @@ export function ExpenseModal({
             <span>{t('expensesExpenseModal.category', { value: category?.name ?? '—' })}</span>
           ) : (
             <span>
-              Consignment:{' '}
-              <span className="sk-ident">
-                {linked.consignmentNumber ?? t('expensesExpenseModal.consignment')}
-              </span>
+              {richMessage(t('expensesExpenseModal.consignmentRich'), {
+                span: (
+                  <span className="sk-ident">
+                    {linked.consignmentNumber ?? t('expensesExpenseModal.consignment')}
+                  </span>
+                ),
+              })}
             </span>
           )}
           <span>
@@ -332,7 +337,9 @@ export function ExpenseModal({
           </span>
           {reference.trim() !== '' && (
             <span>
-              Reference: <span className="sk-ident">{reference.trim()}</span>
+              {richMessage(t('expensesExpenseModal.referenceRich'), {
+                span: <span className="sk-ident">{reference.trim()}</span>,
+              })}
             </span>
           )}
         </div>
@@ -367,6 +374,7 @@ function FreightLinkField({
   readonly currency: string;
 }): ReactElement {
   const t = useT();
+
   const [term, setTerm] = useState('');
   const results = useFreightSearch(term);
 
@@ -384,7 +392,8 @@ function FreightLinkField({
                 value: value.receiptNumber ?? t('expensesExpenseModal.noReceiptNumber'),
                 currency,
                 totalInr: value.totalInr,
-                value2: value.ourCostInr === null ? ' · our cost not yet recorded' : '',
+                value2:
+                  value.ourCostInr === null ? t('expensesExpenseModal.ourCostNotYetRecorded') : '',
               })}
             </div>
           </div>
@@ -437,7 +446,9 @@ function FreightLinkField({
                       value: f.receiptNumber ?? t('expensesExpenseModal.noReceiptNumber'),
                       totalInr: f.totalInr,
                       value2:
-                        f.ourCostInr === null ? ' · no cost recorded' : ` · cost ${f.ourCostInr}`,
+                        f.ourCostInr === null
+                          ? t('expensesExpenseModal.noCostRecorded')
+                          : t('expensesExpenseModal.cost', { ourCostInr: f.ourCostInr }),
                     })}
                   </span>
                 </button>

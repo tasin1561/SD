@@ -16,6 +16,7 @@ import { PayoutInstructionPanel } from './payout-instruction-panel';
 import { serverVerdict } from '@/lib/server-verdict';
 import { MkAlert, MkCallout, MkDl } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Record a remittance. Two-currency model:
@@ -52,6 +53,7 @@ export function RemittanceFormModal({
   readonly onSuccess: (created: { id: string }) => void;
 }): ReactElement {
   const t = useT();
+
   // 100 is the endpoint's MAXIMUM (@Max(100) on the query DTO); asking
   // for 200 is a 400 and this select renders empty, which reads as "there
   // are no approved sellers".
@@ -500,9 +502,9 @@ export function RemittanceFormModal({
           />
           {leavesAccount !== null && (
             <div className="mk-small">
-              Leaves our account in all:{' '}
-              <Money amount={leavesAccount} currency={currency} convert={false} /> — the payout plus
-              the fee.
+              {richMessage(t('remittancesRemittanceFormModal.leavesOurAccountInAll'), {
+                money: <Money amount={leavesAccount} currency={currency} convert={false} />,
+              })}
             </div>
           )}
 
@@ -545,23 +547,31 @@ export function RemittanceFormModal({
           */}
           {overBalance !== null && (
             <MkAlert>
-              The wallet holds{' '}
-              <Money amount={overBalance.have} currency={sourceCurrency} convert={false} />, so{' '}
-              <Money amount={overBalance.asked} currency={sourceCurrency} convert={false} /> is more
-              than we owe this client. The server will refuse it (INSUFFICIENT_WALLET_BALANCE). Note
-              this is capped by the WALLET, not by what we hold for them in the paying account —
-              paying beyond that draws on our own capital, which is normal.
+              {richMessage(t('remittancesRemittanceFormModal.theWalletHoldsSoIs'), {
+                money: (
+                  <Money amount={overBalance.have} currency={sourceCurrency} convert={false} />
+                ),
+                money2: (
+                  <Money amount={overBalance.asked} currency={sourceCurrency} convert={false} />
+                ),
+              })}
             </MkAlert>
           )}
 
           {mismatch !== null && (
             <MkCallout tone="warn" icon={<Info size={16} />}>
               <p>
-                This request asked for{' '}
-                <Money amount={settling?.amountInr ?? '0'} currency="INR" convert={false} />. Paying{' '}
-                <Money amount={mismatch} currency="INR" convert={false} /> will{' '}
-                <span className="mk-strong">{t('remittancesRemittanceFormModal.notCloseIt')}</span>{' '}
-                — it stays in the queue for whoever settles the rest.
+                {richMessage(t('remittancesRemittanceFormModal.thisRequestAskedForPaying'), {
+                  money: (
+                    <Money amount={settling?.amountInr ?? '0'} currency="INR" convert={false} />
+                  ),
+                  money2: <Money amount={mismatch} currency="INR" convert={false} />,
+                  span: (
+                    <span className="mk-strong">
+                      {t('remittancesRemittanceFormModal.notCloseIt')}
+                    </span>
+                  ),
+                })}
               </p>
             </MkCallout>
           )}

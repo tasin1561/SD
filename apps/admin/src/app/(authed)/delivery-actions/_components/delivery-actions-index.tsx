@@ -28,6 +28,8 @@ import {
   elapsedSince,
 } from '../../orders/_components/order-ops-parts';
 import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * The operator gate for failed deliveries (CUR-10).
@@ -41,14 +43,14 @@ import { useT } from '@/i18n/client';
  * RECALL is the exception and is worth recognising on sight: it asks our
  * own agents to phone the customer and reaches no courier at all.
  */
-function actionLabel(a: AdminDeliveryActionView['action']): string {
+function actionLabel(t: Translate<MessageKey>, a: AdminDeliveryActionView['action']): string {
   switch (a) {
     case 'REATTEMPT':
-      return 'Re-attempt delivery';
+      return t('deliveryActionsDeliveryActionsIndex.reAttemptDelivery');
     case 'RECALL':
-      return 'Call the customer';
+      return t('deliveryActionsDeliveryActionsIndex.callTheCustomer');
     case 'RTO':
-      return 'Return to us';
+      return t('deliveryActionsDeliveryActionsIndex.returnToUs');
   }
 }
 
@@ -71,6 +73,7 @@ function statusKind(
 
 export function DeliveryActionsIndex(): ReactElement {
   const t = useT();
+
   const canDecide = usePermission('courier.ops.write');
   const [showAll, setShowAll] = useState(false);
   const queue = useDeliveryActionQueue(showAll ? undefined : 'PENDING');
@@ -204,7 +207,7 @@ export function DeliveryActionsIndex(): ReactElement {
                     )}
                   </Td>
                   <Td>
-                    <span className="oo-strong">{actionLabel(r.action)}</span>
+                    <span className="oo-strong">{actionLabel(t, r.action)}</span>
                     {r.action === 'RECALL' && (
                       <span className="oo-sub">
                         {t('deliveryActionsDeliveryActionsIndex.noCourierInvolved')}
@@ -289,7 +292,7 @@ export function DeliveryActionsIndex(): ReactElement {
         title={
           deciding?.decision === 'approve'
             ? t('deliveryActionsDeliveryActionsIndex.approve2', {
-                value: deciding ? actionLabel(deciding.row.action) : '',
+                value: deciding ? actionLabel(t, deciding.row.action) : '',
               })
             : t('deliveryActionsDeliveryActionsIndex.declineThisRequest')
         }
@@ -327,7 +330,7 @@ export function DeliveryActionsIndex(): ReactElement {
             <div className="oo-row">
               <span className="sk-ident oo-strong">{deciding.row.order?.orderNumber ?? '—'}</span>
               <span className="oo-muted">
-                {deciding.row.seller?.companyName ?? '—'} · {actionLabel(deciding.row.action)}
+                {deciding.row.seller?.companyName ?? '—'} · {actionLabel(t, deciding.row.action)}
               </span>
             </div>
             {deciding.decision === 'approve' && deciding.row.action !== 'RECALL' && (

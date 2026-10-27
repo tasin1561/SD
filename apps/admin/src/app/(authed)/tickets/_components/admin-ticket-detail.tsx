@@ -25,6 +25,7 @@ import { StoreDisputeSettle } from './store-dispute-settle';
 import { useT } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { richMessage } from '@/i18n/client';
 
 /**
  * THREE stages, in the order a ticket actually travels: Open →
@@ -308,34 +309,44 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
         <AfSection title={tr('ticketsAdminTicketDetail.theFiguresWhenThisWas')}>
           <AfCard>
             <p className="af-small">
-              As at {new Date(t.disputedFigures.capturedAt).toLocaleString()} · order{' '}
-              <span className="sk-ident">{t.disputedFigures.orderNumber}</span> ·{' '}
-              {t.disputedFigures.paymentMode}
+              {richMessage(tr('ticketsAdminTicketDetail.asAtOrder'), {
+                value: new Date(t.disputedFigures.capturedAt).toLocaleString(),
+                span: <span className="sk-ident">{t.disputedFigures.orderNumber}</span>,
+                paymentMode: t.disputedFigures.paymentMode,
+              })}
               {t.disputedFigures.codInr === null
                 ? null
                 : tr('ticketsAdminTicketDetail.cod', { codInr: t.disputedFigures.codInr })}{' '}
-              · transfer ₹{t.disputedFigures.transferTotalInr} · retail ₹
-              {t.disputedFigures.retailTotalInr}
+              {tr('ticketsAdminTicketDetail.transferRetail', {
+                transferTotalInr: t.disputedFigures.transferTotalInr,
+                retailTotalInr: t.disputedFigures.retailTotalInr,
+              })}
             </p>
             <ul className="tk-figures">
               {t.disputedFigures.parties.map((p) => (
                 <li key={p.party}>
-                  <span className="af-strong">
-                    {p.party === 'STORE'
-                      ? tr('ticketsAdminTicketDetail.store')
-                      : tr('ticketsAdminTicketDetail.client')}
-                  </span>{' '}
-                  net ₹{p.netInr}{' '}
-                  <span className="af-small">
-                    {tr('ticketsAdminTicketDetail.grossTransferTaxCodFee', {
-                      grossInr: p.grossInr,
-                      transferInr: p.transferInr,
-                      taxShareInr: p.taxShareInr,
-                      codFeeShareInr: p.codFeeShareInr,
-                      instantFeeShareInr: p.instantFeeShareInr,
-                      value: p.status.toLowerCase(),
-                    })}
-                  </span>
+                  {richMessage(tr('ticketsAdminTicketDetail.net'), {
+                    span: (
+                      <span className="af-strong">
+                        {p.party === 'STORE'
+                          ? tr('ticketsAdminTicketDetail.store')
+                          : tr('ticketsAdminTicketDetail.client')}
+                      </span>
+                    ),
+                    netInr: p.netInr,
+                    span2: (
+                      <span className="af-small">
+                        {tr('ticketsAdminTicketDetail.grossTransferTaxCodFee', {
+                          grossInr: p.grossInr,
+                          transferInr: p.transferInr,
+                          taxShareInr: p.taxShareInr,
+                          codFeeShareInr: p.codFeeShareInr,
+                          instantFeeShareInr: p.instantFeeShareInr,
+                          value: p.status.toLowerCase(),
+                        })}
+                      </span>
+                    ),
+                  })}
                 </li>
               ))}
             </ul>

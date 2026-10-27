@@ -35,6 +35,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { Facts, Notice, OoCard } from '../../orders/_components/order-ops-parts';
 import './call-center.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 const OUTCOME_OPTIONS: ReadonlyArray<{
   value: CallOutcome;
@@ -555,7 +556,9 @@ export function CallCenterStation(): ReactElement {
           ) : null}
           <div className="cc-call-head">
             <p className="cc-call-head__title">
-              Assignment <span className="sk-ident">{assignment.assignmentId.slice(0, 8)}</span>
+              {richMessage(tr('callCenterCallCenterStation.assignment'), {
+                span: <span className="sk-ident">{assignment.assignmentId.slice(0, 8)}</span>,
+              })}
             </p>
             <span className="oo-faint">
               {/* NOT +1: scheduledAttempts is incremented by pullNext
@@ -573,11 +576,14 @@ export function CallCenterStation(): ReactElement {
                   assignment carries; the number is what the order
                   snapshot carries, so it falls back only when the order
                   vanished under the entry. */}
-              Order{' '}
-              <span className="sk-ident">
-                {assignment.order?.orderNumber ?? assignment.orderId}
-              </span>{' '}
-              · pull #<span className="sk-figure">{assignment.scheduledAttempts}</span>
+              {richMessage(tr('callCenterCallCenterStation.orderPull'), {
+                span: (
+                  <span className="sk-ident">
+                    {assignment.order?.orderNumber ?? assignment.orderId}
+                  </span>
+                ),
+                span2: <span className="sk-figure">{assignment.scheduledAttempts}</span>,
+              })}
             </span>
           </div>
 
@@ -849,7 +855,9 @@ function RecipientPanel({
           // RS-10: for a reseller-store order that is THE STORE's name.
           <span className="cc-recipient__from" data-testid="ordered-from">
             <span>
-              Ordered from <strong>{orderedFrom}</strong>
+              {richMessage(tr('callCenterCallCenterStation.orderedFrom'), {
+                strong: <strong>{orderedFrom}</strong>,
+              })}
             </span>
             {isReseller && (
               <span className="cc-tag">{tr('callCenterCallCenterStation.memberStore')}</span>
@@ -863,8 +871,9 @@ function RecipientPanel({
         // has never heard of the seller behind it; naming the seller
         // on the phone reads as a stranger calling about their parcel.
         <p className="oo-script" data-testid="reseller-script">
-          Say you are calling about their order from <strong>{orderedFrom}</strong>. Do not mention
-          the client behind the store.
+          {richMessage(tr('callCenterCallCenterStation.sayYouAreCallingAbout'), {
+            strong: <strong>{orderedFrom}</strong>,
+          })}
         </p>
       )}
 
@@ -956,7 +965,9 @@ function PriorAttempts({
             <>
               {' '}
               <span className="oo-faint">
-                on <span className="sk-ident">{a.orderNumber}</span>
+                {richMessage(tr('callCenterCallCenterStation.on'), {
+                  span: <span className="sk-ident">{a.orderNumber}</span>,
+                })}
               </span>
             </>
           )}
@@ -993,16 +1004,19 @@ function PriorAttempts({
   return (
     <div className="cc-prior">
       <h3 className="cc-prior__title">
-        What this customer was told before
-        <span className="cc-prior__count">
-          {tr('callCenterCallCenterStation.previous', {
-            length: attempts.length,
-            value:
-              attempts.length === 1
-                ? tr('callCenterCallCenterStation.call')
-                : tr('callCenterCallCenterStation.calls'),
-          })}
-        </span>
+        {richMessage(tr('callCenterCallCenterStation.whatThisCustomerWasTold'), {
+          span: (
+            <span className="cc-prior__count">
+              {tr('callCenterCallCenterStation.previous', {
+                length: attempts.length,
+                value:
+                  attempts.length === 1
+                    ? tr('callCenterCallCenterStation.call')
+                    : tr('callCenterCallCenterStation.calls'),
+              })}
+            </span>
+          ),
+        })}
       </h3>
 
       {thisOrder.length > 0 && (

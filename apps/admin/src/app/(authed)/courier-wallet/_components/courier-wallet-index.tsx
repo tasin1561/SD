@@ -31,6 +31,8 @@ import {
 import { MoSection } from '../../treasury/_components/money-parts';
 import './courier-wallet.css';
 import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * The courier's prepaid wallet, against our own bank.
@@ -49,19 +51,22 @@ import { useT } from '@/i18n/client';
  * even though it is almost always empty. A section that is usually empty
  * and occasionally holds a theft is worth the space it costs.
  */
-function matchTone(state: CourierRechargeView['matchState']): {
+function matchTone(
+  tr: Translate<MessageKey>,
+  state: CourierRechargeView['matchState'],
+): {
   label: string;
   kind: 'delivered' | 'pending' | 'failed' | 'confirmed';
 } {
   switch (state) {
     case 'MATCHED':
-      return { label: 'Matched', kind: 'delivered' };
+      return { label: tr('courierWalletCourierWalletIndex.matched'), kind: 'delivered' };
     case 'UNRECORDED':
-      return { label: 'Not in our books', kind: 'failed' };
+      return { label: tr('courierWalletCourierWalletIndex.notInOurBooks'), kind: 'failed' };
     case 'AMOUNT_MISMATCH':
-      return { label: 'Amounts disagree', kind: 'failed' };
+      return { label: tr('courierWalletCourierWalletIndex.amountsDisagree'), kind: 'failed' };
     case 'RESOLVED':
-      return { label: 'Explained', kind: 'confirmed' };
+      return { label: tr('courierWalletCourierWalletIndex.explained'), kind: 'confirmed' };
   }
 }
 
@@ -303,7 +308,7 @@ export function CourierWalletIndex(): ReactElement {
                 </TableEmpty>
               ) : (
                 (recharges.data?.recharges ?? []).map((r) => {
-                  const tone = matchTone(r.matchState);
+                  const tone = matchTone(tr, r.matchState);
                   return (
                     <Tr key={r.id}>
                       <Td>

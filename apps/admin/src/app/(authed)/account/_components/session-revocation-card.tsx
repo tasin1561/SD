@@ -8,6 +8,7 @@ import { AcAlert, AcCard } from '../../settings/_components/ac-parts';
 import { useLogoutAllSessions } from '@/lib/account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Sign out of every device.
@@ -38,6 +39,7 @@ import { useT } from '@/i18n/client';
  */
 export function SessionRevocationCard(): ReactElement {
   const t = useT();
+
   const logoutAll = useLogoutAllSessions();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,10 +114,11 @@ export function SessionRevocationCard(): ReactElement {
       }
     >
       <p className="ac-text">
-        Ends every session for your account at once — a lost laptop, a shared machine, a browser you
-        cannot get back to.{' '}
-        <span className="ac-strong">{t('accountSessionRevocationCard.includingThisOne')}</span> you
-        will be returned to the sign-in page and will need your password again.
+        {richMessage(t('accountSessionRevocationCard.endsEverySessionForYour'), {
+          span: (
+            <span className="ac-strong">{t('accountSessionRevocationCard.includingThisOne')}</span>
+          ),
+        })}
       </p>
       <p className="ac-muted">{t('accountSessionRevocationCard.doThisTheMomentA')}</p>
       {error !== null && (

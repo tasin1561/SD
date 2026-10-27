@@ -298,6 +298,7 @@ export function SettingChoiceField({
   readonly keepValues?: readonly string[] | undefined;
 }): ReactElement {
   const t = useT();
+
   const label = labelProp ?? t('settingGuideUi.value');
   const guide = settingGuide(settingKey);
   const base: Readonly<Record<string, SettingOption>> =
@@ -306,7 +307,7 @@ export function SettingChoiceField({
   const field = (extra: readonly Choice[], loading: boolean): ReactElement => (
     <ChoiceSelect
       label={label}
-      choices={mergeChoices(base, extra, [value, ...keepValues])}
+      choices={mergeChoices(t, base, extra, [value, ...keepValues])}
       value={value}
       onChange={onChange}
       disabled={disabled}
@@ -407,6 +408,7 @@ function AccountChoices({
 
 /** The file's choices, then the live ones it lacks, then any value that must stay. */
 function mergeChoices(
+  t: Translate<MessageKey>,
   base: Readonly<Record<string, SettingOption>>,
   extra: readonly Choice[],
   keep: readonly string[],
@@ -424,9 +426,9 @@ function mergeChoices(
     out.push([
       code,
       {
-        label: `${code} (set now)`,
-        does: 'This is what is set now. It is not one of the choices listed.',
-        example: 'Pick one of the other choices to change it, or leave it as it is.',
+        label: t('settingGuideUi.setNow', { code }),
+        does: t('settingGuideUi.thisIsWhatIsSet'),
+        example: t('settingGuideUi.pickOneOfTheOther'),
       },
     ]);
   }

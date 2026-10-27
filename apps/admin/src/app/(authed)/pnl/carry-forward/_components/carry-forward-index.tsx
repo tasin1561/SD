@@ -42,6 +42,9 @@ import {
 import { LinkButton, MoCard, MoSection, Notice } from '../../../treasury/_components/money-parts';
 import '../../_components/pnl.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * The carry-forward P&L (PNL-CF-1).
@@ -56,6 +59,7 @@ import { useT } from '@/i18n/client';
  */
 export function CarryForwardIndex(): ReactElement {
   const t = useT();
+
   const periods = usePnlPeriods();
   const [picked, setPicked] = useState<string | null>(null);
   // Closing is irreversible and has its own permission; the page is
@@ -97,7 +101,7 @@ export function CarryForwardIndex(): ReactElement {
               >
                 {periods.data.months.map((m) => (
                   <option key={m.month} value={m.month}>
-                    {m.name} — {statusWord(m.status)}
+                    {m.name} — {statusWord(t, m.status)}
                     {m.lockState === 'PROVISIONAL' ? ' (provisional)' : ''}
                   </option>
                 ))}
@@ -145,14 +149,14 @@ function PlainSection({
   );
 }
 
-function statusWord(s: PnlMonthStatus): string {
+function statusWord(t: Translate<MessageKey>, s: PnlMonthStatus): string {
   switch (s) {
     case 'CLOSED':
       return 'closed';
     case 'OPEN':
       return 'open';
     case 'AWAITING_CLOSE':
-      return 'not closed yet';
+      return t('pnlCarryForwardCarryForwardIndex.notClosedYet');
     default: {
       const unreachable: never = s;
       return unreachable;
@@ -198,6 +202,7 @@ function MonthView({
   readonly canGodMode: boolean;
 }): ReactElement {
   const t = useT();
+
   // A locked version other than the current one, opened read-only.
   const [version, setVersion] = useState<number | null>(null);
   const q = usePnlMonth(month, version);
@@ -240,7 +245,7 @@ function MonthView({
                     : `by ${v.closed.by}`,
                 value3:
                   v.closed.kind === 'BACKFILL'
-                    ? ', with the months that existed before carry-forward'
+                    ? t('pnlCarryForwardCarryForwardIndex.withTheMonthsThatExisted')
                     : '',
                 value4:
                   v.closed.reason !== null && v.closed.reason !== '' ? ` “${v.closed.reason}”` : '',
@@ -408,7 +413,7 @@ function MonthView({
                     {x.current ? ' (current)' : ''}
                   </Td>
                   <Td>
-                    {versionKindLabel(x.kind)}
+                    {versionKindLabel(t, x.kind)}
                     <div className="mo-faint">
                       {x.lockState === 'PROVISIONAL' ? 'provisional' : 'final'}
                     </div>
@@ -451,20 +456,20 @@ function MonthView({
   );
 }
 
-function versionKindLabel(kind: PnlVersionKindView): string {
+function versionKindLabel(t: Translate<MessageKey>, kind: PnlVersionKindView): string {
   switch (kind) {
     case 'AUTO_FINAL':
-      return 'Scheduled close';
+      return t('pnlCarryForwardCarryForwardIndex.scheduledClose');
     case 'AUTO_PROVISIONAL':
-      return 'Scheduled close (provisional)';
+      return t('pnlCarryForwardCarryForwardIndex.scheduledCloseProvisional');
     case 'LOCK_PERMANENTLY':
-      return 'Locked permanently';
+      return t('pnlCarryForwardCarryForwardIndex.lockedPermanently');
     case 'GOD_MODE':
-      return 'God mode re-lock';
+      return t('pnlCarryForwardCarryForwardIndex.godModeReLockLabel');
     case 'BACKFILL':
-      return 'Backfill';
+      return t('pnlCarryForwardCarryForwardIndex.backfill');
     case 'MANUAL':
-      return 'Closed by hand';
+      return t('pnlCarryForwardCarryForwardIndex.closedByHand');
     default: {
       const unreachable: never = kind;
       return unreachable;
@@ -473,7 +478,10 @@ function versionKindLabel(kind: PnlVersionKindView): string {
 }
 
 /** The nightly jobs a stored gate result says did not succeed. */
-function failedJobs(raw: unknown): Array<{ label: string; detail: string }> {
+function failedJobs(
+  t: Translate<MessageKey>,
+  raw: unknown,
+): Array<{ label: string; detail: string }> {
   const jobs =
     typeof raw === 'object' && raw !== null && Array.isArray((raw as { jobs?: unknown }).jobs)
       ? ((raw as { jobs: unknown[] }).jobs as Array<Record<string, unknown>>)
@@ -481,7 +489,10 @@ function failedJobs(raw: unknown): Array<{ label: string; detail: string }> {
   return jobs
     .filter((j) => j['status'] !== 'OK')
     .map((j) => ({
-      label: typeof j['label'] === 'string' ? j['label'] : 'A nightly job',
+      label:
+        typeof j['label'] === 'string'
+          ? j['label']
+          : t('pnlCarryForwardCarryForwardIndex.aNightlyJob'),
       detail: typeof j['detail'] === 'string' ? j['detail'] : '',
     }));
 }
@@ -499,11 +510,12 @@ function LockPermanentlyPanel({
   readonly canClose: boolean;
 }): ReactElement {
   const t = useT();
+
   const lock = useLockPnlPermanently();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const failed = failedJobs(nightlyJobs);
+  const failed = failedJobs(t, nightlyJobs);
   return (
     <MoSection title={t('pnlCarryForwardCarryForwardIndex.provisionalLock')} tone="warn">
       <Notice tone="warn" icon={<AlertTriangle size={16} />}>
@@ -1082,6 +1094,7 @@ function CarriedGroups({
   readonly filterFor: (g: CarriedGroupView, line: string) => CarryForwardFilter;
 }): ReactElement {
   const t = useT();
+
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div className="mo-stack">
@@ -1090,7 +1103,11 @@ function CarriedGroups({
           <div className="pl-group__head">
             <h3 className="pl-group__title">{heading(g)}</h3>
             <span className="mo-muted">
-              Net <Delta amount={g.netInr} /> · {g.count} change{g.count === 1 ? '' : 's'}
+              {richMessage(t('pnlCarryForwardCarryForwardIndex.netChange'), {
+                delta: <Delta amount={g.netInr} />,
+                count: g.count,
+                value: g.count === 1 ? '' : t('common.pluralS'),
+              })}
             </span>
           </div>
           <Accordion value={open} onValueChange={setOpen}>

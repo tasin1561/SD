@@ -18,6 +18,7 @@ import {
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 const MIN_WAIVE_REASON = 10;
 const MIN_VOID_REASON = 10;
@@ -45,6 +46,7 @@ const MIN_VOID_REASON = 10;
  */
 export function FreightActions({ row }: { readonly row: FreightChargeView }): ReactElement {
   const t = useT();
+
   const toast = useToast();
   const canWrite = usePermission('money.freight.manage');
   const settle = useSettleFreight();
@@ -167,8 +169,9 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
         title={t('freightFreightActions.waiveThisFreightBill')}
         description={
           <>
-            Forgives <Money amount={row.outstandingInr} /> — no wallet movement, and the bill stays
-            countable as a waiver rather than disappearing. Audited at HIGH severity.
+            {richMessage(t('freightFreightActions.forgivesNoWalletMovementAnd'), {
+              money: <Money amount={row.outstandingInr} />,
+            })}
           </>
         }
         footer={
@@ -225,11 +228,9 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
         title={t('freightFreightActions.withdrawThisFreightBill')}
         description={
           <>
-            For a bill that was WRONG — a mistyped rate, a recount. It is withdrawn and whatever it
-            charged (<Money amount={row.amountSettledInr} />) goes back to the client&apos;s wallet.
-            Raise the corrected bill for this stop afterwards; until you do, this arrival has no
-            freight against it. Audited at HIGH severity. Not the same as a waiver: waive is for a
-            bill that was right and we chose to forgive.
+            {richMessage(t('freightFreightActions.forABillThatWas'), {
+              money: <Money amount={row.amountSettledInr} />,
+            })}
           </>
         }
         footer={

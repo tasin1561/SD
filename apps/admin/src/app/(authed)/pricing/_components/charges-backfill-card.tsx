@@ -19,6 +19,7 @@ import { usePermission } from '@/lib/use-permission';
 import { MoSection } from '../../treasury/_components/money-parts';
 import './pricing.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /** Where the REAL (not dry) run stands, for the parachute. Null until one starts. */
 interface RealRun {
@@ -49,6 +50,7 @@ const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' 
  */
 export function ChargesBackfillCard(): ReactElement | null {
   const t = useT();
+
   const canRun = usePermission('orders.charges.compute');
   const backfill = useBackfillCharges();
   const toast = useToast();
@@ -157,11 +159,13 @@ export function ChargesBackfillCard(): ReactElement | null {
       {report !== null && (
         <div className="mo-stack mo-stack--tight">
           <p className="pr-summary">
-            {wasDryRun
-              ? t('pricingChargesBackfillCard.wouldPrice')
-              : t('pricingChargesBackfillCard.priced')}{' '}
-            <span className="mo-strong sk-figure">{report.examined}</span> order
-            {report.examined === 1 ? '' : 's'}
+            {richMessage(t('pricingChargesBackfillCard.order'), {
+              value: wasDryRun
+                ? t('pricingChargesBackfillCard.wouldPrice')
+                : t('pricingChargesBackfillCard.priced'),
+              span: <span className="mo-strong sk-figure">{report.examined}</span>,
+              value2: report.examined === 1 ? '' : t('common.pluralS'),
+            })}
             {!wasDryRun && (
               <>
                 {' '}
@@ -207,6 +211,7 @@ export function ChargesBackfillCard(): ReactElement | null {
  */
 export function BillUnbilledCard(): ReactElement | null {
   const t = useT();
+
   const canBill = usePermission('money.wallets.bill_unbilled');
   const bill = useBillUnbilled();
   const toast = useToast();
@@ -300,9 +305,11 @@ export function BillUnbilledCard(): ReactElement | null {
         onConfirm={runReal}
       >
         <p className="mo-p">
-          The preview found <span className="mo-strong">{report?.examined ?? 0}</span> order
-          {report?.examined === 1 ? '' : 's'} to bill, totalling{' '}
-          <Money amount={report?.totalInr ?? '0'} convert={false} />.
+          {richMessage(t('pricingChargesBackfillCard.thePreviewFoundOrderTo'), {
+            span: <span className="mo-strong">{report?.examined ?? 0}</span>,
+            value: report?.examined === 1 ? '' : t('common.pluralS'),
+            money: <Money amount={report?.totalInr ?? '0'} convert={false} />,
+          })}
         </p>
       </ConfirmDialog>
 
@@ -319,16 +326,22 @@ export function BillUnbilledCard(): ReactElement | null {
       {report !== null && (
         <div className="mo-stack mo-stack--tight">
           <p className="pr-summary">
-            {previewed
-              ? t('pricingChargesBackfillCard.wouldCharge')
-              : t('pricingChargesBackfillCard.charged')}{' '}
-            <span className="mo-strong sk-figure">{report.examined}</span> order
-            {report.examined === 1 ? '' : 's'}
+            {richMessage(t('pricingChargesBackfillCard.order'), {
+              value: previewed
+                ? t('pricingChargesBackfillCard.wouldCharge')
+                : t('pricingChargesBackfillCard.charged'),
+              span: <span className="mo-strong sk-figure">{report.examined}</span>,
+              value2: report.examined === 1 ? '' : t('common.pluralS'),
+            })}
             {!previewed && (
               <>
                 {' '}
-                — {report.billed} billed (<Money amount={report.totalInr} convert={false} />
-                ), {report.skipped} had nothing to bill, {report.failed} failed
+                {richMessage(t('pricingChargesBackfillCard.billedHadNothingToBill'), {
+                  billed: report.billed,
+                  money: <Money amount={report.totalInr} convert={false} />,
+                  skipped: report.skipped,
+                  failed: report.failed,
+                })}
               </>
             )}
             .

@@ -6,6 +6,7 @@ import { Printer } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
 import type { LabelSheet } from '@skydrop/api-client';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * The printable label sheet.
@@ -35,6 +36,7 @@ export function LabelSheetView({
   readonly onClose: () => void;
 }): ReactElement {
   const t = useT();
+
   return (
     <div className="sd-label-sheet">
       <style>{`
@@ -60,8 +62,10 @@ export function LabelSheetView({
       <div className="sd-label-sheet__chrome cns-sheet-chrome">
         <div>
           <h3 className="cns-sheet-chrome__title">
-            {sheet.labels.length} label(s) —{' '}
-            <span className="sk-ident">{sheet.consignmentNumber}</span>
+            {richMessage(t('warehouseConsignmentsIdLabelSheet.labelS'), {
+              labelsLength: sheet.labels.length,
+              span: <span className="sk-ident">{sheet.consignmentNumber}</span>,
+            })}
           </h3>
           <p className="stk-note">
             {t('warehouseConsignmentsIdLabelSheet.printedInTheStationIs', {

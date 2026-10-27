@@ -23,6 +23,7 @@ import { ReconcileModal } from './reconcile-modal';
 import { TransferModal } from './transfer-modal';
 import './treasury.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * What we hold, where, and how much of it is somebody else's.
@@ -66,6 +67,7 @@ interface OpeningTarget {
 
 export function TreasuryIndex(): ReactElement {
   const t = useT();
+
   const canManage = usePermission('money.treasury.manage');
   const overview = useTreasuryOverview();
   const [transferring, setTransferring] = useState(false);
@@ -232,8 +234,10 @@ export function TreasuryIndex(): ReactElement {
                   // — the same amount, twice, formatted two ways, which
                   // is exactly what the Money primitive exists to stop.
                   <>
-                    Ours <Money amount={c.capital} currency={c.currency} convert={false} /> · held{' '}
-                    <Money amount={c.sellerHeld} currency={c.currency} convert={false} />
+                    {richMessage(t('treasuryTreasuryIndex.oursHeld'), {
+                      money: <Money amount={c.capital} currency={c.currency} convert={false} />,
+                      money2: <Money amount={c.sellerHeld} currency={c.currency} convert={false} />,
+                    })}
                   </>
                 }
               />

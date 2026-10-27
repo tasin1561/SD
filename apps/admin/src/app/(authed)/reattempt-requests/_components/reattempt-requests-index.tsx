@@ -21,6 +21,7 @@ import {
 } from '@/lib/callcenter-hooks';
 import { AgeChip } from '../../orders/_components/order-ops-parts';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Sellers asking to ring a customer who declined.
@@ -31,6 +32,7 @@ import { useT } from '@/i18n/client';
  */
 export function ReattemptRequestsIndex(): ReactElement {
   const t = useT();
+
   const [status, setStatus] = useState('PENDING');
   const list = useReattemptRequests(status === '' ? undefined : status);
   const [deciding, setDeciding] = useState<{
@@ -127,11 +129,18 @@ export function ReattemptRequestsIndex(): ReactElement {
 
               {r.status === 'APPROVED' && r.extraAttempts > 0 && (
                 <p className="oo-p">
-                  <span className="oo-faint">
-                    {t('reattemptRequestsReattemptRequestsIndex.granted')}
-                  </span>{' '}
-                  <span className="sk-figure">{r.extraAttempts}</span> extra{' '}
-                  {r.extraAttempts === 1 ? 'call' : 'calls'}
+                  {richMessage(t('reattemptRequestsReattemptRequestsIndex.extra'), {
+                    span: (
+                      <span className="oo-faint">
+                        {t('reattemptRequestsReattemptRequestsIndex.granted')}
+                      </span>
+                    ),
+                    span2: <span className="sk-figure">{r.extraAttempts}</span>,
+                    value:
+                      r.extraAttempts === 1
+                        ? t('reattemptRequestsReattemptRequestsIndex.call')
+                        : t('reattemptRequestsReattemptRequestsIndex.calls'),
+                  })}
                 </p>
               )}
 

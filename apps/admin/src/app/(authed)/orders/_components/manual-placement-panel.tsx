@@ -13,6 +13,7 @@ import { useCancelManualPlacement, usePlaceManualAwb } from '@/lib/api-hooks';
 import { Notice } from './order-ops-parts';
 import './order-shipping.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * The fallback when no integrated courier will carry a parcel (CUR-8).
@@ -55,6 +56,7 @@ export function ManualPlacementPanel({
   readonly hasAwb: boolean;
 }): ReactElement | null {
   const t = useT();
+
   // COSMETIC (FE-2), and necessary: this panel sits on /orders, which is
   // gated on `orders.view`. Without this, everyone who can read an order
   // would see two buttons the server refuses them. The server is still
@@ -165,7 +167,9 @@ export function ManualPlacementPanel({
         icon={<Send size={18} />}
         title={
           <>
-            Record a manual AWB — <span className="sk-ident">{shipmentNumber}</span>
+            {richMessage(t('ordersManualPlacementPanel.recordAManualAwb'), {
+              span: <span className="sk-ident">{shipmentNumber}</span>,
+            })}
           </>
         }
         footer={
@@ -253,7 +257,9 @@ export function ManualPlacementPanel({
         icon={<Ban size={18} />}
         title={
           <>
-            Cancel as unfulfillable — <span className="sk-ident">{shipmentNumber}</span>
+            {richMessage(t('ordersManualPlacementPanel.cancelAsUnfulfillable'), {
+              span: <span className="sk-ident">{shipmentNumber}</span>,
+            })}
           </>
         }
         tone="critical"

@@ -37,6 +37,7 @@ import { AfCard, AfSection, Notice } from '@/app/(authed)/system/_components/af-
 import { EscalationTabs } from './escalation-tabs';
 import './escalation.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * The courier escalation console — the MANUAL consumer of the outbox.
@@ -55,6 +56,7 @@ import { useT } from '@/i18n/client';
  */
 export function CourierEscalationIndex(): ReactElement {
   const t = useT();
+
   const toast = useToast();
   const outbox = useCourierOutbox();
   const channel = useCourierChannel();
@@ -176,12 +178,13 @@ export function CourierEscalationIndex(): ReactElement {
         >
           <p>{t('courierEscalationCourierEscalationIndex.mcpIsReadOnlyAnd')}</p>
           <p>
-            The browser channel can. It drives their own “Raise a ticket” form, and it is what
-            actually sends these. It ships withholding every click:{' '}
-            <Link href="/courier-escalation/portal" className="af-link">
-              {t('courierEscalationCourierEscalationIndex.portalWorker')}
-            </Link>{' '}
-            is where it is turned on, and off. Until it is LIVE, every message here needs a person.
+            {richMessage(t('courierEscalationCourierEscalationIndex.theBrowserChannelCanIt'), {
+              link: (
+                <Link href="/courier-escalation/portal" className="af-link">
+                  {t('courierEscalationCourierEscalationIndex.portalWorker')}
+                </Link>
+              ),
+            })}
           </p>
         </Notice>
       ) : null}

@@ -27,6 +27,8 @@ import { AfCard, AfSection } from '@/app/(authed)/system/_components/af-parts';
 import { ShiprocketCostSection } from './shiprocket-cost-section';
 import './cost-sync.css';
 import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Is the nightly courier-cost sync actually working?
@@ -69,12 +71,12 @@ function runTone(run: WalletSyncRun): 'delivered' | 'pending' | 'failed' {
   return run.accounts.some((a) => a.error !== null) ? 'pending' : 'delivered';
 }
 
-function runLabel(run: WalletSyncRun): string {
-  if (!run.ok) return 'Failed';
-  if (run.skipped === 'DISABLED') return 'Switched off';
-  if (run.skipped === 'NO_ACCOUNTS') return 'No accounts';
-  if (run.accounts.some((a) => a.error !== null)) return 'Partly failed';
-  return run.wrote ? 'Worked' : 'Worked (dry run)';
+function runLabel(t: Translate<MessageKey>, run: WalletSyncRun): string {
+  if (!run.ok) return t('costSyncCostSyncIndex.failed');
+  if (run.skipped === 'DISABLED') return t('costSyncCostSyncIndex.switchedOff');
+  if (run.skipped === 'NO_ACCOUNTS') return t('costSyncCostSyncIndex.noAccounts');
+  if (run.accounts.some((a) => a.error !== null)) return t('costSyncCostSyncIndex.partlyFailed');
+  return run.wrote ? t('costSyncCostSyncIndex.worked') : t('costSyncCostSyncIndex.workedDryRun');
 }
 
 /** The legacy Stat tones, mapped onto the KPI card's. */
@@ -88,10 +90,11 @@ const STAT_TONE: Record<'good' | 'warn' | 'bad' | 'neutral', KpiTone> = {
 /** The last run, in full — the one somebody actually reads. */
 function LastRun({ run }: { readonly run: WalletSyncRun }): ReactElement {
   const t = useT();
+
   return (
     <AfCard>
       <div className="af-row">
-        <StatusChip kind={runTone(run)} label={runLabel(run)} />
+        <StatusChip kind={runTone(run)} label={runLabel(t, run)} />
         <span className="af-body">{fmtWhen(run.at)}</span>
         {!run.wrote && run.skipped === null && (
           // Worth its own line: a dry run reads the real file and
@@ -288,6 +291,7 @@ function Fact({ label, value }: { readonly label: string; readonly value: string
  */
 function HistoryRow({ run }: { readonly run: WalletSyncRun }): ReactElement {
   const t = useT();
+
   const [open, setOpen] = useState(false);
   const written = run.accounts.reduce(
     (n, a) => n + (a.forwardWritten ?? 0) + (a.rtoWritten ?? 0),
@@ -308,7 +312,7 @@ function HistoryRow({ run }: { readonly run: WalletSyncRun }): ReactElement {
           <span className="af-nowrap">{fmtWhen(run.at)}</span>
         </Td>
         <Td>
-          <StatusChip size="sm" kind={runTone(run)} label={runLabel(run)} />
+          <StatusChip size="sm" kind={runTone(run)} label={runLabel(t, run)} />
         </Td>
         <Td>
           <span className="sk-figure">{run.windowDays === null ? '—' : `${run.windowDays}d`}</span>

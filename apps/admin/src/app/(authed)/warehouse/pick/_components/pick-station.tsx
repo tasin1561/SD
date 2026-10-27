@@ -18,6 +18,7 @@ import { SerialScanner, scanCountMet } from '@/components/ui/serial-scanner';
 import { ForceExpirePick } from './force-expire';
 import '../../_components/benches.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Picker workspace — one parcel at a time. Flow:
@@ -39,6 +40,7 @@ import { useT } from '@/i18n/client';
  */
 export function PickStation(): ReactElement {
   const t = useT();
+
   const toast = useToast();
   const [pick, setPick] = useState<StrictPulledPick | null>(null);
   const [started, setStarted] = useState(false);
@@ -204,7 +206,9 @@ export function PickStation(): ReactElement {
           <div className="wh-row wh-row--between">
             <div>
               <div className="wh-title">
-                Shipment <span className="sk-ident">{pick.shipmentNumber}</span>
+                {richMessage(t('warehousePickPickStation.shipment'), {
+                  span: <span className="sk-ident">{pick.shipmentNumber}</span>,
+                })}
               </div>
               <div className="wh-faint sk-figure">
                 {t('warehousePickPickStation.startedExpires', {

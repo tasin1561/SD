@@ -19,6 +19,7 @@ import { MkAlert, MkCallout } from '../../seller-wallets/_components/money-parts
 import { useT } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { richMessage } from '@/i18n/client';
 
 /**
  * What a freight rate may be AGREED in.
@@ -115,6 +116,7 @@ export function RecordFreightModal({
   readonly onOpenChange: (open: boolean) => void;
 }): ReactElement {
   const t = useT();
+
   const toast = useToast();
   const record = useRecordFreight();
   /**
@@ -329,7 +331,7 @@ export function RecordFreightModal({
                   legWords: a.legWords,
                   units: a.units,
                   company: a.company,
-                  value: a.billed ? ' (already billed)' : '',
+                  value: a.billed ? t('freightRecordFreightModal.alreadyBilled') : '',
                 })}
               </option>
             ))}
@@ -375,13 +377,16 @@ export function RecordFreightModal({
         {goodsReceiptId !== '' && (
           <div className="mk-stack">
             <h3 className="mk-form__heading">
-              What the forwarder charged
-              <span className="mk-faint">
-                {t('freightRecordFreightModal.product', {
-                  length: products.length,
-                  value: products.length === 1 ? '' : t('common.pluralS'),
-                })}
-              </span>
+              {richMessage(t('freightRecordFreightModal.whatTheForwarderCharged'), {
+                span: (
+                  <span className="mk-faint">
+                    {t('freightRecordFreightModal.product', {
+                      length: products.length,
+                      value: products.length === 1 ? '' : t('common.pluralS'),
+                    })}
+                  </span>
+                ),
+              })}
             </h3>
             <p className="mk-small">{t('freightRecordFreightModal.priceEachProductTheWay')}</p>
 
@@ -502,7 +507,7 @@ export function RecordFreightModal({
                           value:
                             currency === Currency.INR
                               ? ''
-                              : ' — converted to rupees at the rate in force when this is recorded',
+                              : t('freightRecordFreightModal.convertedToRupeesAtThe'),
                         })}
                       </td>
                       <td data-align="right" className="mk-strong">

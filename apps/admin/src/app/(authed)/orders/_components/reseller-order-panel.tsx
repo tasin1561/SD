@@ -7,20 +7,28 @@ import { Money } from '@skydrop/ui/components';
 import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { Facts, OoCard, OoSection } from './order-ops-parts';
 import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
-const SHARES: ReadonlyArray<readonly [keyof OrderView, string]> = [
-  ['resellerDeliveryFeeStorePercent', 'Delivery fee'],
-  ['resellerReturnFeeStorePercent', 'Return fee'],
-  ['resellerCustomerReturnFeeStorePercent', 'Customer return fee'],
-  ['resellerCodFeeStorePercent', 'COD fee'],
-  ['resellerCodTaxStorePercent', 'COD tax'],
-  ['resellerInstantPayFeeStorePercent', 'Instant Pay fee'],
+const SHARES = (t: Translate<MessageKey>): ReadonlyArray<readonly [keyof OrderView, string]> => [
+  ['resellerDeliveryFeeStorePercent', t('ordersResellerOrderPanel.deliveryFee')],
+  ['resellerReturnFeeStorePercent', t('ordersResellerOrderPanel.returnFee')],
+  ['resellerCustomerReturnFeeStorePercent', t('ordersResellerOrderPanel.customerReturnFee')],
+  ['resellerCodFeeStorePercent', t('ordersResellerOrderPanel.codFee')],
+  ['resellerCodTaxStorePercent', t('ordersResellerOrderPanel.codTax')],
+  ['resellerInstantPayFeeStorePercent', t('ordersResellerOrderPanel.instantPayFee')],
 ];
 
-function timing(trigger: string | null | undefined, days: number | null | undefined): string {
+function timing(
+  t: Translate<MessageKey>,
+  trigger: string | null | undefined,
+  days: number | null | undefined,
+): string {
   if (trigger === null || trigger === undefined) return '—';
   const label = trigger.toLowerCase().replace(/_/g, ' ');
-  return days !== null && days !== undefined && days > 0 ? `${label} (+${days} days)` : label;
+  return days !== null && days !== undefined && days > 0
+    ? t('ordersResellerOrderPanel.days', { label, days })
+    : label;
 }
 
 /**
@@ -32,6 +40,7 @@ function timing(trigger: string | null | undefined, days: number | null | undefi
  */
 export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElement | null {
   const t = useT();
+
   if (order.storeKind !== 'RESELLER') return null;
   return (
     <OoSection
@@ -61,7 +70,7 @@ export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElemen
                     resellerTermsVersionNumber: order.resellerTermsVersionNumber,
                   }),
           },
-          ...SHARES.map(([key, label]) => {
+          ...SHARES(t).map(([key, label]) => {
             const value = order[key];
             return {
               label: t('ordersResellerOrderPanel.storePays', { label }),
@@ -70,11 +79,11 @@ export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElemen
           }),
           {
             label: t('ordersResellerOrderPanel.storeCredited'),
-            value: timing(order.resellerStoreCreditTrigger, order.resellerStoreCreditDays),
+            value: timing(t, order.resellerStoreCreditTrigger, order.resellerStoreCreditDays),
           },
           {
             label: t('ordersResellerOrderPanel.clientCredited'),
-            value: timing(order.resellerSellerCreditTrigger, order.resellerSellerCreditDays),
+            value: timing(t, order.resellerSellerCreditTrigger, order.resellerSellerCreditDays),
           },
         ]}
       />

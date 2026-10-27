@@ -17,6 +17,8 @@ import {
 } from '@/lib/api-hooks';
 import { ManualPlacementPanel } from '../../orders/_components/manual-placement-panel';
 import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Every parcel waiting on a person to arrange carriage.
@@ -72,18 +74,18 @@ function waitTone(hours: number): AgeTone {
  * shipment with nothing retired behind it, where there is no code at
  * all.
  */
-function reasonLabel(code: SupersedeReasonCode | null): string {
+function reasonLabel(t: Translate<MessageKey>, code: SupersedeReasonCode | null): string {
   switch (code) {
     case 'NON_SERVICEABLE':
-      return 'Address not served';
+      return t('manualPlacementManualPlacementIndex.addressNotServed');
     case 'AWB_REJECTED':
-      return 'Courier refused it';
+      return t('manualPlacementManualPlacementIndex.courierRefusedIt');
     case 'COURIER_FAILURE':
-      return 'Courier unreachable';
+      return t('manualPlacementManualPlacementIndex.courierUnreachable');
     case 'MANUAL_REPLACEMENT':
-      return 'Replaced by hand';
+      return t('manualPlacementManualPlacementIndex.replacedByHand');
     case null:
-      return 'Reason not recorded';
+      return t('manualPlacementManualPlacementIndex.reasonNotRecorded');
     default: {
       const never: never = code;
       return never;
@@ -93,6 +95,7 @@ function reasonLabel(code: SupersedeReasonCode | null): string {
 
 function Row({ row }: { row: ManualPlacementQueueRow }): ReactElement {
   const t = useT();
+
   return (
     <Tr>
       <Td>
@@ -107,7 +110,7 @@ function Row({ row }: { row: ManualPlacementQueueRow }): ReactElement {
       </Td>
       <Td>{row.codAmountInr === null ? '—' : <Money amount={row.codAmountInr} />}</Td>
       <Td>
-        <span className="oo-strong">{reasonLabel(row.reasonCode)}</span>
+        <span className="oo-strong">{reasonLabel(t, row.reasonCode)}</span>
         {/* The courier's own sentence, verbatim. A paraphrase of
             "[ER0005] suspicious order/consignee" loses the only part
             that tells an operator what to actually check. */}

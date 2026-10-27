@@ -36,6 +36,7 @@ import { useT } from '@/i18n/client';
  */
 export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }): ReactElement {
   const t = useT();
+
   const toast = useToast();
   // FE-2: cosmetic. The server enforces this regardless.
   const canWrite = usePermission('courier.ops.write');
@@ -161,7 +162,7 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
           <p className="af-title">
             {t('ticketsTicketCourierPanel.support', {
               courierName: desk.courierName,
-              value: desk.canSendAutomatically ? '' : ' — sent by hand',
+              value: desk.canSendAutomatically ? '' : t('ticketsTicketCourierPanel.sentByHand'),
             })}
           </p>
           <p className="af-small">{desk.howTo}</p>

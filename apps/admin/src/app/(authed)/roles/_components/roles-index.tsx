@@ -14,6 +14,7 @@ import { ROLE_AXIS_GROUPS, rolesInGroup } from '@/lib/role-axes';
 import { serverVerdict } from '@/lib/server-verdict';
 import { RoleEditor } from './role-editor';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Roles, and what each may do.
@@ -37,6 +38,7 @@ import { useT } from '@/i18n/client';
  */
 export function RolesIndex(): ReactElement {
   const t = useT();
+
   const toast = useToast();
   const roles = useRoles();
   const catalogue = usePermissionCatalogue();
@@ -146,8 +148,10 @@ export function RolesIndex(): ReactElement {
         meta={
           <div className="ac-meta">
             <AcFact>
-              <span className="sk-figure">{all.length}</span> role
-              {all.length === 1 ? '' : 's'}
+              {richMessage(t('rolesRolesIndex.roleCountRich'), {
+                span: <span className="sk-figure">{all.length}</span>,
+                value: all.length === 1 ? '' : t('common.pluralS'),
+              })}
             </AcFact>
             <AcFact>{t('rolesRolesIndex.somebodyMayHoldSeveralWhat')}</AcFact>
           </div>

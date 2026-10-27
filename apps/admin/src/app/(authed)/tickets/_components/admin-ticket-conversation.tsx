@@ -58,6 +58,7 @@ interface Bubble {
  */
 export function AdminTicketConversation({ ticket }: { readonly ticket: TicketView }): ReactElement {
   const t = useT();
+
   const toast = useToast();
   const events = useTicketEvents(ticket.id);
   const canSeeCourier = usePermission('courier.ops.view');

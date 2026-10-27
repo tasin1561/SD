@@ -15,6 +15,7 @@ import { istDateLabel, istDay, istDayRange } from '@/lib/ist-day';
 import { LinkButton, MoCard, Notice } from '../../treasury/_components/money-parts';
 import './pnl.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Where the money is actually made.
@@ -33,6 +34,7 @@ import { useT } from '@/i18n/client';
  */
 export function PnlIndex(): ReactElement {
   const t = useT();
+
   const [from, setFrom] = useState(() => istDay(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
   const [to, setTo] = useState(() => istDay(new Date()));
   // One line open at a time. Four expanded at once is a wall of numbers
@@ -124,16 +126,23 @@ export function PnlIndex(): ReactElement {
             // than it is.
             <Notice tone="warn" icon={<AlertTriangle size={16} />}>
               <p>
-                <strong>
-                  <Money
-                    amount={pnl.data.unattributedLegCosts.amountInr}
-                    currency="INR"
-                    convert={false}
-                  />
-                </strong>{' '}
-                of leg costs across {pnl.data.unattributedLegCosts.count}{' '}
-                {pnl.data.unattributedLegCosts.count === 1 ? 'entry' : 'entries'} sit in operating
-                expenses with nothing to attribute them to. {pnl.data.unattributedLegCosts.note}
+                {richMessage(t('pnlPnlIndex.ofLegCostsAcrossSit'), {
+                  strong: (
+                    <strong>
+                      <Money
+                        amount={pnl.data.unattributedLegCosts.amountInr}
+                        currency="INR"
+                        convert={false}
+                      />
+                    </strong>
+                  ),
+                  count: pnl.data.unattributedLegCosts.count,
+                  value:
+                    pnl.data.unattributedLegCosts.count === 1
+                      ? t('pnlPnlIndex.entry')
+                      : t('pnlPnlIndex.entries'),
+                  note: pnl.data.unattributedLegCosts.note,
+                })}
               </p>
             </Notice>
           )}

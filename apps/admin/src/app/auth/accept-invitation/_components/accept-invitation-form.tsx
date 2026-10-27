@@ -39,26 +39,26 @@ const TERMINAL_CODES: ReadonlySet<string> = new Set([
 ]);
 
 /** What each one means to the person holding the dead link. */
-function terminalCopy(code: string): { title: string; body: string } {
+function terminalCopy(t: Translate<MessageKey>, code: string): { title: string; body: string } {
   switch (code) {
     case 'INVITATION_ALREADY_USED':
       return {
-        title: 'This invitation has already been used',
+        title: t('authAcceptInvitationAcceptInvitationForm.thisInvitationHasAlreadyBeen'),
         body: 'An account was set up with this link. If that was you, sign in — and if you have forgotten the password, the sign-in page can email you a reset.',
       };
     case 'INVITATION_EXPIRED':
       return {
-        title: 'This invitation has expired',
+        title: t('authAcceptInvitationAcceptInvitationForm.thisInvitationHasExpired'),
         body: 'Invitation links are short-lived on purpose. Ask whoever invited you to send a new one — it takes them a moment.',
       };
     case 'INVITATION_REVOKED':
       return {
-        title: 'This invitation was withdrawn',
+        title: t('authAcceptInvitationAcceptInvitationForm.thisInvitationWasWithdrawn'),
         body: 'Someone cancelled it before it was used. If that seems wrong, speak to whoever invited you.',
       };
     default:
       return {
-        title: 'This invitation link is not valid',
+        title: t('authAcceptInvitationAcceptInvitationForm.thisInvitationLinkIsNot'),
         body: 'It may have been mistyped, or truncated by a mail client. Open the link from your invitation email again, or ask for a fresh one.',
       };
   }
@@ -70,6 +70,7 @@ export function AcceptInvitationForm({
   readonly initialToken: string;
 }): ReactElement {
   const t = useT();
+
   const router = useRouter();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -152,7 +153,7 @@ export function AcceptInvitationForm({
   }
 
   if (dead !== null) {
-    const copy = terminalCopy(dead.code);
+    const copy = terminalCopy(t, dead.code);
     return (
       /* Replaces the form rather than covering it. The link is spent;
          leaving a live password field behind a dismissible overlay just

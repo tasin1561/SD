@@ -10,6 +10,7 @@ import { Package } from 'lucide-react';
 import '../../_components/benches.css';
 import { usePackQueue, type WaitingPack } from '@/lib/api-hooks';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * What is waiting on the bench.
@@ -31,6 +32,7 @@ import { useT } from '@/i18n/client';
  */
 export function PackQueueList(): ReactElement {
   const t = useT();
+
   const q = usePackQueue();
 
   if (q.isLoading) {
@@ -70,21 +72,26 @@ export function PackQueueList(): ReactElement {
     <section className="wh-card" data-flush="1">
       <div className="wh-card__head">
         <h2 className="wh-card__title">
-          <span className="sk-figure">{waiting.length}</span> waiting to be packed
+          {richMessage(t('warehousePackPackQueueList.waitingToBePacked'), {
+            span: <span className="sk-figure">{waiting.length}</span>,
+          })}
         </h2>
         <div className="wh-card__sub">{t('warehousePackPackQueueList.oldestFirstScanALabel')}</div>
       </div>
       {unlabelled > 0 && (
         <p className="wh-card__note">
-          {unlabelled}{' '}
-          {unlabelled === 1
-            ? t('warehousePackPackQueueList.parcelHas')
-            : t('warehousePackPackQueueList.parcelsHave')}{' '}
-          no printed label yet — a box is opened by scanning one, so print from{' '}
-          <Link href="/warehouse/printing" className="wh-link">
-            printing
-          </Link>{' '}
-          first.
+          {richMessage(t('warehousePackPackQueueList.noPrintedLabelYetA'), {
+            unlabelled,
+            value:
+              unlabelled === 1
+                ? t('warehousePackPackQueueList.parcelHas')
+                : t('warehousePackPackQueueList.parcelsHave'),
+            link: (
+              <Link href="/warehouse/printing" className="wh-link">
+                printing
+              </Link>
+            ),
+          })}
         </p>
       )}
       <ul className="wh-list">

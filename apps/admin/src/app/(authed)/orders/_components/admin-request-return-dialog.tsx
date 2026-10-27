@@ -10,6 +10,7 @@ import './order-ops.css';
 import { useAdminRequestReturn } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Raise a customer return on a seller's behalf.
@@ -30,6 +31,7 @@ export function AdminRequestReturnDialog({
   readonly onClose: () => void;
 }): ReactElement {
   const t = useT();
+
   const request = useAdminRequestReturn(orderId);
   const toast = useToast();
   const [reason, setReason] = useState('');
@@ -72,7 +74,9 @@ export function AdminRequestReturnDialog({
       icon={<Undo2 size={18} />}
       title={
         <>
-          Bring <span className="sk-ident">{orderNumber}</span> back?
+          {richMessage(t('ordersAdminRequestReturnDialog.bringBack'), {
+            span: <span className="sk-ident">{orderNumber}</span>,
+          })}
         </>
       }
       footer={
@@ -93,13 +97,13 @@ export function AdminRequestReturnDialog({
     >
       <div className="oo-stack oo-stack--tight">
         <p className="oo-p">
-          The courier collects it from the customer and returns it to the warehouse. It travels the
-          same distance again, so{' '}
-          <span className="oo-strong">
-            {t('ordersAdminRequestReturnDialog.theClientIsCharged200')}
-          </span>{' '}
-          — a second delivery, on top of the one they already paid. Charged when the parcel arrives,
-          not now.
+          {richMessage(t('ordersAdminRequestReturnDialog.theCourierCollectsItFrom'), {
+            span: (
+              <span className="oo-strong">
+                {t('ordersAdminRequestReturnDialog.theClientIsCharged200')}
+              </span>
+            ),
+          })}
         </p>
 
         <TextArea

@@ -14,6 +14,7 @@ import { usePermission } from '@/lib/use-permission';
 import { Notice, OoSection } from './order-ops-parts';
 import './order-shipping.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Correcting who the parcel is going to, while the courier still allows
@@ -31,6 +32,7 @@ import { useT } from '@/i18n/client';
  */
 export function ConsigneePanel({ orderId }: { readonly orderId: string }): ReactElement {
   const t = useT();
+
   const toast = useToast();
   const info = useConsignee(orderId);
   const history = useConsigneeHistory(orderId);
@@ -197,9 +199,11 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
       />
 
       <p className="oo-faint">
-        {d.city} · {d.stateProvince} · <span className="sk-figure">{d.postalCode}</span> — fixed.
-        The parcel is already sorted and routed on this pincode, so it cannot be sent somewhere
-        else; only the street address can be corrected.
+        {richMessage(t('ordersConsigneePanel.fixedTheParcelIsAlready'), {
+          city: d.city,
+          stateProvince: d.stateProvince,
+          span: <span className="sk-figure">{d.postalCode}</span>,
+        })}
       </p>
 
       {d.editable && canWrite ? (

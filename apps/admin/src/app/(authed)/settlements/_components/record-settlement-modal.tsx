@@ -21,6 +21,7 @@ import {
 import { serverVerdict } from '@/lib/server-verdict';
 import { MkAlert, MkCallout } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 interface DraftLine {
   readonly key: number;
@@ -60,6 +61,7 @@ export function RecordSettlementModal({
   readonly onOpenChange: (open: boolean) => void;
 }): ReactElement {
   const t = useT();
+
   const toast = useToast();
   const accounts = useCourierAccounts();
   const record = useRecordSettlement();
@@ -380,13 +382,16 @@ export function RecordSettlementModal({
               // the bank statement is the fact, and the operator types
               // the reference and amount from the latter.
               <p className="mk-body">
-                The file says: UTR{' '}
-                <span className="sk-ident sk-ident--wrap">
-                  {fileNotes.summary.references.join(', ') || '—'}
-                </span>{' '}
-                · collected <Money amount={fileNotes.summary.codInr} /> · kept back{' '}
-                <Money amount={fileNotes.summary.deductedInr} /> · remitted{' '}
-                <Money amount={fileNotes.summary.remittedInr} />
+                {richMessage(t('settlementsRecordSettlementModal.theFileSaysUtrCollected'), {
+                  span: (
+                    <span className="sk-ident sk-ident--wrap">
+                      {fileNotes.summary.references.join(', ') || '—'}
+                    </span>
+                  ),
+                  money: <Money amount={fileNotes.summary.codInr} />,
+                  money2: <Money amount={fileNotes.summary.deductedInr} />,
+                  money3: <Money amount={fileNotes.summary.remittedInr} />,
+                })}
               </p>
             )}
             {fileNotes.warnings.length > 0 && (
@@ -561,7 +566,10 @@ export function RecordSettlementModal({
           }
         >
           <p>
-            Allocated <Money amount={allocated} /> of <Money amount={received} /> received
+            {richMessage(t('settlementsRecordSettlementModal.allocatedOfReceived'), {
+              money: <Money amount={allocated} />,
+              money2: <Money amount={received} />,
+            })}
             {keptTotal > 0 && (
               <>
                 {' '}

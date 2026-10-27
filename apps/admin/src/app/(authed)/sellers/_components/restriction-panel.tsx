@@ -17,6 +17,7 @@ import {
 } from '@/lib/restriction-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Capabilities, split by what blocking them actually costs.
@@ -77,6 +78,7 @@ export function RestrictionPanel({
   readonly canManage: boolean;
 }): ReactElement {
   const t = useT();
+
   const active = useSellerRestriction(sellerId);
   const apply = useApplyRestriction(sellerId);
   const lift = useLiftRestriction(sellerId);
@@ -153,9 +155,11 @@ export function RestrictionPanel({
             })}
           </p>
           <p className="ac-muted">
-            Balance <Money amount={hold.balanceInr} currency="INR" /> · lifts at{' '}
-            <Money amount={hold.clearAtBalanceInr} currency="INR" /> · still needed{' '}
-            <Money amount={hold.shortfallInr} currency="INR" />
+            {richMessage(t('sellersRestrictionPanel.balanceLiftsAtStillNeeded'), {
+              money: <Money amount={hold.balanceInr} currency="INR" />,
+              money2: <Money amount={hold.clearAtBalanceInr} currency="INR" />,
+              money3: <Money amount={hold.shortfallInr} currency="INR" />,
+            })}
           </p>
           {canManage && (
             <div className="ac-buttons" data-align="start">

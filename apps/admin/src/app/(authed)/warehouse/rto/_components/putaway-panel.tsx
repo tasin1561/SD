@@ -17,6 +17,7 @@ import '../../_components/benches.css';
 import { useT } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Shelving returned goods an OLDER finalise left in the returns hold.
@@ -53,6 +54,7 @@ const REASON_LABEL = (t: Translate<MessageKey>): Record<string, string> => ({
 
 export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): ReactElement | null {
   const t = useT();
+
   const toast = useToast();
   const pending = useRtoPutawayPending(shipmentId);
   const putaway = useRtoPutaway();
@@ -130,7 +132,9 @@ export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): R
     <section className="wh-card wh-stack">
       <div className="wh-row wh-row--between">
         <h2 className="wh-title">
-          In hold — not yet sellable (<span className="sk-figure">{rows.length}</span>)
+          {richMessage(t('warehouseRtoPutawayPanel.inHoldNotYetSellable'), {
+            span: <span className="sk-figure">{rows.length}</span>,
+          })}
         </h2>
         <span className="wh-faint">{t('warehouseRtoPutawayPanel.anEarlierVersionOfFinalise')}</span>
       </div>
@@ -159,22 +163,30 @@ export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): R
                 <div className="wh-min0">
                   <div className="wh-item__name">{r.productName}</div>
                   <div className="wh-item__sub">
-                    <span className="sk-ident">{r.skuCode}</span> ·{' '}
-                    <span className="sk-figure">
-                      {t('warehouseRtoPutawayPanel.unit', {
-                        quantity: r.quantity,
-                        value: r.quantity === 1 ? '' : t('common.pluralS'),
-                      })}
-                    </span>{' '}
-                    · in <span className="sk-ident">{r.holdBinCode}</span>
+                    {richMessage(t('warehouseRtoPutawayPanel.in'), {
+                      span: <span className="sk-ident">{r.skuCode}</span>,
+                      span2: (
+                        <span className="sk-figure">
+                          {t('warehouseRtoPutawayPanel.unit', {
+                            quantity: r.quantity,
+                            value: r.quantity === 1 ? '' : t('common.pluralS'),
+                          })}
+                        </span>
+                      ),
+                      span3: <span className="sk-ident">{r.holdBinCode}</span>,
+                    })}
                   </div>
                 </div>
 
                 <div className="wh-faint">
                   {r.suggestedBinCode !== null && r.suggestionReason !== null ? (
                     <span>
-                      suggested <span className="sk-ident">{r.suggestedBinCode}</span>{' '}
-                      <span>({REASON_LABEL(t)[r.suggestionReason] ?? r.suggestionReason})</span>
+                      {richMessage(t('warehouseRtoPutawayPanel.suggestedRich'), {
+                        span: <span className="sk-ident">{r.suggestedBinCode}</span>,
+                        span2: (
+                          <span>({REASON_LABEL(t)[r.suggestionReason] ?? r.suggestionReason})</span>
+                        ),
+                      })}
                     </span>
                   ) : (
                     // Said out loud rather than shown as an empty dropdown:

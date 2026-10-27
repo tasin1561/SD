@@ -14,6 +14,7 @@ import { AcAlert, phaseOf } from '../../settings/_components/ac-parts';
 import { useCreateRole, useUpdateRole, type Catalogue, type RoleView } from '@/lib/rbac-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Deciding what a role may do.
@@ -54,6 +55,7 @@ export function RoleEditor({
   readonly onClose: () => void;
 }): ReactElement {
   const t = useT();
+
   const toast = useToast();
   const create = useCreateRole();
   const update = useUpdateRole();
@@ -178,8 +180,10 @@ export function RoleEditor({
 
           <div className="ac-counts">
             <span>
-              <span className="sk-figure">{selected.length}</span> of{' '}
-              <span className="sk-figure">{catalogue.permissions.length}</span> permissions
+              {richMessage(t('rolesRoleEditor.ofPermissions'), {
+                span: <span className="sk-figure">{selected.length}</span>,
+                span2: <span className="sk-figure">{catalogue.permissions.length}</span>,
+              })}
               {needle !== '' &&
                 t('rolesRoleEditor.match', {
                   length: matches.length,

@@ -14,6 +14,8 @@ import { useLiabilities, type LedgerLineView } from '@/lib/ops-hooks';
 import { MoSection, Notice } from '../../treasury/_components/money-parts';
 import './liabilities.css';
 import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * What we owe, and what is owed to us.
@@ -100,22 +102,22 @@ function LineTable({
  * being hidden — a cause we cannot label is still a cause, and dropping
  * it would make the parts stop adding up to the total beside them.
  */
-function humanCause(direction: string): string {
+function humanCause(t: Translate<MessageKey>, direction: string): string {
   switch (direction) {
     case 'ORDER_CHARGES':
-      return 'Delivery fees';
+      return t('liabilitiesLiabilitiesIndex.deliveryFees');
     case 'RTO_FEE':
-      return 'Return fees';
+      return t('liabilitiesLiabilitiesIndex.returnFees');
     case 'INBOUND_FREIGHT':
-      return 'Inbound freight';
+      return t('liabilitiesLiabilitiesIndex.inboundFreight');
     case 'INSTANT_PAY_FEE':
-      return 'Instant-pay fees';
+      return t('liabilitiesLiabilitiesIndex.instantPayFees');
     case 'COD_COLLECTION_FEE':
-      return 'COD collection';
+      return t('liabilitiesLiabilitiesIndex.codCollection');
     case 'ADJUSTMENT_DEBIT':
-      return 'Manual adjustment';
+      return t('liabilitiesLiabilitiesIndex.manualAdjustment');
     case 'STAFF_DEBIT':
-      return 'Debited by Skydrop';
+      return t('liabilitiesLiabilitiesIndex.debitedBySkydrop');
     default:
       return direction.replaceAll('_', ' ').toLowerCase();
   }
@@ -123,6 +125,7 @@ function humanCause(direction: string): string {
 
 export function LiabilitiesIndex(): ReactElement {
   const t = useT();
+
   const q = useLiabilities();
 
   if (q.isLoading) {
@@ -203,7 +206,9 @@ export function LiabilitiesIndex(): ReactElement {
                     value:
                       uncovered.length === 1
                         ? t('liabilitiesLiabilitiesIndex.oneClientOwesMoreThan')
-                        : `${uncovered.length} clients owe more than their stock is worth`,
+                        : t('liabilitiesLiabilitiesIndex.clientsOweMoreThanTheir', {
+                            length: uncovered.length,
+                          }),
                   })}
                 </p>
               </Notice>
@@ -240,7 +245,7 @@ export function LiabilitiesIndex(): ReactElement {
                         <ul className="li-causes">
                           {s.causes.map((c) => (
                             <li key={c.direction}>
-                              <span className="mo-muted">{humanCause(c.direction)}</span>{' '}
+                              <span className="mo-muted">{humanCause(t, c.direction)}</span>{' '}
                               <Money amount={c.amountInr} currency="INR" convert={false} />
                             </li>
                           ))}

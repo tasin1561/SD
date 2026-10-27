@@ -24,15 +24,17 @@ import {
 import { useResellerOrderMoney } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
-function feeLabel(fee: string): string {
+function feeLabel(t: Translate<MessageKey>, fee: string): string {
   switch (fee) {
     case 'ORDER_CHARGES':
-      return 'Delivery fee';
+      return t('ordersResellerMoneyPanel.deliveryFee');
     case 'RTO_FEE':
-      return 'Return fee';
+      return t('ordersResellerMoneyPanel.returnFee');
     case 'CUSTOMER_RETURN_FEE':
-      return 'Customer return fee';
+      return t('ordersResellerMoneyPanel.customerReturnFee');
     default:
       return fee.toLowerCase().replace(/_/g, ' ');
   }
@@ -48,10 +50,17 @@ function signed(amount: string): ReactElement {
   );
 }
 
-function when(p: ResellerPartyCreditView): string {
-  if (p.reversedAt !== null) return `Taken back ${new Date(p.reversedAt).toLocaleString()}`;
-  if (p.creditedAt !== null) return `Credited ${new Date(p.creditedAt).toLocaleString()}`;
-  if (p.dueAt !== null) return `Due ${new Date(p.dueAt).toLocaleString()}`;
+function when(t: Translate<MessageKey>, p: ResellerPartyCreditView): string {
+  if (p.reversedAt !== null)
+    return t('ordersResellerMoneyPanel.takenBack', {
+      value: new Date(p.reversedAt).toLocaleString(),
+    });
+  if (p.creditedAt !== null)
+    return t('ordersResellerMoneyPanel.credited', {
+      value: new Date(p.creditedAt).toLocaleString(),
+    });
+  if (p.dueAt !== null)
+    return t('ordersResellerMoneyPanel.due', { value: new Date(p.dueAt).toLocaleString() });
   return '—';
 }
 
@@ -112,6 +121,7 @@ export function ResellerMoneyPanel({
   readonly enabled: boolean;
 }): ReactElement | null {
   const t = useT();
+
   const money = useResellerOrderMoney(orderId, enabled);
   if (!enabled) return null;
   if (money.isLoading) {
@@ -218,7 +228,7 @@ export function ResellerMoneyPanel({
                       <span className="oo-sub sk-ident">{p.skippedReason}</span>
                     ) : null}
                   </Td>
-                  <Td className="oo-muted">{when(p)}</Td>
+                  <Td className="oo-muted">{when(t, p)}</Td>
                   <Td align="right">
                     <Money amount={p.grossInr} convert={false} />
                   </Td>
@@ -258,7 +268,7 @@ export function ResellerMoneyPanel({
             <TBody>
               {v.fees.map((f) => (
                 <Tr key={f.fee}>
-                  <Td>{feeLabel(f.fee)}</Td>
+                  <Td>{feeLabel(t, f.fee)}</Td>
                   <Td align="right">
                     <Money amount={f.storeInr} convert={false} />
                   </Td>

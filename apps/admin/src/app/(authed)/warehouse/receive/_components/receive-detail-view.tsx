@@ -29,6 +29,7 @@ import { SkuLabelSheetView } from '@/components/sku-label-sheet';
 import { buildReceiptLines } from './receive-lines';
 import '../../_components/benches.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Admin receive-station — full goods-receipt lifecycle in one page:
@@ -51,6 +52,7 @@ import { useT } from '@/i18n/client';
  */
 export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement {
   const t = useT();
+
   const skuLabels = useSkuLabelsForReceipt();
   const [labelSheet, setLabelSheet] = useState<SkuLabelSheet | null>(null);
   const toast = useToast();
@@ -500,12 +502,16 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                     </span>
                     {line.batch !== null && (
                       <span>
-                        batch <span className="sk-ident">{line.batch.batchCode}</span>
+                        {richMessage(t('warehouseReceiveReceiveDetailView.batch'), {
+                          span: <span className="sk-ident">{line.batch.batchCode}</span>,
+                        })}
                       </span>
                     )}
                     {line.putawayBin !== null && (
                       <span>
-                        bin <span className="sk-ident">{line.putawayBin.code}</span>
+                        {richMessage(t('warehouseReceiveReceiveDetailView.bin'), {
+                          span: <span className="sk-ident">{line.putawayBin.code}</span>,
+                        })}
                       </span>
                     )}
                   </div>
@@ -513,8 +519,10 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
               </div>
               {line.receivedQty !== null && (
                 <span className="wh-tag" data-tone="good">
-                  <Check size={12} aria-hidden /> recorded:{' '}
-                  <span className="sk-figure">{line.receivedQty}</span>
+                  {richMessage(t('warehouseReceiveReceiveDetailView.recorded'), {
+                    check: <Check size={12} aria-hidden />,
+                    span: <span className="sk-figure">{line.receivedQty}</span>,
+                  })}
                   {line.damagedQty
                     ? t('warehouseReceiveReceiveDetailView.dmg', { damagedQty: line.damagedQty })
                     : ''}
@@ -568,11 +576,13 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                     // do. Shown in either mode — knowing the building has
                     // nowhere to shelve stock is worth saying regardless.
                     <p className="wh-note">
-                      Its only locations are ones stock cannot be shelved in.{' '}
-                      <Link href="/warehouse/bins" className="wh-link">
-                        {t('warehouseReceiveReceiveDetailView.addAStorageBin')}
-                      </Link>{' '}
-                      and reload.
+                      {richMessage(t('warehouseReceiveReceiveDetailView.itsOnlyLocationsAreOnes'), {
+                        link: (
+                          <Link href="/warehouse/bins" className="wh-link">
+                            {t('warehouseReceiveReceiveDetailView.addAStorageBin')}
+                          </Link>
+                        ),
+                      })}
                     </p>
                   )}
                 </div>
@@ -623,10 +633,12 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
         }}
       >
         <p className="wh-note">
-          <ClipboardCheck size={14} aria-hidden className="wh-inline-icon" />{' '}
-          <span className="sk-figure">{recordedCount}</span> of{' '}
-          <span className="sk-figure">{r.lines.length}</span> product(s) have a recorded count at{' '}
-          {r.warehouse.code}. A variance does not block — it is recorded on the receipt.
+          {richMessage(t('warehouseReceiveReceiveDetailView.ofProductSHaveA'), {
+            clipboardCheck: <ClipboardCheck size={14} aria-hidden className="wh-inline-icon" />,
+            span: <span className="sk-figure">{recordedCount}</span>,
+            span2: <span className="sk-figure">{r.lines.length}</span>,
+            code: r.warehouse.code,
+          })}
         </p>
       </ConfirmDialog>
 

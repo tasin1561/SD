@@ -32,6 +32,9 @@ import {
   mutationPhase,
 } from '../../../inventory/_components/stock-kit';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Re-shelving.
@@ -105,8 +108,10 @@ function emptyLine(key: number): DraftLine {
   };
 }
 
-function binLabel(b: WarehouseBin): string {
-  return NON_PICKABLE.has(b.type) ? `${b.code} — ${b.type}, not pickable` : b.code;
+function binLabel(t: Translate<MessageKey>, b: WarehouseBin): string {
+  return NON_PICKABLE.has(b.type)
+    ? t('warehouseBinsBinOpsPanel.notPickable', { code: b.code, type: b.type })
+    : b.code;
 }
 
 export function BinOpsPanel({
@@ -118,6 +123,7 @@ export function BinOpsPanel({
   readonly warehouseId?: string;
 }): ReactElement | null {
   const t = useT();
+
   // COSMETIC (FE-2). The page is gated on warehouse.view; both endpoints
   // demand warehouse.manage. Without this, anyone who can read the floor
   // plan is offered two buttons the server will refuse.
@@ -301,7 +307,7 @@ export function BinOpsPanel({
             <option value="">{t('warehouseBinsBinOpsPanel.choose')}</option>
             {binOptions.map((b) => (
               <option key={b.id} value={b.id}>
-                {binLabel(b)}
+                {binLabel(t, b)}
               </option>
             ))}
           </Select>
@@ -317,7 +323,7 @@ export function BinOpsPanel({
             <option value="">{t('warehouseBinsBinOpsPanel.choose')}</option>
             {binOptions.map((b) => (
               <option key={b.id} value={b.id}>
-                {binLabel(b)}
+                {binLabel(t, b)}
               </option>
             ))}
           </Select>
@@ -499,11 +505,13 @@ export function BinOpsPanel({
           being a thing a hand lands on while re-shelving. */}
       {mayCollapse && (
         <Note>
-          Abandoning this warehouse&rsquo;s shelving altogether?{' '}
-          <Link href="/warehouse/collapse" className="stk-link">
-            {t('warehouseBinsBinOpsPanel.collapseItsBinsIntoFloor')}
-          </Link>{' '}
-          — destructive, two-step, and backed up first.
+          {richMessage(t('warehouseBinsBinOpsPanel.abandoningThisWarehouseSShelving'), {
+            link: (
+              <Link href="/warehouse/collapse" className="stk-link">
+                {t('warehouseBinsBinOpsPanel.collapseItsBinsIntoFloor')}
+              </Link>
+            ),
+          })}
         </Note>
       )}
     </AreaSection>

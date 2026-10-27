@@ -16,6 +16,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { AfCard, AfSection, Notice } from '@/app/(authed)/system/_components/af-parts';
 import './shiprocket.css';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 function when(iso: string | null): string {
   return iso === null ? '—' : new Date(iso).toISOString().slice(0, 16).replace('T', ' ');
@@ -39,6 +40,7 @@ function when(iso: string | null): string {
  */
 export function ShiprocketOpsIndex(): ReactElement {
   const t = useT();
+
   const status = useShiprocketStatus();
   const connectivity = useShiprocketConnectivity();
   const [from, setFrom] = useState('');
@@ -87,10 +89,11 @@ export function ShiprocketOpsIndex(): ReactElement {
           {stubbedButLive === true && (
             <Notice tone="bad" role="alert">
               <p>
-                Shiprocket is taking new parcels but answering from a STUB. A booking here would
-                come back with a waybill nobody issued. Either set
-                <code className="af-code sr-inline-code">courier.shiprocket_api_base_url</code>, or
-                switch the courier off for new parcels on /courier-accounts.
+                {richMessage(t('shiprocketShiprocketOpsIndex.shiprocketIsTakingNewParcels'), {
+                  code: (
+                    <code className="af-code sr-inline-code">courier.shiprocket_api_base_url</code>
+                  ),
+                })}
               </p>
             </Notice>
           )}

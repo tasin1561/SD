@@ -18,6 +18,7 @@ import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import './order-core.css';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * The god-mode override surface (CP2.10).
@@ -127,6 +128,7 @@ export function ForceMutationDialog({
   readonly onSuccess: (result: ForceMutationResult) => void;
 }): ReactElement {
   const t = useT();
+
   const [fieldStates, setFieldStates] = useState<Record<FieldKey, FieldState>>(() =>
     initFieldStates(),
   );
@@ -327,8 +329,9 @@ export function ForceMutationDialog({
               label={t('ordersForceMutationDialog.forceOrderStatus')}
               description={
                 <>
-                  Bypasses the state-machine matrix. Currently:{' '}
-                  <span className="sk-ident">{order.status}</span>
+                  {richMessage(t('ordersForceMutationDialog.bypassesTheStateMachineMatrix'), {
+                    span: <span className="sk-ident">{order.status}</span>,
+                  })}
                 </>
               }
             />
@@ -372,17 +375,18 @@ export function ForceMutationDialog({
               disabled={mutate.isPending}
               label={
                 <>
-                  I acknowledge the data-integrity risk: this bypass opts OUT of the saga&apos;s
-                  compensation guarantee. Stock side-effects on{' '}
-                  <span className="sk-ident">{t('ordersForceMutationDialog.confirmed')}</span> are
-                  attempted but not enforced; transitioning away from{' '}
-                  <span className="sk-ident">CONFIRMED</span> leaves reservations intact (cleanup is
-                  the separate <span className="sk-ident">release-reservations</span> action). The
-                  order will carry{' '}
-                  <span className="sk-ident">
-                    {t('ordersForceMutationDialog.hasadminoverrideTrue')}
-                  </span>{' '}
-                  permanently.
+                  {richMessage(t('ordersForceMutationDialog.iAcknowledgeTheDataIntegrity'), {
+                    span: (
+                      <span className="sk-ident">{t('ordersForceMutationDialog.confirmed')}</span>
+                    ),
+                    span2: <span className="sk-ident">CONFIRMED</span>,
+                    span3: <span className="sk-ident">release-reservations</span>,
+                    span4: (
+                      <span className="sk-ident">
+                        {t('ordersForceMutationDialog.hasadminoverrideTrue')}
+                      </span>
+                    ),
+                  })}
                 </>
               }
             />
@@ -411,18 +415,14 @@ export function ForceMutationDialog({
 
 function CriticalNotice(): ReactElement {
   const t = useT();
+
   return (
     <div className="oo-god__banner" role="note">
       <AlertTriangle size={16} aria-hidden />
       <p className="oo-p oo-bad">
-        <strong>{t('ordersForceMutationDialog.thisIsADeliberateBypass')}</strong> The order&apos;s
-        state machine, edit rules, and saga compensation are all opted out of. Use it only when
-        normal flows can&apos;t reach the required state — and document why. A forced status has the
-        same consequences as any other change except stock: customer and client emails, client
-        webhooks, invoices and delivery-time billing fire for the status it lands on; it joins or
-        leaves the call queue; a forced CONFIRMED gets a shipment (so it can be picked and booked);
-        and a cancel voids an unpicked shipment and returns the delivery fee if the parcel never
-        left with a courier. A waybill already issued is NOT cancelled with the courier.
+        {richMessage(t('ordersForceMutationDialog.theOrderSStateMachine'), {
+          strong: <strong>{t('ordersForceMutationDialog.thisIsADeliberateBypass')}</strong>,
+        })}
       </p>
     </div>
   );
@@ -585,6 +585,7 @@ function TypedConfirmStep({
   readonly pending: boolean;
 }): ReactElement {
   const t = useT();
+
   return (
     <div className="oo-god">
       <CriticalNotice />
@@ -609,7 +610,9 @@ function TypedConfirmStep({
 
       <div className="oc-critical-box">
         <p className="oo-p">
-          Type <span className="oc-typed-word">{TYPED_CONFIRM}</span> to confirm
+          {richMessage(t('ordersForceMutationDialog.typeToConfirmRich'), {
+            span: <span className="oc-typed-word">{TYPED_CONFIRM}</span>,
+          })}
         </p>
         <TextField
           className="oo-god__typed"

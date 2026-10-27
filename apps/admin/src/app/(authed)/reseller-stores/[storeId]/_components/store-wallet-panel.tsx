@@ -16,6 +16,7 @@ import { useAdminStoreWallet, useAdminStoreWalletEntries } from '@/lib/reseller-
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
@@ -31,6 +32,7 @@ function when(iso: string): string {
  */
 export function StoreWalletPanel({ storeId }: { readonly storeId: string }): ReactElement | null {
   const t = useT();
+
   const allowed = usePermission('money.view');
   const summary = useAdminStoreWallet(storeId, allowed);
   const entries = useAdminStoreWalletEntries(storeId, allowed);
@@ -89,8 +91,10 @@ export function StoreWalletPanel({ storeId }: { readonly storeId: string }): Rea
             figure={<Money amount={summary.data.negativeLimit.effectiveInr} />}
             hint={
               <>
-                Client set <Money amount={summary.data.negativeLimit.ownInr} convert={false} />; our
-                cap <Money amount={summary.data.negativeLimit.capInr} convert={false} />.
+                {richMessage(t('resellerStoresStoreIdStoreWalletPanel.clientSetOurCap'), {
+                  money: <Money amount={summary.data.negativeLimit.ownInr} convert={false} />,
+                  money2: <Money amount={summary.data.negativeLimit.capInr} convert={false} />,
+                })}
               </>
             }
           />
