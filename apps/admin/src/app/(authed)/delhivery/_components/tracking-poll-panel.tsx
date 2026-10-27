@@ -12,6 +12,7 @@ import './delhivery.css';
 import { useRunTrackingPoll, useTrackingPollHealth } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * The human layer over the tracking poller.
@@ -27,6 +28,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  * exactly the moment somebody is under pressure.
  */
 export function TrackingPollPanel(): ReactElement | null {
+  const t = useT();
   const toast = useToast();
   // This page is gated on managing waybills, which is a different job
   // from running tracking — so the panel checks its own permission
@@ -47,8 +49,12 @@ export function TrackingPollPanel(): ReactElement | null {
       const r = await run.mutateAsync();
       toast.success(
         r.stubMode
-          ? 'Cycle ran in STUB MODE — no call left this process. Tracking is not actually running; check the API base URL.'
-          : `Checked ${r.shipmentsExamined} parcels, applied ${r.scansApplied} new scans, moved ${r.transitions} orders.`,
+          ? t('delhiveryTrackingPollPanel.cycleRanInStubMode')
+          : t('delhiveryTrackingPollPanel.checkedParcelsAppliedNewScans', {
+              shipmentsExamined: r.shipmentsExamined,
+              scansApplied: r.scansApplied,
+              transitions: r.transitions,
+            }),
       );
     } catch (err) {
       toast.error(serverVerdict(err));
@@ -58,12 +64,14 @@ export function TrackingPollPanel(): ReactElement | null {
 
   return (
     <AfSection
-      title="Tracking"
-      note="Delhivery sends us no webhooks, so a scheduled poll is what moves every order to delivered. If this stops, nothing else fails — parcels simply stop updating."
+      title={t('delhiveryTrackingPollPanel.tracking')}
+      note={t('delhiveryTrackingPollPanel.delhiverySendsUsNoWebhooks')}
     >
       {health.isError ? (
         <ErrorState
-          message={health.error?.message ?? 'Could not read tracking health.'}
+          message={
+            health.error?.message ?? t('delhiveryTrackingPollPanel.couldNotReadTrackingHealth')
+          }
           retry={() => void health.refetch()}
         />
       ) : health.isLoading ? (
@@ -80,19 +88,21 @@ export function TrackingPollPanel(): ReactElement | null {
                 )}
                 <StatusChip
                   kind={stale ? 'failed' : 'delivered'}
-                  label={stale ? 'Not running' : 'Running'}
+                  label={
+                    stale
+                      ? t('delhiveryTrackingPollPanel.notRunning')
+                      : t('delhiveryTrackingPollPanel.running')
+                  }
                 />
               </div>
               <p className="af-muted">
                 {minutes === null
-                  ? 'No cycle has ever completed. Either the poller has not run since this was added, or it is not running at all.'
+                  ? t('delhiveryTrackingPollPanel.noCycleHasEverCompleted')
                   : `Last cycle ${minutes === 0 ? 'less than a minute' : `${minutes} minute${minutes === 1 ? '' : 's'}`} ago. Scheduled ${health.data?.cronPattern ?? ''}.`}
               </p>
               {stale ? (
                 <p className="af-muted">
-                  Orders will not reach delivered while this is stopped, which also means COD is not
-                  being credited. Run a cycle below, then check the API process is up and that the
-                  Delhivery base URL is still set.
+                  {t('delhiveryTrackingPollPanel.ordersWillNotReachDelivered')}
                 </p>
               ) : null}
             </div>
@@ -100,10 +110,10 @@ export function TrackingPollPanel(): ReactElement | null {
               variant="secondary"
               size="md"
               labels={{
-                idle: 'Run a cycle now',
-                busy: 'Running…',
-                done: 'Cycle ran',
-                error: 'Did not run',
+                idle: t('delhiveryTrackingPollPanel.runACycleNow'),
+                busy: t('delhiveryTrackingPollPanel.running2'),
+                done: t('delhiveryTrackingPollPanel.cycleRan'),
+                error: t('delhiveryTrackingPollPanel.didNotRun'),
               }}
               disabled={run.isPending}
               onAction={runNow}

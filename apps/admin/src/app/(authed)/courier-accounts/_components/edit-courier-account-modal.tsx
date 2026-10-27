@@ -12,6 +12,7 @@ import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useUpdateCourierAccount, type CourierAccountView } from '@/lib/ops-hooks';
+import { useT } from '@/i18n/client';
 
 /**
  * Editing what an account IS, not what it authenticates with.
@@ -33,6 +34,7 @@ export function EditCourierAccountModal({
   readonly open: boolean;
   readonly onOpenChange: (next: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const update = useUpdateCourierAccount();
   const [label, setLabel] = useState(account.label);
@@ -76,7 +78,7 @@ export function EditCourierAccountModal({
         // a link they were never shown.
         ...(canMoney ? { payoutBankAccountId: payoutBank === '' ? null : payoutBank } : {}),
       });
-      toast.success('Account updated.');
+      toast.success(t('courierAccountsEditCourierAccountModal.accountUpdated'));
       onOpenChange(false);
     } catch (err) {
       // FE-2 — the server owns the rules; show its refusal verbatim.
@@ -90,12 +92,12 @@ export function EditCourierAccountModal({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Edit courier account"
-      description="The API credential cannot be edited — it is never readable once saved. To change a token, add an account and deactivate this one."
+      title={t('courierAccountsEditCourierAccountModal.editCourierAccount')}
+      description={t('courierAccountsEditCourierAccountModal.theApiCredentialCannotBe')}
       footer={
         <DialogFooter>
           <Button variant="secondary" size="md" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('courierAccountsEditCourierAccountModal.cancel')}
           </Button>
           <Button
             size="md"
@@ -103,7 +105,7 @@ export function EditCourierAccountModal({
             disabled={label.trim() === '' || update.isPending}
             onClick={() => void save()}
           >
-            Save changes
+            {t('courierAccountsEditCourierAccountModal.saveChanges')}
           </Button>
         </DialogFooter>
       }
@@ -111,19 +113,19 @@ export function EditCourierAccountModal({
       <div className="af-form">
         <TextField
           id="ea-label"
-          label="Label"
-          hint="How an operator tells this account apart."
+          label={t('courierAccountsEditCourierAccountModal.label')}
+          hint={t('courierAccountsEditCourierAccountModal.howAnOperatorTellsThis')}
           value={label}
           onChange={(e) => setLabel(e.target.value)}
         />
 
         <TextField
           id="ea-pickup"
-          label="Pickup location name"
-          hint="The warehouse name registered with THIS account at Delhivery, matched byte-for-byte. Leave blank to use the global setting — right for a single account, wrong as soon as there are two."
+          label={t('courierAccountsEditCourierAccountModal.pickupLocationName')}
+          hint={t('courierAccountsEditCourierAccountModal.theWarehouseNameRegisteredWith')}
           value={pickup}
           onChange={(e) => setPickup(e.target.value)}
-          placeholder="Blank = global setting"
+          placeholder={t('courierAccountsEditCourierAccountModal.blankGlobalSetting')}
         />
 
         {/*
@@ -141,12 +143,14 @@ export function EditCourierAccountModal({
         {canMoney && (
           <Select
             id="ea-payout-bank"
-            label="COD payouts land in"
-            hint="One of our bank accounts. Required before a settlement for this courier can be recorded. Several couriers can share one account."
+            label={t('courierAccountsEditCourierAccountModal.codPayoutsLandIn')}
+            hint={t('courierAccountsEditCourierAccountModal.oneOfOurBankAccounts')}
             value={payoutBank}
             onChange={(e) => setPayoutBank(e.target.value)}
           >
-            <option value="">No account linked yet</option>
+            <option value="">
+              {t('courierAccountsEditCourierAccountModal.noAccountLinkedYet')}
+            </option>
             {(banks.data ?? [])
               .filter((b) => b.currency === 'INR')
               .map((b) => (
@@ -162,23 +166,23 @@ export function EditCourierAccountModal({
           // string exactly, so silently "fixing" whitespace would produce
           // a name that does not match the registration. Say it instead.
           <Notice tone="warn">
-            <p>
-              This name has leading or trailing spaces. Delhivery matches it exactly — that will not
-              match your registration unless the spaces are really there.
-            </p>
+            <p>{t('courierAccountsEditCourierAccountModal.thisNameHasLeadingOr')}</p>
           </Notice>
         )}
 
         <TextArea
           id="ea-notes"
-          label="Notes"
+          label={t('courierAccountsEditCourierAccountModal.notes')}
           rows={3}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
 
         {update.error !== null && (
-          <ErrorState title="Not saved" message={serverVerdict(update.error)} />
+          <ErrorState
+            title={t('courierAccountsEditCourierAccountModal.notSaved')}
+            message={serverVerdict(update.error)}
+          />
         )}
       </div>
     </Dialog>

@@ -15,6 +15,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { AfCard } from '@/app/(authed)/system/_components/af-parts';
 import './courier-accounts.css';
+import { useT } from '@/i18n/client';
 
 /**
  * The master on/off per courier.
@@ -35,6 +36,7 @@ import './courier-accounts.css';
  * server's verdict is shown verbatim.
  */
 export function CourierMasterSwitches(): ReactElement {
+  const t = useT();
   const couriers = useCouriers();
   const setActive = useSetCourierActive();
   const canWrite = usePermission('courier.accounts.manage');
@@ -58,7 +60,12 @@ export function CourierMasterSwitches(): ReactElement {
       const r = await setActive.mutateAsync({ courierCode: c.code, isActive: next, reason });
       const said = r.changed
         ? `${c.name} is now ${r.isActive ? 'taking new parcels' : 'off for new parcels'}.`
-        : `${c.name} was already ${r.isActive ? 'on' : 'off'}.`;
+        : t('courierAccountsCourierMasterSwitches.wasAlready', {
+            name: c.name,
+            value: r.isActive
+              ? t('courierAccountsCourierMasterSwitches.on')
+              : t('courierAccountsCourierMasterSwitches.off'),
+          });
       if (r.isActive) toast.success(said);
       else toast.info(said);
     } catch (err) {
@@ -72,20 +79,28 @@ export function CourierMasterSwitches(): ReactElement {
   }
 
   const next = asking === null ? true : !asking.isActive;
-  const verb = next ? 'start sending new parcels to' : 'stop sending new parcels to';
+  const verb = next
+    ? t('courierAccountsCourierMasterSwitches.startSendingNewParcelsTo')
+    : t('courierAccountsCourierMasterSwitches.stopSendingNewParcelsTo');
 
   return (
     <AfCard>
       <SectionHeading
-        title="Couriers"
-        note="Whether each courier receives new parcels. Turning one off diverts new orders to the others; parcels already with them keep being tracked, and can still be cancelled or re-attempted."
+        title={t('courierAccountsCourierMasterSwitches.couriers')}
+        note={t('courierAccountsCourierMasterSwitches.whetherEachCourierReceivesNew')}
       />
       {couriers.isPending ? (
-        <SkeletonRows rows={2} cols={3} label="Loading couriers" />
+        <SkeletonRows
+          rows={2}
+          cols={3}
+          label={t('courierAccountsCourierMasterSwitches.loadingCouriers')}
+        />
       ) : couriers.isError ? (
         <ErrorState message={serverVerdict(couriers.error)} retry={() => void couriers.refetch()} />
       ) : (couriers.data ?? []).length === 0 ? (
-        <p className="af-faint">No couriers are configured.</p>
+        <p className="af-faint">
+          {t('courierAccountsCourierMasterSwitches.noCouriersAreConfigured')}
+        </p>
       ) : (
         <ul className="af-list af-stack">
           {(couriers.data ?? []).map((c) => (
@@ -100,7 +115,11 @@ export function CourierMasterSwitches(): ReactElement {
               <span className="ca-switch__side">
                 <StatusChip
                   kind={c.isActive ? 'delivered' : 'cancelled'}
-                  label={c.isActive ? 'Taking parcels' : 'Off for new parcels'}
+                  label={
+                    c.isActive
+                      ? t('courierAccountsCourierMasterSwitches.takingParcels')
+                      : t('courierAccountsCourierMasterSwitches.offForNewParcels')
+                  }
                 />
                 {canWrite ? (
                   <Button
@@ -109,7 +128,9 @@ export function CourierMasterSwitches(): ReactElement {
                     disabled={pending !== null}
                     loading={pending === c.code}
                   >
-                    {c.isActive ? 'Turn off' : 'Turn on'}
+                    {c.isActive
+                      ? t('courierAccountsCourierMasterSwitches.turnOff')
+                      : t('courierAccountsCourierMasterSwitches.turnOn')}
                   </Button>
                 ) : null}
               </span>
@@ -123,20 +144,28 @@ export function CourierMasterSwitches(): ReactElement {
         onOpenChange={(o) => {
           if (!o) setAsking(null);
         }}
-        title={asking === null ? 'Change this courier?' : `Why ${verb} ${asking.name}?`}
+        title={
+          asking === null
+            ? t('courierAccountsCourierMasterSwitches.changeThisCourier')
+            : t('courierAccountsCourierMasterSwitches.why', { verb, name: asking.name })
+        }
         entity={asking === null ? '' : `${asking.name} (${asking.code})`}
         consequence={
           next
-            ? 'New orders will begin routing here immediately.'
-            : 'Parcels they already hold keep being tracked and can still be cancelled or re-attempted. Only new bookings stop.'
+            ? t('courierAccountsCourierMasterSwitches.newOrdersWillBeginRouting')
+            : t('courierAccountsCourierMasterSwitches.parcelsTheyAlreadyHoldKeep')
         }
-        confirmLabel={next ? 'Turn on' : 'Turn off'}
+        confirmLabel={
+          next
+            ? t('courierAccountsCourierMasterSwitches.turnOn')
+            : t('courierAccountsCourierMasterSwitches.turnOff')
+        }
         destructive={!next}
         error={error}
         onConfirm={() => (asking === null ? undefined : toggle(asking))}
       >
         <TextArea
-          label="Reason"
+          label={t('courierAccountsCourierMasterSwitches.reason')}
           rows={2}
           value={reason}
           onChange={(e) => setReason(e.target.value)}

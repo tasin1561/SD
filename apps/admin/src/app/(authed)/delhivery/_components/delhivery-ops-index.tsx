@@ -21,6 +21,7 @@ import { TrackingLookupPanel } from './tracking-lookup-panel';
 import { WalletImportPanel } from './wallet-import-panel';
 import { TrackingPollPanel } from './tracking-poll-panel';
 import './delhivery.css';
+import { useT } from '@/i18n/client';
 
 /**
  * The Delhivery operations console.
@@ -30,6 +31,7 @@ import './delhivery.css';
  * and how much rate budget remains before the WAF blocks our egress IP.
  */
 export function DelhiveryOpsIndex(): ReactElement {
+  const t = useT();
   const toast = useToast();
   const status = useDelhiveryStatus();
   const refill = useRefillWaybillPool();
@@ -48,8 +50,11 @@ export function DelhiveryOpsIndex(): ReactElement {
       const result = await refill.mutateAsync();
       toast.success(
         result.fetched === 0
-          ? `Pool is already above its watermark (${result.poolAfter} held).`
-          : `Fetched ${result.fetched}. Pool now ${result.poolAfter}.`,
+          ? t('delhiveryDelhiveryOpsIndex.poolIsAlreadyAboveIts', { poolAfter: result.poolAfter })
+          : t('delhiveryDelhiveryOpsIndex.fetchedPoolNow', {
+              fetched: result.fetched,
+              poolAfter: result.poolAfter,
+            }),
       );
     } catch (err) {
       const verdict = serverVerdict(err);
@@ -62,10 +67,13 @@ export function DelhiveryOpsIndex(): ReactElement {
   return (
     <div className="af-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Network' }, { label: 'Delhivery' }]}
+        breadcrumbs={[
+          { label: t('delhiveryDelhiveryOpsIndex.network') },
+          { label: t('delhiveryDelhiveryOpsIndex.delhivery') },
+        ]}
         Link={Link}
-        title="Delhivery"
-        subtitle="Waybill pool depth, the live-write guard, and remaining rate budget. Refreshes every 30 seconds."
+        title={t('delhiveryDelhiveryOpsIndex.delhivery')}
+        subtitle={t('delhiveryDelhiveryOpsIndex.waybillPoolDepthTheLive')}
         action={
           <Button
             variant="secondary"
@@ -76,7 +84,7 @@ export function DelhiveryOpsIndex(): ReactElement {
               setConfirmRefill(true);
             }}
           >
-            Refill waybill pool
+            {t('delhiveryDelhiveryOpsIndex.refillWaybillPool')}
           </Button>
         }
       />
@@ -87,7 +95,9 @@ export function DelhiveryOpsIndex(): ReactElement {
 
       {status.isError ? (
         <ErrorState
-          message={status.error?.message ?? 'Could not read Delhivery status.'}
+          message={
+            status.error?.message ?? t('delhiveryDelhiveryOpsIndex.couldNotReadDelhiveryStatus')
+          }
           retry={() => void status.refetch()}
         />
       ) : status.isLoading ? (
@@ -100,21 +110,25 @@ export function DelhiveryOpsIndex(): ReactElement {
         <>
           {/* ── mode + guard ── */}
           <AfSection
-            title="Connection"
-            note="Stub mode means no network call ever leaves this process. The write guard is a second, independent gate on operations with a physical or billable effect."
+            title={t('delhiveryDelhiveryOpsIndex.connection')}
+            note={t('delhiveryDelhiveryOpsIndex.stubModeMeansNoNetwork')}
           >
             <div className="af-grid-2">
               <AfCard>
                 <div>
                   <StatusChip
                     kind={status.data?.liveMode === true ? 'in-transit' : 'draft'}
-                    label={status.data?.liveMode === true ? 'Live API' : 'Stub mode'}
+                    label={
+                      status.data?.liveMode === true
+                        ? t('delhiveryDelhiveryOpsIndex.liveApi')
+                        : t('delhiveryDelhiveryOpsIndex.stubMode')
+                    }
                   />
                 </div>
                 <p className="af-small">
                   {status.data?.liveMode === true
-                    ? 'Calls go to the real Delhivery API. There is no sandbox on this account, so every request counts against production.'
-                    : 'No base URL configured, so the adapter answers from deterministic stubs. Safe to exercise any flow.'}
+                    ? t('delhiveryDelhiveryOpsIndex.callsGoToTheReal')
+                    : t('delhiveryDelhiveryOpsIndex.noBaseUrlConfiguredSo')}
                 </p>
               </AfCard>
 
@@ -123,22 +137,24 @@ export function DelhiveryOpsIndex(): ReactElement {
                   {status.data?.liveWritesEnabled === true ? (
                     <>
                       <Unlock size={14} aria-hidden className="af-bad" />
-                      <span className="af-bad">Live writes enabled</span>
+                      <span className="af-bad">
+                        {t('delhiveryDelhiveryOpsIndex.liveWritesEnabled')}
+                      </span>
                     </>
                   ) : (
                     <>
                       <Lock size={14} aria-hidden />
-                      <span>Live writes blocked</span>
+                      <span>{t('delhiveryDelhiveryOpsIndex.liveWritesBlocked')}</span>
                     </>
                   )}
                 </p>
                 <p className="af-small">
                   {status.data?.liveWritesEnabled === true
-                    ? 'Manifesting, pickups, cancels and NDR actions will reach the real account. Turn this off again once the intended operation is done.'
-                    : 'Manifesting, pickups, cancels and NDR actions are refused with DELHIVERY_LIVE_WRITES_DISABLED. This is the default and the safe state.'}
+                    ? t('delhiveryDelhiveryOpsIndex.manifestingPickupsCancelsAndNdr')
+                    : t('delhiveryDelhiveryOpsIndex.manifestingPickupsCancelsAndNdr2')}
                 </p>
                 <Link href="/settings" className="af-link af-small af-inline-link">
-                  Change in system settings →
+                  {t('delhiveryDelhiveryOpsIndex.changeInSystemSettings')}
                 </Link>
               </AfCard>
             </div>
@@ -146,48 +162,54 @@ export function DelhiveryOpsIndex(): ReactElement {
 
           {/* ── waybill pool ── */}
           <AfSection
-            title="Waybill pool"
-            note="AWBs are fetched in bulk ahead of time because Delhivery allows only five bulk requests per five minutes. An empty pool stops manifests."
+            title={t('delhiveryDelhiveryOpsIndex.waybillPool')}
+            note={t('delhiveryDelhiveryOpsIndex.awbsAreFetchedInBulk')}
           >
             <div className="af-kpis">
               <KpiCard
-                label="Usable now"
+                label={t('delhiveryDelhiveryOpsIndex.usableNow')}
                 figure={<Num value={usable} />}
                 tone={poolTone}
-                hint="Past their settle delay"
+                hint={t('delhiveryDelhiveryOpsIndex.pastTheirSettleDelay')}
               />
               <KpiCard
-                label="Available"
+                label={t('delhiveryDelhiveryOpsIndex.available')}
                 figure={<Num value={pool?.available ?? 0} />}
-                hint="Includes not-yet-settled"
+                hint={t('delhiveryDelhiveryOpsIndex.includesNotYetSettled')}
               />
-              <KpiCard label="Assigned" figure={<Num value={pool?.assigned ?? 0} />} />
-              <KpiCard label="Used" figure={<Num value={pool?.used ?? 0} />} />
-              <KpiCard label="Void" figure={<Num value={pool?.void ?? 0} />} />
+              <KpiCard
+                label={t('delhiveryDelhiveryOpsIndex.assigned')}
+                figure={<Num value={pool?.assigned ?? 0} />}
+              />
+              <KpiCard
+                label={t('delhiveryDelhiveryOpsIndex.used')}
+                figure={<Num value={pool?.used ?? 0} />}
+              />
+              <KpiCard
+                label={t('delhiveryDelhiveryOpsIndex.void')}
+                figure={<Num value={pool?.void ?? 0} />}
+              />
             </div>
 
             {usable === 0 && (
               <Notice tone="bad" role="alert">
-                <p>
-                  No usable waybills. Manifest closure will fail until the pool is refilled. In live
-                  mode the refill itself needs the write guard on.
-                </p>
+                <p>{t('delhiveryDelhiveryOpsIndex.noUsableWaybillsManifestClosure')}</p>
               </Notice>
             )}
           </AfSection>
 
           {/* ── rate budget ── */}
           <AfSection
-            title="Rate budget"
-            note="Budgeted to 80% of Delhivery's documented limits, per five-minute window, shared across every API instance. Exhausting one returns a WAF 403 that blocks our whole egress IP."
+            title={t('delhiveryDelhiveryOpsIndex.rateBudget')}
+            note={t('delhiveryDelhiveryOpsIndex.budgetedTo80OfDelhivery')}
           >
             <Table>
               <THead>
                 <Tr>
-                  <Th>Endpoint</Th>
-                  <Th align="right">Remaining</Th>
-                  <Th align="right">Budget</Th>
-                  <Th>Headroom</Th>
+                  <Th>{t('delhiveryDelhiveryOpsIndex.endpoint')}</Th>
+                  <Th align="right">{t('delhiveryDelhiveryOpsIndex.remaining')}</Th>
+                  <Th align="right">{t('delhiveryDelhiveryOpsIndex.budget')}</Th>
+                  <Th>{t('delhiveryDelhiveryOpsIndex.headroom')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -199,7 +221,9 @@ export function DelhiveryOpsIndex(): ReactElement {
                         <span className="af-stack af-stack--tight">
                           <span>{b.endpoint.replaceAll('_', ' ')}</span>
                           {b.endpoint === 'waybill_bulk' && (
-                            <span className="af-faint">five per five minutes — the tight one</span>
+                            <span className="af-faint">
+                              {t('delhiveryDelhiveryOpsIndex.fivePerFiveMinutesThe')}
+                            </span>
                           )}
                         </span>
                       </Td>
@@ -237,10 +261,10 @@ export function DelhiveryOpsIndex(): ReactElement {
       <ConfirmDialog
         open={confirmRefill}
         onOpenChange={setConfirmRefill}
-        title="Refill the waybill pool?"
-        entity="Delhivery waybill pool"
-        consequence="This asks Delhivery for a bulk batch of real AWBs from the account's allocation and uses one of the five bulk requests allowed per five minutes."
-        confirmLabel="Refill waybill pool"
+        title={t('delhiveryDelhiveryOpsIndex.refillTheWaybillPool')}
+        entity={t('delhiveryDelhiveryOpsIndex.delhiveryWaybillPool')}
+        consequence={t('delhiveryDelhiveryOpsIndex.thisAsksDelhiveryForA')}
+        confirmLabel={t('delhiveryDelhiveryOpsIndex.refillWaybillPool')}
         error={refillError}
         onConfirm={doRefill}
       />

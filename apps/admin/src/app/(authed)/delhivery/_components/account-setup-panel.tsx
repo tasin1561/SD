@@ -16,6 +16,7 @@ import {
   useUpdateCourierWarehouse,
   type RegisterCourierWarehouseBody,
 } from '@/lib/ops-hooks';
+import { useT } from '@/i18n/client';
 
 /**
  * The two things that have to be true before a real parcel can move,
@@ -55,6 +56,7 @@ const EMPTY: RegisterCourierWarehouseBody = {
 };
 
 export function AccountSetupPanel(): ReactElement | null {
+  const t = useT();
   const toast = useToast();
   const mayProbe = usePermission('courier.ops.view');
   const mayRegister = usePermission('courier.accounts.manage');
@@ -111,7 +113,7 @@ export function AccountSetupPanel(): ReactElement | null {
           `Reached Delhivery. ${r.pincode ?? ''} is ${r.detail?.serviceable === true ? 'serviceable' : 'not serviceable'}.`,
         );
       } else {
-        toast.error(r.error ?? 'Did not reach the live API.');
+        toast.error(r.error ?? t('delhiveryAccountSetupPanel.didNotReachTheLive'));
       }
     } catch (err) {
       setError(serverVerdict(err));
@@ -142,13 +144,13 @@ export function AccountSetupPanel(): ReactElement | null {
       if (r.success) {
         toast.success(
           mode === 'REGISTER'
-            ? `Registered "${r.name}". Every shipment from this warehouse must send exactly that name.`
-            : `Updated "${r.name}".`,
+            ? t('delhiveryAccountSetupPanel.registeredEveryShipmentFromThis', { name: r.name })
+            : t('delhiveryAccountSetupPanel.updated', { name: r.name }),
         );
       } else {
         // A 200 that did not succeed is Delhivery declining, and its own
         // words are more useful than ours.
-        setError(r.message ?? 'Delhivery declined the request without saying why.');
+        setError(r.message ?? t('delhiveryAccountSetupPanel.delhiveryDeclinedTheRequestWithout'));
       }
     } catch (err) {
       setError(serverVerdict(err));
@@ -159,24 +161,24 @@ export function AccountSetupPanel(): ReactElement | null {
 
   return (
     <AfSection
-      title="Account setup"
-      note="What has to be true before a real parcel can move. Neither of these creates a shipment."
+      title={t('delhiveryAccountSetupPanel.accountSetup')}
+      note={t('delhiveryAccountSetupPanel.whatHasToBeTrue')}
     >
-      {error !== null && !open && <ErrorState title="Refused" message={error} />}
+      {error !== null && !open && (
+        <ErrorState title={t('delhiveryAccountSetupPanel.refused')} message={error} />
+      )}
 
       <div className="af-grid-2">
         <AfCard>
-          <h3 className="af-card__title">Reachability</h3>
+          <h3 className="af-card__title">{t('delhiveryAccountSetupPanel.reachability')}</h3>
           <p className="af-muted">
-            One live serviceability lookup using the stored credential. Creates nothing. In stub
-            mode it reports that it did not reach anything — a cached answer would look exactly like
-            proof.
+            {t('delhiveryAccountSetupPanel.oneLiveServiceabilityLookupUsing')}
           </p>
           <div className="af-row af-row--bottom">
             <div className="af-grow">
               <TextField
-                label="Pincode"
-                hint="Blank uses our own dispatch origin."
+                label={t('delhiveryAccountSetupPanel.pincode')}
+                hint={t('delhiveryAccountSetupPanel.blankUsesOurOwnDispatch')}
                 inputMode="numeric"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
@@ -189,51 +191,55 @@ export function AccountSetupPanel(): ReactElement | null {
               loading={probe.isPending}
               onClick={() => void onProbe()}
             >
-              Check connection
+              {t('delhiveryAccountSetupPanel.checkConnection')}
             </Button>
           </div>
 
           {result !== undefined && (
             <div className="af-body">
               {result.stubMode ? (
-                <span>
-                  Stub mode: the call never left the box. This says nothing about the real account.
-                </span>
+                <span>{t('delhiveryAccountSetupPanel.stubModeTheCallNever')}</span>
               ) : result.reachedLiveApi ? (
                 <span>
-                  Reached the live API. {result.pincode} —{' '}
-                  {result.detail?.serviceable === true ? 'serviceable' : 'not serviceable'}
-                  {result.detail?.city !== null && result.detail?.city !== undefined
-                    ? `, ${result.detail.city}`
-                    : ''}
-                  .
+                  {t('delhiveryAccountSetupPanel.reachedTheLiveApi', {
+                    pincode: result.pincode ?? '',
+                    value:
+                      result.detail?.serviceable === true
+                        ? t('delhiveryAccountSetupPanel.serviceable')
+                        : t('delhiveryAccountSetupPanel.notServiceable'),
+                    value2:
+                      result.detail?.city !== null && result.detail?.city !== undefined
+                        ? `, ${result.detail.city}`
+                        : '',
+                  })}
                 </span>
               ) : (
-                <span className="af-bad">{result.error ?? 'Did not reach the live API.'}</span>
+                <span className="af-bad">
+                  {result.error ?? t('delhiveryAccountSetupPanel.didNotReachTheLive')}
+                </span>
               )}
             </div>
           )}
         </AfCard>
 
         <AfCard>
-          <h3 className="af-card__title">Pickup location</h3>
+          <h3 className="af-card__title">{t('delhiveryAccountSetupPanel.pickupLocation')}</h3>
           <p className="af-muted">
-            Every shipment sends this warehouse&apos;s name and Delhivery matches it exactly — case
-            and spaces included. A warehouse that is not registered, or whose name differs by one
-            character, fails every AWB. Delhivery offers no way to list what is already registered,
-            so this cannot show you; the audit log is the record.
+            {t('delhiveryAccountSetupPanel.everyShipmentSendsThisWarehouse')}
           </p>
           {mayRegister ? (
             <div className="af-row">
               <Button variant="primary" size="md" onClick={() => openFor('REGISTER')}>
-                Register a warehouse
+                {t('delhiveryAccountSetupPanel.registerAWarehouse')}
               </Button>
               <Button variant="secondary" size="md" onClick={() => openFor('UPDATE')}>
-                Update a registered one
+                {t('delhiveryAccountSetupPanel.updateARegisteredOne')}
               </Button>
             </div>
           ) : (
-            <p className="af-faint">Registering needs the courier-accounts permission.</p>
+            <p className="af-faint">
+              {t('delhiveryAccountSetupPanel.registeringNeedsTheCourierAccounts')}
+            </p>
           )}
         </AfCard>
       </div>
@@ -245,16 +251,20 @@ export function AccountSetupPanel(): ReactElement | null {
         }}
         size="lg"
         tone={mode === 'REGISTER' ? 'critical' : 'default'}
-        title={mode === 'REGISTER' ? 'Register a pickup location' : 'Update a pickup location'}
+        title={
+          mode === 'REGISTER'
+            ? t('delhiveryAccountSetupPanel.registerAPickupLocation')
+            : t('delhiveryAccountSetupPanel.updateAPickupLocation')
+        }
         description={
           mode === 'REGISTER'
-            ? 'The name cannot be changed afterwards, and it is what every shipment is matched on. Everything else can be corrected later.'
-            : 'The name identifies which location to change, so it must match what was registered exactly. Everything else here replaces what is stored.'
+            ? t('delhiveryAccountSetupPanel.theNameCannotBeChanged')
+            : t('delhiveryAccountSetupPanel.theNameIdentifiesWhichLocation')
         }
         footer={
           <DialogFooter>
             <Button variant="secondary" size="md" onClick={() => setOpen(false)}>
-              Cancel
+              {t('delhiveryAccountSetupPanel.cancel')}
             </Button>
             <Button
               variant={mode === 'REGISTER' ? 'destructive' : 'primary'}
@@ -263,31 +273,31 @@ export function AccountSetupPanel(): ReactElement | null {
               disabled={!complete || register.isPending || update.isPending}
               onClick={() => void onSubmit()}
             >
-              {mode === 'REGISTER' ? 'Register permanently' : 'Update'}
+              {mode === 'REGISTER'
+                ? t('delhiveryAccountSetupPanel.registerPermanently')
+                : t('delhiveryAccountSetupPanel.update')}
             </Button>
           </DialogFooter>
         }
       >
         <div className="af-form">
-          {error !== null && <ErrorState title="Refused" message={error} />}
+          {error !== null && (
+            <ErrorState title={t('delhiveryAccountSetupPanel.refused')} message={error} />
+          )}
           <TextField
-            label="Warehouse name"
+            label={t('delhiveryAccountSetupPanel.warehouseName')}
             requiredMark
-            hint="Exactly as it will be sent on every shipment."
-            error={
-              nameHasEdgeSpace
-                ? 'This has a leading or trailing space. Delhivery would treat it as a different name — and it cannot be corrected.'
-                : undefined
-            }
+            hint={t('delhiveryAccountSetupPanel.exactlyAsItWillBe')}
+            error={nameHasEdgeSpace ? t('delhiveryAccountSetupPanel.thisHasALeadingOr') : undefined}
             value={form.name}
             onChange={(e) => set('name', e.target.value)}
           />
 
           {mode === 'REGISTER' && (
             <TextField
-              label="Type the name again"
+              label={t('delhiveryAccountSetupPanel.typeTheNameAgain')}
               requiredMark
-              hint="It is the one field nobody can fix later."
+              hint={t('delhiveryAccountSetupPanel.itIsTheOneField')}
               value={confirmName}
               onChange={(e) => setConfirmName(e.target.value)}
             />
@@ -295,15 +305,15 @@ export function AccountSetupPanel(): ReactElement | null {
 
           <div className="af-grid-2">
             <TextField
-              label="Phone"
+              label={t('delhiveryAccountSetupPanel.phone')}
               requiredMark
               value={form.phone}
               onChange={(e) => set('phone', e.target.value)}
             />
             <TextField
-              label="Pincode"
+              label={t('delhiveryAccountSetupPanel.pincode')}
               requiredMark
-              hint="Six digits."
+              hint={t('delhiveryAccountSetupPanel.sixDigits')}
               inputMode="numeric"
               value={form.pin}
               onChange={(e) => set('pin', e.target.value)}
@@ -311,44 +321,44 @@ export function AccountSetupPanel(): ReactElement | null {
           </div>
 
           <TextField
-            label="Address"
+            label={t('delhiveryAccountSetupPanel.address')}
             value={form.address ?? ''}
             onChange={(e) => set('address', e.target.value)}
           />
           <div className="af-grid-2">
             <TextField
-              label="City"
+              label={t('delhiveryAccountSetupPanel.city')}
               value={form.city ?? ''}
               onChange={(e) => set('city', e.target.value)}
             />
             <TextField
-              label="Email"
+              label={t('delhiveryAccountSetupPanel.email')}
               value={form.email ?? ''}
               onChange={(e) => set('email', e.target.value)}
             />
           </div>
 
           <TextField
-            label="Return address"
+            label={t('delhiveryAccountSetupPanel.returnAddress')}
             requiredMark
-            hint="Where undelivered parcels come back to. May be the same address."
+            hint={t('delhiveryAccountSetupPanel.whereUndeliveredParcelsComeBack')}
             value={form.returnAddress}
             onChange={(e) => set('returnAddress', e.target.value)}
           />
           <div className="af-grid-3">
             <TextField
-              label="Return city"
+              label={t('delhiveryAccountSetupPanel.returnCity')}
               value={form.returnCity ?? ''}
               onChange={(e) => set('returnCity', e.target.value)}
             />
             <TextField
-              label="Return pincode"
+              label={t('delhiveryAccountSetupPanel.returnPincode')}
               inputMode="numeric"
               value={form.returnPin ?? ''}
               onChange={(e) => set('returnPin', e.target.value)}
             />
             <TextField
-              label="Return state"
+              label={t('delhiveryAccountSetupPanel.returnState')}
               value={form.returnState ?? ''}
               onChange={(e) => set('returnState', e.target.value)}
             />

@@ -25,6 +25,7 @@ import { AfCard, AfSection, Notice } from '@/app/(authed)/system/_components/af-
 import { EscalationTabs } from '../../_components/escalation-tabs';
 import '../../_components/escalation.css';
 import { usePermission } from '@/lib/use-permission';
+import { useT } from '@/i18n/client';
 
 /**
  * What the portal worker did — or, in SHADOW, would have done.
@@ -47,6 +48,7 @@ import { usePermission } from '@/lib/use-permission';
  * on the send-queue tab behind the emailed code.
  */
 export function CourierPortalIndex(): ReactElement {
+  const t = useT();
   const runs = useCourierPortalRuns();
   const taxonomy = useCourierTaxonomy();
   const channel = useCourierChannel();
@@ -59,10 +61,13 @@ export function CourierPortalIndex(): ReactElement {
   return (
     <div className="af-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Network' }, { label: 'Courier escalation' }]}
+        breadcrumbs={[
+          { label: t('courierEscalationPortalPortalIndex.network') },
+          { label: t('courierEscalationPortalPortalIndex.courierEscalation') },
+        ]}
         Link={Link}
-        title="Portal worker"
-        subtitle="The browser tier. It runs in a separate process from the API, and in SHADOW it reads and decides without writing anything."
+        title={t('courierEscalationPortalPortalIndex.portalWorker')}
+        subtitle={t('courierEscalationPortalPortalIndex.theBrowserTierItRuns')}
       />
       <EscalationTabs />
 
@@ -70,55 +75,67 @@ export function CourierPortalIndex(): ReactElement {
 
       <div className="af-kpis">
         <KpiCard
-          label="Portal mode"
+          label={t('courierEscalationPortalPortalIndex.portalMode')}
           figure={channel.data?.settings.portalMode ?? '—'}
-          hint="SHADOW reads and decides but never writes. Separate from the send-queue write mode."
+          hint={t('courierEscalationPortalPortalIndex.shadowReadsAndDecidesBut')}
         />
         {runs.isLoading ? (
-          <KpiCard label="Shadow runs recorded" figure="—" hint="Loading" />
+          <KpiCard
+            label={t('courierEscalationPortalPortalIndex.shadowRunsRecorded')}
+            figure="—"
+            hint={t('courierEscalationPortalPortalIndex.loading')}
+          />
         ) : (
           <KpiCard
-            label="Shadow runs recorded"
+            label={t('courierEscalationPortalPortalIndex.shadowRunsRecorded')}
             value={shadow}
-            hint="Each one is a decision that was made and deliberately not acted on."
+            hint={t('courierEscalationPortalPortalIndex.eachOneIsADecision')}
           />
         )}
         {runs.isLoading ? (
-          <KpiCard label="Failed or challenged" figure="—" hint="Loading" />
+          <KpiCard
+            label={t('courierEscalationPortalPortalIndex.failedOrChallenged')}
+            figure="—"
+            hint={t('courierEscalationPortalPortalIndex.loading')}
+          />
         ) : (
           <KpiCard
-            label="Failed or challenged"
+            label={t('courierEscalationPortalPortalIndex.failedOrChallenged')}
             value={failures}
             tone={failures > 0 ? 'debit' : 'neutral'}
-            hint="A challenge freezes the worker rather than retrying — a login loop against a courier's portal is how an account gets locked."
+            hint={t('courierEscalationPortalPortalIndex.aChallengeFreezesTheWorker')}
           />
         )}
       </div>
 
       <AfSection
-        title="Recent runs"
-        note="Newest first. A run is one visit with one purpose; the detail is what it saw or what it would have written."
+        title={t('courierEscalationPortalPortalIndex.recentRuns')}
+        note={t('courierEscalationPortalPortalIndex.newestFirstARunIs')}
       >
         {runs.isLoading ? (
           <AfCard flush>
-            <SkeletonRows rows={4} cols={5} label="Loading runs" />
+            <SkeletonRows
+              rows={4}
+              cols={5}
+              label={t('courierEscalationPortalPortalIndex.loadingRuns')}
+            />
           </AfCard>
         ) : runs.isError ? (
           <ErrorState message={serverVerdict(runs.error)} retry={() => void runs.refetch()} />
         ) : rows.length === 0 ? (
           <EmptyState
-            title="The worker has not run"
-            description="Expected: it is deployed inert and the nightly canary only runs once the portal credential exists. Nothing here is a fault yet."
+            title={t('courierEscalationPortalPortalIndex.theWorkerHasNotRun')}
+            description={t('courierEscalationPortalPortalIndex.expectedItIsDeployedInert')}
           />
         ) : (
           <Table>
             <THead>
               <Tr>
-                <Th>When</Th>
-                <Th>Doing</Th>
-                <Th>Mode</Th>
-                <Th>Outcome</Th>
-                <Th>Detail</Th>
+                <Th>{t('courierEscalationPortalPortalIndex.when')}</Th>
+                <Th>{t('courierEscalationPortalPortalIndex.doing')}</Th>
+                <Th>{t('courierEscalationPortalPortalIndex.mode')}</Th>
+                <Th>{t('courierEscalationPortalPortalIndex.outcome')}</Th>
+                <Th>{t('courierEscalationPortalPortalIndex.detail')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -161,12 +178,16 @@ export function CourierPortalIndex(): ReactElement {
       </AfSection>
 
       <AfSection
-        title="Delhivery's categories"
-        note="Fetched from their portal and kept by their own IDs. Two are locked to humans permanently — a claim and a paid-protection case are money, and no mode unlocks them."
+        title={t('courierEscalationPortalPortalIndex.delhiverySCategories')}
+        note={t('courierEscalationPortalPortalIndex.fetchedFromTheirPortalAnd')}
       >
         {taxonomy.isLoading ? (
           <AfCard flush>
-            <SkeletonRows rows={3} cols={4} label="Loading categories" />
+            <SkeletonRows
+              rows={3}
+              cols={4}
+              label={t('courierEscalationPortalPortalIndex.loadingCategories')}
+            />
           </AfCard>
         ) : taxonomy.isError ? (
           <ErrorState
@@ -174,21 +195,17 @@ export function CourierPortalIndex(): ReactElement {
             retry={() => void taxonomy.refetch()}
           />
         ) : cats.length === 0 ? (
-          <Notice tone="warn" title="Not fetched yet">
-            <p>
-              This is why unattended action is refused: with no category IDs on file, none can be
-              checked against the locked list, so the safe answer to &ldquo;may the worker file
-              this?&rdquo; is no. The list fills on the worker&apos;s first successful visit.
-            </p>
+          <Notice tone="warn" title={t('courierEscalationPortalPortalIndex.notFetchedYet')}>
+            <p>{t('courierEscalationPortalPortalIndex.thisIsWhyUnattendedAction')}</p>
           </Notice>
         ) : (
           <Table>
             <THead>
               <Tr>
-                <Th>Their ID</Th>
-                <Th>Category</Th>
-                <Th>Unattended</Th>
-                <Th>Last seen</Th>
+                <Th>{t('courierEscalationPortalPortalIndex.theirId')}</Th>
+                <Th>{t('courierEscalationPortalPortalIndex.category')}</Th>
+                <Th>{t('courierEscalationPortalPortalIndex.unattended')}</Th>
+                <Th>{t('courierEscalationPortalPortalIndex.lastSeen')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -201,10 +218,13 @@ export function CourierPortalIndex(): ReactElement {
                   <Td>
                     {c.isHumanOnly ? (
                       <span className="ce-lock-chip">
-                        <Lock size={12} aria-hidden /> human only
+                        <Lock size={12} aria-hidden />{' '}
+                        {t('courierEscalationPortalPortalIndex.humanOnly')}
                       </span>
                     ) : (
-                      <span className="af-small">allowed if listed</span>
+                      <span className="af-small">
+                        {t('courierEscalationPortalPortalIndex.allowedIfListed')}
+                      </span>
                     )}
                   </Td>
                   <Td>
@@ -257,6 +277,7 @@ function humanise(value: string): string {
  * (FE-2), and its verdict is shown verbatim.
  */
 function PortalModeSwitch({ current }: { readonly current: string | null }): ReactElement {
+  const t = useT();
   const setMode = useSetPortalMode();
   const toast = useToast();
   const canManage = usePermission('courier.accounts.manage');
@@ -274,10 +295,10 @@ function PortalModeSwitch({ current }: { readonly current: string | null }): Rea
     await setMode.mutateAsync({ portalMode, reason: why });
     toast.success(
       portalMode === 'LIVE'
-        ? 'Portal is LIVE'
+        ? t('courierEscalationPortalPortalIndex.portalIsLive')
         : portalMode === 'OFF'
-          ? 'Portal automation is OFF — nothing will open a browser'
-          : 'Portal is back in SHADOW',
+          ? t('courierEscalationPortalPortalIndex.portalAutomationIsOffNothing')
+          : t('courierEscalationPortalPortalIndex.portalIsBackInShadow'),
     );
     setReason('');
   };
@@ -308,22 +329,23 @@ function PortalModeSwitch({ current }: { readonly current: string | null }): Rea
       <div className="af-card__head">
         <div className="af-grow af-stack af-stack--tight">
           <p className="af-title">
-            Browser channel:{' '}
-            {live
-              ? 'LIVE — it clicks'
-              : off
-                ? 'OFF — nothing runs at all'
-                : 'SHADOW — it withholds every click'}
+            {t('courierEscalationPortalPortalIndex.browserChannel', {
+              value: live
+                ? 'LIVE — it clicks'
+                : off
+                  ? 'OFF — nothing runs at all'
+                  : 'SHADOW — it withholds every click',
+            })}
           </p>
           <p className="af-small">
             {live
-              ? 'Software is raising tickets on the courier’s portal in our name.'
+              ? t('courierEscalationPortalPortalIndex.softwareIsRaisingTicketsOn')
               : off
                 ? // The distinction people get wrong: SHADOW still signs in
                   // and reads, and can still fail at 3am about work nobody
                   // is waiting for. OFF is the one that means stop.
-                  'No browser is opened and no session is established. Escalations are handled by hand on the courier’s own site and recorded here afterwards.'
-                : 'Everything up to the click happens and is recorded. Nothing reaches the courier.'}
+                  t('courierEscalationPortalPortalIndex.noBrowserIsOpenedAnd')
+                : t('courierEscalationPortalPortalIndex.everythingUpToTheClick')}
           </p>
         </div>
         {live ? (
@@ -332,28 +354,32 @@ function PortalModeSwitch({ current }: { readonly current: string | null }): Rea
               variant="destructive"
               size="sm"
               disabled={setMode.isPending}
-              onClick={() => go('SHADOW', 'Stopping the browser channel from the portal page')}
+              onClick={() =>
+                go('SHADOW', t('courierEscalationPortalPortalIndex.stoppingTheBrowserChannelFrom'))
+              }
             >
-              Stop — back to SHADOW
+              {t('courierEscalationPortalPortalIndex.stopBackToShadow')}
             </Button>
             <Button
               variant="destructive"
               size="sm"
               disabled={setMode.isPending}
-              onClick={() => go('OFF', 'Standing the portal automation down from the portal page')}
+              onClick={() =>
+                go('OFF', t('courierEscalationPortalPortalIndex.standingThePortalAutomationDown'))
+              }
             >
-              Turn it OFF
+              {t('courierEscalationPortalPortalIndex.turnItOff')}
             </Button>
           </div>
         ) : (
           <div className="af-row af-row--bottom">
             <div className="ce-reason">
               <TextField
-                label="Reason"
+                label={t('courierEscalationPortalPortalIndex.reason')}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="Why (10+ chars)"
-                aria-label="Reason for going live"
+                placeholder={t('courierEscalationPortalPortalIndex.why10Chars')}
+                aria-label={t('courierEscalationPortalPortalIndex.reasonForGoingLive')}
               />
             </div>
             <Button
@@ -365,7 +391,7 @@ function PortalModeSwitch({ current }: { readonly current: string | null }): Rea
                 setConfirmLive(true);
               }}
             >
-              Go LIVE
+              {t('courierEscalationPortalPortalIndex.goLive')}
             </Button>
             {off ? (
               <Button
@@ -374,7 +400,7 @@ function PortalModeSwitch({ current }: { readonly current: string | null }): Rea
                 disabled={reason.trim().length < 10 || setMode.isPending}
                 onClick={() => go('SHADOW', reason.trim())}
               >
-                Back to SHADOW
+                {t('courierEscalationPortalPortalIndex.backToShadow')}
               </Button>
             ) : (
               <Button
@@ -382,10 +408,10 @@ function PortalModeSwitch({ current }: { readonly current: string | null }): Rea
                 size="sm"
                 disabled={setMode.isPending}
                 onClick={() =>
-                  go('OFF', 'Standing the portal automation down from the portal page')
+                  go('OFF', t('courierEscalationPortalPortalIndex.standingThePortalAutomationDown'))
                 }
               >
-                Turn it OFF
+                {t('courierEscalationPortalPortalIndex.turnItOff')}
               </Button>
             )}
           </div>
@@ -394,16 +420,16 @@ function PortalModeSwitch({ current }: { readonly current: string | null }): Rea
       <ConfirmDialog
         open={confirmLive}
         onOpenChange={setConfirmLive}
-        title="Let the browser channel click?"
-        entity="Courier portal worker"
-        consequence="From the next run, software raises tickets on the courier's own portal in our name; Stop — back to SHADOW undoes it with one click."
-        confirmLabel="Go LIVE"
+        title={t('courierEscalationPortalPortalIndex.letTheBrowserChannelClick')}
+        entity={t('courierEscalationPortalPortalIndex.courierPortalWorker')}
+        consequence={t('courierEscalationPortalPortalIndex.fromTheNextRunSoftware')}
+        confirmLabel={t('courierEscalationPortalPortalIndex.goLive')}
         destructive
         error={liveError}
         onConfirm={goLive}
       >
         <Notice tone="info">
-          <p>Reason recorded: {reason.trim()}</p>
+          <p>{t('courierEscalationPortalPortalIndex.reasonRecorded', { value: reason.trim() })}</p>
         </Notice>
       </ConfirmDialog>
     </AfCard>

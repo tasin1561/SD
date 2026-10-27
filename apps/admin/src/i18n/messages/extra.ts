@@ -20,4 +20,5 @@ export const extra = defineMessages({
     ' · declined on a call {n}×',
     ' · কলে {n} বার প্রত্যাখ্যান',
   ],
+  'delhiveryWalletImportPanel.skippedN': [', {n} skipped', ', {n}টি বাদ'],
 });

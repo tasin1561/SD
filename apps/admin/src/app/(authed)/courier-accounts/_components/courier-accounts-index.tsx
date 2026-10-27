@@ -24,6 +24,7 @@ import { CreateCourierAccountModal } from './create-courier-account-modal';
 import { CourierMasterSwitches } from './courier-master-switches';
 import { usePermission } from '@/lib/use-permission';
 import './courier-accounts.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Courier accounts (R1).
@@ -40,6 +41,7 @@ import './courier-accounts.css';
  * "view credential" affordance to build.
  */
 export function CourierAccountsIndex(): ReactElement {
+  const t = useT();
   const [creating, setCreating] = useState(false);
   const canWrite = usePermission('courier.accounts.manage');
   const list = useCourierAccounts();
@@ -47,10 +49,13 @@ export function CourierAccountsIndex(): ReactElement {
   return (
     <div className="af-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Network' }, { label: 'Courier accounts' }]}
+        breadcrumbs={[
+          { label: t('courierAccountsCourierAccountsIndex.network') },
+          { label: t('courierAccountsCourierAccountsIndex.courierAccounts') },
+        ]}
         Link={Link}
-        title="Courier accounts"
-        subtitle="Multiple accounts per courier. Route a client to specific accounts, by weight, from that client's page; every shipment records the account that carried it."
+        title={t('courierAccountsCourierAccountsIndex.courierAccounts')}
+        subtitle={t('courierAccountsCourierAccountsIndex.multipleAccountsPerCourierRoute')}
         action={
           canWrite ? (
             <Button
@@ -59,7 +64,7 @@ export function CourierAccountsIndex(): ReactElement {
               icon={<Plus size={16} />}
               onClick={() => setCreating(true)}
             >
-              Add account
+              {t('courierAccountsCourierAccountsIndex.addAccount')}
             </Button>
           ) : null
         }
@@ -68,11 +73,7 @@ export function CourierAccountsIndex(): ReactElement {
       <Notice tone="info">
         <p className="ca-shield">
           <ShieldCheck size={14} aria-hidden />
-          <span>
-            API credentials are encrypted at rest with a key held in the environment, never in the
-            database. They are never returned by any endpoint — to change one, add a new account and
-            deactivate the old.
-          </span>
+          <span>{t('courierAccountsCourierAccountsIndex.apiCredentialsAreEncryptedAt')}</span>
         </p>
       </Notice>
 
@@ -82,21 +83,28 @@ export function CourierAccountsIndex(): ReactElement {
 
       {list.isError ? (
         <ErrorState
-          message={list.error?.message ?? 'Failed to load courier accounts.'}
+          message={
+            list.error?.message ??
+            t('courierAccountsCourierAccountsIndex.failedToLoadCourierAccounts')
+          }
           retry={() => void list.refetch()}
         />
       ) : list.isLoading ? (
         <AfCard flush>
-          <SkeletonRows rows={3} cols={5} label="Loading courier accounts" />
+          <SkeletonRows
+            rows={3}
+            cols={5}
+            label={t('courierAccountsCourierAccountsIndex.loadingCourierAccounts')}
+          />
         </AfCard>
       ) : (list.data?.length ?? 0) === 0 ? (
         <EmptyState
-          title="No courier accounts yet"
-          description="Add the Delhivery account whose credentials should be used for AWB generation. The first account for a courier becomes its default."
+          title={t('courierAccountsCourierAccountsIndex.noCourierAccountsYet')}
+          description={t('courierAccountsCourierAccountsIndex.addTheDelhiveryAccountWhose')}
           action={
             canWrite ? (
               <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
-                Add account
+                {t('courierAccountsCourierAccountsIndex.addAccount')}
               </Button>
             ) : undefined
           }
@@ -105,12 +113,12 @@ export function CourierAccountsIndex(): ReactElement {
         <Table>
           <THead>
             <Tr>
-              <Th>Label</Th>
-              <Th>Courier</Th>
-              <Th>Environment</Th>
-              <Th>Pickup location</Th>
-              <Th>State</Th>
-              <Th align="right">Actions</Th>
+              <Th>{t('courierAccountsCourierAccountsIndex.label')}</Th>
+              <Th>{t('courierAccountsCourierAccountsIndex.courier')}</Th>
+              <Th>{t('courierAccountsCourierAccountsIndex.environment')}</Th>
+              <Th>{t('courierAccountsCourierAccountsIndex.pickupLocation')}</Th>
+              <Th>{t('courierAccountsCourierAccountsIndex.state')}</Th>
+              <Th align="right">{t('courierAccountsCourierAccountsIndex.actions')}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -129,6 +137,7 @@ export function CourierAccountsIndex(): ReactElement {
 type RowAct = 'default' | 'active';
 
 function AccountRow({ account }: { readonly account: CourierAccountView }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const update = useUpdateCourierAccount();
   const [editing, setEditing] = useState(false);
@@ -174,10 +183,10 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
       <Td>
         {account.environment === 'PRODUCTION' ? (
           <span className="ca-env" data-prod="1">
-            Production
+            {t('courierAccountsCourierAccountsIndex.production')}
           </span>
         ) : (
-          <span className="ca-env">Sandbox</span>
+          <span className="ca-env">{t('courierAccountsCourierAccountsIndex.sandbox')}</span>
         )}
       </Td>
       <Td>
@@ -186,7 +195,7 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
           // account the global setting is correct, and with two it is
           // the thing that silently sends parcels from the wrong
           // registration.
-          <span className="af-faint">global setting</span>
+          <span className="af-faint">{t('courierAccountsCourierAccountsIndex.globalSetting')}</span>
         ) : (
           <span className="sk-ident af-small">{account.pickupLocationName}</span>
         )}
@@ -196,9 +205,19 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
           <StatusChip
             size="sm"
             kind={account.isActive ? 'confirmed' : 'cancelled'}
-            label={account.isActive ? 'Active' : 'Inactive'}
+            label={
+              account.isActive
+                ? t('courierAccountsCourierAccountsIndex.active')
+                : t('courierAccountsCourierAccountsIndex.inactive')
+            }
           />
-          {account.isDefault && <StatusChip size="sm" kind="delivered" label="Default" />}
+          {account.isDefault && (
+            <StatusChip
+              size="sm"
+              kind="delivered"
+              label={t('courierAccountsCourierAccountsIndex.default')}
+            />
+          )}
         </span>
       </Td>
       <Td align="right">
@@ -213,11 +232,11 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
                 setConfirming('default');
               }}
             >
-              Make default
+              {t('courierAccountsCourierAccountsIndex.makeDefault')}
             </Button>
           )}
           <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-            Edit
+            {t('courierAccountsCourierAccountsIndex.edit')}
           </Button>
           {/* Delhivery has no billing API, so reading what they actually
               charged means signing into their panel. Offered only where
@@ -225,7 +244,7 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
               none. */}
           {(account.courierCode === 'delhivery' || account.courierCode === 'shiprocket') && (
             <Button variant="ghost" size="sm" onClick={() => setPortalLogin(true)}>
-              Portal login
+              {t('courierAccountsCourierAccountsIndex.portalLogin')}
             </Button>
           )}
           <Button
@@ -243,7 +262,9 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
               }
             }}
           >
-            {account.isActive ? 'Deactivate' : 'Reactivate'}
+            {account.isActive
+              ? t('courierAccountsCourierAccountsIndex.deactivate')
+              : t('courierAccountsCourierAccountsIndex.reactivate')}
           </Button>
         </div>
         <EditCourierAccountModal account={account} open={editing} onOpenChange={setEditing} />
@@ -262,21 +283,30 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
           }}
           title={
             confirming === 'default'
-              ? 'Make this the default account?'
-              : 'Deactivate this courier account?'
+              ? t('courierAccountsCourierAccountsIndex.makeThisTheDefaultAccount')
+              : t('courierAccountsCourierAccountsIndex.deactivateThisCourierAccount')
           }
           entity={`${account.label} · ${account.courierCode} · ${account.environment.toLowerCase()}`}
           consequence={
             confirming === 'default'
-              ? 'Every client with no explicit link to this courier routes their new parcels through this account from now on.'
-              : 'No new parcel is booked on this account; parcels it already carried keep their record of it.'
+              ? t('courierAccountsCourierAccountsIndex.everyClientWithNoExplicit')
+              : t('courierAccountsCourierAccountsIndex.noNewParcelIsBooked')
           }
-          confirmLabel={confirming === 'default' ? 'Make default' : 'Deactivate'}
+          confirmLabel={
+            confirming === 'default'
+              ? t('courierAccountsCourierAccountsIndex.makeDefault')
+              : t('courierAccountsCourierAccountsIndex.deactivate')
+          }
           destructive={confirming === 'active'}
           error={error}
           onConfirm={() =>
             confirming === 'default'
-              ? run({ isDefault: true }, `${account.label} is now the default.`)
+              ? run(
+                  { isDefault: true },
+                  t('courierAccountsCourierAccountsIndex.isNowTheDefault', {
+                    label: account.label,
+                  }),
+                )
               : run({ isActive: false }, `${account.label} deactivated.`)
           }
         />
