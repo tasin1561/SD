@@ -54,19 +54,19 @@ const BROWSER_RUNS = (
 > => ({
   wallet: {
     title: t('costSyncShiprocketCostSection.runTheShiprocketWalletSync'),
-    entity: 'Shiprocket passbook, recharges and ledger',
+    entity: t('costSyncShiprocketCostSection.entityWallet'),
     label: t('costSyncShiprocketCostSection.runWalletSyncNow'),
     done: t('costSyncShiprocketCostSection.queuedItSignsInAnd'),
   },
   invoices: {
     title: t('costSyncShiprocketCostSection.checkShiprocketInvoicesNow'),
-    entity: 'Shiprocket freight and VAS invoices',
+    entity: t('costSyncShiprocketCostSection.entityInvoices'),
     label: t('costSyncShiprocketCostSection.checkInvoicesNow'),
     done: t('costSyncShiprocketCostSection.queuedItSignsInAnd2'),
   },
   probe: {
     title: t('costSyncShiprocketCostSection.checkShiprocketWebsiteAccessNow'),
-    entity: 'Shiprocket website login',
+    entity: t('costSyncShiprocketCostSection.entityProbe'),
     label: t('costSyncShiprocketCostSection.checkWebsiteAccess'),
     done: t('costSyncShiprocketCostSection.queuedItSignsInThrough'),
   },

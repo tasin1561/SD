@@ -288,4 +288,32 @@ export const extra = defineMessages({
     'Human-only, always: {categories}. These can never be added to the auto list.',
     'সবসময় শুধু মানুষের জন্য: {categories}। এগুলো কখনো স্বয়ংক্রিয় তালিকায় যোগ করা যায় না।',
   ],
+  'authAcceptInvitationAcceptInvitationForm.bodyUsed': [
+    'An account was set up with this link. If that was you, sign in — and if you have forgotten the password, the sign-in page can email you a reset.',
+    'এই লিংক দিয়ে একটি অ্যাকাউন্ট তৈরি হয়েছে। সেটি আপনি হলে সাইন ইন করুন — আর পাসওয়ার্ড ভুলে গেলে সাইন-ইন পেজ আপনাকে রিসেটের ইমেইল পাঠাতে পারে।',
+  ],
+  'authAcceptInvitationAcceptInvitationForm.bodyExpired': [
+    'Invitation links are short-lived on purpose. Ask whoever invited you to send a new one — it takes them a moment.',
+    'আমন্ত্রণের লিংক ইচ্ছা করেই অল্প সময়ের জন্য বৈধ থাকে। যিনি আপনাকে আমন্ত্রণ জানিয়েছেন তাঁকে নতুন একটি পাঠাতে বলুন — তাঁর এক মুহূর্ত লাগে।',
+  ],
+  'authAcceptInvitationAcceptInvitationForm.bodyRevoked': [
+    'Someone cancelled it before it was used. If that seems wrong, speak to whoever invited you.',
+    'ব্যবহারের আগেই কেউ এটি বাতিল করেছেন। এটি ভুল মনে হলে যিনি আপনাকে আমন্ত্রণ জানিয়েছেন তাঁর সাথে কথা বলুন।',
+  ],
+  'authAcceptInvitationAcceptInvitationForm.bodyInvalid': [
+    'It may have been mistyped, or truncated by a mail client. Open the link from your invitation email again, or ask for a fresh one.',
+    'এটি ভুল টাইপ হয়ে থাকতে পারে, বা মেইল ক্লায়েন্ট ছেঁটে দিয়েছে। আপনার আমন্ত্রণ ইমেইল থেকে লিংকটি আবার খুলুন, অথবা নতুন একটি চান।',
+  ],
+  'costSyncShiprocketCostSection.entityWallet': [
+    'Shiprocket passbook, recharges and ledger',
+    'Shiprocket পাসবুক, রিচার্জ ও লেজার',
+  ],
+  'costSyncShiprocketCostSection.entityInvoices': [
+    'Shiprocket freight and VAS invoices',
+    'Shiprocket ফ্রেইট ও VAS ইনভয়েস',
+  ],
+  'costSyncShiprocketCostSection.entityProbe': [
+    'Shiprocket website login',
+    'Shiprocket ওয়েবসাইট লগইন',
+  ],
 });

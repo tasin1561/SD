@@ -44,22 +44,22 @@ function terminalCopy(t: Translate<MessageKey>, code: string): { title: string; 
     case 'INVITATION_ALREADY_USED':
       return {
         title: t('authAcceptInvitationAcceptInvitationForm.thisInvitationHasAlreadyBeen'),
-        body: 'An account was set up with this link. If that was you, sign in — and if you have forgotten the password, the sign-in page can email you a reset.',
+        body: t('authAcceptInvitationAcceptInvitationForm.bodyUsed'),
       };
     case 'INVITATION_EXPIRED':
       return {
         title: t('authAcceptInvitationAcceptInvitationForm.thisInvitationHasExpired'),
-        body: 'Invitation links are short-lived on purpose. Ask whoever invited you to send a new one — it takes them a moment.',
+        body: t('authAcceptInvitationAcceptInvitationForm.bodyExpired'),
       };
     case 'INVITATION_REVOKED':
       return {
         title: t('authAcceptInvitationAcceptInvitationForm.thisInvitationWasWithdrawn'),
-        body: 'Someone cancelled it before it was used. If that seems wrong, speak to whoever invited you.',
+        body: t('authAcceptInvitationAcceptInvitationForm.bodyRevoked'),
       };
     default:
       return {
         title: t('authAcceptInvitationAcceptInvitationForm.thisInvitationLinkIsNot'),
-        body: 'It may have been mistyped, or truncated by a mail client. Open the link from your invitation email again, or ask for a fresh one.',
+        body: t('authAcceptInvitationAcceptInvitationForm.bodyInvalid'),
       };
   }
 }
