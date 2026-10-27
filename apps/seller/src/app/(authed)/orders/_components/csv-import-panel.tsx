@@ -16,6 +16,7 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { useApiClient } from '@skydrop/auth/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { CsvColumnGuide, type CsvColumnGuideColumn } from '@skydrop/ui/app/csv-column-guide';
 import { verdict } from '@/i18n/verdict';
 import { Notice, OrdSection } from './orders-parts';
 import { useT, useLocale } from '@/i18n/client';
@@ -167,6 +168,15 @@ export function CsvImportPanel({
     fileName: string;
     preview: CsvPreview;
   } | null>(null);
+
+  // Required/optional columns come from the API (the importer's own sets),
+  // never from a list in this file; see CsvColumnGuide.
+  const columnGuide = useQuery<{ columns: CsvColumnGuideColumn[] }>({
+    queryKey: ['seller-csv-columns', kind],
+    queryFn: () =>
+      client.request<{ columns: CsvColumnGuideColumn[] }>(`${endpointBase}/template/columns`),
+    staleTime: 60_000,
+  });
 
   const list = useQuery<UploadsResponse>({
     queryKey: ['seller-csv-uploads', kind],
@@ -368,6 +378,23 @@ export function CsvImportPanel({
       >
         <div className="ord-stack ord-stack--tight">
           <p className="ord-p">{t('orderImport.downloadTheTemplateFill')}</p>
+
+          {columnGuide.data !== undefined ? (
+            <CsvColumnGuide
+              columns={columnGuide.data.columns}
+              notes={{ addressLine2: t('csvcols.landmarkNote') }}
+              labels={{
+                title: t('csvcols.title'),
+                everyRow: t('csvcols.everyRow'),
+                everyRowHint: t('csvcols.everyRowHint'),
+                oncePerOrder: t('csvcols.oncePerOrder'),
+                oncePerOrderHint: t('csvcols.oncePerOrderHint'),
+                optional: t('csvcols.optional'),
+                optionalHint: t('csvcols.optionalHint'),
+                uat: t('csvcols.uat'),
+              }}
+            />
+          ) : null}
 
           <DropZone
             key={zoneKey}

@@ -20,7 +20,7 @@ import { CSV_TEMPLATE_PREFIX } from '../../../common/text/csv-separator-hint';
 const CSV_PRESIGN_CONTENT_TYPE = 'text/csv';
 
 /** Canonical template columns (header → example value). */
-const TEMPLATE_COLUMNS: Array<[string, string]> = [
+export const TEMPLATE_COLUMNS: Array<[string, string]> = [
   ['Product Name', 'Classic T-Shirt'],
   ['Product ID', 'TSHIRT-001'],
   ['SKU', 'TSHIRT-001-RED-M'],

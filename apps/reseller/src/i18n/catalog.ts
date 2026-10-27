@@ -15,6 +15,7 @@ import { notifications } from './messages/notifications';
 import { orderActions } from './messages/orderActions';
 import { orderDetail } from './messages/orderDetail';
 import { orderImport } from './messages/orderImport';
+import { csvColumns } from './messages/csvColumns';
 import { orderMoney } from './messages/orderMoney';
 import { orderNew } from './messages/orderNew';
 import { orders } from './messages/orders';
@@ -48,6 +49,7 @@ export const NAMESPACES = [
   orderActions,
   orderDetail,
   orderImport,
+  csvColumns,
   orderMoney,
   orderNew,
   orders,
@@ -77,6 +79,7 @@ const ALL = {
   ...orderActions,
   ...orderDetail,
   ...orderImport,
+  ...csvColumns,
   ...orderMoney,
   ...orderNew,
   ...orders,

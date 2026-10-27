@@ -121,7 +121,7 @@ export interface GroupedCsv {
  * Required PER ROW. A continuation row of a multi-line order may state
  * nothing but these three, and must still be readable.
  */
-const ROW_REQUIRED_FIELDS: OrderCsvField[] = ['productSku', 'quantity', 'externalRef'];
+export const ROW_REQUIRED_FIELDS: OrderCsvField[] = ['productSku', 'quantity', 'externalRef'];
 
 /**
  * Required on the ASSEMBLED ORDER. These are the columns
@@ -130,7 +130,7 @@ const ROW_REQUIRED_FIELDS: OrderCsvField[] = ['productSku', 'quantity', 'externa
  * copy of this list is exactly how `coerceRow` and the column check drifted
  * apart before (see `order-csv-required-fields.spec.ts`).
  */
-const ORDER_REQUIRED_FIELDS: OrderCsvField[] = ORDER_CSV_REQUIRED_FIELDS.filter(
+export const ORDER_REQUIRED_FIELDS: OrderCsvField[] = ORDER_CSV_REQUIRED_FIELDS.filter(
   (f) => !ROW_REQUIRED_FIELDS.includes(f),
 );
 

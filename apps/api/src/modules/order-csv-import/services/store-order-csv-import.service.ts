@@ -34,7 +34,7 @@ import { CSV_TEMPLATE_PREFIX } from '../../../common/text/csv-separator-hint';
  * stays on the template because stating it is the common case and a
  * column nobody can see is a column nobody fills in.
  */
-const STORE_TEMPLATE_COLUMNS: Array<[string, string, string]> = [
+export const STORE_TEMPLATE_COLUMNS: Array<[string, string, string]> = [
   ['Product SKU', 'TSHIRT-001-RED-M', 'CAP-001-NAVY'],
   ['Quantity', '2', '1'],
   ['Retail Price', '499', '299'],

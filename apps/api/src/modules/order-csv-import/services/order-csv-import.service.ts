@@ -36,7 +36,7 @@ const CSV_PRESIGN_CONTENT_TYPE = 'text/csv';
  * same reference are lines of one order (ORD-9), and a template that
  * never showed that left every seller believing otherwise.
  */
-const TEMPLATE_COLUMNS: Array<[string, string, string]> = [
+export const TEMPLATE_COLUMNS: Array<[string, string, string]> = [
   ['Product SKU', 'TSHIRT-001-RED-M', 'CAP-001-NAVY'],
   ['Quantity', '2', '1'],
   ['Payment Mode', 'COD', 'COD'],

@@ -26,6 +26,9 @@ import {
   type CsvPresignResult,
   type CsvPreviewResult,
 } from './services/csv-import.service';
+import { buildCatalogColumnGuide } from './catalog-csv-column-guide';
+import type { CsvColumnGuide } from '../../common/text/csv-column-guide';
+import { TEMPLATE_COLUMNS } from './services/csv-import.service';
 import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 @ApiTags('seller-csv-import')
@@ -36,6 +39,14 @@ import { RequireSellerPermissions } from '../../common/auth/require-seller-permi
 @Controller('seller/csv-imports')
 export class SellerCsvImportController {
   constructor(private readonly svc: CsvImportService) {}
+
+  @Get('template/columns')
+  @SellerAuthAllowSuspended()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Which template columns are required or optional' })
+  columns(): CsvColumnGuide {
+    return buildCatalogColumnGuide(TEMPLATE_COLUMNS.map(([h]) => h));
+  }
 
   @Get('template')
   @SellerAuthAllowSuspended()
