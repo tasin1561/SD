@@ -31,6 +31,7 @@ export type {
 export type {
   ListOrdersQuery,
   OrderListItem,
+  OrderListShipment,
   OrderListResponse,
   OrderItemView,
   OrderView,

@@ -126,4 +126,12 @@ export const shell = defineMessages({
   'error.digest': ['digest {digest}', 'digest {digest}'],
   'error.unknown': ['unknown', 'অজানা'],
   'error.reload': ['Reload now', 'এখনই রিলোড করুন'],
+
+  'search.card.placed': ['Placed', 'অর্ডারের তারিখ'],
+  'search.card.weight': ['Weight', 'ওজন'],
+  'search.card.size': ['Size', 'আকার'],
+  'search.card.courier': ['Courier', 'কুরিয়ার'],
+  'search.card.awb': ['AWB', 'AWB'],
+  'search.card.awbPending': ['Not issued yet', 'এখনও ইস্যু হয়নি'],
+  'search.card.notDispatched': ['Not dispatched yet', 'এখনও পাঠানো হয়নি'],
 });
