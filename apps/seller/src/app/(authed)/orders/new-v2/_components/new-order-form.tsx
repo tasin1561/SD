@@ -50,12 +50,7 @@ import {
 } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { useStores } from '@/lib/store-hooks';
-import {
-  ADDRESS_LINE_1_HINT,
-  ADDRESS_LINE_2_HINT,
-  DUPLICATE_LINES_ERROR,
-  linesAreDuplicated,
-} from '@/lib/address-guidance';
+import { linesAreDuplicated } from '@/lib/address-guidance';
 import { prefixHint, stripSellerPrefix } from '@/lib/seller-prefix';
 import { CustomerHistoryPanel } from './customer-history-panel';
 import { DuplicateOrderDialog, type DuplicateCandidate } from './duplicate-order-dialog';
@@ -63,7 +58,6 @@ import { useServiceability } from '@/lib/ops-hooks';
 import {
   IN_DIAL,
   IN_LOCAL_LENGTH,
-  IN_PHONE_ERROR,
   isCompleteLocal,
   sanitiseLocal,
   toE164,
@@ -542,7 +536,8 @@ export function NewOrderForm(): ReactElement {
 
   function validate(): string | null {
     if (!form.recipientName.trim()) return t('orderNew.recipientNameIsRequired');
-    if (!isCompleteLocal(toLocalDigits(form.recipientPhoneE164))) return IN_PHONE_ERROR;
+    if (!isCompleteLocal(toLocalDigits(form.recipientPhoneE164)))
+      return t('guidance.phoneError', { len: IN_LOCAL_LENGTH, dial: IN_DIAL });
     if (!form.recipientAddressLine1.trim()) return t('orderNew.addressLine1Is');
     if (!form.recipientAddressLine2.trim()) return t('orderNew.addressLine2The');
     // Advisory, NOT a mirror of a server rule — the API has no such
@@ -550,7 +545,7 @@ export function NewOrderForm(): ReactElement {
     // duplicated lines get the order held by hand downstream, and
     // finding that out at the field beats finding it out afterwards.
     if (linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2))
-      return DUPLICATE_LINES_ERROR;
+      return t('guidance.duplicateLines');
     if (!/^[1-9]\d{5}$/.test(form.recipientPostalCode.trim())) return t('orderNew.pinMustBe6');
     const effectiveCollectable = computedCollectable;
     if (form.paymentMode === 'COD' && !(effectiveCollectable > 0))
@@ -836,7 +831,7 @@ export function NewOrderForm(): ReactElement {
               <TextField
                 label={t('orderNew.fullName')}
                 required
-                hint={prefixHint(sellerInitials)}
+                hint={prefixHint(sellerInitials, t)}
                 lead={
                   sellerInitials !== null && sellerInitials !== '' ? (
                     <span className="ord-prefix" aria-hidden>
@@ -882,7 +877,7 @@ export function NewOrderForm(): ReactElement {
               <TextField
                 label={t('orderNew.addressLine1')}
                 required
-                hint={ADDRESS_LINE_1_HINT}
+                hint={t('guidance.addressLine1Hint')}
                 value={form.recipientAddressLine1}
                 onChange={(e) => set('recipientAddressLine1', e.target.value)}
                 maxLength={200}
@@ -890,10 +885,10 @@ export function NewOrderForm(): ReactElement {
               <TextField
                 label={t('orderNew.addressLine2The2')}
                 required
-                hint={ADDRESS_LINE_2_HINT}
+                hint={t('guidance.addressLine2Hint')}
                 error={
                   linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
-                    ? DUPLICATE_LINES_ERROR
+                    ? t('guidance.duplicateLines')
                     : undefined
                 }
                 value={form.recipientAddressLine2}

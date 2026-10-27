@@ -17,7 +17,7 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useTrackedShipment, useTrackedShipments } from '@/lib/api-hooks';
 import { MetaFact, OrdSection } from '../../orders/_components/orders-parts';
 import { ParcelTimeline } from './parcel-timeline';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
@@ -67,6 +67,7 @@ const filtersOf = (t: Translate<MessageKey>): ReadonlyArray<readonly [string, st
 ];
 
 export function TrackingIndex(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
@@ -228,7 +229,7 @@ export function TrackingIndex(): ReactElement {
                       <Td>
                         <StatusChip
                           kind={shipmentStatusKind(r.status as ShipmentStatus)}
-                          label={statusLabel(r.status as ShipmentStatus)}
+                          label={statusLabel(r.status as ShipmentStatus, locale)}
                           size="sm"
                         />
                         {r.failedAttempts > 0 && (

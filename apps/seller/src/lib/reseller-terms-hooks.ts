@@ -8,6 +8,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * A reseller store's TERMS (RS-4) — who pays which Skydrop fee on the
@@ -41,27 +42,67 @@ export const FEE_FIELDS: ReadonlyArray<{
   readonly feeType: FeeType;
   readonly field: PercentField;
   readonly label: string;
+  readonly labelKey: MessageKey;
 }> = [
-  { feeType: 'DELIVERY_FEE', field: 'deliveryFeeStorePercent', label: 'Delivery fee' },
-  { feeType: 'RETURN_FEE', field: 'returnFeeStorePercent', label: 'Return fee' },
+  {
+    feeType: 'DELIVERY_FEE',
+    field: 'deliveryFeeStorePercent',
+    label: 'Delivery fee',
+    labelKey: 'termsFees.deliveryFee',
+  },
+  {
+    feeType: 'RETURN_FEE',
+    field: 'returnFeeStorePercent',
+    label: 'Return fee',
+    labelKey: 'termsFees.returnFee',
+  },
   {
     feeType: 'CUSTOMER_RETURN_FEE',
     field: 'customerReturnFeeStorePercent',
     label: 'Customer return fee',
+    labelKey: 'termsFees.customerReturnFee',
   },
-  { feeType: 'COD_FEE', field: 'codFeeStorePercent', label: 'COD fee' },
-  { feeType: 'COD_TAX', field: 'codTaxStorePercent', label: 'COD tax' },
-  { feeType: 'INSTANT_PAY_FEE', field: 'instantPayFeeStorePercent', label: 'Instant Pay fee' },
+  {
+    feeType: 'COD_FEE',
+    field: 'codFeeStorePercent',
+    label: 'COD fee',
+    labelKey: 'termsFees.codFee',
+  },
+  {
+    feeType: 'COD_TAX',
+    field: 'codTaxStorePercent',
+    label: 'COD tax',
+    labelKey: 'termsFees.codTax',
+  },
+  {
+    feeType: 'INSTANT_PAY_FEE',
+    field: 'instantPayFeeStorePercent',
+    label: 'Instant Pay fee',
+    labelKey: 'termsFees.instantPayFee',
+  },
 ];
 
 export const CREDIT_TRIGGERS: ReadonlyArray<{
   readonly value: CreditTrigger;
   readonly label: string;
+  readonly labelKey: MessageKey;
 }> = [
-  { value: 'ON_PAYOUT', label: 'When the courier pays us (+ days)' },
-  { value: 'AFTER_DELIVERY', label: 'Days after delivery' },
-  { value: 'INSTANT', label: 'Instant, at delivery (Instant Pay fee applies)' },
-  { value: 'AFTER_CONFIRMATION', label: 'Days after confirmation' },
+  {
+    value: 'ON_PAYOUT',
+    label: 'When the courier pays us (+ days)',
+    labelKey: 'termsFees.onPayout',
+  },
+  { value: 'AFTER_DELIVERY', label: 'Days after delivery', labelKey: 'termsFees.afterDelivery' },
+  {
+    value: 'INSTANT',
+    label: 'Instant, at delivery (Instant Pay fee applies)',
+    labelKey: 'termsFees.instant',
+  },
+  {
+    value: 'AFTER_CONFIRMATION',
+    label: 'Days after confirmation',
+    labelKey: 'termsFees.afterConfirmation',
+  },
 ];
 
 export interface TermsShare {

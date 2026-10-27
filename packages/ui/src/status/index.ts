@@ -45,9 +45,18 @@ import {
 import type { Locale } from '../app/i18n';
 import {
   DELIVERY_ACTION_STATUS_BN,
+  FREIGHT_MODE_EXPLAINER_BN,
+  FREIGHT_MODE_WORDS_BN,
+  JOURNEY_OWNER_BN,
+  RESELLER_CREDIT_STATUS_BN,
+  RESELLER_STORE_STATUS_BN,
   STATUS_LABEL_BN,
+  STORE_WALLET_DIRECTION_BN,
   TICKET_STATUS_BN,
+  TOPUP_STATUS_BN,
   UPLOAD_STATUS_BN,
+  WALLET_DIRECTION_BN,
+  WITHDRAWAL_BY_AUDIENCE_BN,
 } from './bn';
 
 /** The Bangla tables, for a consumer's own consistency spec. Additive. */
@@ -482,7 +491,9 @@ export function uploadStatusLabel(status: BulkUploadStatus, locale: Locale = 'en
 export function topupStatusLabel(
   status: TopupRequestStatus,
   audience: 'staff' | 'payer' = 'staff',
+  locale: Locale = 'en',
 ): string {
+  if (locale === 'bn') return TOPUP_STATUS_BN[audience][status];
   switch (status) {
     case TopupRequestStatus.PENDING:
       return audience === 'payer' ? 'Waiting for Skydrop to see it' : 'Waiting for review';
@@ -697,7 +708,11 @@ export function storeOrderRequestStatusLabel(status: StoreOrderRequestStatus): s
   }
 }
 
-export function resellerStoreStatusLabel(status: ResellerStoreStatus): string {
+export function resellerStoreStatusLabel(
+  status: ResellerStoreStatus,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return RESELLER_STORE_STATUS_BN[status];
   switch (status) {
     case ResellerStoreStatus.PENDING_SELLER_APPROVAL:
       return 'awaiting approval';
@@ -741,7 +756,11 @@ export function resellerCreditStatusKind(status: ResellerCreditStatus): StatusKi
 }
 
 /** The words a person reads for a reseller order credit's status. */
-export function resellerCreditStatusLabel(status: ResellerCreditStatus): string {
+export function resellerCreditStatusLabel(
+  status: ResellerCreditStatus,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return RESELLER_CREDIT_STATUS_BN[status];
   switch (status) {
     case ResellerCreditStatus.WAITING:
       return 'waiting';
@@ -881,7 +900,9 @@ export function statusLabel(
 export function withdrawalStatusLabel(
   status: WithdrawalRequestStatus,
   audience: 'staff' | 'seller' = 'staff',
+  locale: Locale = 'en',
 ): string {
+  if (locale === 'bn') return WITHDRAWAL_BY_AUDIENCE_BN[audience][status];
   switch (status) {
     case WithdrawalRequestStatus.PENDING:
       return audience === 'seller' ? 'Requested' : 'Pending';
@@ -1017,7 +1038,11 @@ export function isWalletCredit(direction: WalletEntryDirection): boolean {
 }
 
 /** The human label for a ledger row. Same words on both apps. */
-export function walletDirectionLabel(direction: WalletEntryDirection): string {
+export function walletDirectionLabel(
+  direction: WalletEntryDirection,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return WALLET_DIRECTION_BN[direction];
   switch (direction) {
     case WalletEntryDirection.COD_COLLECTION:
       return 'COD collected';
@@ -1148,7 +1173,9 @@ export function isStoreWalletCredit(direction: StoreWalletEntryDirection): boole
 export function storeWalletDirectionLabel(
   direction: StoreWalletEntryDirection,
   seller = 'the client',
+  locale: Locale = 'en',
 ): string {
+  if (locale === 'bn') return STORE_WALLET_DIRECTION_BN[direction].replaceAll('{seller}', seller);
   switch (direction) {
     case StoreWalletEntryDirection.SELLER_TOPUP:
       return `Topped up by ${seller}`;
@@ -1232,7 +1259,12 @@ export type FreightAudience = 'STAFF' | 'SELLER';
  * places — so the risk was never an omission, it was WORDING: the same
  * mode reading two different ways on two screens of the same app.
  */
-export function freightModeWords(mode: InboundFreightMode, audience: FreightAudience): string {
+export function freightModeWords(
+  mode: InboundFreightMode,
+  audience: FreightAudience,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return FREIGHT_MODE_WORDS_BN[audience][mode];
   switch (mode) {
     case InboundFreightMode.PAY_ADVANCE:
       return audience === 'STAFF' ? 'Pay in advance' : 'Paid before it flew';
@@ -1256,7 +1288,12 @@ export function freightModeWords(mode: InboundFreightMode, audience: FreightAudi
  * other two and the one a seller most needs to recognise on a wallet
  * they have already been debited from.
  */
-export function freightModeExplainer(mode: InboundFreightMode, audience: FreightAudience): string {
+export function freightModeExplainer(
+  mode: InboundFreightMode,
+  audience: FreightAudience,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return FREIGHT_MODE_EXPLAINER_BN[audience][mode];
   switch (mode) {
     case InboundFreightMode.PAY_ADVANCE:
       return audience === 'STAFF'
@@ -1326,7 +1363,8 @@ export const FREIGHT_MODES: readonly InboundFreightMode[] = [
  */
 export type MilestoneOwner = 'SKYDROP' | 'SELLER' | 'STORE' | 'COURIER';
 
-export function journeyOwnerLabel(owner: MilestoneOwner): string {
+export function journeyOwnerLabel(owner: MilestoneOwner, locale: Locale = 'en'): string {
+  if (locale === 'bn') return JOURNEY_OWNER_BN[owner];
   switch (owner) {
     case 'SKYDROP':
       return 'Skydrop';

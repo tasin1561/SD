@@ -35,7 +35,7 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { LinkButton, MetaFact } from './orders-parts';
 import { useStores } from '@/lib/store-hooks';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { MessageKey } from '@/i18n/catalog';
 
@@ -191,6 +191,7 @@ function parseParams(sp: URLSearchParams): QueryParams {
 }
 
 export function OrdersIndex(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const identity = useSellerIdentity();
   const router = useRouter();
@@ -301,7 +302,7 @@ export function OrdersIndex(): ReactElement {
     ...CHIP_STATUSES.flatMap((s): TabItem[] => {
       const n = counts.get(s)?.count ?? 0;
       if (n === 0 && params.status !== s) return [];
-      return [{ id: s, label: chipWords(statusLabel(s)), count: n }];
+      return [{ id: s, label: chipWords(statusLabel(s, locale)), count: n }];
     }),
   ];
 
@@ -567,7 +568,7 @@ export function OrdersIndex(): ReactElement {
               <option value="">{t('orderList.allStatuses')}</option>
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
-                  {chipWords(statusLabel(s))}
+                  {chipWords(statusLabel(s, locale))}
                 </option>
               ))}
             </Select>
@@ -665,7 +666,7 @@ export function OrdersIndex(): ReactElement {
                     <Td>
                       <StatusChip
                         kind={orderStatusKind(o.status)}
-                        label={statusLabel(o.status)}
+                        label={statusLabel(o.status, locale)}
                         size="sm"
                       />
                     </Td>

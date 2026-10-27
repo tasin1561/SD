@@ -29,7 +29,7 @@ import { EarlyReservationReviewStatus } from '@skydrop/db';
 import { HoldDecisionDialog } from '@/components/hold-decision-dialog';
 import { useHoldReviews, type ReviewView } from '@/lib/ops-hooks';
 import { useRouter } from 'next/navigation';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 
 /**
@@ -71,6 +71,7 @@ import { richMessage } from '@/i18n/rich';
  *                         column.
  */
 export function HoldReviewsIndex(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const router = useRouter();
   const [status, setStatus] = useState<string>(EarlyReservationReviewStatus.OPEN);
@@ -276,7 +277,7 @@ export function HoldReviewsIndex(): ReactElement {
                     <Td>
                       <StatusChip
                         kind={earlyReviewStatusKind(r.status)}
-                        label={statusLabel(r.status)}
+                        label={statusLabel(r.status, locale)}
                         size="sm"
                       />
                     </Td>

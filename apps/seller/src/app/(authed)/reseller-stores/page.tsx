@@ -33,7 +33,7 @@ import {
   RsStripFact,
   pendingPhase,
 } from './_components/rs-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 
 function day(iso: string): string {
@@ -243,6 +243,7 @@ function StoreTable({
   stores: readonly ResellerStoreView[];
   caption: string;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   return (
     <Table caption={caption}>
@@ -272,7 +273,7 @@ function StoreTable({
             <Td>
               <StatusChip
                 kind={resellerStoreStatusKind(s.status)}
-                label={resellerStoreStatusLabel(s.status)}
+                label={resellerStoreStatusLabel(s.status, locale)}
                 size="sm"
               />
             </Td>

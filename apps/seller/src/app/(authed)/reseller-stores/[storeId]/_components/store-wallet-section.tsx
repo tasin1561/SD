@@ -36,7 +36,7 @@ import {
 } from '@/lib/reseller-store-wallet-hooks';
 import { verdict } from '@/i18n/verdict';
 import { RsError, RsSection, pendingPhase } from '../../_components/rs-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 
 function when(iso: string): string {
@@ -56,6 +56,7 @@ export function StoreWalletSection({
 }: {
   readonly store: ResellerStoreDetail;
 }): ReactElement | null {
+  const locale = useLocale();
   const t = useT();
   const allowed = can(useSellerIdentity(), 'stores.wallet');
   const summary = useResellerStoreWallet(store.id, allowed);
@@ -201,7 +202,7 @@ export function StoreWalletSection({
                             {credit ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
                           </span>
                           <span className="rs-body">
-                            {storeWalletDirectionLabel(e.direction, 'you')}
+                            {storeWalletDirectionLabel(e.direction, 'you', locale)}
                           </span>
                         </div>
                         {e.linkedOrderId !== null ? (

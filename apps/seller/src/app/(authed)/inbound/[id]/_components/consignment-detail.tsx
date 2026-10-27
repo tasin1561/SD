@@ -77,7 +77,7 @@ import {
   stamp,
   statusWords,
 } from '../../_components/consignment-words';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 
 /** The server's floor for a cancellation reason. Cosmetic — it refuses
@@ -129,6 +129,7 @@ export function ConsignmentDetailView({ id }: { id: string }): ReactElement {
  * Passing it in once makes it a non-null parameter for the whole subtree.
  */
 function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const events = useConsignmentEvents(consignment.id);
   const canManage = can(useSellerIdentity(), 'inbound.manage');
@@ -151,11 +152,11 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
         ]}
         Link={Link}
         title={<span className="sk-ident">{consignment.consignmentNumber}</span>}
-        subtitle={routeWords(consignment.route).blurb}
+        subtitle={routeWords(consignment.route, t).blurb}
         meta={
           <MetaFacts>
-            <MetaFact tone="accent">{routeWords(consignment.route).title}</MetaFact>
-            <MetaFact dot>{statusWords(consignment.status)}</MetaFact>
+            <MetaFact tone="accent">{routeWords(consignment.route, t).title}</MetaFact>
+            <MetaFact dot>{statusWords(consignment.status, t)}</MetaFact>
             {consignment.sellerReference !== null && (
               <MetaFact>
                 {richMessage(t('inboundDetail.yourRef'), {
@@ -296,6 +297,7 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
                 ? t('inboundDetail.oneBill', {
                     pending: statusLabel(
                       consignment.freightCharges[0]?.status ?? InboundFreightStatus.PENDING,
+                      locale,
                     ),
                   })
                 : t('inboundDetail.billsOnePerArrival', {
@@ -316,12 +318,12 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
                   value: (
                     <StatusChip
                       kind={consignmentStatusKind(consignment.status)}
-                      label={statusWords(consignment.status)}
+                      label={statusWords(consignment.status, t)}
                       size="sm"
                     />
                   ),
                 },
-                { label: t('inboundDetail.route'), value: routeWords(consignment.route).title },
+                { label: t('inboundDetail.route'), value: routeWords(consignment.route, t).title },
                 {
                   label: t('inboundDetail.expectedArrival'),
                   value: shortDate(consignment.expectedArrivalAt),
@@ -446,7 +448,7 @@ function EventTimeline({
     const last = i === events.length - 1;
     return {
       id: evt.id,
-      label: eventWords(evt.type),
+      label: eventWords(evt.type, t),
       state: last && !ended ? 'current' : 'done',
       ...(last && consignment.status === ConsignmentStatus.CANCELLED
         ? { tone: 'failed' as const }
@@ -508,7 +510,7 @@ function LegCard({
     <AreaSection
       title={
         <span className="inv-leg-heading">
-          {legTitle(leg, consignment.route, indiaLegs(consignment))}
+          {legTitle(leg, consignment.route, indiaLegs(consignment), t)}
           <span className="sk-ident inv-muted">{leg.receiptNumber}</span>
         </span>
       }
@@ -517,7 +519,7 @@ function LegCard({
       note={
         <>
           {leg.warehouse.name} · {leg.warehouse.countryCode} —{' '}
-          <span style={{ color: 'var(--fg-body)' }}>{legProgress(leg).headline}</span>
+          <span style={{ color: 'var(--fg-body)' }}>{legProgress(leg, t).headline}</span>
         </>
       }
       action={
@@ -535,7 +537,7 @@ function LegCard({
     >
       <Panel>
         <div className="inv-stack">
-          <Note>{legProgress(leg).detail}</Note>
+          <Note>{legProgress(leg, t).detail}</Note>
           <Facts
             columns={3}
             items={[
@@ -547,7 +549,7 @@ function LegCard({
                 label: t('inboundDetail.counted'),
                 value:
                   counted === null ? (
-                    <span className="inv-muted">{legProgress(leg).headline}</span>
+                    <span className="inv-muted">{legProgress(leg, t).headline}</span>
                   ) : (
                     <Num value={counted} suffix="units" />
                   ),
@@ -733,7 +735,7 @@ function CancelConsignmentModal({
             {consignment.consignmentNumber}
           </span>
           <span>
-            {routeWords(consignment.route).title} · {productCount(consignment)}{' '}
+            {routeWords(consignment.route, t).title} · {productCount(consignment)}{' '}
             {productCount(consignment) === 1 ? 'product' : 'products'}
           </span>
         </div>
@@ -767,6 +769,7 @@ function CancelConsignmentModal({
  * a seller endpoint for it is the next step.
  */
 function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const q = useSellerFreight({});
 
@@ -797,7 +800,7 @@ function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string 
               </h3>
               <StatusChip
                 kind={inboundFreightStatusKind(f.status)}
-                label={statusLabel(f.status)}
+                label={statusLabel(f.status, locale)}
                 size="sm"
               />
             </div>
@@ -842,7 +845,10 @@ function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string 
                       <Money amount={f.outstandingInr} direction="debit" />
                     ),
                 },
-                { label: t('inboundDetail.terms'), value: freightModeExplainer(f.mode, 'SELLER') },
+                {
+                  label: t('inboundDetail.terms'),
+                  value: freightModeExplainer(f.mode, 'SELLER', locale),
+                },
                 {
                   label: t('inboundDetail.unitsCharged'),
                   value: (

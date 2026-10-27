@@ -24,7 +24,7 @@ import {
 } from '@/lib/api-hooks';
 import { verdict } from '@/i18n/verdict';
 import { WalCallout } from './wallet-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
@@ -479,6 +479,7 @@ function Detail({
 }
 
 function Submitted({ onClose }: { readonly onClose: () => void }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   return (
     <div className="wal-done">
@@ -500,7 +501,7 @@ function Submitted({ onClose }: { readonly onClose: () => void }): ReactElement 
           words it carries in the Top-ups list. */}
       <StatusChip
         kind={topupStatusKind(TopupRequestStatus.PENDING)}
-        label={topupStatusLabel(TopupRequestStatus.PENDING, 'payer')}
+        label={topupStatusLabel(TopupRequestStatus.PENDING, 'payer', locale)}
         pulse
       />
       <p className="wal-done__aside">{t('wallet.nothingHasBeenAdded')}</p>

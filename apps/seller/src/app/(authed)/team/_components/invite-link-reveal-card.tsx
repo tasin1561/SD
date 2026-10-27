@@ -33,7 +33,7 @@ export function InviteLinkRevealCard({
     <RevealCard
       icon={<Link2 size={15} />}
       title={t('team.invitationLinkCopyAnd')}
-      note={`${invitation.email} · ${roleLine({ roleNames: invitation.roleNames })}`}
+      note={`${invitation.email} · ${roleLine({ roleNames: invitation.roleNames }, t('roleWords.noRole'))}`}
       body={t('team.thisIsTheOnly', { expiresAt: new Date(invitation.expiresAt).toLocaleString() })}
       value={invitation.inviteUrl}
       valueLabel={t('team.invitationLink')}

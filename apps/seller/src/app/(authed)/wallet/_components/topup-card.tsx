@@ -15,7 +15,7 @@ import { can } from '@/lib/page-access';
 import { useTopupBankAccounts, useTopupProofUrl, useTopupRequests } from '@/lib/api-hooks';
 import { TopupWizard } from './topup-wizard';
 import './wallet.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 
 /** The view type says `string`; this is what makes it safe to badge. */
 function isTopupStatus(value: string): value is TopupRequestStatus {
@@ -39,6 +39,7 @@ export function TopupCard({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }): ReactElement | null {
+  const locale = useLocale();
   const t = useT();
   const identity = useSellerIdentity();
   const banks = useTopupBankAccounts();
@@ -155,7 +156,7 @@ export function TopupCard({
                   {isTopupStatus(r.status) ? (
                     <StatusChip
                       kind={topupStatusKind(r.status)}
-                      label={topupStatusLabel(r.status, 'payer')}
+                      label={topupStatusLabel(r.status, 'payer', locale)}
                       size="sm"
                     />
                   ) : (

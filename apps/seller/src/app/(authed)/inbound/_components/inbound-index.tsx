@@ -265,7 +265,7 @@ export function InboundIndex(): ReactElement {
                   { id: 'ANY', label: t('inbound.anywhere') },
                   ...Object.values(ConsignmentStatus).map((s) => ({
                     id: s,
-                    label: statusWords(s),
+                    label: statusWords(s, t),
                   })),
                 ]}
               />
@@ -286,7 +286,7 @@ export function InboundIndex(): ReactElement {
                   { id: 'ANY', label: t('inbound.eitherRoute') },
                   ...Object.values(ConsignmentRoute).map((r) => ({
                     id: r,
-                    label: routeWords(r).title,
+                    label: routeWords(r, t).title,
                   })),
                 ]}
               />
@@ -359,7 +359,7 @@ export function InboundIndex(): ReactElement {
                           {c.consignmentNumber}
                         </Link>
                       </Td>
-                      <Td>{routeWords(c.route).title}</Td>
+                      <Td>{routeWords(c.route, t).title}</Td>
                       <Td align="right">
                         <Num value={productCount(c)} />
                       </Td>
@@ -374,7 +374,7 @@ export function InboundIndex(): ReactElement {
                       <Td>
                         <StatusChip
                           kind={consignmentStatusKind(c.status)}
-                          label={statusWords(c.status)}
+                          label={statusWords(c.status, t)}
                           size="sm"
                         />
                       </Td>
@@ -622,8 +622,8 @@ function AnnounceConsignment({
             onChange={(v) => setRoute(v as ConsignmentRoute)}
             options={Object.values(ConsignmentRoute).map((r) => ({
               value: r,
-              title: routeWords(r).title,
-              description: routeWords(r).hint,
+              title: routeWords(r, t).title,
+              description: routeWords(r, t).hint,
               icon: r === ConsignmentRoute.DIRECT_IN ? <Truck size={16} /> : <Plane size={16} />,
             }))}
           />
@@ -631,8 +631,8 @@ function AnnounceConsignment({
             <dl className="inv-route-info">
               {Object.values(ConsignmentRoute).map((r) => (
                 <div key={r}>
-                  <dt>{routeWords(r).title}: </dt>
-                  <dd>{routeWords(r).blurb}</dd>
+                  <dt>{routeWords(r, t).title}: </dt>
+                  <dd>{routeWords(r, t).blurb}</dd>
                 </div>
               ))}
             </dl>

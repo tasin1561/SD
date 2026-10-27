@@ -45,17 +45,11 @@ import {
   type PackageTypeValue,
 } from '@/lib/package-type';
 import { useStores } from '@/lib/store-hooks';
-import {
-  ADDRESS_LINE_1_HINT,
-  ADDRESS_LINE_2_HINT,
-  DUPLICATE_LINES_ERROR,
-  linesAreDuplicated,
-} from '@/lib/address-guidance';
+import { linesAreDuplicated } from '@/lib/address-guidance';
 import { prefixHint, stripSellerPrefix } from '@/lib/seller-prefix';
 import {
   IN_DIAL,
   IN_LOCAL_LENGTH,
-  IN_PHONE_ERROR,
   isCompleteLocal,
   sanitiseLocal,
   toE164,
@@ -381,7 +375,9 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
    *  screens edit the same field and must refuse the same values. */
   function phoneProblem(): string | null {
     if (!form) return null;
-    return isCompleteLocal(toLocalDigits(form.recipientPhoneE164)) ? null : IN_PHONE_ERROR;
+    return isCompleteLocal(toLocalDigits(form.recipientPhoneE164))
+      ? null
+      : t('guidance.phoneError', { len: IN_LOCAL_LENGTH, dial: IN_DIAL });
   }
 
   /** Same shape, same reason: the create form refuses duplicated address
@@ -391,7 +387,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     if (!form) return null;
     if (!form.recipientAddressLine2.trim()) return t('orderEdit.addressLine2The');
     return linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
-      ? DUPLICATE_LINES_ERROR
+      ? t('guidance.duplicateLines')
       : null;
   }
 
@@ -569,7 +565,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
           <TextField
             label={t('orderEdit.fullName')}
             required
-            hint={prefixHint(sellerInitials)}
+            hint={prefixHint(sellerInitials, t)}
             lead={
               sellerInitials !== null && sellerInitials !== '' ? (
                 <span className="ord-prefix" aria-hidden>
@@ -641,7 +637,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             <TextField
               label={t('orderEdit.addressLine1')}
               required
-              hint={ADDRESS_LINE_1_HINT}
+              hint={t('guidance.addressLine1Hint')}
               value={form.recipientAddressLine1}
               onChange={(e) => set('recipientAddressLine1', e.target.value)}
               maxLength={200}
@@ -651,10 +647,10 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             <TextField
               label={t('orderEdit.addressLine2')}
               required
-              hint={ADDRESS_LINE_2_HINT}
+              hint={t('guidance.addressLine2Hint')}
               error={
                 linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
-                  ? DUPLICATE_LINES_ERROR
+                  ? t('guidance.duplicateLines')
                   : undefined
               }
               value={form.recipientAddressLine2}
@@ -788,9 +784,9 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               onChange={(e) => set('packageType', e.target.value as PackageTypeValue | '')}
             >
               <option value="">{t('orderEdit.notStated')}</option>
-              {PACKAGE_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {packageWords(t)}
+              {PACKAGE_TYPES.map((kind) => (
+                <option key={kind} value={kind}>
+                  {packageWords(kind, t)}
                 </option>
               ))}
             </Select>

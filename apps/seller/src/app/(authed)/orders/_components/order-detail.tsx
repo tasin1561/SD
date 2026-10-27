@@ -54,7 +54,7 @@ import { OrderTicketsPanel } from '../[id]/_components/order-tickets-panel';
 import { ConsigneePanel } from '../[id]/_components/consignee-panel';
 import { ResellerMoneyPanel } from '../[id]/_components/reseller-money-panel';
 import { UnreachableCustomerPanel } from '../[id]/_components/unreachable-customer-panel';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 
 /** The public tracking site. Env-driven so a domain change is a deploy
@@ -172,6 +172,7 @@ const TILE_TONE: Record<ReturnType<typeof statusTone>, KpiTone> = {
 };
 
 export function OrderDetailView({ orderId }: { orderId: string }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const detail = useOrderDetail(orderId);
   // Asked for any FAILED status, because which of them qualifies is a
@@ -256,7 +257,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               <span className="ord-meta">
                 <StatusChip
                   kind={orderStatusKind(detail.data.status as OrderStatus)}
-                  label={statusLabel(detail.data.status as OrderStatus)}
+                  label={statusLabel(detail.data.status as OrderStatus, locale)}
                 />
                 <MetaFact tone="accent">
                   {detail.data.paymentMode === 'COD'
@@ -376,7 +377,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               /* `statusLabel` from `@skydrop/ui/status`, never the raw
                  enum: the chip in the header beside this tile reads
                  the same vocabulary. */
-              figure={<span>{statusLabel(detail.data.status as OrderStatus)}</span>}
+              figure={<span>{statusLabel(detail.data.status as OrderStatus, locale)}</span>}
               tone={TILE_TONE[statusTone(detail.data.status as OrderStatus)]}
             />
             <KpiCard
@@ -674,7 +675,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                     },
                     {
                       label: t('orderDetail.package'),
-                      value: packageWords(detail.data.packageType),
+                      value: packageWords(detail.data.packageType, t),
                     },
                     {
                       label: t('orderDetail.flags'),
@@ -883,6 +884,7 @@ function OrderJourneySection({
   readonly orderNumber: string;
   readonly status: OrderStatus;
 }): ReactElement | null {
+  const locale = useLocale();
   const t = useT();
   const journey = useOrderJourney(orderId);
   if (journey.isPending)
@@ -897,7 +899,9 @@ function OrderJourneySection({
   return (
     <OrderJourney
       orderNumber={orderNumber}
-      status={<StatusChip kind={orderStatusKind(status)} label={statusLabel(status)} size="sm" />}
+      status={
+        <StatusChip kind={orderStatusKind(status)} label={statusLabel(status, locale)} size="sm" />
+      }
       milestones={journey.data.milestones}
       parcels={journey.data.parcels}
       entries={journey.data.timeline}

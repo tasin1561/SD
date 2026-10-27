@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { ComboSelect, type ComboOption } from '@skydrop/ui/app/combo-select';
 import { statusLabel } from '@skydrop/ui/status';
 import { useOrdersList } from '@/lib/api-hooks';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 
 /** Long enough that a stray keystroke does not hit the API. */
 const MIN_QUERY = 2;
@@ -58,6 +58,7 @@ export function OrderPicker({
   readonly hint?: string;
   readonly disabled?: boolean;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -77,7 +78,7 @@ export function OrderPicker({
         // The NUMBER is the label, because that is what the seller reads
         // on every other screen and would say down a phone.
         label: o.orderNumber,
-        description: `${o.recipientName} · ${o.recipientPhoneE164} · ${statusLabel(o.status)}`,
+        description: `${o.recipientName} · ${o.recipientPhoneE164} · ${statusLabel(o.status, locale)}`,
       })),
     [list.data],
   );

@@ -31,7 +31,7 @@ import {
   Notice,
   OrdSection,
 } from '../../_components/orders-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 
@@ -99,6 +99,7 @@ function runState(status: BulkUploadStatus, running: boolean): ParachuteState {
 }
 
 export function OrderImportDetail({ importId }: { readonly importId: string }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const detail = useOrderImport(importId);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -185,7 +186,7 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
               <span className="ord-meta">
                 <StatusChip
                   kind={uploadStatusKind(job.status)}
-                  label={uploadStatusLabel(job.status)}
+                  label={uploadStatusLabel(job.status, locale)}
                   pulse={running}
                   size="sm"
                 />

@@ -10,7 +10,7 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { statusLabel, stockUnitStatusKind } from '@skydrop/ui/status';
 import type { StockUnitStatus } from '@skydrop/db';
 import './stock-ui.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 
 /**
  * The presentational pieces shared by the stock area of the seller
@@ -281,5 +281,8 @@ export function StockUnitStatusBadge({
 }: {
   readonly status: StockUnitStatus;
 }): ReactElement {
-  return <StatusChip kind={stockUnitStatusKind(status)} label={statusLabel(status)} size="sm" />;
+  const locale = useLocale();
+  return (
+    <StatusChip kind={stockUnitStatusKind(status)} label={statusLabel(status, locale)} size="sm" />
+  );
 }

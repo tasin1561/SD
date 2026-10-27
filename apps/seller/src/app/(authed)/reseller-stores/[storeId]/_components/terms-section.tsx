@@ -238,8 +238,8 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
     return CREDIT_TRIGGERS.map((o) => (
       <option key={o.value} value={o.value}>
         {o.value === 'AFTER_CONFIRMATION' && !terms.afterConfirmationEnabled
-          ? t('resellerStoreDetail.needsSkydropToEnable', { label: o.label })
-          : o.label}
+          ? t('resellerStoreDetail.needsSkydropToEnable', { label: t(o.labelKey) })
+          : t(o.labelKey)}
       </option>
     ));
   }
@@ -281,7 +281,7 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
             <TextField
               key={f.field}
               id={`tf-${f.field}`}
-              label={t('resellerStoreDetail.storePays', { label: f.label })}
+              label={t('resellerStoreDetail.storePays', { label: t(f.labelKey) })}
               inputMode="decimal"
               inputClassName="sk-figure"
               value={draft[f.field]}

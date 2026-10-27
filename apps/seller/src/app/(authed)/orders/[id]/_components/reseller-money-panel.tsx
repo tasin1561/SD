@@ -22,7 +22,7 @@ import { useResellerOrderMoney } from '@/lib/api-hooks';
 import { can } from '@/lib/page-access';
 import { verdict } from '@/i18n/verdict';
 import { DisputeFiguresModal } from './dispute-figures-modal';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
@@ -122,6 +122,7 @@ export function ResellerMoneyPanel({
   readonly orderId: string;
   readonly enabled: boolean;
 }): ReactElement | null {
+  const locale = useLocale();
   const t = useT();
   const money = useResellerOrderMoney(orderId, enabled);
   if (!enabled) return null;
@@ -161,7 +162,7 @@ export function ResellerMoneyPanel({
                 value: (
                   <StatusChip
                     kind={resellerCreditStatusKind(mine.status)}
-                    label={resellerCreditStatusLabel(mine.status)}
+                    label={resellerCreditStatusLabel(mine.status, locale)}
                     size="sm"
                   />
                 ),
@@ -248,7 +249,7 @@ export function ResellerMoneyPanel({
                 (view.sellerLines ?? []).map((l) => (
                   <Tr key={l.id}>
                     <Td>
-                      <div>{walletDirectionLabel(l.direction as WalletEntryDirection)}</div>
+                      <div>{walletDirectionLabel(l.direction as WalletEntryDirection, locale)}</div>
                       {l.note !== null ? <span className="ord-sub">{l.note}</span> : null}
                     </Td>
                     <Td>

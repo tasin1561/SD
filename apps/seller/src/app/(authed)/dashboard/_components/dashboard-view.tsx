@@ -41,7 +41,7 @@ import {
   ShortcutCard,
 } from './dashboard-parts';
 import { can } from '@/lib/page-access';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 
 /**
@@ -108,6 +108,7 @@ export function onboardingVisible(
 }
 
 export function DashboardView(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const identity = useSellerIdentity();
   // This is the ONE page open to everybody, so it is where a permission
@@ -407,7 +408,7 @@ export function DashboardView(): ReactElement {
                     <Td>
                       <StatusChip
                         kind={orderStatusKind(o.status)}
-                        label={statusLabel(o.status)}
+                        label={statusLabel(o.status, locale)}
                         size="sm"
                       />
                     </Td>

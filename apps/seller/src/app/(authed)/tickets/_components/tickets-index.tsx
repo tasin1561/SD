@@ -22,7 +22,7 @@ import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { useRouter } from 'next/navigation';
 import './tickets.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 
@@ -57,6 +57,7 @@ const stagesOf = (t: Translate<MessageKey>) =>
   ] as const;
 
 export function SellerTicketsIndex(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const router = useRouter();
   const canWrite = can(useSellerIdentity(), 'tickets.create');
@@ -336,7 +337,7 @@ export function SellerTicketsIndex(): ReactElement {
                     <Td>
                       <StatusChip
                         kind={ticketStatusKind(ticket.status)}
-                        label={ticketStatusLabel(ticket.status)}
+                        label={ticketStatusLabel(ticket.status, locale)}
                         size="sm"
                       />
                     </Td>

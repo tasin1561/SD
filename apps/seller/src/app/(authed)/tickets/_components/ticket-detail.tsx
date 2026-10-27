@@ -16,7 +16,7 @@ import { useSellerTicket } from '@/lib/ticket-hooks';
 import { verdict } from '@/i18n/verdict';
 import { TicketConversation } from './ticket-conversation';
 import './tickets.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 
 /**
  * One ticket, opened.
@@ -37,6 +37,7 @@ import { useT } from '@/i18n/client';
  * tell them they were paid.
  */
 export function TicketDetail({ ticketId }: { readonly ticketId: string }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const query = useSellerTicket(ticketId);
 
@@ -119,7 +120,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
           action={
             <StatusChip
               kind={ticketStatusKind(ticket.status)}
-              label={ticketStatusLabel(ticket.status)}
+              label={ticketStatusLabel(ticket.status, locale)}
             />
           }
         />
@@ -144,7 +145,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
             live in `@skydrop/ui/status` (FE-6) — a second vocabulary
             here is the drift that rule exists to prevent.
           */
-          figure={<span className="tkt-tile-text">{ticketStatusLabel(ticket.status)}</span>}
+          figure={<span className="tkt-tile-text">{ticketStatusLabel(ticket.status, locale)}</span>}
           tone={kpiTone(statTone(ticket.status))}
         />
         <KpiCard
@@ -224,7 +225,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
             <FactItem label={t('tickets.status')}>
               <StatusChip
                 kind={ticketStatusKind(ticket.status)}
-                label={ticketStatusLabel(ticket.status)}
+                label={ticketStatusLabel(ticket.status, locale)}
                 size="sm"
               />
             </FactItem>

@@ -29,7 +29,7 @@ import {
 } from '@/lib/reseller-report-hooks';
 import { verdict } from '@/i18n/verdict';
 import { RsFact, RsFacts, RsLink, RsSection, RsStrip, RsStripFact } from '../_components/rs-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 
 const pct = (v: string | null): string => (v === null ? '—' : `${v}%`);
@@ -52,6 +52,7 @@ const pct = (v: string | null): string => (v === null ? '—' : `${v}%`);
  *       would read as complete when it is not (TRE-6's rule).
  */
 export default function ResellerReportsPage(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const identity = useSellerIdentity();
   const mayManage = can(identity, 'stores.manage');
@@ -235,7 +236,7 @@ export default function ResellerReportsPage(): ReactElement {
                           <div className="rs-block">
                             <StatusChip
                               kind={resellerStoreStatusKind(s.status)}
-                              label={resellerStoreStatusLabel(s.status)}
+                              label={resellerStoreStatusLabel(s.status, locale)}
                               size="sm"
                             />
                           </div>

@@ -18,7 +18,7 @@ import { useApiClient } from '@skydrop/auth/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { verdict } from '@/i18n/verdict';
 import { Notice, OrdSection } from './orders-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
@@ -648,6 +648,7 @@ const RUNNING: ReadonlySet<string> = new Set(['PENDING', 'PROCESSING']);
 
 /** The run's status as a chip, in the shared words; an unknown value prints as itself. */
 function UploadStatusChip({ status }: { readonly status: string }): ReactElement {
+  const locale = useLocale();
   if (!UPLOAD_STATUSES.includes(status)) {
     return <StatusChip kind="neutral" label={status} size="sm" />;
   }
@@ -655,7 +656,7 @@ function UploadStatusChip({ status }: { readonly status: string }): ReactElement
   return (
     <StatusChip
       kind={uploadStatusKind(s)}
-      label={uploadStatusLabel(s)}
+      label={uploadStatusLabel(s, locale)}
       size="sm"
       pulse={RUNNING.has(status)}
     />

@@ -11,7 +11,7 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { OrdSection } from '../../_components/orders-parts';
 import { useSellerTickets } from '@/lib/ops-hooks';
 import { RaiseTicketModal } from '../../../tickets/_components/raise-ticket-modal';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 
 /**
  * Every conversation open on this parcel, and a way to start another.
@@ -40,6 +40,7 @@ export function OrderTicketsPanel({
   readonly raising: boolean;
   readonly onRaisingChange: (next: boolean) => void;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const tickets = useSellerTickets({ orderId });
   const setRaising = onRaisingChange;
@@ -67,7 +68,7 @@ export function OrderTicketsPanel({
               status={
                 <StatusChip
                   kind={ticketStatusKind(t.status)}
-                  label={ticketStatusLabel(t.status)}
+                  label={ticketStatusLabel(t.status, locale)}
                   size="sm"
                 />
               }

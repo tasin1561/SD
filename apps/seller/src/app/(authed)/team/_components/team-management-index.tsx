@@ -557,7 +557,10 @@ export function TeamManagementIndex(): ReactElement {
                                   setPendingRevoke({
                                     id: inv.id,
                                     email: inv.email,
-                                    roles: roleLine({ roleNames: inv.roleNames }),
+                                    roles: roleLine(
+                                      { roleNames: inv.roleNames },
+                                      t('roleWords.noRole'),
+                                    ),
                                   })
                                 }
                               >
@@ -613,6 +616,7 @@ export function TeamManagementIndex(): ReactElement {
                 editingRoles.member.fullName,
                 roleNamesOf(editingRoles.member),
                 namesFor(editingRoles.roleIds),
+                t,
               )
         }
         confirmLabel={t('team.saveRoles')}

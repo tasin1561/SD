@@ -16,7 +16,7 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useSellerFreight } from '@/lib/ops-hooks';
 import './freight.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 
 /** The filter tab that means "no status filter". */
@@ -50,6 +50,7 @@ const ALL = 'all';
  *                          seller view. It is our margin, not their bill.
  */
 export function SellerFreightIndex(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const [status, setStatus] = useState<string>('');
   const list = useSellerFreight(status === '' ? {} : { status });
@@ -280,7 +281,7 @@ export function SellerFreightIndex(): ReactElement {
                   </Td>
                   <Td>
                     <div className="frt-terms">
-                      <span>{freightModeWords(r.mode, 'SELLER')}</span>
+                      <span>{freightModeWords(r.mode, 'SELLER', locale)}</span>
                       {r.serviceChargeInr !== null && Number(r.serviceChargeInr) > 0 && (
                         <span className="frt-faint">
                           {richMessage(t('freight.includesServiceCharge'), {
@@ -328,7 +329,7 @@ export function SellerFreightIndex(): ReactElement {
                   <Td>
                     <StatusChip
                       kind={inboundFreightStatusKind(r.status)}
-                      label={statusLabel(r.status)}
+                      label={statusLabel(r.status, locale)}
                       size="sm"
                     />
                   </Td>

@@ -104,7 +104,7 @@ export function SecurityIndex(): ReactElement {
                   the server keeps truthful; somebody who is Finance AND
                   Ops read as Finance on the page that tells them what
                   they are. */}
-              <SetFact>{roleLine(identity)}</SetFact>
+              <SetFact>{roleLine(identity, t('roleWords.noRole'))}</SetFact>
             </span>
           )
         }
@@ -160,7 +160,7 @@ export function SecurityIndex(): ReactElement {
                     ? t('settingsSecurity.role')
                     : t('settingsSecurity.roles')}
                 </dt>
-                <dd>{roleLine(identity)}</dd>
+                <dd>{roleLine(identity, t('roleWords.noRole'))}</dd>
                 <dt>{t('settingsSecurity.company')}</dt>
                 <dd>{identity.companyName}</dd>
               </dl>

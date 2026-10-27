@@ -1,3 +1,7 @@
+import type { Translate } from '@skydrop/ui/app/i18n';
+import { englishT } from '@/i18n/english';
+import type { MessageKey } from '@/i18n/catalog';
+
 /**
  * What a parcel is packed in, in the DATABASE's own vocabulary.
  *
@@ -41,18 +45,18 @@ export function isPackageType(value: unknown): value is PackageTypeValue {
  * enum grows and this list does not, the screen says the new name out
  * loud instead of quietly printing nothing.
  */
-export function packageWords(value: string): string {
+export function packageWords(value: string, t: Translate<MessageKey> = englishT): string {
   switch (value) {
     case 'BOX':
-      return 'Box';
+      return t('packageType.box');
     case 'POLYBAG':
-      return 'Polybag';
+      return t('packageType.polybag');
     case 'ENVELOPE':
-      return 'Envelope';
+      return t('packageType.envelope');
     case 'TUBE':
-      return 'Tube';
+      return t('packageType.tube');
     case 'CUSTOM':
-      return 'Something else';
+      return t('packageType.somethingElse');
     default:
       return value;
   }

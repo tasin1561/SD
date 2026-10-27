@@ -10,8 +10,17 @@ import { CATALOGS, NAMESPACES } from '@/i18n/catalog';
   in where numerals must stay 0-9.
 */
 
+/*
+  `{plural}` is the one sanctioned exception to "same placeholders in both
+  halves": it is the English "s" of `{n} order{plural}`, supplied by the caller
+  (`n === 1 ? '' : 's'`). Bangla has no plural suffix, so the Bangla half simply
+  does not use it. Nothing else may be dropped.
+*/
 const placeholders = (s: string): string[] =>
-  [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1] ?? '').sort();
+  [...s.matchAll(/\{(\w+)\}/g)]
+    .map((m) => m[1] ?? '')
+    .filter((n) => !/^plural\d*$/.test(n))
+    .sort();
 const BENGALI_DIGIT = /[০-৯]/;
 
 describe('seller message catalogue', () => {

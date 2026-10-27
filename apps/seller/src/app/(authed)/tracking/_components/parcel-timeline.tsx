@@ -12,7 +12,7 @@ import {
 import { EmptyState } from '@skydrop/ui/app/empty-state';
 import type { TrackedShipmentDetail } from '@/lib/api-hooks';
 import '../../orders/_components/orders.css';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 
 /**
@@ -39,6 +39,7 @@ export function ParcelTimeline({
   readonly parcel: TrackedShipmentDetail;
   readonly header?: TimelineHeader | undefined;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   /**
    * A delivery attempt belongs to the scan that CAUSED it, and that scan
@@ -87,7 +88,7 @@ export function ParcelTimeline({
     const last = i === all.length - 1;
     return {
       id: e.id,
-      label: statusLabel(e.status as ShipmentStatus),
+      label: statusLabel(e.status as ShipmentStatus, locale),
       // The latest scan is where the parcel is now — unless it has
       // arrived, when there is nothing left in progress.
       state: last && latestKind !== 'delivered' ? 'current' : 'done',

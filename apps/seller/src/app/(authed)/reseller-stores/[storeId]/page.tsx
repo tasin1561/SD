@@ -62,7 +62,7 @@ import {
   RsSection,
   pendingPhase,
 } from '../_components/rs-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
@@ -171,6 +171,7 @@ function statusWords(t: Translate<MessageKey>, status: ResellerStoreStatusValue)
  *       store row itself carries no signing date.
  */
 export default function ResellerStorePage(): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const { storeId } = useParams<{ storeId: string }>();
   const store = useResellerStore(storeId);
@@ -259,7 +260,7 @@ export default function ResellerStorePage(): ReactElement {
             <div className="rs-actions">
               <StatusChip
                 kind={resellerStoreStatusKind(s.status)}
-                label={resellerStoreStatusLabel(s.status)}
+                label={resellerStoreStatusLabel(s.status, locale)}
               />
               <RsLink href={`/orders?storeId=${encodeURIComponent(s.id)}`}>
                 {t('resellerStoreDetail.itsOrders')}
@@ -935,7 +936,7 @@ function TeamSection({
                     label — so a member who is Ops AND Finance read as
                     Ops, on the screen a seller uses to check who at a
                     store can reach its money. */}
-                <Td className="rs-small">{roleLine(m)}</Td>
+                <Td className="rs-small">{roleLine(m, t('roleWords.noRole'))}</Td>
                 <Td className="rs-small">
                   {richMessage(t('resellerStoreDetail.lastSignedIn'), {
                     lastLoginAt: when(m.lastLoginAt),
@@ -948,7 +949,7 @@ function TeamSection({
               <Tr key={i.id}>
                 <Td className="rs-strong">{i.fullName}</Td>
                 <Td className="rs-small">{i.email}</Td>
-                <Td className="rs-small">{roleLine(i)}</Td>
+                <Td className="rs-small">{roleLine(i, t('roleWords.noRole'))}</Td>
                 {/* The word as well as the colour: an expired row and a
                     live one must not differ only by tint. */}
                 <Td className="rs-small">

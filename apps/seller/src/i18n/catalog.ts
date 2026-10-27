@@ -6,9 +6,11 @@ import { authReset } from './messages/authReset';
 import { authVerify } from './messages/authVerify';
 import { authedShell } from './messages/authedShell';
 import { common } from './messages/common';
+import { consignmentWords } from './messages/consignmentWords';
 import { customers } from './messages/customers';
 import { dashboard } from './messages/dashboard';
 import { freight } from './messages/freight';
+import { guidance } from './messages/guidance';
 import { holdDecision } from './messages/holdDecision';
 import { holds } from './messages/holds';
 import { impersonation } from './messages/impersonation';
@@ -36,6 +38,7 @@ import { orderResellerMoney } from './messages/orderResellerMoney';
 import { orderTickets } from './messages/orderTickets';
 import { orderUnreachable } from './messages/orderUnreachable';
 import { ordersParts } from './messages/ordersParts';
+import { packageType } from './messages/packageType';
 import { passwordReset } from './messages/passwordReset';
 import { productDetail } from './messages/productDetail';
 import { productImport } from './messages/productImport';
@@ -50,6 +53,7 @@ import { resellerReports } from './messages/resellerReports';
 import { resellerRequests } from './messages/resellerRequests';
 import { resellerStoreDetail } from './messages/resellerStoreDetail';
 import { resellerStores } from './messages/resellerStores';
+import { roleWords } from './messages/roleWords';
 import { settingsApiKeys } from './messages/settingsApiKeys';
 import { settingsHub } from './messages/settingsHub';
 import { settingsNotifications } from './messages/settingsNotifications';
@@ -62,6 +66,7 @@ import { shell } from './messages/shell';
 import { signUp } from './messages/signUp';
 import { team } from './messages/team';
 import { teamRoles } from './messages/teamRoles';
+import { termsFees } from './messages/termsFees';
 import { tickets } from './messages/tickets';
 import { tracking } from './messages/tracking';
 import { variantDetail } from './messages/variantDetail';
@@ -80,9 +85,11 @@ export const NAMESPACES = [
   authVerify,
   authedShell,
   common,
+  consignmentWords,
   customers,
   dashboard,
   freight,
+  guidance,
   holdDecision,
   holds,
   impersonation,
@@ -110,6 +117,7 @@ export const NAMESPACES = [
   orderTickets,
   orderUnreachable,
   ordersParts,
+  packageType,
   passwordReset,
   productDetail,
   productImport,
@@ -124,6 +132,7 @@ export const NAMESPACES = [
   resellerRequests,
   resellerStoreDetail,
   resellerStores,
+  roleWords,
   settingsApiKeys,
   settingsHub,
   settingsNotifications,
@@ -136,6 +145,7 @@ export const NAMESPACES = [
   signUp,
   team,
   teamRoles,
+  termsFees,
   tickets,
   tracking,
   variantDetail,
@@ -150,9 +160,11 @@ const ALL = {
   ...authVerify,
   ...authedShell,
   ...common,
+  ...consignmentWords,
   ...customers,
   ...dashboard,
   ...freight,
+  ...guidance,
   ...holdDecision,
   ...holds,
   ...impersonation,
@@ -180,6 +192,7 @@ const ALL = {
   ...orderTickets,
   ...orderUnreachable,
   ...ordersParts,
+  ...packageType,
   ...passwordReset,
   ...productDetail,
   ...productImport,
@@ -194,6 +207,7 @@ const ALL = {
   ...resellerRequests,
   ...resellerStoreDetail,
   ...resellerStores,
+  ...roleWords,
   ...settingsApiKeys,
   ...settingsHub,
   ...settingsNotifications,
@@ -206,6 +220,7 @@ const ALL = {
   ...signUp,
   ...team,
   ...teamRoles,
+  ...termsFees,
   ...tickets,
   ...tracking,
   ...variantDetail,

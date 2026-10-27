@@ -21,7 +21,7 @@ import {
 } from '@/lib/ops-hooks';
 import { verdict } from '@/i18n/verdict';
 import { WalCallout } from './wallet-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 
 /**
@@ -51,6 +51,7 @@ export function WithdrawalsCard({
   readonly requesting: boolean;
   readonly onRequestingChange: (open: boolean) => void;
 }): ReactElement {
+  const locale = useLocale();
   const t = useT();
   const list = useSellerWithdrawals();
   const rows = list.data ?? [];
@@ -112,7 +113,7 @@ export function WithdrawalsCard({
                 <Td>
                   <StatusChip
                     kind={withdrawalStatusKind(w.status)}
-                    label={withdrawalStatusLabel(w.status, 'seller')}
+                    label={withdrawalStatusLabel(w.status, 'seller', locale)}
                     size="sm"
                   />
                 </Td>

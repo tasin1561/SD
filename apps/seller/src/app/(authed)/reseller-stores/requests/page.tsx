@@ -38,7 +38,7 @@ import {
   RsStripFact,
   pendingPhase,
 } from '../_components/rs-parts';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
@@ -279,12 +279,17 @@ function OrderCell({
   status?: Parameters<typeof orderStatusKind>[0] | undefined;
   extra?: string | undefined;
 }): ReactElement {
+  const locale = useLocale();
   return (
     <>
       <span className="sk-ident">{number ?? '—'}</span>
       {status !== undefined ? (
         <div className="rs-block">
-          <StatusChip kind={orderStatusKind(status)} label={statusLabel(status)} size="sm" />
+          <StatusChip
+            kind={orderStatusKind(status)}
+            label={statusLabel(status, locale)}
+            size="sm"
+          />
         </div>
       ) : null}
       {extra !== undefined ? <div className="rs-small">{extra}</div> : null}

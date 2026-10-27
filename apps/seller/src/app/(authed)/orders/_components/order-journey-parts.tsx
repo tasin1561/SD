@@ -12,9 +12,10 @@ import {
 import { Timeline, type TimelineStep, type TimelineStepState } from '@skydrop/ui/app/timeline';
 import { journeyOwnerLabel } from '@skydrop/ui/status';
 import { OrdSection } from './orders-parts';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 /**
  * The order journey, drawn as the u17 timeline.
@@ -60,9 +61,10 @@ const STATE: Record<JourneyMilestoneView['state'], TimelineStepState> = {
 export function milestoneSteps(
   milestones: readonly JourneyMilestoneView[],
   t: Translate<MessageKey>,
+  locale: Locale = 'en',
 ): TimelineStep[] {
   return milestones.map((m) => {
-    const owner = journeyOwnerLabel(m.owner);
+    const owner = journeyOwnerLabel(m.owner, locale);
     const description: ReactNode = (
       <>
         <span>{owner}</span>
@@ -103,6 +105,7 @@ export function OrderJourney({
   readonly trackingUrlBase: string;
 }): ReactElement {
   const t = useT();
+  const locale = useLocale();
   // The latest parcel, as the shared panels chose it.
   const parcel = parcels[parcels.length - 1] ?? null;
   return (
@@ -110,7 +113,7 @@ export function OrderJourney({
       <OrdSection title={t('orderDetail.orderTracker')} note={t('orderDetail.whereThisOrderHas')}>
         <Timeline
           label={t('orderDetail.orderTracker')}
-          steps={milestoneSteps(milestones, t)}
+          steps={milestoneSteps(milestones, t, locale)}
           header={{
             icon: <Route size={16} />,
             title: t('orderDetail.order'),
