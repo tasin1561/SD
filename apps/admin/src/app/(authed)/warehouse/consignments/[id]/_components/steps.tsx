@@ -2,6 +2,7 @@
 
 import { Check } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
+import { useT } from '@/i18n/client';
 
 /**
  * One numbered stop on the journey.
@@ -75,13 +76,18 @@ export function Variance({
   readonly shortWord?: string;
   readonly overWord?: string;
 }): ReactElement {
+  const t = useT();
   if (counted === null) {
-    return <span className="stk-muted sk-figure">{expected} expected, not yet counted</span>;
+    return (
+      <span className="stk-muted sk-figure">
+        {t('warehouseConsignmentsIdSteps.expectedNotYetCounted', { expected })}
+      </span>
+    );
   }
   const diff = counted - expected;
   return (
     <span className="sk-figure">
-      {counted} of {expected}
+      {t('warehouseConsignmentsIdSteps.of', { counted, expected })}
       {diff === 0 ? (
         ''
       ) : (

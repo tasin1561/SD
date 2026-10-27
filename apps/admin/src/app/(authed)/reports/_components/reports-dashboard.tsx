@@ -11,6 +11,7 @@ import type { ReportSummary } from '@skydrop/api-client';
 import { useReportSummary } from '@/lib/api-hooks';
 import { MoCard } from '../../treasury/_components/money-parts';
 import './reports.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Operational summary — 3 cards (orders / shipments / wallet) +
@@ -21,6 +22,7 @@ import './reports.css';
  * timeseries breakdowns land later once the volume justifies them.
  */
 export function ReportsDashboard(): ReactElement {
+  const t = useT();
   const [from, setFrom] = useState(defaultFrom());
   const [to, setTo] = useState(defaultTo());
 
@@ -32,21 +34,21 @@ export function ReportsDashboard(): ReactElement {
   return (
     <div className="mo-page">
       <PageHeader
-        title="Reports"
-        subtitle="Operational metrics across the date range. Confirm + NDR + RTO + delivery rates; dispatch times; wallet flows."
+        title={t('reportsReportsDashboard.reports')}
+        subtitle={t('reportsReportsDashboard.operationalMetricsAcrossTheDate')}
       />
 
       <MoCard>
         <div className="rp-range">
           <DateField
             id="reports-from"
-            label="From"
+            label={t('reportsReportsDashboard.from')}
             value={from}
             onChange={(e) => setFrom(e.target.value)}
           />
           <DateField
             id="reports-to"
-            label="To (exclusive)"
+            label={t('reportsReportsDashboard.toExclusive')}
             value={to}
             onChange={(e) => setTo(e.target.value)}
           />
@@ -63,11 +65,11 @@ export function ReportsDashboard(): ReactElement {
         </div>
       ) : summary.isError ? (
         <ErrorState
-          message={summary.error?.message ?? 'Failed.'}
+          message={summary.error?.message ?? t('reportsReportsDashboard.failed')}
           retry={() => void summary.refetch()}
         />
       ) : !summary.data ? (
-        <ErrorState message="No data." />
+        <ErrorState message={t('reportsReportsDashboard.noData')} />
       ) : (
         <div className="mo-stack rp-groups">
           <OrdersGroup data={summary.data.orders} />
@@ -80,35 +82,36 @@ export function ReportsDashboard(): ReactElement {
 }
 
 function OrdersGroup({ data }: { readonly data: ReportSummary['orders'] }): ReactElement {
+  const t = useT();
   return (
     <section className="rp-group">
-      <SectionHeading title="Orders" />
+      <SectionHeading title={t('reportsReportsDashboard.orders')} />
       <div className="mo-kpis">
-        <KpiCard label="Created" value={data.created} />
-        <KpiCard label="Confirmed" value={data.confirmed} />
-        <KpiCard label="Delivered" value={data.delivered} />
-        <KpiCard label="RTO initiated" value={data.rtoInitiated} />
-        <KpiCard label="Cancelled" value={data.cancelled} />
-        <KpiCard label="Rejected (NDR)" value={data.rejectedNdr} />
+        <KpiCard label={t('reportsReportsDashboard.created')} value={data.created} />
+        <KpiCard label={t('reportsReportsDashboard.confirmed')} value={data.confirmed} />
+        <KpiCard label={t('reportsReportsDashboard.delivered')} value={data.delivered} />
+        <KpiCard label={t('reportsReportsDashboard.rtoInitiated')} value={data.rtoInitiated} />
+        <KpiCard label={t('reportsReportsDashboard.cancelled')} value={data.cancelled} />
+        <KpiCard label={t('reportsReportsDashboard.rejectedNdr')} value={data.rejectedNdr} />
       </div>
       <div className="mo-kpis">
         <KpiCard
-          label="Confirm rate"
+          label={t('reportsReportsDashboard.confirmRate')}
           figure={pct(data.confirmRate)}
           tone={rateTone(data.confirmRate >= 0.6 ? 'accent' : 'pending')}
         />
         <KpiCard
-          label="Delivery rate"
+          label={t('reportsReportsDashboard.deliveryRate')}
           figure={pct(data.deliveryRate)}
           tone={rateTone(data.deliveryRate >= 0.85 ? 'accent' : 'pending')}
         />
         <KpiCard
-          label="NDR rate"
+          label={t('reportsReportsDashboard.ndrRate')}
           figure={pct(data.ndrRate)}
           tone={rateTone(data.ndrRate <= 0.1 ? 'accent' : 'critical')}
         />
         <KpiCard
-          label="RTO rate"
+          label={t('reportsReportsDashboard.rtoRate')}
           figure={pct(data.rtoRate)}
           tone={rateTone(data.rtoRate <= 0.15 ? 'accent' : 'critical')}
         />
@@ -118,14 +121,15 @@ function OrdersGroup({ data }: { readonly data: ReportSummary['orders'] }): Reac
 }
 
 function ShipmentsGroup({ data }: { readonly data: ReportSummary['shipments'] }): ReactElement {
+  const t = useT();
   return (
     <section className="rp-group">
-      <SectionHeading title="Shipments" />
+      <SectionHeading title={t('reportsReportsDashboard.shipments')} />
       <div className="mo-kpis">
-        <KpiCard label="Dispatched" value={data.dispatched} />
+        <KpiCard label={t('reportsReportsDashboard.dispatched')} value={data.dispatched} />
         <KpiCard
-          label="Avg hours to dispatch"
-          hint="From CONFIRMED → DISPATCHED"
+          label={t('reportsReportsDashboard.avgHoursToDispatch')}
+          hint={t('reportsReportsDashboard.fromConfirmedDispatched')}
           figure={
             data.avgDispatchHoursFromConfirm === null
               ? '—'
@@ -133,8 +137,8 @@ function ShipmentsGroup({ data }: { readonly data: ReportSummary['shipments'] })
           }
         />
         <KpiCard
-          label="Avg days to delivery"
-          hint="From DISPATCHED → DELIVERED"
+          label={t('reportsReportsDashboard.avgDaysToDelivery')}
+          hint={t('reportsReportsDashboard.fromDispatchedDelivered')}
           figure={
             data.avgDeliveryDaysFromDispatch === null
               ? '—'
@@ -147,31 +151,32 @@ function ShipmentsGroup({ data }: { readonly data: ReportSummary['shipments'] })
 }
 
 function WalletGroup({ data }: { readonly data: ReportSummary['wallet'] }): ReactElement {
+  const t = useT();
   return (
     <section className="rp-group">
-      <SectionHeading title="Wallet flows (INR)" />
+      <SectionHeading title={t('reportsReportsDashboard.walletFlowsInr')} />
       {/* Direction is the whole point of this group: money in, money
           out, what is left. Money encodes it with a sign AND a colour,
           and groups the figure the Indian way. */}
       <div className="mo-kpis">
         <KpiCard
-          label="COD collected"
+          label={t('reportsReportsDashboard.codCollected')}
           tone="credit"
           figure={<Money amount={data.codCollected} direction="credit" />}
         />
         <KpiCard
-          label="Charges debited"
+          label={t('reportsReportsDashboard.chargesDebited')}
           tone="debit"
           figure={<Money amount={data.chargesDebited} direction="debit" />}
         />
         <KpiCard
-          label="Remittances paid"
+          label={t('reportsReportsDashboard.remittancesPaid')}
           tone="debit"
           figure={<Money amount={data.remittancesPaid} direction="debit" />}
         />
         <KpiCard
-          label="Net outstanding"
-          hint="Owed to clients across all wallets"
+          label={t('reportsReportsDashboard.netOutstanding')}
+          hint={t('reportsReportsDashboard.owedToClientsAcrossAll')}
           figure={<Money amount={data.netOutstanding} />}
         />
       </div>

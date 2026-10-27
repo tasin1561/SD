@@ -42,6 +42,7 @@ import { usePermission } from '@/lib/use-permission';
 import { useFxRatesList } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { MkCard } from './money-parts';
+import { useT } from '@/i18n/client';
 
 type Filter = 'all' | 'credit' | 'debt' | 'payout';
 
@@ -95,6 +96,7 @@ function Bdt({
  * ever touched — it says so rather than showing a plausible zero.
  */
 export function SellerWalletsIndex(): ReactElement {
+  const t = useT();
   const overview = useSellerWalletOverview();
   const toast = useToast();
   const mayReconcile = usePermission('money.wallets.reconcile');
@@ -158,8 +160,11 @@ export function SellerWalletsIndex(): ReactElement {
       }
       toast.success(
         r.repaired === 0
-          ? `Checked ${r.checked} wallet(s). Every one agrees with its ledger; nothing needed repair.`
-          : `Checked ${r.checked} wallet(s), repaired ${r.repaired} cached balance(s).`,
+          ? t('sellerWalletsSellerWalletsIndex.checkedWalletSEveryOne', { checked: r.checked })
+          : t('sellerWalletsSellerWalletsIndex.checkedWalletSRepairedCached', {
+              checked: r.checked,
+              repaired: r.repaired,
+            }),
       );
     } catch (err) {
       toast.error(serverVerdict(err));
@@ -169,13 +174,13 @@ export function SellerWalletsIndex(): ReactElement {
   return (
     <div className="mk-page">
       <PageHeader
-        title="Client wallets"
+        title={t('sellerWalletsSellerWalletsIndex.clientWallets')}
         meta={
           <span className="mk-count sk-figure">
             {counts.all} {counts.all === 1 ? 'account' : 'accounts'}
           </span>
         }
-        subtitle="What we owe clients, what they owe us, and every ledger behind those two numbers."
+        subtitle={t('sellerWalletsSellerWalletsIndex.whatWeOweClientsWhat')}
         action={
           mayReconcile ? (
             <Button
@@ -185,9 +190,11 @@ export function SellerWalletsIndex(): ReactElement {
               loading={reconcile.isPending}
               disabled={reconcile.isPending}
               onClick={() => setConfirmingReconcile(true)}
-              title="Re-check every wallet against its own ledger. Balances update as money moves, so this is a verification rather than a refresh."
+              title={t('sellerWalletsSellerWalletsIndex.reCheckEveryWalletAgainst')}
             >
-              {reconcile.isPending ? 'Checking…' : 'Re-check ledgers'}
+              {reconcile.isPending
+                ? t('sellerWalletsSellerWalletsIndex.checking')
+                : t('sellerWalletsSellerWalletsIndex.reCheckLedgers')}
             </Button>
           ) : undefined
         }
@@ -195,8 +202,8 @@ export function SellerWalletsIndex(): ReactElement {
 
       {reconcile.isPending && (
         <ParachuteProgress
-          label="Re-checking every client wallet against its ledger"
-          detail="Nothing is changed unless a cached balance drifted from its own entries."
+          label={t('sellerWalletsSellerWalletsIndex.reCheckingEveryClientWallet')}
+          detail={t('sellerWalletsSellerWalletsIndex.nothingIsChangedUnlessA')}
         />
       )}
 
@@ -207,61 +214,78 @@ export function SellerWalletsIndex(): ReactElement {
               <Skeleton key={i} height={148} rounded="md" />
             ))}
           </div>
-          <SkeletonRows rows={6} cols={7} label="Loading client wallets…" />
+          <SkeletonRows
+            rows={6}
+            cols={7}
+            label={t('sellerWalletsSellerWalletsIndex.loadingClientWallets')}
+          />
         </>
       ) : overview.isError || overview.data === undefined ? (
         <ErrorState
-          message={overview.error?.message ?? 'Failed to load.'}
+          message={overview.error?.message ?? t('sellerWalletsSellerWalletsIndex.failedToLoad')}
           retry={() => void overview.refetch()}
         />
       ) : (
         <>
           <div className="mk-kpis">
             <MoneyTile
-              label="We owe clients"
-              caption="Payable on demand"
+              label={t('sellerWalletsSellerWalletsIndex.weOweClients')}
+              caption={t('sellerWalletsSellerWalletsIndex.payableOnDemand')}
               amountInr={overview.data.totals.owedToSellersInr}
               icon={<ArrowUpRight size={16} />}
-              footLeft={`${overview.data.totals.sellersInCredit} in credit`}
+              footLeft={t('sellerWalletsSellerWalletsIndex.inCredit', {
+                sellersInCredit: overview.data.totals.sellersInCredit,
+              })}
               footRight="OK"
               tone="ok"
               inrToBdt={inrToBdt}
             />
             <MoneyTile
-              label="Clients owe us"
-              caption="Negative balances and return charges"
+              label={t('sellerWalletsSellerWalletsIndex.clientsOweUs')}
+              caption={t('sellerWalletsSellerWalletsIndex.negativeBalancesAndReturnCharges')}
               amountInr={overview.data.totals.owedBySellersInr}
               icon={<AlertTriangle size={16} />}
-              footLeft={`${overview.data.totals.sellersInDebt} account${
-                overview.data.totals.sellersInDebt === 1 ? '' : 's'
-              } in debt`}
-              footRight={Number(overview.data.totals.owedBySellersInr) > 0 ? 'Review' : '—'}
+              footLeft={t('sellerWalletsSellerWalletsIndex.accountInDebt', {
+                sellersInDebt: overview.data.totals.sellersInDebt,
+                value: overview.data.totals.sellersInDebt === 1 ? '' : t('common.pluralS'),
+              })}
+              footRight={
+                Number(overview.data.totals.owedBySellersInr) > 0
+                  ? t('sellerWalletsSellerWalletsIndex.review')
+                  : '—'
+              }
               // Loud only when there is something to be loud about. A
               // permanently red tile is one nobody reads.
               tone={Number(overview.data.totals.owedBySellersInr) > 0 ? 'bad' : 'ok'}
               inrToBdt={inrToBdt}
             />
             <MoneyTile
-              label="Withdrawals held"
-              caption="Asked for, already inside the balance above"
+              label={t('sellerWalletsSellerWalletsIndex.withdrawalsHeld')}
+              caption={t('sellerWalletsSellerWalletsIndex.askedForAlreadyInsideThe')}
               amountInr={overview.data.totals.pendingWithdrawalInr}
               icon={<ClipboardCheck size={16} />}
-              footLeft={`${counts.payout} awaiting payout`}
-              footRight={counts.payout > 0 ? 'Pending' : '—'}
+              footLeft={t('sellerWalletsSellerWalletsIndex.awaitingPayout', {
+                payout: counts.payout,
+              })}
+              footRight={counts.payout > 0 ? t('sellerWalletsSellerWalletsIndex.pending') : '—'}
               tone={counts.payout > 0 ? 'warn' : 'ok'}
               inrToBdt={inrToBdt}
             />
             <MoneyTile
-              label="Top-ups in review"
-              caption="Claimed, not yet matched to a statement — in no balance"
+              label={t('sellerWalletsSellerWalletsIndex.topUpsInReview')}
+              caption={t('sellerWalletsSellerWalletsIndex.claimedNotYetMatchedTo')}
               amountInr={overview.data.totals.pendingTopupInr}
               icon={<CheckCircle2 size={16} />}
               footLeft={
                 Number(overview.data.totals.pendingTopupInr) > 0
-                  ? 'Waiting on verification'
-                  : 'All statements reconciled'
+                  ? t('sellerWalletsSellerWalletsIndex.waitingOnVerification')
+                  : t('sellerWalletsSellerWalletsIndex.allStatementsReconciled')
               }
-              footRight={Number(overview.data.totals.pendingTopupInr) > 0 ? 'Queued' : 'Clear'}
+              footRight={
+                Number(overview.data.totals.pendingTopupInr) > 0
+                  ? t('sellerWalletsSellerWalletsIndex.queued')
+                  : t('sellerWalletsSellerWalletsIndex.clear')
+              }
               tone="ok"
               inrToBdt={inrToBdt}
             />
@@ -270,15 +294,31 @@ export function SellerWalletsIndex(): ReactElement {
           <MkCard flush>
             <div className="mk-card__head">
               <Tabs
-                label="Which wallets"
+                label={t('sellerWalletsSellerWalletsIndex.whichWallets')}
                 size="sm"
                 value={filter}
                 onChange={(id) => setFilter(id as Filter)}
                 items={[
-                  { id: 'all', label: 'All wallets', count: counts.all },
-                  { id: 'credit', label: 'In credit', count: counts.credit },
-                  { id: 'debt', label: 'In debt', count: counts.debt },
-                  { id: 'payout', label: 'Pending payout', count: counts.payout },
+                  {
+                    id: 'all',
+                    label: t('sellerWalletsSellerWalletsIndex.allWallets'),
+                    count: counts.all,
+                  },
+                  {
+                    id: 'credit',
+                    label: t('sellerWalletsSellerWalletsIndex.inCredit2'),
+                    count: counts.credit,
+                  },
+                  {
+                    id: 'debt',
+                    label: t('sellerWalletsSellerWalletsIndex.inDebt'),
+                    count: counts.debt,
+                  },
+                  {
+                    id: 'payout',
+                    label: t('sellerWalletsSellerWalletsIndex.pendingPayout'),
+                    count: counts.payout,
+                  },
                 ]}
               />
             </div>
@@ -286,28 +326,28 @@ export function SellerWalletsIndex(): ReactElement {
               search={{
                 value: term,
                 onChange: setTerm,
-                label: 'Filter wallets',
-                placeholder: 'Filter by company, email or id…',
+                label: t('sellerWalletsSellerWalletsIndex.filterWallets'),
+                placeholder: t('sellerWalletsSellerWalletsIndex.filterByCompanyEmailOr'),
               }}
             />
-            <Table caption="Client wallets">
+            <Table caption={t('sellerWalletsSellerWalletsIndex.clientWallets')}>
               <THead>
                 <Tr>
-                  <Th>Client</Th>
-                  <Th align="right">Available balance</Th>
-                  <Th align="right">Requested out</Th>
-                  <Th align="right">Awaiting review</Th>
-                  <Th>Last movement</Th>
-                  <Th>Status</Th>
-                  <Th align="right">Actions</Th>
+                  <Th>{t('sellerWalletsSellerWalletsIndex.client')}</Th>
+                  <Th align="right">{t('sellerWalletsSellerWalletsIndex.availableBalance')}</Th>
+                  <Th align="right">{t('sellerWalletsSellerWalletsIndex.requestedOut')}</Th>
+                  <Th align="right">{t('sellerWalletsSellerWalletsIndex.awaitingReview')}</Th>
+                  <Th>{t('sellerWalletsSellerWalletsIndex.lastMovement')}</Th>
+                  <Th>{t('sellerWalletsSellerWalletsIndex.status')}</Th>
+                  <Th align="right">{t('sellerWalletsSellerWalletsIndex.actions')}</Th>
                 </Tr>
               </THead>
               <TBody>
                 {shown.length === 0 ? (
                   <TableEmpty colSpan={7}>
                     {rows.length === 0
-                      ? 'No clients yet. Every approved client appears here, whether or not money has moved.'
-                      : 'No wallet matches that.'}
+                      ? t('sellerWalletsSellerWalletsIndex.noClientsYetEveryApproved')
+                      : t('sellerWalletsSellerWalletsIndex.noWalletMatchesThat')}
                   </TableEmpty>
                 ) : (
                   shown.map((r) => <WalletRow key={r.sellerId} row={r} inrToBdt={inrToBdt} />)
@@ -316,18 +356,23 @@ export function SellerWalletsIndex(): ReactElement {
             </Table>
             <div className="mk-card__foot">
               <span>
-                Showing {shown.length} of {rows.length} registered client wallet
-                {rows.length === 1 ? '' : 's'}
+                {t('sellerWalletsSellerWalletsIndex.showingOfRegisteredClientWallet', {
+                  length: shown.length,
+                  length2: rows.length,
+                  value: rows.length === 1 ? '' : t('common.pluralS'),
+                })}
               </span>
               <span className="mk-balances">
-                <span className="mk-small">Net position</span>
+                <span className="mk-small">{t('sellerWalletsSellerWalletsIndex.netPosition')}</span>
                 <Money amount={overview.data.totals.netInr} currency="INR" convert={false} />
                 {/* The arithmetic, spelled out. A net figure with no
                     working is the one number on this page that could be
                     read as "nothing is outstanding". */}
                 <span className="mk-faint">
-                  (owed to clients {overview.data.totals.owedToSellersInr} − owed by them{' '}
-                  {overview.data.totals.owedBySellersInr})
+                  {t('sellerWalletsSellerWalletsIndex.owedToClientsOwedBy', {
+                    owedToSellersInr: overview.data.totals.owedToSellersInr,
+                    owedBySellersInr: overview.data.totals.owedBySellersInr,
+                  })}
                 </span>
               </span>
             </div>
@@ -338,10 +383,16 @@ export function SellerWalletsIndex(): ReactElement {
       <ConfirmDialog
         open={confirmingReconcile}
         onOpenChange={setConfirmingReconcile}
-        title="Re-check every client ledger?"
-        entity={`Every client wallet · ${counts.all} ${counts.all === 1 ? 'account' : 'accounts'}`}
-        consequence="Each wallet's cached balance is checked against its own ledger entries. A cached balance that drifted is repaired; a ledger that disagrees with itself is reported and never changed."
-        confirmLabel="Re-check ledgers"
+        title={t('sellerWalletsSellerWalletsIndex.reCheckEveryClientLedger')}
+        entity={t('sellerWalletsSellerWalletsIndex.everyClientWallet', {
+          all: counts.all,
+          value:
+            counts.all === 1
+              ? t('sellerWalletsSellerWalletsIndex.account')
+              : t('sellerWalletsSellerWalletsIndex.accounts'),
+        })}
+        consequence={t('sellerWalletsSellerWalletsIndex.eachWalletSCachedBalance')}
+        confirmLabel={t('sellerWalletsSellerWalletsIndex.reCheckLedgers')}
         onConfirm={runReconcile}
       />
     </div>
@@ -414,6 +465,7 @@ function WalletRow({
   readonly row: SellerWalletRow;
   readonly inrToBdt: number | null;
 }): ReactElement {
+  const t = useT();
   const balance = Number(row.balanceInr);
   const inDebt = balance < 0;
   /*
@@ -487,7 +539,9 @@ function WalletRow({
           // Not a date and not a dash: a wallet nothing has ever touched
           // is a real state, and saying so beats an empty cell that
           // reads as missing data.
-          <span className="mk-faint">Nothing has moved yet</span>
+          <span className="mk-faint">
+            {t('sellerWalletsSellerWalletsIndex.nothingHasMovedYet')}
+          </span>
         ) : (
           <div className="mk-cell">
             <span className="mk-when">
@@ -511,13 +565,19 @@ function WalletRow({
       <Td>
         <StatusChip
           kind={inDebt ? 'failed' : balance > 0 ? 'delivered' : 'draft'}
-          label={inDebt ? 'In debit' : balance > 0 ? 'In credit' : 'Settled'}
+          label={
+            inDebt
+              ? t('sellerWalletsSellerWalletsIndex.inDebit')
+              : balance > 0
+                ? t('sellerWalletsSellerWalletsIndex.inCredit2')
+                : t('sellerWalletsSellerWalletsIndex.settled')
+          }
           size="sm"
         />
       </Td>
       <Td align="right">
         <Link href={`/seller-wallets/${row.sellerId}`} className={buttonClassName('ghost', 'sm')}>
-          <span className="sk-btn__label">Ledger →</span>
+          <span className="sk-btn__label">{t('sellerWalletsSellerWalletsIndex.ledger')}</span>
         </Link>
       </Td>
     </Tr>

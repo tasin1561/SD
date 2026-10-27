@@ -11,6 +11,7 @@ import { usePauseResellerStore } from '@/lib/reseller-analysis-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { AcAlert } from '../../settings/_components/ac-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * RS-9 — staff pause a reseller store (`reseller.stores.pause`). Shared by
@@ -29,6 +30,7 @@ export function PauseStoreModal({
   readonly storeName: string;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const mayPause = usePermission('reseller.stores.pause');
   const pause = usePauseResellerStore();
@@ -44,12 +46,12 @@ export function PauseStoreModal({
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
-      title={`Pause “${storeName}”?`}
-      description="It stops placing new orders now. Orders already placed carry on, and only its client can resume it. The client and the store read your reason."
+      title={t('resellerStoresPauseStoreModal.pause', { storeName })}
+      description={t('resellerStoresPauseStoreModal.itStopsPlacingNewOrders')}
       footer={
         <DialogFooter>
           <Button type="button" variant="secondary" size="md" onClick={onClose}>
-            Cancel
+            {t('resellerStoresPauseStoreModal.cancel')}
           </Button>
           <AsyncButton
             type="button"
@@ -57,7 +59,11 @@ export function PauseStoreModal({
             size="md"
             icon={<PauseCircle size={15} />}
             state={pause.isPending ? 'busy' : error !== null ? 'error' : 'idle'}
-            labels={{ idle: 'Pause', busy: 'Pausing…', error: 'Not paused' }}
+            labels={{
+              idle: t('resellerStoresPauseStoreModal.pause2'),
+              busy: t('resellerStoresPauseStoreModal.pausing'),
+              error: t('resellerStoresPauseStoreModal.notPaused'),
+            }}
             disabled={pause.isPending || !mayPause}
             onClick={() => {
               setError(null);
@@ -65,7 +71,7 @@ export function PauseStoreModal({
                 { storeId, reason },
                 {
                   onSuccess: () => {
-                    toast.success('Paused.');
+                    toast.success(t('resellerStoresPauseStoreModal.paused'));
                     onClose();
                   },
                   onError: (err) => setError(serverVerdict(err)),
@@ -78,17 +84,14 @@ export function PauseStoreModal({
     >
       <div className="ac-form">
         <TextField
-          label="Why"
+          label={t('resellerStoresPauseStoreModal.why')}
           id="pause-reason"
           requiredMark
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
         {mayPause ? null : (
-          <p className="ac-muted">
-            Pausing a store needs the “reseller.stores.pause” permission. Its client can pause it
-            themselves.
-          </p>
+          <p className="ac-muted">{t('resellerStoresPauseStoreModal.pausingAStoreNeedsThe')}</p>
         )}
         {error !== null ? <AcAlert message={error} /> : null}
       </div>

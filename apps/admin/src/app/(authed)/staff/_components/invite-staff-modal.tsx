@@ -14,6 +14,7 @@ import { useCreateStaffInvitation } from '@/lib/api-hooks';
 import { useRoles } from '@/lib/rbac-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { AcAlert, AcCallout, phaseOf } from '../../settings/_components/ac-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * Inviting somebody onto the roles they will actually hold.
@@ -48,6 +49,7 @@ export function InviteStaffModal({
   readonly onClose: () => void;
   readonly onSuccess: (revealed: CreatedStaffInvitation) => void;
 }): ReactElement {
+  const t = useT();
   const create = useCreateStaffInvitation();
   const roles = useRoles();
   const [email, setEmail] = useState('');
@@ -56,7 +58,7 @@ export function InviteStaffModal({
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(e: unknown): string {
-    return serverVerdict(e, 'Action failed');
+    return serverVerdict(e, t('staffInviteStaffModal.actionFailed'));
   }
 
   const options: readonly ComboOption[] = (roles.data ?? []).map((r) => ({
@@ -65,7 +67,7 @@ export function InviteStaffModal({
     description:
       r.description ??
       (r.isSuperAdmin
-        ? 'Everything, including permissions added later'
+        ? t('staffInviteStaffModal.everythingIncludingPermissionsAddedLater')
         : `${r.permissions.length} permission${r.permissions.length === 1 ? '' : 's'}`),
   }));
 
@@ -89,15 +91,15 @@ export function InviteStaffModal({
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
-      title="Invite staff member"
-      description="The invitee gets a one-time link to set their password. The roles are fixed at invite time and can be changed afterwards."
+      title={t('staffInviteStaffModal.inviteStaffMember')}
+      description={t('staffInviteStaffModal.theInviteeGetsAOne')}
       icon={<UserPlus size={18} />}
       size="md"
       locked={busy}
     >
       <form onSubmit={(e) => void onSubmit(e)} className="ac-form">
         <TextField
-          label="Email"
+          label={t('staffInviteStaffModal.email')}
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -107,18 +109,17 @@ export function InviteStaffModal({
         />
 
         {roles.isLoading ? (
-          <SkeletonRows rows={1} cols={1} label="Loading roles…" />
+          <SkeletonRows rows={1} cols={1} label={t('staffInviteStaffModal.loadingRoles')} />
         ) : roles.isError ? (
           <AcAlert
             tone="warn"
-            message={`The role list did not load, so there is nothing to choose from. ${serverVerdict(
-              roles.error,
-              'Could not load roles.',
-            )}`}
+            message={t('staffInviteStaffModal.theRoleListDidNot', {
+              value: serverVerdict(roles.error, t('staffInviteStaffModal.couldNotLoadRoles')),
+            })}
           />
         ) : (
           <MultiSelect
-            label="Roles"
+            label={t('staffInviteStaffModal.roles')}
             required
             options={options}
             value={roleIds}
@@ -126,16 +127,15 @@ export function InviteStaffModal({
               setError(null);
               setRoleIds(values);
             }}
-            placeholder="Type to find a role"
-            hint="Pick an access tier for how much of the console they reach, plus the job functions they do. Any role from the Roles screen is valid here."
+            placeholder={t('staffInviteStaffModal.typeToFindARole')}
+            hint={t('staffInviteStaffModal.pickAnAccessTierFor')}
             disabled={busy}
           />
         )}
 
         {roleIds.length === 0 && !roles.isLoading && !roles.isError && (
           <AcCallout tone="warn" icon={<TriangleAlert size={15} />} role="status">
-            Choose at least one role. Somebody holding none cannot sign in at all, so the server
-            refuses an invitation without any.
+            {t('staffInviteStaffModal.chooseAtLeastOneRole')}
           </AcCallout>
         )}
 
@@ -143,7 +143,7 @@ export function InviteStaffModal({
 
         <DialogFooter>
           <Button type="button" variant="ghost" size="md" disabled={busy} onClick={onClose}>
-            Cancel
+            {t('staffInviteStaffModal.cancel')}
           </Button>
           <AsyncButton
             type="submit"
@@ -151,7 +151,11 @@ export function InviteStaffModal({
             size="md"
             icon={<Send size={15} />}
             state={phaseOf(busy, error)}
-            labels={{ idle: 'Create invitation', busy: 'Creating…', error: 'Not created' }}
+            labels={{
+              idle: t('staffInviteStaffModal.createInvitation'),
+              busy: t('staffInviteStaffModal.creating'),
+              error: t('staffInviteStaffModal.notCreated'),
+            }}
           />
         </DialogFooter>
       </form>

@@ -22,6 +22,9 @@ import {
   type AgentListRow,
 } from '@/lib/callcenter-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Call agents — who is on, what they are holding, how they are doing.
@@ -36,6 +39,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  * because the number only means something against the cap.
  */
 export function AgentsIndex(): ReactElement {
+  const t = useT();
   const list = useAgents();
   const update = useUpdateAgentSettings();
   /*
@@ -55,25 +59,25 @@ export function AgentsIndex(): ReactElement {
   return (
     <div className="oo-page">
       <PageHeader
-        title="Call agents"
-        subtitle="Who is taking calls, what they are holding, and how their attempts are landing."
+        title={t('callCenterAgentsAgentsIndex.callAgents')}
+        subtitle={t('callCenterAgentsAgentsIndex.whoIsTakingCallsWhat')}
       />
 
       <div className="oo-kpis">
         <KpiCard
-          label="Agents"
+          label={t('callCenterAgentsAgentsIndex.agents')}
           icon={<Headset size={14} />}
           {...(list.data === undefined
             ? { figure: <span className="oo-faint">—</span> }
             : { value: items.length })}
         />
         <KpiCard
-          label="Marked available"
+          label={t('callCenterAgentsAgentsIndex.markedAvailable')}
           icon={<UserCheck size={14} />}
           tone={items.length > 0 && availableCount === 0 ? 'debit' : 'neutral'}
           hint={
             items.length > 0 && availableCount === 0
-              ? 'Nobody is available — nothing will be assigned'
+              ? t('callCenterAgentsAgentsIndex.nobodyIsAvailableNothingWill')
               : undefined
           }
           {...(list.data === undefined
@@ -81,7 +85,7 @@ export function AgentsIndex(): ReactElement {
             : { value: availableCount })}
         />
         <KpiCard
-          label="Calls held right now"
+          label={t('callCenterAgentsAgentsIndex.callsHeldRightNow')}
           icon={<PhoneCall size={14} />}
           {...(list.data === undefined
             ? { figure: <span className="oo-faint">—</span> }
@@ -90,24 +94,24 @@ export function AgentsIndex(): ReactElement {
       </div>
 
       {list.isLoading ? (
-        <SkeletonRows rows={4} cols={6} label="Loading agents…" />
+        <SkeletonRows rows={4} cols={6} label={t('callCenterAgentsAgentsIndex.loadingAgents')} />
       ) : list.isError ? (
         <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : items.length === 0 ? (
         <EmptyState
-          title="No call agents"
-          description="Staff with the call agent role appear here once they exist. Add them from Staff."
+          title={t('callCenterAgentsAgentsIndex.noCallAgents')}
+          description={t('callCenterAgentsAgentsIndex.staffWithTheCallAgent')}
         />
       ) : (
         <OoCard flush>
-          <Table caption="Call agents">
+          <Table caption={t('callCenterAgentsAgentsIndex.callAgents')}>
             <THead>
               <Tr>
-                <Th>Agent</Th>
-                <Th>Hours</Th>
-                <Th>Languages</Th>
-                <Th align="right">Holding</Th>
-                <Th>Available</Th>
+                <Th>{t('callCenterAgentsAgentsIndex.agent')}</Th>
+                <Th>{t('callCenterAgentsAgentsIndex.hours')}</Th>
+                <Th>{t('callCenterAgentsAgentsIndex.languages')}</Th>
+                <Th align="right">{t('callCenterAgentsAgentsIndex.holding')}</Th>
+                <Th>{t('callCenterAgentsAgentsIndex.available')}</Th>
                 <Th align="right" />
               </Tr>
             </THead>
@@ -136,7 +140,10 @@ export function AgentsIndex(): ReactElement {
                           : 'sk-figure'
                       }
                     >
-                      {a.activeAssigned} of {a.settings.maxActiveCalls}
+                      {t('callCenterAgentsAgentsIndex.of', {
+                        activeAssigned: a.activeAssigned,
+                        maxActiveCalls: a.settings.maxActiveCalls,
+                      })}
                     </span>
                   </Td>
                   <Td>
@@ -159,10 +166,12 @@ export function AgentsIndex(): ReactElement {
                           })
                         }
                       >
-                        {a.settings.isAvailable ? 'Mark off' : 'Mark available'}
+                        {a.settings.isAvailable
+                          ? t('callCenterAgentsAgentsIndex.markOff')
+                          : t('callCenterAgentsAgentsIndex.markAvailable')}
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => setOpenAgentId(a.agentId)}>
-                        Details
+                        {t('callCenterAgentsAgentsIndex.details')}
                       </Button>
                     </span>
                   </Td>
@@ -191,6 +200,7 @@ function AgentDetail({
   agent: AgentListRow | null;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const metrics = useAgentMetrics(agent?.agentId ?? null);
   const update = useUpdateAgentSettings();
   const [maxActiveCalls, setMaxActiveCalls] = useState('');
@@ -232,18 +242,21 @@ function AgentDetail({
         if (!next) close();
       }}
       size="lg"
-      title={agent?.email ?? 'Agent'}
-      description="Attempt history and capacity."
+      title={agent?.email ?? t('callCenterAgentsAgentsIndex.agent')}
+      description={t('callCenterAgentsAgentsIndex.attemptHistoryAndCapacity')}
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={close}>
-            Close
+            {t('callCenterAgentsAgentsIndex.close')}
           </Button>
           {agent !== null && (
             <AsyncButton
               size="md"
               state={update.isPending ? 'busy' : 'idle'}
-              labels={{ idle: 'Save capacity', busy: 'Saving…' }}
+              labels={{
+                idle: t('callCenterAgentsAgentsIndex.saveCapacity'),
+                busy: t('callCenterAgentsAgentsIndex.saving'),
+              }}
               disabled={
                 maxActiveCalls === '' ||
                 Number(maxActiveCalls) === agent.settings.maxActiveCalls ||
@@ -266,23 +279,27 @@ function AgentDetail({
           <Facts
             items={[
               {
-                label: 'Working hours',
+                label: t('callCenterAgentsAgentsIndex.workingHours'),
                 value: `${agent.settings.workingHoursStart}–${agent.settings.workingHoursEnd} ${agent.settings.timezone}`,
               },
               {
-                label: 'Working days',
+                label: t('callCenterAgentsAgentsIndex.workingDays'),
                 value:
                   agent.settings.workingDays.length === 0
                     ? '—'
-                    : agent.settings.workingDays.map((d) => DAY_NAMES[d] ?? d).join(', '),
+                    : agent.settings.workingDays.map((d) => DAY_NAMES(t)[d] ?? d).join(', '),
               },
               {
-                label: 'Can take high risk',
-                value: agent.settings.canHandleHighRisk ? 'Yes' : 'No',
+                label: t('callCenterAgentsAgentsIndex.canTakeHighRisk'),
+                value: agent.settings.canHandleHighRisk
+                  ? t('callCenterAgentsAgentsIndex.yes')
+                  : t('callCenterAgentsAgentsIndex.no'),
               },
               {
-                label: 'Can take high value',
-                value: agent.settings.canHandleHighValue ? 'Yes' : 'No',
+                label: t('callCenterAgentsAgentsIndex.canTakeHighValue'),
+                value: agent.settings.canHandleHighValue
+                  ? t('callCenterAgentsAgentsIndex.yes')
+                  : t('callCenterAgentsAgentsIndex.no'),
               },
             ]}
           />
@@ -291,37 +308,46 @@ function AgentDetail({
             <section className="oo-section">
               <SectionHeading
                 as="h3"
-                title="Time holding calls"
+                title={t('callCenterAgentsAgentsIndex.timeHoldingCalls')}
                 // An attempt count says how much work an agent DID. This
                 // says what became of the work they TOOK — a dropped hold
                 // logs no attempt, so it is invisible above by
                 // construction.
                 note={
                   holds.holdsDropped === 0
-                    ? 'Every call this agent picked up ended in a logged outcome.'
-                    : `${holds.holdsDropped} of ${holds.holdsCompleted + holds.holdsDropped} calls picked up ended without a call being logged.`
+                    ? t('callCenterAgentsAgentsIndex.everyCallThisAgentPicked')
+                    : t('callCenterAgentsAgentsIndex.ofCallsPickedUpEnded', {
+                        holdsDropped: holds.holdsDropped,
+                        value: holds.holdsCompleted + holds.holdsDropped,
+                      })
                 }
               />
               <Facts
                 items={[
-                  { label: 'Calls worked', value: <Num value={holds.holdsCompleted} /> },
-                  { label: 'Picked up then dropped', value: <Num value={holds.holdsDropped} /> },
                   {
-                    label: 'Average time to log an outcome',
+                    label: t('callCenterAgentsAgentsIndex.callsWorked'),
+                    value: <Num value={holds.holdsCompleted} />,
+                  },
+                  {
+                    label: t('callCenterAgentsAgentsIndex.pickedUpThenDropped'),
+                    value: <Num value={holds.holdsDropped} />,
+                  },
+                  {
+                    label: t('callCenterAgentsAgentsIndex.averageTimeToLogAn'),
                     value:
                       holds.avgSecondsToOutcome === null
                         ? '—'
                         : formatDuration(holds.avgSecondsToOutcome),
                   },
                   {
-                    label: 'Longest hold that went nowhere',
+                    label: t('callCenterAgentsAgentsIndex.longestHoldThatWentNowhere'),
                     value:
                       holds.longestDroppedSeconds === null
                         ? '—'
                         : formatDuration(holds.longestDroppedSeconds),
                   },
                   ...Object.entries(holds.dropsByReason).map(([reason, n]) => ({
-                    label: DROP_REASON_LABELS[reason] ?? reason,
+                    label: DROP_REASON_LABELS(t)[reason] ?? reason,
                     value: <Num value={n} />,
                   })),
                 ]}
@@ -332,28 +358,32 @@ function AgentDetail({
           <section className="oo-section">
             <SectionHeading
               as="h3"
-              title="Attempts"
+              title={t('callCenterAgentsAgentsIndex.attempts')}
               note={
                 attempts === 0
-                  ? 'No attempts logged yet.'
-                  : `${confirmed} of ${attempts} attempts ended in a confirmed order.`
+                  ? t('callCenterAgentsAgentsIndex.noAttemptsLoggedYet')
+                  : t('callCenterAgentsAgentsIndex.ofAttemptsEndedInA', { confirmed, attempts })
               }
             />
             {metrics.isLoading ? (
-              <SkeletonRows rows={3} cols={3} label="Loading attempts…" />
+              <SkeletonRows
+                rows={3}
+                cols={3}
+                label={t('callCenterAgentsAgentsIndex.loadingAttempts')}
+              />
             ) : outcomes.length === 0 ? (
               <EmptyState
                 bare
-                title="Nothing logged"
-                description="No calls recorded for this agent."
+                title={t('callCenterAgentsAgentsIndex.nothingLogged')}
+                description={t('callCenterAgentsAgentsIndex.noCallsRecordedForThis')}
               />
             ) : (
-              <Table caption="Attempts by outcome">
+              <Table caption={t('callCenterAgentsAgentsIndex.attemptsByOutcome')}>
                 <THead>
                   <Tr>
-                    <Th>Outcome</Th>
-                    <Th align="right">Count</Th>
-                    <Th align="right">Share</Th>
+                    <Th>{t('callCenterAgentsAgentsIndex.outcome')}</Th>
+                    <Th align="right">{t('callCenterAgentsAgentsIndex.count')}</Th>
+                    <Th align="right">{t('callCenterAgentsAgentsIndex.share')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -376,12 +406,12 @@ function AgentDetail({
           <section className="oo-section">
             <SectionHeading
               as="h3"
-              title="Capacity"
-              note="How many calls this agent can hold at once. Lower it if they are drowning; raise it only if they are idle."
+              title={t('callCenterAgentsAgentsIndex.capacity')}
+              note={t('callCenterAgentsAgentsIndex.howManyCallsThisAgent')}
             />
             <TextField
               id="ag-max"
-              label="Maximum concurrent calls"
+              label={t('callCenterAgentsAgentsIndex.maximumConcurrentCalls')}
               type="number"
               min={1}
               value={maxActiveCalls}
@@ -400,24 +430,24 @@ function AgentDetail({
   );
 }
 
-const DAY_NAMES: Record<number, string> = {
-  0: 'Sun',
-  1: 'Mon',
-  2: 'Tue',
-  3: 'Wed',
-  4: 'Thu',
-  5: 'Fri',
-  6: 'Sat',
-};
+const DAY_NAMES = (t: Translate<MessageKey>): Record<number, string> => ({
+  0: t('callCenterAgentsAgentsIndex.sun'),
+  1: t('callCenterAgentsAgentsIndex.mon'),
+  2: t('callCenterAgentsAgentsIndex.tue'),
+  3: t('callCenterAgentsAgentsIndex.wed'),
+  4: t('callCenterAgentsAgentsIndex.thu'),
+  5: t('callCenterAgentsAgentsIndex.fri'),
+  6: t('callCenterAgentsAgentsIndex.sat'),
+});
 
 /** Why a hold ended with nothing to show for it, in words an operator
  *  can act on rather than an enum. */
-const DROP_REASON_LABELS: Record<string, string> = {
-  RELEASED: 'Handed back without calling',
-  EXPIRED: 'Held past the timeout',
-  AGENT_ABSENT: 'Agent was not at the desk',
-  REASSIGNED: 'Moved to someone else',
-};
+const DROP_REASON_LABELS = (t: Translate<MessageKey>): Record<string, string> => ({
+  RELEASED: t('callCenterAgentsAgentsIndex.handedBackWithoutCalling'),
+  EXPIRED: t('callCenterAgentsAgentsIndex.heldPastTheTimeout'),
+  AGENT_ABSENT: t('callCenterAgentsAgentsIndex.agentWasNotAtThe'),
+  REASSIGNED: t('callCenterAgentsAgentsIndex.movedToSomeoneElse'),
+});
 
 /** Seconds → the coarsest unit that still says something. A hold is
  *  minutes long; rendering 450 helps nobody. */

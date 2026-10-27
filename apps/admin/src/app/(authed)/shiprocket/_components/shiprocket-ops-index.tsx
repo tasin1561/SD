@@ -15,6 +15,8 @@ import { useShiprocketConnectivity, useShiprocketStatus } from '@/lib/ops-hooks'
 import { serverVerdict } from '@/lib/server-verdict';
 import { AfCard, AfSection, Notice } from '@/app/(authed)/system/_components/af-parts';
 import './shiprocket.css';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 function when(iso: string | null): string {
   return iso === null ? '—' : new Date(iso).toISOString().slice(0, 16).replace('T', ' ');
@@ -37,6 +39,8 @@ function when(iso: string | null): string {
  * is a second thing to keep in step.
  */
 export function ShiprocketOpsIndex(): ReactElement {
+  const t = useT();
+
   const status = useShiprocketStatus();
   const connectivity = useShiprocketConnectivity();
   const [from, setFrom] = useState('');
@@ -48,15 +52,20 @@ export function ShiprocketOpsIndex(): ReactElement {
   return (
     <div className="af-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Network' }, { label: 'Shiprocket' }]}
+        breadcrumbs={[
+          { label: t('shiprocketShiprocketOpsIndex.network') },
+          { label: t('shiprocketShiprocketOpsIndex.shiprocket') },
+        ]}
         Link={Link}
-        title="Shiprocket"
-        subtitle="Whether this courier is answering from its live API or from a stub, whether writes are armed, and what it has booked. Refreshes every 30 seconds."
+        title={t('shiprocketShiprocketOpsIndex.shiprocket')}
+        subtitle={t('shiprocketShiprocketOpsIndex.whetherThisCourierIsAnswering')}
       />
 
       {status.isError ? (
         <ErrorState
-          message={status.error?.message ?? 'Could not read Shiprocket status.'}
+          message={
+            status.error?.message ?? t('shiprocketShiprocketOpsIndex.couldNotReadShiprocketStatus')
+          }
           retry={() => void status.refetch()}
         />
       ) : status.isLoading ? (
@@ -80,31 +89,36 @@ export function ShiprocketOpsIndex(): ReactElement {
           {stubbedButLive === true && (
             <Notice tone="bad" role="alert">
               <p>
-                Shiprocket is taking new parcels but answering from a STUB. A booking here would
-                come back with a waybill nobody issued. Either set
-                <code className="af-code sr-inline-code">courier.shiprocket_api_base_url</code>, or
-                switch the courier off for new parcels on /courier-accounts.
+                {richMessage(t('shiprocketShiprocketOpsIndex.shiprocketIsTakingNewParcels'), {
+                  code: (
+                    <code className="af-code sr-inline-code">courier.shiprocket_api_base_url</code>
+                  ),
+                })}
               </p>
             </Notice>
           )}
 
           {/* ── mode + the two switches ── */}
           <AfSection
-            title="Connection"
-            note="Stub mode means no network call ever leaves this process. The write guard and the intake switch are two further, independent gates."
+            title={t('shiprocketShiprocketOpsIndex.connection')}
+            note={t('shiprocketShiprocketOpsIndex.stubModeMeansNoNetwork')}
           >
             <div className="af-grid-3">
               <AfCard>
                 <div>
                   <StatusChip
                     kind={d?.liveMode === true ? 'in-transit' : 'draft'}
-                    label={d?.liveMode === true ? 'Live API' : 'Stub mode'}
+                    label={
+                      d?.liveMode === true
+                        ? t('shiprocketShiprocketOpsIndex.liveApi')
+                        : t('shiprocketShiprocketOpsIndex.stubMode')
+                    }
                   />
                 </div>
                 <p className="af-small">
                   {d?.liveMode === true
-                    ? 'Calls go to the real Shiprocket API. There is no sandbox, so every request counts against production.'
-                    : 'No base URL configured, so the adapter answers from deterministic stubs — including a FABRICATED waybill on a booking. Safe alone; dangerous beside a live courier.'}
+                    ? t('shiprocketShiprocketOpsIndex.callsGoToTheReal')
+                    : t('shiprocketShiprocketOpsIndex.noBaseUrlConfiguredSo')}
                 </p>
               </AfCard>
 
@@ -113,22 +127,24 @@ export function ShiprocketOpsIndex(): ReactElement {
                   {d?.liveWritesEnabled === true ? (
                     <>
                       <Unlock size={14} aria-hidden className="af-bad" />
-                      <span className="af-bad">Live writes enabled</span>
+                      <span className="af-bad">
+                        {t('shiprocketShiprocketOpsIndex.liveWritesEnabled')}
+                      </span>
                     </>
                   ) : (
                     <>
                       <Lock size={14} aria-hidden />
-                      <span>Live writes blocked</span>
+                      <span>{t('shiprocketShiprocketOpsIndex.liveWritesBlocked')}</span>
                     </>
                   )}
                 </p>
                 <p className="af-small">
                   {d?.liveWritesEnabled === true
-                    ? 'Bookings, returns, pickups, cancels and NDR actions reach the real account.'
-                    : 'Bookings, returns, pickups, cancels and NDR actions are refused. This is the safe state.'}
+                    ? t('shiprocketShiprocketOpsIndex.bookingsReturnsPickupsCancelsAnd')
+                    : t('shiprocketShiprocketOpsIndex.bookingsReturnsPickupsCancelsAnd2')}
                 </p>
                 <Link href="/settings" className="af-link af-small af-inline-link">
-                  Change in system settings →
+                  {t('shiprocketShiprocketOpsIndex.changeInSystemSettings')}
                 </Link>
               </AfCard>
 
@@ -136,16 +152,20 @@ export function ShiprocketOpsIndex(): ReactElement {
                 <div>
                   <StatusChip
                     kind={d?.intakeEnabled === true ? 'confirmed' : 'cancelled'}
-                    label={d?.intakeEnabled === true ? 'Taking new parcels' : 'No new parcels'}
+                    label={
+                      d?.intakeEnabled === true
+                        ? t('shiprocketShiprocketOpsIndex.takingNewParcels')
+                        : t('shiprocketShiprocketOpsIndex.noNewParcels')
+                    }
                   />
                 </div>
                 <p className="af-small">
                   {d?.intakeEnabled === true
-                    ? 'New parcels can be booked here, including by failover from another courier.'
-                    : 'No NEW parcels — in-flight ones are still tracked, cancelled and costed (CUR-16).'}
+                    ? t('shiprocketShiprocketOpsIndex.newParcelsCanBeBooked')
+                    : t('shiprocketShiprocketOpsIndex.noNewParcelsInFlight')}
                 </p>
                 <Link href="/courier-accounts" className="af-link af-small af-inline-link">
-                  Change on courier accounts →
+                  {t('shiprocketShiprocketOpsIndex.changeOnCourierAccounts')}
                 </Link>
               </AfCard>
             </div>
@@ -153,21 +173,23 @@ export function ShiprocketOpsIndex(): ReactElement {
 
           {/* ── accounts ── */}
           <AfSection
-            title="Accounts"
-            note="The pickup location name is matched byte for byte on every booking; without one, bookings are refused. The balance is what the nightly wallet sync last read."
+            title={t('shiprocketShiprocketOpsIndex.accounts')}
+            note={t('shiprocketShiprocketOpsIndex.thePickupLocationNameIs')}
           >
             <Table>
               <THead>
                 <Tr>
-                  <Th>Account</Th>
-                  <Th>Pickup location</Th>
-                  <Th align="right">Wallet</Th>
-                  <Th>Read</Th>
+                  <Th>{t('shiprocketShiprocketOpsIndex.account')}</Th>
+                  <Th>{t('shiprocketShiprocketOpsIndex.pickupLocation')}</Th>
+                  <Th align="right">{t('shiprocketShiprocketOpsIndex.wallet')}</Th>
+                  <Th>{t('shiprocketShiprocketOpsIndex.read')}</Th>
                 </Tr>
               </THead>
               <TBody>
                 {d?.accounts.length === 0 ? (
-                  <TableEmpty colSpan={4}>No Shiprocket account is configured.</TableEmpty>
+                  <TableEmpty colSpan={4}>
+                    {t('shiprocketShiprocketOpsIndex.noShiprocketAccountIsConfigured')}
+                  </TableEmpty>
                 ) : (
                   d?.accounts.map((a) => (
                     <Tr key={a.courierAccountId}>
@@ -177,7 +199,9 @@ export function ShiprocketOpsIndex(): ReactElement {
                       </Td>
                       <Td>
                         {a.pickupLocationName === null ? (
-                          <span className="af-small af-bad">not set — bookings refuse</span>
+                          <span className="af-small af-bad">
+                            {t('shiprocketShiprocketOpsIndex.notSetBookingsRefuse')}
+                          </span>
                         ) : (
                           <span className="sk-ident af-small">{a.pickupLocationName}</span>
                         )}
@@ -201,7 +225,9 @@ export function ShiprocketOpsIndex(): ReactElement {
             <div className="af-grid-3">
               <AfCard>
                 <div className="af-mini">
-                  <span className="af-mini__label">Last wallet sync</span>
+                  <span className="af-mini__label">
+                    {t('shiprocketShiprocketOpsIndex.lastWalletSync')}
+                  </span>
                   <span className="af-body">
                     <span className="sk-figure">{when(d?.lastWalletSync?.at ?? null)}</span>
                     {d?.lastWalletSync !== null && d?.lastWalletSync !== undefined && (
@@ -215,7 +241,9 @@ export function ShiprocketOpsIndex(): ReactElement {
               </AfCard>
               <AfCard>
                 <div className="af-mini">
-                  <span className="af-mini__label">Last invoice check</span>
+                  <span className="af-mini__label">
+                    {t('shiprocketShiprocketOpsIndex.lastInvoiceCheck')}
+                  </span>
                   <span className="af-body">
                     <span className="sk-figure">{when(d?.lastInvoiceCheck?.at ?? null)}</span>
                     {d?.lastInvoiceCheck !== null && d?.lastInvoiceCheck !== undefined && (
@@ -227,23 +255,24 @@ export function ShiprocketOpsIndex(): ReactElement {
                   </span>
                 </div>
                 <Link href="/cost-sync" className="af-link af-small af-inline-link">
-                  Every run, in detail →
+                  {t('shiprocketShiprocketOpsIndex.everyRunInDetail')}
                 </Link>
               </AfCard>
               <AfCard>
                 <div className="af-mini">
-                  <span className="af-mini__label">Return address</span>
+                  <span className="af-mini__label">
+                    {t('shiprocketShiprocketOpsIndex.returnAddress')}
+                  </span>
                   <span className="af-body">
                     {d?.returnAddressConfigured === true ? (
-                      'Set'
+                      t('shiprocketShiprocketOpsIndex.set')
                     ) : (
-                      <span className="af-bad">Not set</span>
+                      <span className="af-bad">{t('shiprocketShiprocketOpsIndex.notSet')}</span>
                     )}
                   </span>
                 </div>
                 <p className="af-small">
-                  Their return booking spells out BOTH ends, so a customer collection needs the
-                  address it comes back to. Without it, returns are refused by name.
+                  {t('shiprocketShiprocketOpsIndex.theirReturnBookingSpellsOut')}
                 </p>
               </AfCard>
             </div>
@@ -251,21 +280,21 @@ export function ShiprocketOpsIndex(): ReactElement {
 
           {/* ── connectivity ── */}
           <AfSection
-            title="Reachability"
-            note="One serviceability lookup on a lane. It creates nothing, and it is the only way to prove the stored credential still works without booking a parcel."
+            title={t('shiprocketShiprocketOpsIndex.reachability')}
+            note={t('shiprocketShiprocketOpsIndex.oneServiceabilityLookupOnA')}
           >
             <AfCard>
               <div className="sr-lane">
                 <TextField
                   id="sr-from"
-                  label="From pincode"
+                  label={t('shiprocketShiprocketOpsIndex.fromPincode')}
                   value={from}
                   onChange={(e) => setFrom(e.target.value)}
                   inputMode="numeric"
                 />
                 <TextField
                   id="sr-to"
-                  label="To pincode"
+                  label={t('shiprocketShiprocketOpsIndex.toPincode')}
                   value={to}
                   onChange={(e) => setTo(e.target.value)}
                   inputMode="numeric"
@@ -273,7 +302,12 @@ export function ShiprocketOpsIndex(): ReactElement {
                 <AsyncButton
                   variant="secondary"
                   size="md"
-                  labels={{ idle: 'Check', busy: 'Checking…', done: 'Checked', error: 'Failed' }}
+                  labels={{
+                    idle: t('shiprocketShiprocketOpsIndex.check'),
+                    busy: t('shiprocketShiprocketOpsIndex.checking'),
+                    done: t('shiprocketShiprocketOpsIndex.checked'),
+                    error: t('shiprocketShiprocketOpsIndex.failed'),
+                  }}
                   disabled={connectivity.isPending || from.trim() === '' || to.trim() === ''}
                   onAction={() => connectivity.mutateAsync({ from, to })}
                 />
@@ -292,15 +326,18 @@ export function ShiprocketOpsIndex(): ReactElement {
                   ) : (
                     <p className="af-small">
                       {connectivity.data.reachedLiveApi
-                        ? 'Reached the live API.'
-                        : 'Answered WITHOUT reaching them (stub mode) — this proves nothing about the credential.'}{' '}
-                      <Num value={connectivity.data.optionCount ?? 0} /> carrier
-                      {connectivity.data.optionCount === 1 ? '' : 's'} quoted
+                        ? t('shiprocketShiprocketOpsIndex.reachedTheLiveApi')
+                        : t('shiprocketShiprocketOpsIndex.answeredWithoutReachingThemStub')}{' '}
+                      <Num value={connectivity.data.optionCount ?? 0} />{' '}
+                      {t('shiprocketShiprocketOpsIndex.carrierQuoted', {
+                        value: connectivity.data.optionCount === 1 ? '' : t('common.pluralS'),
+                      })}
                       {connectivity.data.cheapestInr === null ? (
                         '.'
                       ) : (
                         <>
-                          , cheapest <Money amount={connectivity.data.cheapestInr} />.
+                          {t('shiprocketShiprocketOpsIndex.cheapest')}{' '}
+                          <Money amount={connectivity.data.cheapestInr} />.
                         </>
                       )}
                     </p>
@@ -312,22 +349,24 @@ export function ShiprocketOpsIndex(): ReactElement {
 
           {/* ── bookings ── */}
           <AfSection
-            title="Recent parcels"
-            note="The twenty most recent Shiprocket shipments. A row with no waybill never got one — the AWB-less sweep chases those."
+            title={t('shiprocketShiprocketOpsIndex.recentParcels')}
+            note={t('shiprocketShiprocketOpsIndex.theTwentyMostRecentShiprocket')}
           >
             <Table>
               <THead>
                 <Tr>
-                  <Th>Parcel</Th>
-                  <Th>Waybill</Th>
-                  <Th>Carrier</Th>
-                  <Th>Status</Th>
-                  <Th>Booked</Th>
+                  <Th>{t('shiprocketShiprocketOpsIndex.parcel')}</Th>
+                  <Th>{t('shiprocketShiprocketOpsIndex.waybill')}</Th>
+                  <Th>{t('shiprocketShiprocketOpsIndex.carrier')}</Th>
+                  <Th>{t('shiprocketShiprocketOpsIndex.status')}</Th>
+                  <Th>{t('shiprocketShiprocketOpsIndex.booked')}</Th>
                 </Tr>
               </THead>
               <TBody>
                 {d?.recentBookings.length === 0 ? (
-                  <TableEmpty colSpan={5}>No Shiprocket parcels yet.</TableEmpty>
+                  <TableEmpty colSpan={5}>
+                    {t('shiprocketShiprocketOpsIndex.noShiprocketParcelsYet')}
+                  </TableEmpty>
                 ) : (
                   d?.recentBookings.map((b) => (
                     <Tr key={b.shipmentId}>

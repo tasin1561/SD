@@ -30,13 +30,18 @@ import {
   SellerStatusChip,
   phaseOf,
 } from '../../settings/_components/ac-parts';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
-const CRUMBS = [{ label: 'Clients', href: '/sellers' }] as const;
+const CRUMBS = (t: Translate<MessageKey>) =>
+  [{ label: t('sellersSellerDetail.clients'), href: '/sellers' }] as const;
 
 // Was a check against the role NAME, which cannot see a role somebody
 // created — the permission is what the server enforces, so it is what
 // the button should ask about.
 export function SellerDetailView({ sellerId }: { sellerId: string }): ReactElement {
+  const t = useT();
   const detail = useSellerDetail(sellerId);
   // `sellers.suspend` only — matching the route, which dropped
   // `sellers.approve`. `usePermission` is OR like the server's decorator,
@@ -55,16 +60,19 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
   if (detail.isLoading || detail.isError || !detail.data) {
     return (
       <AcPage>
-        <AcHeader crumbs={[...CRUMBS, { label: 'Client' }]} title="Client" />
+        <AcHeader
+          crumbs={[...CRUMBS(t), { label: t('sellersSellerDetail.client') }]}
+          title={t('sellersSellerDetail.client')}
+        />
         {detail.isLoading ? (
-          <SkeletonRows rows={6} cols={2} label="Loading client…" />
+          <SkeletonRows rows={6} cols={2} label={t('sellersSellerDetail.loadingClient')} />
         ) : detail.isError ? (
           <ErrorState
-            message={detail.error?.message ?? 'Failed to load client.'}
+            message={detail.error?.message ?? t('sellersSellerDetail.failedToLoadClient')}
             retry={() => void detail.refetch()}
           />
         ) : (
-          <ErrorState message="Client not found." />
+          <ErrorState message={t('sellersSellerDetail.clientNotFound')} />
         )}
       </AcPage>
     );
@@ -75,7 +83,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
   return (
     <AcPage>
       <AcHeader
-        crumbs={[...CRUMBS, { label: d.companyName }]}
+        crumbs={[...CRUMBS(t), { label: d.companyName }]}
         title={d.companyName}
         meta={
           <div className="ac-meta">
@@ -96,7 +104,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
               <span className="sk-btn__icon" aria-hidden>
                 <PackageSearch size={15} />
               </span>
-              <span className="sk-btn__label">This client&apos;s orders →</span>
+              <span className="sk-btn__label">{t('sellersSellerDetail.thisClientSOrders')}</span>
             </Link>
             {canTransfer && (
               <Link
@@ -106,7 +114,9 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
                 <span className="sk-btn__icon" aria-hidden>
                   <ArrowLeftRight size={15} />
                 </span>
-                <span className="sk-btn__label">Debit or credit wallet →</span>
+                <span className="sk-btn__label">
+                  {t('sellersSellerDetail.debitOrCreditWallet')}
+                </span>
               </Link>
             )}
             {canImpersonate && (
@@ -121,7 +131,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
                 icon={<ShieldAlert size={15} />}
                 onClick={() => setImpersonating(true)}
               >
-                Sign in as {d.companyName}
+                {t('sellersSellerDetail.signInAs', { companyName: d.companyName })}
               </Button>
             )}
           </div>
@@ -137,31 +147,37 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
         />
       )}
 
-      <AcSection title="Profile">
+      <AcSection title={t('sellersSellerDetail.profile')}>
         <AcDl
           items={[
             {
-              label: 'Short code',
+              label: t('sellersSellerDetail.shortCode'),
               value: <InitialsRow sellerId={d.id} current={d.initials} />,
             },
-            { label: 'Contact name', value: d.contactPersonName },
-            { label: 'Phone', value: <span className="sk-figure">{d.phone}</span> },
-            { label: 'WhatsApp', value: <span className="sk-figure">{d.whatsapp ?? '—'}</span> },
-            { label: 'Country', value: d.countryCode },
-            { label: 'Display currency', value: d.displayCurrency },
-            { label: 'Display language', value: d.displayLanguage },
+            { label: t('sellersSellerDetail.contactName'), value: d.contactPersonName },
             {
-              label: 'Email verified',
+              label: t('sellersSellerDetail.phone'),
+              value: <span className="sk-figure">{d.phone}</span>,
+            },
+            {
+              label: t('sellersSellerDetail.whatsapp'),
+              value: <span className="sk-figure">{d.whatsapp ?? '—'}</span>,
+            },
+            { label: t('sellersSellerDetail.country'), value: d.countryCode },
+            { label: t('sellersSellerDetail.displayCurrency'), value: d.displayCurrency },
+            { label: t('sellersSellerDetail.displayLanguage'), value: d.displayLanguage },
+            {
+              label: t('sellersSellerDetail.emailVerified'),
               value: d.emailVerifiedAt ? (
                 <span className="sk-figure">
                   {new Date(d.emailVerifiedAt).toISOString().slice(0, 10)}
                 </span>
               ) : (
-                <span className="ac-faint">Pending</span>
+                <span className="ac-faint">{t('sellersSellerDetail.pending')}</span>
               ),
             },
             {
-              label: 'Approved',
+              label: t('sellersSellerDetail.approved'),
               value: (
                 <span className="sk-figure">
                   {d.approvedAt ? new Date(d.approvedAt).toISOString().slice(0, 10) : '—'}
@@ -169,7 +185,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
               ),
             },
             {
-              label: 'Created',
+              label: t('sellersSellerDetail.created'),
               value: (
                 <span className="sk-figure">
                   {new Date(d.createdAt).toISOString().slice(0, 16)}
@@ -183,10 +199,10 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
       {/* The approved identity, and the only way it moves. Sits
           directly under the profile because that is where an operator
           reads the wrong value and forms the intent to fix it. */}
-      <AcSection title="Registered identity" bare>
+      <AcSection title={t('sellersSellerDetail.registeredIdentity')} bare>
         <AcCard
-          title="Company name and phone"
-          note="What this account was approved as. The client cannot change either — a staff correction, recorded with a reason, is the only route."
+          title={t('sellersSellerDetail.companyNameAndPhone')}
+          note={t('sellersSellerDetail.whatThisAccountWasApproved')}
         >
           <IdentityCorrectionPanel
             sellerId={d.id}
@@ -196,10 +212,10 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
         </AcCard>
       </AcSection>
 
-      <AcSection title="Status" bare>
+      <AcSection title={t('sellersSellerDetail.status')} bare>
         <AcCard
-          title="Account status"
-          note="Suspend a client to immediately revoke their portal access; reapprove to restore it."
+          title={t('sellersSellerDetail.accountStatus')}
+          note={t('sellersSellerDetail.suspendAClientToImmediately')}
         >
           <StatusActionPanel
             sellerId={d.id}
@@ -210,15 +226,15 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
         </AcCard>
       </AcSection>
 
-      <AcSection title="Account hold" bare>
+      <AcSection title={t('sellersSellerDetail.accountHold')} bare>
         <RestrictionPanel sellerId={d.id} canManage={canChangeStatus} />
         <BulkDequeuePanel sellerId={d.id} sellerName={d.companyName} />
       </AcSection>
 
-      <AcSection title="Bank account" bare>
+      <AcSection title={t('sellersSellerDetail.bankAccount')} bare>
         <AcCard
-          title="Reveal bank account number"
-          note="Decrypts + audits HIGH. Use only when copying into a bank portal for a manual withdrawal."
+          title={t('sellersSellerDetail.revealBankAccountNumber')}
+          note={t('sellersSellerDetail.decryptsAuditsHighUseOnly')}
           tone="warn"
         >
           <RevealBankAccountPanel sellerId={d.id} />
@@ -245,6 +261,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
  * Refreshing the page clears it. FE-2: server rejection verbatim.
  */
 function RevealBankAccountPanel({ sellerId }: { readonly sellerId: string }): ReactElement {
+  const t = useT();
   const canReveal = usePermission('sellers.bank_account.reveal');
   const [reason, setReason] = useState('');
   const [revealed, setRevealed] = useState<string | null>(null);
@@ -258,21 +275,21 @@ function RevealBankAccountPanel({ sellerId }: { readonly sellerId: string }): Re
       const res = await reveal.mutateAsync({
         ...(reason.trim() ? { reason: reason.trim() } : {}),
       });
-      setRevealed(res.accountNumber ?? '(no account number captured)');
+      setRevealed(res.accountNumber ?? t('sellersSellerDetail.noAccountNumberCaptured'));
     } catch (e) {
-      setError(serverVerdict(e, 'Reveal failed'));
+      setError(serverVerdict(e, t('sellersSellerDetail.revealFailed')));
     }
   }
 
   return (
     <div className="ac-form">
       <TextField
-        label="Reason for revealing (recorded in the audit log)"
-        hint="Optional but recommended"
+        label={t('sellersSellerDetail.reasonForRevealingRecordedIn')}
+        hint={t('sellersSellerDetail.optionalButRecommended')}
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         maxLength={200}
-        placeholder="e.g. manual withdrawal via DBBL portal — TRF-2026-06-03"
+        placeholder={t('sellersSellerDetail.eGManualWithdrawalVia')}
         disabled={reveal.isPending || !canReveal}
       />
       <div className="ac-buttons" data-align="start">
@@ -282,15 +299,17 @@ function RevealBankAccountPanel({ sellerId }: { readonly sellerId: string }): Re
           icon={<Eye size={15} />}
           state={phaseOf(reveal.isPending, error)}
           labels={{
-            idle: 'Reveal account number',
-            busy: 'Revealing…',
-            error: 'Not revealed',
+            idle: t('sellersSellerDetail.revealAccountNumber'),
+            busy: t('sellersSellerDetail.revealing'),
+            error: t('sellersSellerDetail.notRevealed'),
           }}
           onClick={() => void onReveal()}
         />
       </div>
 
-      {revealed !== null && <AcRevealValue value={revealed} label="Bank account number" />}
+      {revealed !== null && (
+        <AcRevealValue value={revealed} label={t('sellersSellerDetail.bankAccountNumber')} />
+      )}
 
       {error && <AcAlert message={error} />}
     </div>
@@ -318,6 +337,7 @@ function InitialsRow({
   readonly sellerId: string;
   readonly current: string | null;
 }): ReactElement {
+  const t = useT();
   const canEdit = usePermission('sellers.approve');
   const rename = useUpdateSellerInitials(sellerId);
   const [editing, setEditing] = useState(false);
@@ -339,7 +359,7 @@ function InitialsRow({
               setEditing(true);
             }}
           >
-            Change
+            {t('sellersSellerDetail.change')}
           </Button>
         )}
       </div>
@@ -364,19 +384,23 @@ function InitialsRow({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         maxLength={4}
-        aria-label="Client short code"
+        aria-label={t('sellersSellerDetail.clientShortCode')}
         inputClassName="sk-ident"
       />
       <AsyncButton
         variant="primary"
         size="sm"
         state={phaseOf(rename.isPending, error)}
-        labels={{ idle: 'Save', busy: 'Saving…', error: 'Not saved' }}
+        labels={{
+          idle: t('sellersSellerDetail.save'),
+          busy: t('sellersSellerDetail.saving'),
+          error: t('sellersSellerDetail.notSaved'),
+        }}
         onClick={save}
         disabled={value.trim().length < 2}
       />
       <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
-        Cancel
+        {t('sellersSellerDetail.cancel')}
       </Button>
       {error !== null && <AcAlert message={error} />}
     </div>

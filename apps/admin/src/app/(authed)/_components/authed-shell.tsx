@@ -8,7 +8,6 @@ import type { StaffMe } from '@skydrop/api-client';
 import { NotificationBellContainer } from '@/components/notification-bell-container';
 import { Toaster } from '@skydrop/ui/components';
 import { Shell, type NavGroup } from '@skydrop/ui/app/shell';
-import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
 import { ToastProvider } from '@skydrop/ui/app/toast';
 import {
   AlertTriangle,
@@ -52,6 +51,8 @@ import {
   Webhook,
   PhoneForwarded,
 } from 'lucide-react';
+import { useT } from '@/i18n/client';
+import { PrefsControl } from '@/components/prefs-control';
 import { canSeePath } from '@/lib/page-access';
 import { PermissionBoundary } from './permission-boundary';
 import { LiveSupportSessions } from './live-support-sessions';
@@ -72,6 +73,8 @@ export function AuthedShell({
   identity: StaffMe;
   children: ReactNode;
 }): ReactElement {
+  const t = useT();
+
   const pathname = usePathname();
   const client = useApiClient();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -104,122 +107,142 @@ export function AuthedShell({
   // you are not allowed to do.
   const allGroups: NavGroup[] = [
     {
-      heading: 'Operations',
+      heading: t('nav.operations'),
       items: [
-        { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
+        { href: '/dashboard', label: t('nav.dashboard'), icon: <LayoutDashboard size={15} /> },
         {
           href: '/system-issues',
-          label: 'Needs a person',
+          label: t('nav.needsAPerson'),
           icon: <ShieldAlert size={15} />,
         },
-        { href: '/orders', label: 'Orders', icon: <Package size={15} /> },
-        { href: '/delivery-actions', label: 'Failed deliveries', icon: <PackageX size={15} /> },
+        { href: '/orders', label: t('nav.orders'), icon: <Package size={15} /> },
+        {
+          href: '/delivery-actions',
+          label: t('nav.failedDeliveries'),
+          icon: <PackageX size={15} />,
+        },
         {
           href: '/courier-decisions',
-          label: 'Courier decisions',
+          label: t('nav.courierDecisions'),
           icon: <Truck size={15} />,
         },
         {
           href: '/manual-placement',
-          label: 'Manual placement',
+          label: t('nav.manualPlacement'),
           icon: <PackageSearch size={15} />,
         },
-        { href: '/nsa', label: 'Needs attention', icon: <AlertTriangle size={15} /> },
-        { href: '/call-center', label: 'Call centre', icon: <Headphones size={15} /> },
-        { href: '/call-center/queue', label: 'Call queue', icon: <PhoneCall size={15} /> },
+        { href: '/nsa', label: t('nav.needsAttention'), icon: <AlertTriangle size={15} /> },
+        { href: '/call-center', label: t('nav.callCentre'), icon: <Headphones size={15} /> },
+        { href: '/call-center/queue', label: t('nav.callQueue'), icon: <PhoneCall size={15} /> },
         {
           href: '/reattempt-requests',
-          label: 'Re-attempt requests',
+          label: t('nav.reattemptRequests'),
           icon: <PhoneForwarded size={15} />,
         },
-        { href: '/call-center/agents', label: 'Call agents', icon: <Users size={15} /> },
-        { href: '/warehouse', label: 'Warehouse', icon: <Warehouse size={15} /> },
-        { href: '/tickets', label: 'Tickets', icon: <LifeBuoy size={15} /> },
-        { href: '/holds', label: 'Held stock', icon: <Lock size={15} /> },
+        { href: '/call-center/agents', label: t('nav.callAgents'), icon: <Users size={15} /> },
+        { href: '/warehouse', label: t('nav.warehouse'), icon: <Warehouse size={15} /> },
+        { href: '/tickets', label: t('nav.tickets'), icon: <LifeBuoy size={15} /> },
+        { href: '/holds', label: t('nav.heldStock'), icon: <Lock size={15} /> },
         {
           href: '/inventory/adjustments',
-          label: 'Stock adjustments',
+          label: t('nav.stockAdjustments'),
           icon: <ListChecks size={15} />,
         },
         {
           href: '/inventory/cycle-counts',
-          label: 'Cycle counts',
+          label: t('nav.cycleCounts'),
           icon: <ClipboardList size={15} />,
         },
-        { href: '/inventory/movements', label: 'Stock ledger', icon: <ScrollText size={15} /> },
-        { href: '/inventory/transfers', label: 'Transfers', icon: <ArrowLeftRight size={15} /> },
-        { href: '/inventory-units', label: 'Unit discrepancies', icon: <Boxes size={15} /> },
-      ],
-    },
-    {
-      heading: 'Money',
-      items: [
-        { href: '/seller-wallets', label: 'Client wallets', icon: <Wallet size={15} /> },
-        { href: '/settlements', label: 'Settlements', icon: <Banknote size={15} /> },
-        { href: '/withdrawals', label: 'Withdrawals', icon: <Wallet size={15} /> },
         {
-          href: '/wallet-transfers',
-          label: 'Wallet transfers',
+          href: '/inventory/movements',
+          label: t('nav.stockLedger'),
+          icon: <ScrollText size={15} />,
+        },
+        {
+          href: '/inventory/transfers',
+          label: t('nav.transfers'),
           icon: <ArrowLeftRight size={15} />,
         },
-        { href: '/topups', label: 'Top-ups', icon: <Wallet size={15} /> },
+        { href: '/inventory-units', label: t('nav.unitDiscrepancies'), icon: <Boxes size={15} /> },
+      ],
+    },
+    {
+      heading: t('nav.money'),
+      items: [
+        { href: '/seller-wallets', label: t('nav.clientWallets'), icon: <Wallet size={15} /> },
+        { href: '/settlements', label: t('nav.settlements'), icon: <Banknote size={15} /> },
+        { href: '/withdrawals', label: t('nav.withdrawals'), icon: <Wallet size={15} /> },
+        {
+          href: '/wallet-transfers',
+          label: t('nav.walletTransfers'),
+          icon: <ArrowLeftRight size={15} />,
+        },
+        { href: '/topups', label: t('nav.topUps'), icon: <Wallet size={15} /> },
         {
           href: '/reseller-store-wallets',
-          label: 'Member store wallets',
+          label: t('nav.memberStoreWallets'),
           icon: <Wallet size={15} />,
         },
-        { href: '/treasury', label: 'Treasury', icon: <Vault size={15} /> },
-        { href: '/courier-wallet', label: 'Courier wallets', icon: <Wallet size={15} /> },
-        { href: '/pnl', label: 'Profit & loss', icon: <TrendingUp size={15} /> },
+        { href: '/treasury', label: t('nav.treasury'), icon: <Vault size={15} /> },
+        { href: '/courier-wallet', label: t('nav.courierWallets'), icon: <Wallet size={15} /> },
+        { href: '/pnl', label: t('nav.profitLoss'), icon: <TrendingUp size={15} /> },
         {
           href: '/pnl/carry-forward',
-          label: 'Carry-forward P&L',
+          label: t('nav.carryForward'),
           icon: <TrendingUp size={15} />,
         },
-        { href: '/expenses', label: 'Expenses', icon: <ReceiptText size={15} /> },
-        { href: '/liabilities', label: 'What we owe', icon: <Scale size={15} /> },
-        { href: '/bank-accounts', label: 'Bank accounts', icon: <Landmark size={15} /> },
-        { href: '/remittances', label: 'Remittances', icon: <Send size={15} /> },
-        { href: '/bank-changes', label: 'Bank changes', icon: <Landmark size={15} /> },
-        { href: '/freight', label: 'Inbound freight', icon: <Truck size={15} /> },
-        { href: '/margin', label: 'Lane margin', icon: <BarChart3 size={15} /> },
-        { href: '/pricing', label: 'Pricing preview', icon: <Receipt size={15} /> },
-        { href: '/fx', label: 'FX rates', icon: <Coins size={15} /> },
+        { href: '/expenses', label: t('nav.expenses'), icon: <ReceiptText size={15} /> },
+        { href: '/liabilities', label: t('nav.whatWeOwe'), icon: <Scale size={15} /> },
+        { href: '/bank-accounts', label: t('nav.bankAccounts'), icon: <Landmark size={15} /> },
+        { href: '/remittances', label: t('nav.remittances'), icon: <Send size={15} /> },
+        { href: '/bank-changes', label: t('nav.bankChanges'), icon: <Landmark size={15} /> },
+        { href: '/freight', label: t('nav.inboundFreight'), icon: <Truck size={15} /> },
+        { href: '/margin', label: t('nav.laneMargin'), icon: <BarChart3 size={15} /> },
+        { href: '/pricing', label: t('nav.pricingPreview'), icon: <Receipt size={15} /> },
+        { href: '/fx', label: t('nav.fxRates'), icon: <Coins size={15} /> },
       ],
     },
     {
-      heading: 'Network',
+      heading: t('nav.network'),
       items: [
-        { href: '/leads', label: 'Invite requests', icon: <Inbox size={15} /> },
-        { href: '/sellers', label: 'Clients', icon: <Store size={15} /> },
-        { href: '/stores', label: 'Shops', icon: <Building2 size={15} /> },
-        { href: '/reseller-stores', label: 'Member stores', icon: <Store size={15} /> },
+        { href: '/leads', label: t('nav.inviteRequests'), icon: <Inbox size={15} /> },
+        { href: '/sellers', label: t('nav.clients'), icon: <Store size={15} /> },
+        { href: '/stores', label: t('nav.shops'), icon: <Building2 size={15} /> },
+        { href: '/reseller-stores', label: t('nav.memberStores'), icon: <Store size={15} /> },
         {
           href: '/reseller-stores/analysis',
-          label: 'Member store analysis',
+          label: t('nav.memberStoreAnalysis'),
           icon: <BarChart3 size={15} />,
         },
-        { href: '/courier-accounts', label: 'Courier accounts', icon: <Building2 size={15} /> },
-        { href: '/delhivery', label: 'Delhivery', icon: <Gauge size={15} /> },
-        { href: '/shiprocket', label: 'Shiprocket', icon: <Gauge size={15} /> },
-        { href: '/cost-sync', label: 'Courier cost sync', icon: <RefreshCw size={15} /> },
-        { href: '/courier-escalation', label: 'Escalations', icon: <Inbox size={15} /> },
+        {
+          href: '/courier-accounts',
+          label: t('nav.courierAccounts'),
+          icon: <Building2 size={15} />,
+        },
+        { href: '/delhivery', label: t('authedShell.delhivery'), icon: <Gauge size={15} /> },
+        { href: '/shiprocket', label: t('authedShell.shiprocket'), icon: <Gauge size={15} /> },
+        { href: '/cost-sync', label: t('nav.courierCostSync'), icon: <RefreshCw size={15} /> },
+        { href: '/courier-escalation', label: t('nav.escalations'), icon: <Inbox size={15} /> },
       ],
     },
     {
-      heading: 'System',
+      heading: t('nav.system'),
       items: [
-        { href: '/reports', label: 'Reports', icon: <BarChart3 size={15} /> },
-        { href: '/webhooks', label: 'Webhooks', icon: <Webhook size={15} /> },
-        { href: '/staff', label: 'Staff', icon: <ShieldCheck size={15} /> },
-        { href: '/roles', label: 'Roles', icon: <KeyRound size={15} /> },
+        { href: '/reports', label: t('nav.reports'), icon: <BarChart3 size={15} /> },
+        { href: '/webhooks', label: t('nav.webhooks'), icon: <Webhook size={15} /> },
+        { href: '/staff', label: t('nav.staff'), icon: <ShieldCheck size={15} /> },
+        { href: '/roles', label: t('nav.roles'), icon: <KeyRound size={15} /> },
         // The log of who has been inside whose account. Filtered on
         // `support.impersonate.review` by `canSeePath`, so a person who
         // USES impersonation but may not review it does not see a link
         // to a page whose only query would refuse them.
-        { href: '/impersonation', label: 'Support sessions', icon: <ShieldAlert size={15} /> },
-        { href: '/system/capacity', label: 'System limits', icon: <Activity size={15} /> },
-        { href: '/settings', label: 'Settings', icon: <Settings size={15} /> },
+        {
+          href: '/impersonation',
+          label: t('nav.supportSessions'),
+          icon: <ShieldAlert size={15} />,
+        },
+        { href: '/system/capacity', label: t('nav.systemLimits'), icon: <Activity size={15} /> },
+        { href: '/settings', label: t('nav.settings'), icon: <Settings size={15} /> },
       ],
     },
   ];
@@ -232,8 +255,8 @@ export function AuthedShell({
     <Toaster>
       <ToastProvider>
         <Shell
-          subtitle="Admin"
-          sectionLabel="Staff console"
+          subtitle={t('shell.subtitle')}
+          sectionLabel={t('shell.section')}
           navGroups={navGroups}
           identityPrimary={identity.emailDisplay}
           // Every role, not `roleName` — that is the FIRST one only, and
@@ -270,7 +293,7 @@ export function AuthedShell({
             void handleLogout();
           }}
           signingOut={loggingOut}
-          themeControl={<ThemeSwitch />}
+          themeControl={<PrefsControl />}
         >
           <PermissionBoundary permissions={identity.permissions}>{children}</PermissionBoundary>
         </Shell>

@@ -15,6 +15,8 @@ import { isStoreWalletCredit, storeWalletDirectionLabel } from '@skydrop/ui/stat
 import { useAdminStoreWallet, useAdminStoreWalletEntries } from '@/lib/reseller-store-wallet-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
@@ -29,6 +31,8 @@ function when(iso: string): string {
  * hid every older movement with nothing to say so.
  */
 export function StoreWalletPanel({ storeId }: { readonly storeId: string }): ReactElement | null {
+  const t = useT();
+
   const allowed = usePermission('money.view');
   const summary = useAdminStoreWallet(storeId, allowed);
   const entries = useAdminStoreWalletEntries(storeId, allowed);
@@ -42,15 +46,17 @@ export function StoreWalletPanel({ storeId }: { readonly storeId: string }): Rea
 
   return (
     <AcSection
-      title="Wallet"
-      note="A ledger between the store and its client; the cash behind it is the client’s in our books."
+      title={t('resellerStoresStoreIdStoreWalletPanel.wallet')}
+      note={t('resellerStoresStoreIdStoreWalletPanel.aLedgerBetweenTheStore')}
       bare
       action={
         <Link
           href={`/reseller-store-wallets?storeId=${storeId}`}
           className={buttonClassName('ghost', 'sm')}
         >
-          <span className="sk-btn__label">This store’s top-ups and withdrawals</span>
+          <span className="sk-btn__label">
+            {t('resellerStoresStoreIdStoreWalletPanel.thisStoreSTopUps')}
+          </span>
           <span className="sk-btn__icon sk-btn__icon--right" aria-hidden>
             <ArrowRight size={14} />
           </span>
@@ -58,56 +64,73 @@ export function StoreWalletPanel({ storeId }: { readonly storeId: string }): Rea
       }
     >
       {summary.isPending ? (
-        <SkeletonRows rows={2} cols={4} label="Loading the wallet" />
+        <SkeletonRows
+          rows={2}
+          cols={4}
+          label={t('resellerStoresStoreIdStoreWalletPanel.loadingTheWallet')}
+        />
       ) : summary.isError ? (
         <ErrorState message={serverVerdict(summary.error)} retry={() => void summary.refetch()} />
       ) : (
         <div className="ac-kpis">
           <KpiCard
-            label="Balance"
+            label={t('resellerStoresStoreIdStoreWalletPanel.balance')}
             figure={<Money amount={summary.data.balanceInr} size="lg" />}
             tone={Number(summary.data.balanceInr) < 0 ? 'debit' : 'neutral'}
           />
           <KpiCard
-            label="Managed by"
-            figure={summary.data.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'The client'}
+            label={t('resellerStoresStoreIdStoreWalletPanel.managedBy')}
+            figure={
+              summary.data.walletManagedBy === 'SKYDROP'
+                ? t('resellerStoresStoreIdStoreWalletPanel.skydrop')
+                : t('resellerStoresStoreIdStoreWalletPanel.theClient')
+            }
           />
           <KpiCard
-            label="May go below zero by"
+            label={t('resellerStoresStoreIdStoreWalletPanel.mayGoBelowZeroBy')}
             figure={<Money amount={summary.data.negativeLimit.effectiveInr} />}
             hint={
               <>
-                Client set <Money amount={summary.data.negativeLimit.ownInr} convert={false} />; our
-                cap <Money amount={summary.data.negativeLimit.capInr} convert={false} />.
+                {richMessage(t('resellerStoresStoreIdStoreWalletPanel.clientSetOurCap'), {
+                  money: <Money amount={summary.data.negativeLimit.ownInr} convert={false} />,
+                  money2: <Money amount={summary.data.negativeLimit.capInr} convert={false} />,
+                })}
               </>
             }
           />
           <KpiCard
-            label="Waiting on us"
+            label={t('resellerStoresStoreIdStoreWalletPanel.waitingOnUs')}
             tone={
               summary.data.pendingTopups.count + summary.data.pendingWithdrawals.count > 0
                 ? 'pending'
                 : 'neutral'
             }
-            figure={`${summary.data.pendingTopups.count} claim(s), ${summary.data.pendingWithdrawals.count} withdrawal(s)`}
+            figure={t('resellerStoresStoreIdStoreWalletPanel.claimSWithdrawalS', {
+              count: summary.data.pendingTopups.count,
+              count2: summary.data.pendingWithdrawals.count,
+            })}
           />
         </div>
       )}
       {entries.isPending ? (
-        <SkeletonRows rows={3} cols={4} label="Loading the ledger" />
+        <SkeletonRows
+          rows={3}
+          cols={4}
+          label={t('resellerStoresStoreIdStoreWalletPanel.loadingTheLedger')}
+        />
       ) : entries.isError ? (
         <ErrorState message={serverVerdict(entries.error)} retry={() => void entries.refetch()} />
       ) : rows.length === 0 ? (
-        <EmptyState title="Nothing has moved yet" />
+        <EmptyState title={t('resellerStoresStoreIdStoreWalletPanel.nothingHasMovedYet')} />
       ) : (
         <AcCard flush>
-          <Table caption="Store wallet ledger">
+          <Table caption={t('resellerStoresStoreIdStoreWalletPanel.storeWalletLedger')}>
             <THead>
               <Tr>
-                <Th>When</Th>
-                <Th>What</Th>
-                <Th align="right">Amount</Th>
-                <Th align="right">Balance after</Th>
+                <Th>{t('resellerStoresStoreIdStoreWalletPanel.when')}</Th>
+                <Th>{t('resellerStoresStoreIdStoreWalletPanel.what')}</Th>
+                <Th align="right">{t('resellerStoresStoreIdStoreWalletPanel.amount')}</Th>
+                <Th align="right">{t('resellerStoresStoreIdStoreWalletPanel.balanceAfter')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -122,7 +145,7 @@ export function StoreWalletPanel({ storeId }: { readonly storeId: string }): Rea
                     </span>
                     {e.linkedOrderId !== null ? (
                       <Link href={`/orders/${e.linkedOrderId}`} className="ac-link ac-cell-sub">
-                        See the order
+                        {t('resellerStoresStoreIdStoreWalletPanel.seeTheOrder')}
                       </Link>
                     ) : null}
                     {e.note !== null ? <span className="ac-cell-sub">{e.note}</span> : null}
@@ -143,8 +166,12 @@ export function StoreWalletPanel({ storeId }: { readonly storeId: string }): Rea
           <div className="ac-pad ac-toolbar">
             <p className="ac-muted">
               {entries.hasNextPage
-                ? `Showing the latest ${rows.length} movements.`
-                : `Showing all ${rows.length} movements.`}
+                ? t('resellerStoresStoreIdStoreWalletPanel.showingTheLatestMovements', {
+                    length: rows.length,
+                  })
+                : t('resellerStoresStoreIdStoreWalletPanel.showingAllMovements', {
+                    length: rows.length,
+                  })}
             </p>
             {entries.hasNextPage ? (
               <AsyncButton
@@ -152,7 +179,10 @@ export function StoreWalletPanel({ storeId }: { readonly storeId: string }): Rea
                 size="sm"
                 icon={<History size={14} />}
                 state={entries.isFetchingNextPage ? 'busy' : 'idle'}
-                labels={{ idle: 'Show older', busy: 'Loading…' }}
+                labels={{
+                  idle: t('resellerStoresStoreIdStoreWalletPanel.showOlder'),
+                  busy: t('resellerStoresStoreIdStoreWalletPanel.loading'),
+                }}
                 onClick={() => void entries.fetchNextPage()}
               />
             ) : null}

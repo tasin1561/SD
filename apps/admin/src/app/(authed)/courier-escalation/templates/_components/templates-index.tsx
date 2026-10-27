@@ -26,6 +26,7 @@ import { usePermission } from '@/lib/use-permission';
 import { AfCard, AfSection } from '@/app/(authed)/system/_components/af-parts';
 import { EscalationTabs } from '../../_components/escalation-tabs';
 import '../../_components/escalation.css';
+import { useT } from '@/i18n/client';
 
 /**
  * The promotion queue: unmatched courier messages becoming patterns.
@@ -51,6 +52,7 @@ import '../../_components/escalation.css';
  * look like a successful promotion.
  */
 export function CourierTemplatesIndex(): ReactElement {
+  const tr = useT();
   const candidates = useCourierTemplateCandidates();
   const templates = useCourierTemplates();
   // FE-2: cosmetic. Promotion is refused server-side without this.
@@ -62,19 +64,26 @@ export function CourierTemplatesIndex(): ReactElement {
   return (
     <div className="af-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Network' }, { label: 'Courier escalation' }]}
+        breadcrumbs={[
+          { label: tr('courierEscalationTemplatesTemplatesIndex.network') },
+          { label: tr('courierEscalationTemplatesTemplatesIndex.courierEscalation') },
+        ]}
         Link={Link}
-        title="Message patterns"
-        subtitle="Courier messages the library could not classify, and the live patterns it matches with. A pattern decides what a client is told a message means."
+        title={tr('courierEscalationTemplatesTemplatesIndex.messagePatterns')}
+        subtitle={tr('courierEscalationTemplatesTemplatesIndex.courierMessagesTheLibraryCould')}
       />
       <EscalationTabs />
 
       <AfSection
-        title="Awaiting review"
-        note="Most-repeated first — the pattern worth writing next is at the top."
+        title={tr('courierEscalationTemplatesTemplatesIndex.awaitingReview')}
+        note={tr('courierEscalationTemplatesTemplatesIndex.mostRepeatedFirstThePattern')}
       >
         {candidates.isLoading ? (
-          <SkeletonRows rows={3} cols={1} label="Loading candidates" />
+          <SkeletonRows
+            rows={3}
+            cols={1}
+            label={tr('courierEscalationTemplatesTemplatesIndex.loadingCandidates')}
+          />
         ) : candidates.isError ? (
           <ErrorState
             message={serverVerdict(candidates.error)}
@@ -83,8 +92,8 @@ export function CourierTemplatesIndex(): ReactElement {
         ) : pending.length === 0 ? (
           <EmptyState
             tone="positive"
-            title="Nothing unmatched"
-            description="Either every message so far matched a pattern, or none have arrived yet. Both are fine; this queue fills itself."
+            title={tr('courierEscalationTemplatesTemplatesIndex.nothingUnmatched')}
+            description={tr('courierEscalationTemplatesTemplatesIndex.eitherEveryMessageSoFar')}
           />
         ) : (
           <div className="af-stack">
@@ -96,12 +105,16 @@ export function CourierTemplatesIndex(): ReactElement {
       </AfSection>
 
       <AfSection
-        title="The live library"
-        note="Checked in this order — the first match wins, so a broad pattern with a low number can shadow a precise one below it."
+        title={tr('courierEscalationTemplatesTemplatesIndex.theLiveLibrary')}
+        note={tr('courierEscalationTemplatesTemplatesIndex.checkedInThisOrderThe')}
       >
         {templates.isLoading ? (
           <AfCard flush>
-            <SkeletonRows rows={4} cols={5} label="Loading patterns" />
+            <SkeletonRows
+              rows={4}
+              cols={5}
+              label={tr('courierEscalationTemplatesTemplatesIndex.loadingPatterns')}
+            />
           </AfCard>
         ) : templates.isError ? (
           <ErrorState
@@ -112,12 +125,12 @@ export function CourierTemplatesIndex(): ReactElement {
           <Table>
             <THead>
               <Tr>
-                <Th align="right">Order</Th>
-                <Th>Code</Th>
-                <Th>Pattern</Th>
-                <Th>Means</Th>
-                <Th>Action</Th>
-                <Th>Live</Th>
+                <Th align="right">{tr('courierEscalationTemplatesTemplatesIndex.order')}</Th>
+                <Th>{tr('courierEscalationTemplatesTemplatesIndex.code')}</Th>
+                <Th>{tr('courierEscalationTemplatesTemplatesIndex.pattern')}</Th>
+                <Th>{tr('courierEscalationTemplatesTemplatesIndex.means')}</Th>
+                <Th>{tr('courierEscalationTemplatesTemplatesIndex.action')}</Th>
+                <Th>{tr('courierEscalationTemplatesTemplatesIndex.live')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -156,15 +169,15 @@ export function CourierTemplatesIndex(): ReactElement {
 
       {reviewed.length > 0 ? (
         <AfSection
-          title="Already decided"
-          note="Kept rather than deleted: the body is the evidence for why a pattern exists, and a pattern whose origin was thrown away is one nobody can safely change later."
+          title={tr('courierEscalationTemplatesTemplatesIndex.alreadyDecided')}
+          note={tr('courierEscalationTemplatesTemplatesIndex.keptRatherThanDeletedThe')}
         >
           <Table>
             <THead>
               <Tr>
-                <Th>Message</Th>
-                <Th align="right">Seen</Th>
-                <Th>Outcome</Th>
+                <Th>{tr('courierEscalationTemplatesTemplatesIndex.message')}</Th>
+                <Th align="right">{tr('courierEscalationTemplatesTemplatesIndex.seen')}</Th>
+                <Th>{tr('courierEscalationTemplatesTemplatesIndex.outcome')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -202,6 +215,7 @@ function CandidateCard({
   readonly candidate: CourierTemplateCandidate;
   readonly canWrite: boolean;
 }): ReactElement {
+  const tr = useT();
   const toast = useToast();
   const promote = usePromoteCandidate();
   const reject = useRejectCandidate();
@@ -225,7 +239,7 @@ function CandidateCard({
         ...(action.trim() === '' ? {} : { action: action.trim() }),
         ...(Number.isFinite(Number(priority)) ? { priority: Number(priority) } : {}),
       });
-      toast.success('Pattern is live');
+      toast.success(tr('courierEscalationTemplatesTemplatesIndex.patternIsLive'));
       setOpen(false);
     } catch (err) {
       // FE-2: PATTERN_DOES_NOT_MATCH and PATTERN_INVALID arrive from the
@@ -238,7 +252,7 @@ function CandidateCard({
   const dismiss = async (): Promise<void> => {
     try {
       await reject.mutateAsync({ candidateId: candidate.id });
-      toast.success('Left out of the library');
+      toast.success(tr('courierEscalationTemplatesTemplatesIndex.leftOutOfTheLibrary'));
     } catch (err) {
       toast.error(serverVerdict(err));
       throw err;
@@ -249,11 +263,19 @@ function CandidateCard({
     <AfCard>
       <div className="ce-candidate__meta">
         <span className="af-strong">
-          seen {candidate.seenCount} {candidate.seenCount === 1 ? 'time' : 'times'}
+          {tr('courierEscalationTemplatesTemplatesIndex.seen2', {
+            seenCount: candidate.seenCount,
+            value:
+              candidate.seenCount === 1
+                ? tr('courierEscalationTemplatesTemplatesIndex.time')
+                : tr('courierEscalationTemplatesTemplatesIndex.times'),
+          })}
         </span>
         <span className="af-small">
-          first {new Date(candidate.firstSeenAt).toLocaleDateString('en-IN')}, last{' '}
-          {new Date(candidate.lastSeenAt).toLocaleDateString('en-IN')}
+          {tr('courierEscalationTemplatesTemplatesIndex.firstLast', {
+            value: new Date(candidate.firstSeenAt).toLocaleDateString('en-IN'),
+            value2: new Date(candidate.lastSeenAt).toLocaleDateString('en-IN'),
+          })}
         </span>
       </div>
 
@@ -267,29 +289,29 @@ function CandidateCard({
             <div className="af-grid-2">
               <TextField
                 id={fid('code')}
-                label="Code"
-                hint="Stable, e.g. NDR_ACK_24_48."
+                label={tr('courierEscalationTemplatesTemplatesIndex.code')}
+                hint={tr('courierEscalationTemplatesTemplatesIndex.stableEGNdrAck')}
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
               />
               <TextField
                 id={fid('state')}
-                label="Means"
-                hint="The state this implies, e.g. ACKNOWLEDGED."
+                label={tr('courierEscalationTemplatesTemplatesIndex.means')}
+                hint={tr('courierEscalationTemplatesTemplatesIndex.theStateThisImpliesE')}
                 value={state}
                 onChange={(e) => setState(e.target.value)}
               />
               <TextField
                 id={fid('action')}
-                label="Action"
-                hint="Optional, e.g. ASK_SELLER_ALT_PHONE."
+                label={tr('courierEscalationTemplatesTemplatesIndex.action')}
+                hint={tr('courierEscalationTemplatesTemplatesIndex.optionalEGAskSeller')}
                 value={action}
                 onChange={(e) => setAction(e.target.value)}
               />
               <TextField
                 id={fid('priority')}
-                label="Order"
-                hint="Lower is checked first."
+                label={tr('courierEscalationTemplatesTemplatesIndex.order')}
+                hint={tr('courierEscalationTemplatesTemplatesIndex.lowerIsCheckedFirst')}
                 inputMode="numeric"
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
@@ -297,8 +319,10 @@ function CandidateCard({
             </div>
             <TextField
               id={fid('pattern')}
-              label="Pattern"
-              hint="A regular expression without delimiters, matched case-insensitively. The server refuses one that does not match the message above."
+              label={tr('courierEscalationTemplatesTemplatesIndex.pattern')}
+              hint={tr(
+                'courierEscalationTemplatesTemplatesIndex.aRegularExpressionWithoutDelimiters',
+              )}
               inputClassName="af-code"
               value={pattern}
               onChange={(e) => setPattern(e.target.value)}
@@ -309,29 +333,33 @@ function CandidateCard({
                 size="sm"
                 icon={<CheckCircle2 size={14} />}
                 labels={{
-                  idle: 'Make it live',
-                  busy: 'Promoting…',
-                  done: 'Live',
-                  error: 'Refused',
+                  idle: tr('courierEscalationTemplatesTemplatesIndex.makeItLive'),
+                  busy: tr('courierEscalationTemplatesTemplatesIndex.promoting'),
+                  done: tr('courierEscalationTemplatesTemplatesIndex.live'),
+                  error: tr('courierEscalationTemplatesTemplatesIndex.refused'),
                 }}
                 disabled={code.trim() === '' || pattern.trim() === '' || state.trim() === ''}
                 onAction={submit}
               />
               <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
-                Cancel
+                {tr('courierEscalationTemplatesTemplatesIndex.cancel')}
               </Button>
             </div>
           </div>
         ) : (
           <div className="af-row">
             <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-              Write a pattern
+              {tr('courierEscalationTemplatesTemplatesIndex.writeAPattern')}
             </Button>
             <AsyncButton
               variant="ghost"
               size="sm"
               icon={<XCircle size={14} />}
-              labels={{ idle: 'Not worth one', busy: 'Leaving out…', done: 'Left out' }}
+              labels={{
+                idle: tr('courierEscalationTemplatesTemplatesIndex.notWorthOne'),
+                busy: tr('courierEscalationTemplatesTemplatesIndex.leavingOut'),
+                done: tr('courierEscalationTemplatesTemplatesIndex.leftOut'),
+              }}
               onAction={dismiss}
             />
           </div>

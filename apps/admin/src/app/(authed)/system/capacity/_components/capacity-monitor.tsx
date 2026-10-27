@@ -10,6 +10,10 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { AfCard, Meter } from '@/app/(authed)/system/_components/af-parts';
 import './capacity.css';
 import { useCapacityReport, type CapacityMetric, type CapacityStatus } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { richMessage } from '@/i18n/client';
 
 /**
  * What is running out, how fast, and what to do about it.
@@ -38,13 +42,14 @@ import { useCapacityReport, type CapacityMetric, type CapacityStatus } from '@/l
 const REFRESH_MS = 15_000;
 
 /** Each status's words and the tone its gauge and figure take. */
-const TONE: Record<CapacityStatus, { tone: 'good' | 'warn' | 'bad' | 'critical'; label: string }> =
-  {
-    OK: { tone: 'good', label: 'Healthy' },
-    WATCH: { tone: 'warn', label: 'Watch' },
-    WARNING: { tone: 'bad', label: 'Plan the work' },
-    CRITICAL: { tone: 'critical', label: 'Acting soon is not optional' },
-  };
+const TONE = (
+  t: Translate<MessageKey>,
+): Record<CapacityStatus, { tone: 'good' | 'warn' | 'bad' | 'critical'; label: string }> => ({
+  OK: { tone: 'good', label: t('systemCapacityCapacityMonitor.healthy') },
+  WATCH: { tone: 'warn', label: t('systemCapacityCapacityMonitor.watch') },
+  WARNING: { tone: 'bad', label: t('systemCapacityCapacityMonitor.planTheWork') },
+  CRITICAL: { tone: 'critical', label: t('systemCapacityCapacityMonitor.actingSoonIsNotOptional') },
+});
 
 function Gauge({
   percent,
@@ -53,7 +58,8 @@ function Gauge({
   percent: number | null;
   status: CapacityStatus;
 }): ReactElement {
-  const tone = TONE[status].tone;
+  const t = useT();
+  const tone = TONE(t)[status].tone;
   // A null percent means we do not know the ceiling. Showing an empty
   // bar would read as "plenty of room", which is the opposite of true.
   if (percent === null) {
@@ -68,7 +74,8 @@ function Gauge({
 }
 
 function MetricCard({ m }: { readonly m: CapacityMetric }): ReactElement {
-  const tone = TONE[m.status];
+  const t = useT();
+  const tone = TONE(t)[m.status];
   const [open, setOpen] = useState(m.status === 'WARNING' || m.status === 'CRITICAL');
 
   return (
@@ -96,10 +103,10 @@ function MetricCard({ m }: { readonly m: CapacityMetric }): ReactElement {
 
       <p className="af-faint">
         {m.ceilingSource === 'MEASURED'
-          ? 'Ceiling read from the system itself.'
+          ? t('systemCapacityCapacityMonitor.ceilingReadFromTheSystem')
           : m.ceilingSource === 'CONFIGURED'
-            ? 'Ceiling from system settings — update it when the plan changes.'
-            : 'Ceiling unknown; record it in system settings to get a real gauge.'}
+            ? t('systemCapacityCapacityMonitor.ceilingFromSystemSettingsUpdate')
+            : t('systemCapacityCapacityMonitor.ceilingUnknownRecordItIn')}
         {m.detail && <span className="af-small"> {m.detail}</span>}
       </p>
 
@@ -110,17 +117,19 @@ function MetricCard({ m }: { readonly m: CapacityMetric }): ReactElement {
         className="af-disclose"
       >
         <ChevronRight size={14} className="af-disclose__chev" aria-hidden />
-        {open ? 'Hide' : 'What happens, and what to do'}
+        {open
+          ? t('systemCapacityCapacityMonitor.hide')
+          : t('systemCapacityCapacityMonitor.whatHappensAndWhatTo')}
       </button>
 
       {open && (
         <div className="cap-explain">
           <p className="af-body">
-            <span className="af-small">When it fills: </span>
+            <span className="af-small">{t('systemCapacityCapacityMonitor.whenItFills')} </span>
             {m.consequence}
           </p>
           <p className="af-body">
-            <span className="af-small">To fix: </span>
+            <span className="af-small">{t('systemCapacityCapacityMonitor.toFix')} </span>
             {m.remedy}
           </p>
         </div>
@@ -130,6 +139,8 @@ function MetricCard({ m }: { readonly m: CapacityMetric }): ReactElement {
 }
 
 export function CapacityMonitor(): ReactElement {
+  const t = useT();
+
   const q = useCapacityReport(REFRESH_MS);
   const [now, setNow] = useState<string>('');
 
@@ -142,50 +153,59 @@ export function CapacityMonitor(): ReactElement {
   if (q.isLoading) {
     return (
       <div className="af-page">
-        <PageHeader title="System limits" />
-        <SkeletonRows rows={4} cols={3} label="Reading system capacity…" />
+        <PageHeader title={t('systemCapacityCapacityMonitor.systemLimits')} />
+        <SkeletonRows
+          rows={4}
+          cols={3}
+          label={t('systemCapacityCapacityMonitor.readingSystemCapacity')}
+        />
       </div>
     );
   }
   if (q.isError || !q.data) {
     return (
       <ErrorState
-        message={q.error?.message ?? 'Could not read capacity.'}
+        message={q.error?.message ?? t('systemCapacityCapacityMonitor.couldNotReadCapacity')}
         retry={() => void q.refetch()}
       />
     );
   }
 
   const { metrics, growth, topology, worstStatus } = q.data;
-  const tone = TONE[worstStatus];
+  const tone = TONE(t)[worstStatus];
 
   return (
     <div className="af-page">
       <PageHeader
-        breadcrumbs={[{ label: 'System' }, { label: 'System limits' }]}
+        breadcrumbs={[
+          { label: t('systemCapacityCapacityMonitor.system') },
+          { label: t('systemCapacityCapacityMonitor.systemLimits') },
+        ]}
         Link={Link}
-        title="System limits"
-        subtitle="What the platform can currently take, how much of it is used, and what to do before it runs out. Refreshes every 15 seconds."
+        title={t('systemCapacityCapacityMonitor.systemLimits')}
+        subtitle={t('systemCapacityCapacityMonitor.whatThePlatformCanCurrently')}
       />
 
       <AfCard>
         <div className="af-row af-row--between">
           <span className="cap-status cap-status--lead" data-tone={tone.tone}>
             {worstStatus === 'OK'
-              ? 'Everything has room'
-              : `Tightest constraint: ${tone.label.toLowerCase()}`}
+              ? t('systemCapacityCapacityMonitor.everythingHasRoom')
+              : t('systemCapacityCapacityMonitor.tightestConstraint', {
+                  value: tone.label.toLowerCase(),
+                })}
           </span>
           <span className="af-faint">{now && `updated ${now}`}</span>
         </div>
 
         <div className="af-kpis">
           <KpiCard
-            label="Orders, last 30 days"
+            label={t('systemCapacityCapacityMonitor.ordersLast30Days')}
             value={growth.ordersLast30Days}
             format={(n) => n.toLocaleString('en-IN')}
           />
           <KpiCard
-            label="Month on month"
+            label={t('systemCapacityCapacityMonitor.monthOnMonth')}
             figure={
               growth.monthlyGrowthPercent === null
                 ? '—'
@@ -193,7 +213,7 @@ export function CapacityMonitor(): ReactElement {
             }
           />
           <KpiCard
-            label="Storage runway"
+            label={t('systemCapacityCapacityMonitor.storageRunway')}
             figure={
               growth.storageMonthsRemaining === null
                 ? '—'
@@ -202,11 +222,7 @@ export function CapacityMonitor(): ReactElement {
           />
         </div>
 
-        <p className="af-small">
-          Runway is measured: the database's actual size divided by the orders in it, projected at
-          the last 30 days' rate. It is blank until there are enough orders to divide by, and it
-          moves whenever the shape of the data does.
-        </p>
+        <p className="af-small">{t('systemCapacityCapacityMonitor.runwayIsMeasuredTheDatabase')}</p>
       </AfCard>
 
       <div className="af-grid-2">
@@ -216,18 +232,22 @@ export function CapacityMonitor(): ReactElement {
       </div>
 
       <AfCard>
-        <h2 className="af-card__title">How requests are served</h2>
+        <h2 className="af-card__title">
+          {t('systemCapacityCapacityMonitor.howRequestsAreServed')}
+        </h2>
         <p className="af-small">
           {topology.apiInstancesAssumed === 1
-            ? 'One API process serves every request. Node is single-threaded, so one slow CPU-bound job — a large CSV, image processing, a PDF invoice — delays everyone else, and a restart is downtime for everyone.'
-            : `${topology.apiInstancesAssumed} API processes share the traffic.`}{' '}
+            ? t('systemCapacityCapacityMonitor.oneApiProcessServesEvery')
+            : t('systemCapacityCapacityMonitor.apiProcessesShareTheTraffic', {
+                apiInstancesAssumed: topology.apiInstancesAssumed,
+              })}{' '}
           {topology.note}
         </p>
         <p className="af-small">
-          To add instances: raise <code className="af-code">capacity.api_instances</code> in
-          settings so the connection gauge stays honest, and start every additional process with{' '}
-          <code className="af-code">WORKERS_ENABLED=false</code> so only one owns the background
-          queues. Two processes running the same crons would double every sweep.
+          {richMessage(t('systemCapacityCapacityMonitor.toAddInstancesRaiseIn'), {
+            code: <code className="af-code">capacity.api_instances</code>,
+            code2: <code className="af-code">WORKERS_ENABLED=false</code>,
+          })}
         </p>
       </AfCard>
     </div>

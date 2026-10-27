@@ -8,6 +8,7 @@ import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { useToast } from '@skydrop/ui/app/toast';
 import { useMergeCredentialFields } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * The portal login, added beside the API token that already works.
@@ -41,6 +42,7 @@ export function PortalLoginModal({
   readonly courierCode: string;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const needsCompany = courierCode === 'delhivery';
   const merge = useMergeCredentialFields();
   const toast = useToast();
@@ -65,8 +67,10 @@ export function PortalLoginModal({
       });
       toast.success(
         res.added.length > 0
-          ? `Portal login saved — added ${res.added.join(', ')}`
-          : 'Portal login replaced',
+          ? t('courierAccountsPortalLoginModal.portalLoginSavedAdded', {
+              value: res.added.join(', '),
+            })
+          : t('courierAccountsPortalLoginModal.portalLoginReplaced'),
       );
       onClose();
     } catch (err) {
@@ -80,16 +84,16 @@ export function PortalLoginModal({
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
-      title={`Portal login — ${accountLabel}`}
+      title={t('courierAccountsPortalLoginModal.portalLogin', { accountLabel })}
       description={
         needsCompany
-          ? 'Delhivery has no billing API, so the nightly cost sync signs into their panel. Stored encrypted; never shown again.'
-          : 'Shiprocket has no API for its passbook, ledger or recharges, so the automation signs into app.shiprocket.in through the Bangalore tunnel. Stored encrypted; never shown again.'
+          ? t('courierAccountsPortalLoginModal.delhiveryHasNoBillingApi')
+          : t('courierAccountsPortalLoginModal.shiprocketHasNoApiFor')
       }
       footer={
         <DialogFooter>
           <Button variant="secondary" size="sm" onClick={onClose}>
-            Cancel
+            {t('courierAccountsPortalLoginModal.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -98,19 +102,19 @@ export function PortalLoginModal({
             disabled={incomplete || merge.isPending}
             onClick={() => void save()}
           >
-            Save login
+            {t('courierAccountsPortalLoginModal.saveLogin')}
           </Button>
         </DialogFooter>
       }
     >
       <div className="af-form">
         <TextField
-          label="Email"
+          label={t('courierAccountsPortalLoginModal.email')}
           requiredMark
           hint={
             needsCompany
-              ? 'The address you use at one.delhivery.com.'
-              : 'The address you use at app.shiprocket.in — the website login, not the API user.'
+              ? t('courierAccountsPortalLoginModal.theAddressYouUseAt')
+              : t('courierAccountsPortalLoginModal.theAddressYouUseAt2')
           }
           type="email"
           value={username}
@@ -118,7 +122,7 @@ export function PortalLoginModal({
           autoComplete="off"
         />
         <TextField
-          label="Password"
+          label={t('courierAccountsPortalLoginModal.password')}
           requiredMark
           type="password"
           value={password}
@@ -127,20 +131,19 @@ export function PortalLoginModal({
         />
         {needsCompany && (
           <TextField
-            label="Company"
+            label={t('courierAccountsPortalLoginModal.company')}
             requiredMark
-            hint="Exactly as it appears in their login dropdown — e.g. MS EXPORTS. One login reaches several companies and each has its own wallet, so this decides which one is read."
+            hint={t('courierAccountsPortalLoginModal.exactlyAsItAppearsIn')}
             value={company}
             onChange={(e) => setCompany(e.target.value)}
           />
         )}
 
-        <p className="af-small">
-          The API token on this account is left exactly as it is — this adds to the credential
-          rather than replacing it.
-        </p>
+        <p className="af-small">{t('courierAccountsPortalLoginModal.theApiTokenOnThis')}</p>
 
-        {error !== null && <ErrorState title="Not saved" message={error} />}
+        {error !== null && (
+          <ErrorState title={t('courierAccountsPortalLoginModal.notSaved')} message={error} />
+        )}
       </div>
     </Dialog>
   );

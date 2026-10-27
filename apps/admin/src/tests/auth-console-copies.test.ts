@@ -69,6 +69,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withCatalogEnglish } from './i18n-source';
 
 const REPO = join(__dirname, '..', '..', '..', '..');
 
@@ -120,7 +121,7 @@ describe('apps/admin uses the ONE shared sign-in frame', () => {
     const src = readFileSync(join(REPO, 'apps', 'admin', relative), 'utf8');
     expect(src).toContain("from '@skydrop/ui/app/sign-in'");
     expect(src).toContain('<SignInFrame');
-    expect(src).toContain('operations console');
+    expect(withCatalogEnglish(src)).toContain('operations console');
     expect(src).not.toContain('auth-console');
   });
 

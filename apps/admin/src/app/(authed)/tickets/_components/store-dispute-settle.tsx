@@ -12,6 +12,7 @@ import { AfCard } from '@/app/(authed)/system/_components/af-parts';
 import './tickets.css';
 import { useSettleStoreDispute } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 type Payer = 'STORE' | 'SELLER';
 
@@ -46,6 +47,8 @@ export function StoreDisputeSettle({
   readonly claimAmountInr?: string | null;
   readonly claimPayer?: Payer | null;
 }): ReactElement {
+  const t = useT();
+
   const toast = useToast();
   const settle = useSettleStoreDispute();
   const [payer, setPayer] = useState<Payer | ''>(claimPayer ?? '');
@@ -53,7 +56,7 @@ export function StoreDisputeSettle({
   const [notes, setNotes] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const store = storeName ?? 'the store';
+  const store = storeName ?? t('ticketsStoreDisputeSettle.theStore');
 
   const submit = async (): Promise<void> => {
     if (payer === '') return;
@@ -69,7 +72,7 @@ export function StoreDisputeSettle({
       setPayer('');
       setAmount('');
       setNotes('');
-      toast.success('Dispute settled');
+      toast.success(t('ticketsStoreDisputeSettle.disputeSettled'));
     } catch (err) {
       setConfirming(false);
       setError(serverVerdict(err));
@@ -79,31 +82,34 @@ export function StoreDisputeSettle({
   return (
     <AfCard>
       <p className="af-muted">
-        The money moves between {store}&apos;s wallet and the client&apos;s — never from ours. Both
-        read your note.
+        {t('ticketsStoreDisputeSettle.theMoneyMovesBetweenS', { store })}
         {claimAmountInr != null && claimPayer != null ? (
           <>
             {' '}
-            Filled in from what was claimed (₹{claimAmountInr},{' '}
-            {claimPayer === 'STORE' ? `${store} owes the client` : `the client owes ${store}`}) —
-            change it if that is not what you have decided.
+            {t('ticketsStoreDisputeSettle.filledInFromWhatWas', {
+              claimAmountInr,
+              value:
+                claimPayer === 'STORE'
+                  ? t('ticketsStoreDisputeSettle.owesTheClient', { store })
+                  : t('ticketsStoreDisputeSettle.theClientOwes', { store }),
+            })}
           </>
         ) : null}
       </p>
       <div className="tk-move">
         <Select
           id="dispute-payer"
-          label="Who pays"
+          label={t('ticketsStoreDisputeSettle.whoPays')}
           value={payer}
           onChange={(e) => setPayer(e.target.value as Payer | '')}
         >
-          <option value="">Choose…</option>
-          <option value="STORE">The store pays the client</option>
-          <option value="SELLER">The client pays the store</option>
+          <option value="">{t('ticketsStoreDisputeSettle.choose')}</option>
+          <option value="STORE">{t('ticketsStoreDisputeSettle.theStorePaysTheClient')}</option>
+          <option value="SELLER">{t('ticketsStoreDisputeSettle.theClientPaysTheStore')}</option>
         </Select>
         <TextField
           id="dispute-amount"
-          label="Amount (INR)"
+          label={t('ticketsStoreDisputeSettle.amountInr')}
           inputMode="decimal"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
@@ -111,9 +117,9 @@ export function StoreDisputeSettle({
         <div className="tk-move__notes">
           <TextArea
             id="dispute-notes"
-            label="Note"
+            label={t('ticketsStoreDisputeSettle.note')}
             rows={1}
-            placeholder="The client and the store both read this."
+            placeholder={t('ticketsStoreDisputeSettle.theClientAndTheStore')}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             // Display only: SettleStoreDisputeDto allows 2000; never enforced here.
@@ -126,7 +132,7 @@ export function StoreDisputeSettle({
           disabled={payer === '' || amount.trim() === '' || settle.isPending}
           onClick={() => setConfirming(true)}
         >
-          Settle
+          {t('ticketsStoreDisputeSettle.settle')}
         </Button>
       </div>
       {error !== null ? (
@@ -137,14 +143,20 @@ export function StoreDisputeSettle({
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Settle this dispute?"
-        entity={storeName ?? 'Member store'}
+        title={t('ticketsStoreDisputeSettle.settleThisDispute')}
+        entity={storeName ?? t('ticketsStoreDisputeSettle.memberStore')}
         consequence={
           payer === 'STORE'
-            ? `${store} pays the client ₹${amount.trim()}. Both wallets move now and the ticket closes.`
-            : `The client pays ${store} ₹${amount.trim()}. Both wallets move now and the ticket closes.`
+            ? t('ticketsStoreDisputeSettle.paysTheClientBothWallets', {
+                store,
+                value: amount.trim(),
+              })
+            : t('ticketsStoreDisputeSettle.theClientPaysBothWallets', {
+                store,
+                value: amount.trim(),
+              })
         }
-        confirmLabel="Settle"
+        confirmLabel={t('ticketsStoreDisputeSettle.settle')}
         onConfirm={submit}
       />
     </AfCard>

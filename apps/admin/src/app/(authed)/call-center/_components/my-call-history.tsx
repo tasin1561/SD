@@ -12,6 +12,7 @@ import { OoCard } from '../../orders/_components/order-ops-parts';
 import './call-center.css';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useAgentCallHistory } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
 
 /**
  * What this agent has already done.
@@ -42,6 +43,7 @@ function duration(seconds: number | null): string {
 }
 
 export function MyCallHistory(): ReactElement {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(1);
   const history = useAgentCallHistory(page, PAGE_SIZE);
@@ -51,18 +53,18 @@ export function MyCallHistory(): ReactElement {
   return (
     <section className="oo-section">
       <SectionHeading
-        title="My calls"
-        note="Everything you have logged, newest first. Opening it loads your own history."
+        title={t('callCenterMyCallHistory.myCalls')}
+        note={t('callCenterMyCallHistory.everythingYouHaveLoggedNewest')}
         action={
           <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-            {open ? 'Hide' : 'Show'}
+            {open ? t('callCenterMyCallHistory.hide') : t('callCenterMyCallHistory.show')}
           </Button>
         }
       />
       {open && (
         <OoCard>
           {history.isLoading ? (
-            <SkeletonRows rows={4} cols={5} label="Loading your calls…" />
+            <SkeletonRows rows={4} cols={5} label={t('callCenterMyCallHistory.loadingYourCalls')} />
           ) : history.isError ? (
             <ErrorState
               message={serverVerdict(history.error)}
@@ -70,20 +72,20 @@ export function MyCallHistory(): ReactElement {
             />
           ) : (
             <>
-              <Table caption="My calls">
+              <Table caption={t('callCenterMyCallHistory.myCalls')}>
                 <THead>
                   <Tr>
-                    <Th>When</Th>
-                    <Th>Outcome</Th>
-                    <Th>Length</Th>
-                    <Th>Order</Th>
-                    <Th>Notes</Th>
+                    <Th>{t('callCenterMyCallHistory.when')}</Th>
+                    <Th>{t('callCenterMyCallHistory.outcome')}</Th>
+                    <Th>{t('callCenterMyCallHistory.length')}</Th>
+                    <Th>{t('callCenterMyCallHistory.order')}</Th>
+                    <Th>{t('callCenterMyCallHistory.notes')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
                   {(data?.items.length ?? 0) === 0 ? (
                     <TableEmpty colSpan={5}>
-                      No calls logged yet. Pull one from the queue above to start.
+                      {t('callCenterMyCallHistory.noCallsLoggedYetPull')}
                     </TableEmpty>
                   ) : (
                     (data?.items ?? []).map((r) => (
@@ -104,7 +106,9 @@ export function MyCallHistory(): ReactElement {
                           {r.outcomeNotes ?? '—'}
                           {r.rescheduledFor !== null && (
                             <span className="oo-sub">
-                              call back {new Date(r.rescheduledFor).toLocaleString()}
+                              {t('callCenterMyCallHistory.callBack', {
+                                value: new Date(r.rescheduledFor).toLocaleString(),
+                              })}
                             </span>
                           )}
                         </Td>
@@ -117,7 +121,7 @@ export function MyCallHistory(): ReactElement {
               {(data?.total ?? 0) > PAGE_SIZE && (
                 <Pagination
                   className="cc-history-pager"
-                  label="My calls pages"
+                  label={t('callCenterMyCallHistory.myCallsPages')}
                   page={page}
                   pageSize={PAGE_SIZE}
                   total={data?.total ?? 0}

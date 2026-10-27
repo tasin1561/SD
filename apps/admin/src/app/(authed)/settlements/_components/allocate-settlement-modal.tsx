@@ -11,6 +11,7 @@ import { useToast } from '@skydrop/ui/app/toast';
 import { MkAlert } from '../../seller-wallets/_components/money-parts';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useAllocateSettlement } from '@/lib/ops-hooks';
+import { useT } from '@/i18n/client';
 
 /**
  * Finish attributing a payout that was recorded before every order it
@@ -35,6 +36,7 @@ export function AllocateSettlementModal({
   readonly open: boolean;
   readonly onOpenChange: (next: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const allocate = useAllocateSettlement();
   const [lines, setLines] = useState<Array<{ orderId: string; settledInr: string }>>([
@@ -66,7 +68,7 @@ export function AllocateSettlementModal({
         settlementId,
         lines: filled.map((l) => ({ orderId: l.orderId.trim(), settledInr: l.settledInr.trim() })),
       });
-      toast.success('Allocated. Those clients have been credited.');
+      toast.success(t('settlementsAllocateSettlementModal.allocatedThoseClientsHaveBeen'));
       onOpenChange(false);
     } catch (err) {
       // FE-2 — the server owns the rules; show its refusal verbatim.
@@ -80,8 +82,8 @@ export function AllocateSettlementModal({
       open={open}
       onOpenChange={onOpenChange}
       locked={allocate.isPending}
-      title="Allocate more of this payout"
-      description={`${reference} — name the orders it also covered. The payout total is not changed; this moves money already in the bank to the clients it belongs to.`}
+      title={t('settlementsAllocateSettlementModal.allocateMoreOfThisPayout')}
+      description={t('settlementsAllocateSettlementModal.nameTheOrdersItAlso', { reference })}
       footer={
         <DialogFooter>
           <Button
@@ -89,10 +91,15 @@ export function AllocateSettlementModal({
             onClick={() => onOpenChange(false)}
             disabled={allocate.isPending}
           >
-            Cancel
+            {t('settlementsAllocateSettlementModal.cancel')}
           </Button>
           <AsyncButton
-            labels={{ idle: 'Allocate', busy: 'Allocating…', done: 'Allocated', error: 'Refused' }}
+            labels={{
+              idle: t('settlementsAllocateSettlementModal.allocate'),
+              busy: t('settlementsAllocateSettlementModal.allocating'),
+              done: t('settlementsAllocateSettlementModal.allocated'),
+              error: t('settlementsAllocateSettlementModal.refused'),
+            }}
             disabled={filled.length === 0 || over}
             onAction={submit}
           />
@@ -101,26 +108,29 @@ export function AllocateSettlementModal({
     >
       <div className="mk-stack">
         <div className="mk-subject">
-          <span className="mk-subject__label">Payout</span>
+          <span className="mk-subject__label">
+            {t('settlementsAllocateSettlementModal.payout')}
+          </span>
           <span className="mk-subject__main">
             <Ident value={reference} />
           </span>
           <span className="mk-small">
-            Left to allocate: <Money amount={unallocatedInr} />
+            {t('settlementsAllocateSettlementModal.leftToAllocate')}{' '}
+            <Money amount={unallocatedInr} />
           </span>
         </div>
 
         {lines.map((line, i) => (
           <div key={i} className="mk-line mk-line--2">
             <TextField
-              label="Order ID"
+              label={t('settlementsAllocateSettlementModal.orderId')}
               value={line.orderId}
               onChange={(e) => set(i, 'orderId', e.target.value)}
-              placeholder="Order UUID"
+              placeholder={t('settlementsAllocateSettlementModal.orderUuid')}
               inputClassName="sk-ident"
             />
             <TextField
-              label="Settled (INR)"
+              label={t('settlementsAllocateSettlementModal.settledInr')}
               value={line.settledInr}
               onChange={(e) => set(i, 'settledInr', e.target.value)}
               placeholder="0.00"
@@ -136,16 +146,11 @@ export function AllocateSettlementModal({
             icon={<Plus size={14} />}
             onClick={() => setLines((prev) => [...prev, { orderId: '', settledInr: '' }])}
           >
-            Add order
+            {t('settlementsAllocateSettlementModal.addOrder')}
           </Button>
         </div>
 
-        {over && (
-          <MkAlert>
-            You have named more than this payout has left. The server refuses this — record a
-            separate payout for cash that landed separately.
-          </MkAlert>
-        )}
+        {over && <MkAlert>{t('settlementsAllocateSettlementModal.youHaveNamedMoreThan')}</MkAlert>}
       </div>
     </Dialog>
   );

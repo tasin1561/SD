@@ -20,6 +20,8 @@ import {
   type AdminReattemptRequest,
 } from '@/lib/callcenter-hooks';
 import { AgeChip } from '../../orders/_components/order-ops-parts';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Sellers asking to ring a customer who declined.
@@ -29,6 +31,8 @@ import { AgeChip } from '../../orders/_components/order-ops-parts';
  * REJECTED_BY_CUSTOMER reachable — there is no other way back.
  */
 export function ReattemptRequestsIndex(): ReactElement {
+  const t = useT();
+
   const [status, setStatus] = useState('PENDING');
   const list = useReattemptRequests(status === '' ? undefined : status);
   const [deciding, setDeciding] = useState<{
@@ -39,39 +43,52 @@ export function ReattemptRequestsIndex(): ReactElement {
   return (
     <div className="oo-page">
       <PageHeader
-        title="Re-attempt requests"
-        subtitle="Clients asking us to call a customer who declined. Read the reason before approving — the customer already said no once."
+        title={t('reattemptRequestsReattemptRequestsIndex.reAttemptRequests')}
+        subtitle={t('reattemptRequestsReattemptRequestsIndex.clientsAskingUsToCall')}
       />
 
       <FilterBar activeCount={status === 'PENDING' ? 0 : 1}>
         <FilterField>
           <Select
             id="ra-status"
-            label="Status"
+            label={t('reattemptRequestsReattemptRequestsIndex.status')}
             value={status}
             onChange={(e) => setStatus(e.target.value)}
           >
-            <option value="PENDING">Waiting for a decision</option>
-            <option value="APPROVED">Approved</option>
-            <option value="REJECTED">Declined</option>
-            <option value="">All</option>
+            <option value="PENDING">
+              {t('reattemptRequestsReattemptRequestsIndex.waitingForADecision')}
+            </option>
+            <option value="APPROVED">
+              {t('reattemptRequestsReattemptRequestsIndex.approved')}
+            </option>
+            <option value="REJECTED">
+              {t('reattemptRequestsReattemptRequestsIndex.declined')}
+            </option>
+            <option value="">{t('reattemptRequestsReattemptRequestsIndex.all')}</option>
           </Select>
         </FilterField>
       </FilterBar>
 
       {list.isLoading ? (
-        <SkeletonRows rows={3} cols={3} label="Loading requests…" />
+        <SkeletonRows
+          rows={3}
+          cols={3}
+          label={t('reattemptRequestsReattemptRequestsIndex.loadingRequests')}
+        />
       ) : list.error !== null ? (
         <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : (list.data ?? []).length === 0 ? (
         <EmptyState
           tone={status === 'PENDING' ? 'positive' : 'neutral'}
           icon={<PhoneCall size={20} />}
-          title="Nothing waiting"
-          description="When a client asks us to call a customer who declined, it lands here."
+          title={t('reattemptRequestsReattemptRequestsIndex.nothingWaiting')}
+          description={t('reattemptRequestsReattemptRequestsIndex.whenAClientAsksUs')}
         />
       ) : (
-        <ul className="oo-queue" aria-label="Re-attempt requests">
+        <ul
+          className="oo-queue"
+          aria-label={t('reattemptRequestsReattemptRequestsIndex.reAttemptRequests')}
+        >
           {(list.data ?? []).map((r) => (
             <li
               key={r.id}
@@ -98,8 +115,10 @@ export function ReattemptRequestsIndex(): ReactElement {
                     }
                     label={r.status.toLowerCase()}
                   />
-                  <AgeChip title="When the client asked">
-                    asked {new Date(r.createdAt).toLocaleString('en-IN')}
+                  <AgeChip title={t('reattemptRequestsReattemptRequestsIndex.whenTheClientAsked')}>
+                    {t('reattemptRequestsReattemptRequestsIndex.asked', {
+                      value: new Date(r.createdAt).toLocaleString('en-IN'),
+                    })}
                   </AgeChip>
                 </div>
               </div>
@@ -110,15 +129,27 @@ export function ReattemptRequestsIndex(): ReactElement {
 
               {r.status === 'APPROVED' && r.extraAttempts > 0 && (
                 <p className="oo-p">
-                  <span className="oo-faint">Granted:</span>{' '}
-                  <span className="sk-figure">{r.extraAttempts}</span> extra{' '}
-                  {r.extraAttempts === 1 ? 'call' : 'calls'}
+                  {richMessage(t('reattemptRequestsReattemptRequestsIndex.extra'), {
+                    span: (
+                      <span className="oo-faint">
+                        {t('reattemptRequestsReattemptRequestsIndex.granted')}
+                      </span>
+                    ),
+                    span2: <span className="sk-figure">{r.extraAttempts}</span>,
+                    value:
+                      r.extraAttempts === 1
+                        ? t('reattemptRequestsReattemptRequestsIndex.call')
+                        : t('reattemptRequestsReattemptRequestsIndex.calls'),
+                  })}
                 </p>
               )}
 
               {r.decisionNote !== null && r.decisionNote !== '' && (
                 <p className="oo-p">
-                  <span className="oo-faint">Decision note:</span> {r.decisionNote}
+                  <span className="oo-faint">
+                    {t('reattemptRequestsReattemptRequestsIndex.decisionNote')}
+                  </span>{' '}
+                  {r.decisionNote}
                 </p>
               )}
 
@@ -129,14 +160,14 @@ export function ReattemptRequestsIndex(): ReactElement {
                     variant="primary"
                     onClick={() => setDeciding({ row: r, approve: true })}
                   >
-                    Approve — call again
+                    {t('reattemptRequestsReattemptRequestsIndex.approveCallAgain')}
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setDeciding({ row: r, approve: false })}
                   >
-                    Decline
+                    {t('reattemptRequestsReattemptRequestsIndex.decline')}
                   </Button>
                 </div>
               )}
@@ -157,6 +188,7 @@ function Decide({
   target: { row: AdminReattemptRequest; approve: boolean } | null;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const decide = useDecideReattempt();
   const [note, setNote] = useState('');
   const [extra, setExtra] = useState('1');
@@ -176,25 +208,28 @@ function Decide({
       }}
       title={
         target?.approve === true
-          ? 'Put this order back in the call queue?'
-          : 'Decline this request?'
+          ? t('reattemptRequestsReattemptRequestsIndex.putThisOrderBackIn')
+          : t('reattemptRequestsReattemptRequestsIndex.declineThisRequest')
       }
       description={
         target?.approve === true
-          ? 'The order returns to PENDING_CONFIRMATION and is queued for calling. Its attempt count is unchanged; choose how many extra calls to allow, or it comes back already at its cap.'
-          : 'The order stays rejected. The client can ask again if something changes.'
+          ? t('reattemptRequestsReattemptRequestsIndex.theOrderReturnsToPending')
+          : t('reattemptRequestsReattemptRequestsIndex.theOrderStaysRejectedThe')
       }
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={close}>
-            Cancel
+            {t('reattemptRequestsReattemptRequestsIndex.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
             labels={{
-              idle: target?.approve === true ? 'Approve' : 'Decline request',
-              busy: 'Saving…',
+              idle:
+                target?.approve === true
+                  ? t('reattemptRequestsReattemptRequestsIndex.approve')
+                  : t('reattemptRequestsReattemptRequestsIndex.declineRequest'),
+              busy: t('reattemptRequestsReattemptRequestsIndex.saving'),
             }}
             onAction={async () => {
               if (target !== null) {
@@ -215,20 +250,28 @@ function Decide({
         {target !== null && (
           <div className="oo-row">
             <span className="sk-ident oo-strong">{target.row.orderNumber ?? '—'}</span>
-            <span className="oo-muted">asked by the client</span>
+            <span className="oo-muted">
+              {t('reattemptRequestsReattemptRequestsIndex.askedByTheClient')}
+            </span>
           </div>
         )}
         {target?.approve === true && (
           <Select
             id="ra-extra"
-            label="Extra calls to allow"
-            hint="On top of the client's normal cap. One is usually right — an approval that grants none puts the order back already out of chances, so the first unanswered ring rejects it again."
+            label={t('reattemptRequestsReattemptRequestsIndex.extraCallsToAllow')}
+            hint={t('reattemptRequestsReattemptRequestsIndex.onTopOfTheClient')}
             value={extra}
             onChange={(e) => setExtra(e.target.value)}
           >
             {['1', '2', '3', '4', '5'].map((n) => (
               <option key={n} value={n}>
-                {n} more {n === '1' ? 'call' : 'calls'}
+                {t('reattemptRequestsReattemptRequestsIndex.more', {
+                  n,
+                  value:
+                    n === '1'
+                      ? t('reattemptRequestsReattemptRequestsIndex.call')
+                      : t('reattemptRequestsReattemptRequestsIndex.calls'),
+                })}
               </option>
             ))}
           </Select>
@@ -236,8 +279,8 @@ function Decide({
 
         <TextField
           id="ra-note"
-          label="Note"
-          hint="Optional — recorded with the decision."
+          label={t('reattemptRequestsReattemptRequestsIndex.note')}
+          hint={t('reattemptRequestsReattemptRequestsIndex.optionalRecordedWithTheDecision')}
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />

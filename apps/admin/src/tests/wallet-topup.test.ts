@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withCatalogEnglish } from './i18n-source';
 
 /**
  * Wallet top-up — the only way money enters a wallet other than COD.
@@ -104,14 +105,14 @@ describe('the admin side can actually accept one', () => {
   });
 
   it('accepting says plainly that it moves money', () => {
-    expect(src).toContain('Credit the wallet');
-    expect(src).toMatch(/adds the money to the client/);
+    expect(withCatalogEnglish(src)).toContain('Credit the wallet');
+    expect(withCatalogEnglish(src)).toMatch(/adds the money to the client/);
   });
 
   it('a rejection carries a reason the client can act on', () => {
     // The DTO requires ≥5 chars; mirrored so the operator is told first.
     expect(src).toContain('note.trim().length < 5');
-    expect(src).toContain('the client sees your reason');
+    expect(withCatalogEnglish(src)).toContain('the client sees your reason');
   });
 
   it('the receipt link is fetched on demand, not listed', () => {

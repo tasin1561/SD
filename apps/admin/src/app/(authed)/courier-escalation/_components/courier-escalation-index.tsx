@@ -36,6 +36,8 @@ import { usePermission } from '@/lib/use-permission';
 import { AfCard, AfSection, Notice } from '@/app/(authed)/system/_components/af-parts';
 import { EscalationTabs } from './escalation-tabs';
 import './escalation.css';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * The courier escalation console — the MANUAL consumer of the outbox.
@@ -53,6 +55,8 @@ import './escalation.css';
  * an item sent without pasting a ticket id, the reconciler puts it back.
  */
 export function CourierEscalationIndex(): ReactElement {
+  const t = useT();
+
   const toast = useToast();
   const outbox = useCourierOutbox();
   const channel = useCourierChannel();
@@ -80,8 +84,13 @@ export function CourierEscalationIndex(): ReactElement {
           ? // Without a read-back, "still unknown" is our own ignorance
             // rather than anything Delhivery told us — saying "0 confirmed"
             // would read as a finding.
-            'Could not read state back from Delhivery, so nothing could be confirmed either way.'
-          : `Examined ${r.examined}: ${r.confirmed} confirmed, ${r.returnedToQueue} back in the queue, ${r.stillUnknown} still unknown.`,
+            t('courierEscalationCourierEscalationIndex.couldNotReadStateBack')
+          : t('courierEscalationCourierEscalationIndex.examinedConfirmedBackInThe', {
+              examined: r.examined,
+              confirmed: r.confirmed,
+              returnedToQueue: r.returnedToQueue,
+              stillUnknown: r.stillUnknown,
+            }),
       );
     } catch (err) {
       toast.error(serverVerdict(err));
@@ -110,8 +119,8 @@ export function CourierEscalationIndex(): ReactElement {
 
   const copy = (text: string): void => {
     void navigator.clipboard.writeText(text).then(
-      () => toast.success('Copied'),
-      () => toast.error('Could not copy'),
+      () => toast.success(t('courierEscalationCourierEscalationIndex.copied')),
+      () => toast.error(t('courierEscalationCourierEscalationIndex.couldNotCopy')),
     );
   };
 
@@ -132,10 +141,13 @@ export function CourierEscalationIndex(): ReactElement {
     try {
       if (confirmChannel === 'resume') {
         await resume.mutateAsync();
-        toast.success('Channel resumed');
+        toast.success(t('courierEscalationCourierEscalationIndex.channelResumed'));
       } else {
-        await pause.mutateAsync({ minutes: 60, reason: 'Paused from the console' });
-        toast.success('Channel paused for 60 minutes');
+        await pause.mutateAsync({
+          minutes: 60,
+          reason: t('courierEscalationCourierEscalationIndex.pausedFromTheConsole'),
+        });
+        toast.success(t('courierEscalationCourierEscalationIndex.channelPausedFor60Minutes'));
       }
     } catch (err) {
       // FE-2: shown verbatim in the dialog, which stays open to retry.
@@ -149,32 +161,36 @@ export function CourierEscalationIndex(): ReactElement {
   return (
     <div className="af-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Network' }, { label: 'Courier escalation' }]}
+        breadcrumbs={[
+          { label: t('courierEscalationCourierEscalationIndex.network') },
+          { label: t('courierEscalationCourierEscalationIndex.courierEscalation') },
+        ]}
         Link={Link}
-        title="Courier escalation"
-        subtitle="Messages waiting to reach Delhivery, and the switch that decides who sends them."
+        title={t('courierEscalationCourierEscalationIndex.courierEscalation')}
+        subtitle={t('courierEscalationCourierEscalationIndex.messagesWaitingToReachDelhivery')}
       />
       <EscalationTabs />
 
       {noWriteChannel ? (
-        <Notice tone="warn" title="Delhivery has no ticket write API.">
+        <Notice
+          tone="warn"
+          title={t('courierEscalationCourierEscalationIndex.delhiveryHasNoTicketWrite')}
+        >
+          <p>{t('courierEscalationCourierEscalationIndex.mcpIsReadOnlyAnd')}</p>
           <p>
-            MCP is read-only and their notification emails do not accept replies, so nothing here
-            can be posted through an API — whatever the write mode says.
-          </p>
-          <p>
-            The browser channel can. It drives their own “Raise a ticket” form, and it is what
-            actually sends these. It ships withholding every click:{' '}
-            <Link href="/courier-escalation/portal" className="af-link">
-              Portal worker
-            </Link>{' '}
-            is where it is turned on, and off. Until it is LIVE, every message here needs a person.
+            {richMessage(t('courierEscalationCourierEscalationIndex.theBrowserChannelCanIt'), {
+              link: (
+                <Link href="/courier-escalation/portal" className="af-link">
+                  {t('courierEscalationCourierEscalationIndex.portalWorker')}
+                </Link>
+              ),
+            })}
           </p>
         </Notice>
       ) : null}
 
       <AfSection
-        title="Today"
+        title={t('courierEscalationCourierEscalationIndex.today')}
         action={
           canWrite ? (
             <AsyncButton
@@ -182,10 +198,10 @@ export function CourierEscalationIndex(): ReactElement {
               size="sm"
               icon={<RefreshCw size={14} />}
               labels={{
-                idle: 'Reconcile now',
-                busy: 'Reconciling…',
-                done: 'Reconciled',
-                error: 'Not reconciled',
+                idle: t('courierEscalationCourierEscalationIndex.reconcileNow'),
+                busy: t('courierEscalationCourierEscalationIndex.reconciling'),
+                done: t('courierEscalationCourierEscalationIndex.reconciled'),
+                error: t('courierEscalationCourierEscalationIndex.notReconciled'),
               }}
               disabled={reconcile.isPending}
               onAction={onReconcile}
@@ -195,35 +211,68 @@ export function CourierEscalationIndex(): ReactElement {
       >
         {/* The counts roll up once, when they first arrive. */}
         {counts === undefined ? (
-          <SkeletonRows rows={1} cols={5} label="Loading today's counts" />
+          <SkeletonRows
+            rows={1}
+            cols={5}
+            label={t('courierEscalationCourierEscalationIndex.loadingTodaySCounts')}
+          />
         ) : (
           <div className="af-kpis">
-            <KpiCard label="Waiting" value={counts.pending} tone="pending" />
-            <KpiCard label="In hand" value={counts.sending} tone="info" />
-            <KpiCard label="Unconfirmed" value={counts.sentUnconfirmed} />
-            <KpiCard label="Confirmed today" value={counts.confirmedToday} tone="credit" />
-            <KpiCard label="Failed today" value={counts.failedToday} tone="debit" />
+            <KpiCard
+              label={t('courierEscalationCourierEscalationIndex.waiting')}
+              value={counts.pending}
+              tone="pending"
+            />
+            <KpiCard
+              label={t('courierEscalationCourierEscalationIndex.inHand')}
+              value={counts.sending}
+              tone="info"
+            />
+            <KpiCard
+              label={t('courierEscalationCourierEscalationIndex.unconfirmed')}
+              value={counts.sentUnconfirmed}
+            />
+            <KpiCard
+              label={t('courierEscalationCourierEscalationIndex.confirmedToday')}
+              value={counts.confirmedToday}
+              tone="credit"
+            />
+            <KpiCard
+              label={t('courierEscalationCourierEscalationIndex.failedToday')}
+              value={counts.failedToday}
+              tone="debit"
+            />
           </div>
         )}
       </AfSection>
 
       <AfSection
-        title="Write channel"
-        note="What the operator chose, and what the system currently thinks of its own health. Two different things."
+        title={t('courierEscalationCourierEscalationIndex.writeChannel')}
+        note={t('courierEscalationCourierEscalationIndex.whatTheOperatorChoseAnd')}
       >
         <AfCard>
           <div className="ce-channel">
             <div className="af-mini">
-              <span className="af-mini__label">Mode</span>
+              <span className="af-mini__label">
+                {t('courierEscalationCourierEscalationIndex.mode')}
+              </span>
               <span className="af-mini__value">{settings?.writeMode ?? '—'}</span>
             </div>
             <div className="af-mini">
-              <span className="af-mini__label">Health</span>
+              <span className="af-mini__label">
+                {t('courierEscalationCourierEscalationIndex.health')}
+              </span>
               <span>
                 {settings?.effectivelyPaused === true ? (
-                  <StatusChip kind="failed" label="Paused" />
+                  <StatusChip
+                    kind="failed"
+                    label={t('courierEscalationCourierEscalationIndex.paused')}
+                  />
                 ) : canSendAtAll ? (
-                  <StatusChip kind="delivered" label="Running" />
+                  <StatusChip
+                    kind="delivered"
+                    label={t('courierEscalationCourierEscalationIndex.running')}
+                  />
                 ) : (
                   /*
                     "Running" was shown whenever the channel was not
@@ -239,15 +288,20 @@ export function CourierEscalationIndex(): ReactElement {
                     switches, so the chip makes it rather than leaving
                     it to be inferred.
                   */
-                  <StatusChip kind="pending" label="Nothing can send" />
+                  <StatusChip
+                    kind="pending"
+                    label={t('courierEscalationCourierEscalationIndex.nothingCanSend')}
+                  />
                 )}
               </span>
             </div>
             <div className="af-mini ce-channel__wide">
-              <span className="af-mini__label">Auto categories</span>
+              <span className="af-mini__label">
+                {t('courierEscalationCourierEscalationIndex.autoCategories')}
+              </span>
               <span className="af-body">
                 {settings?.autoCategories.length === 0
-                  ? 'None — nothing is actioned unattended'
+                  ? t('courierEscalationCourierEscalationIndex.noneNothingIsActionedUnattended')
                   : settings?.autoCategories.join(', ')}
               </span>
               {!canSendAtAll && (settings?.autoCategories.length ?? 0) > 0 && (
@@ -256,7 +310,7 @@ export function CourierEscalationIndex(): ReactElement {
                 // beside a green "Running" it looked like a list of
                 // things happening right now.
                 <span className="af-small">
-                  Listed for when a write channel exists. None of it is acting today.
+                  {t('courierEscalationCourierEscalationIndex.listedForWhenAWrite')}
                 </span>
               )}
             </div>
@@ -271,7 +325,7 @@ export function CourierEscalationIndex(): ReactElement {
                     setConfirmChannel('resume');
                   }}
                 >
-                  Resume
+                  {t('courierEscalationCourierEscalationIndex.resume')}
                 </Button>
               ) : (
                 <Button
@@ -283,22 +337,27 @@ export function CourierEscalationIndex(): ReactElement {
                     setConfirmChannel('pause');
                   }}
                 >
-                  Pause
+                  {t('courierEscalationCourierEscalationIndex.pause')}
                 </Button>
               )}
             </div>
           </div>
 
           {settings?.pauseReason != null ? (
-            <p className="af-muted">Paused because: {settings.pauseReason}</p>
+            <p className="af-muted">
+              {t('courierEscalationCourierEscalationIndex.pausedBecause', {
+                pauseReason: settings.pauseReason,
+              })}
+            </p>
           ) : null}
 
           <div className="af-divider">
             <p className="af-small ce-lock">
               <Lock size={13} aria-hidden />
               <span>
-                Human-only, always: {(channel.data?.lockedCategoryLabels ?? []).join(' · ') || '—'}.
-                These can never be added to the auto list.
+                {t('courierEscalationCourierEscalationIndex.humanOnlyAlwaysList', {
+                  categories: (channel.data?.lockedCategoryLabels ?? []).join(' · ') || '—',
+                })}
               </span>
             </p>
           </div>
@@ -306,27 +365,34 @@ export function CourierEscalationIndex(): ReactElement {
         {canWrite ? <ModeSwitch /> : null}
       </AfSection>
 
-      <AfSection title="Queue" note="Oldest first. Claim an item to hold it for ten minutes.">
+      <AfSection
+        title={t('courierEscalationCourierEscalationIndex.queue')}
+        note={t('courierEscalationCourierEscalationIndex.oldestFirstClaimAnItem')}
+      >
         {outbox.isLoading ? (
           <AfCard flush>
-            <SkeletonRows rows={4} cols={4} label="Loading the send queue" />
+            <SkeletonRows
+              rows={4}
+              cols={4}
+              label={t('courierEscalationCourierEscalationIndex.loadingTheSendQueue')}
+            />
           </AfCard>
         ) : outbox.isError ? (
           <ErrorState message={serverVerdict(outbox.error)} retry={() => void outbox.refetch()} />
         ) : rows.length === 0 ? (
           <EmptyState
             tone="positive"
-            title="Nothing waiting"
-            description="Messages arrive here when a client raises an issue or an NDR re-attempt could not be confirmed."
+            title={t('courierEscalationCourierEscalationIndex.nothingWaiting')}
+            description={t('courierEscalationCourierEscalationIndex.messagesArriveHereWhenA')}
           />
         ) : (
           <Table>
             <THead>
               <Tr>
-                <Th>Parcel</Th>
-                <Th>Message</Th>
-                <Th>Status</Th>
-                <Th>Actions</Th>
+                <Th>{t('courierEscalationCourierEscalationIndex.parcel')}</Th>
+                <Th>{t('courierEscalationCourierEscalationIndex.message')}</Th>
+                <Th>{t('courierEscalationCourierEscalationIndex.status')}</Th>
+                <Th>{t('courierEscalationCourierEscalationIndex.actions')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -334,7 +400,9 @@ export function CourierEscalationIndex(): ReactElement {
                 <Tr key={item.id}>
                   <Td>
                     <div className="af-stack af-stack--tight">
-                      <span className="af-strong sk-ident">{item.awbNumber ?? 'No AWB'}</span>
+                      <span className="af-strong sk-ident">
+                        {item.awbNumber ?? t('courierEscalationCourierEscalationIndex.noAwb')}
+                      </span>
                       <span className="af-small">
                         {item.courierName} · {item.sellerName ?? '—'}
                       </span>
@@ -345,8 +413,10 @@ export function CourierEscalationIndex(): ReactElement {
                         className="af-link af-small ce-ext"
                       >
                         {item.externalTicketId == null
-                          ? 'Raise a ticket'
-                          : `Ticket ${item.externalTicketId}`}
+                          ? t('courierEscalationCourierEscalationIndex.raiseATicket')
+                          : t('courierEscalationCourierEscalationIndex.ticket', {
+                              externalTicketId: item.externalTicketId,
+                            })}
                         <ExternalLink size={11} aria-hidden />
                       </a>
                       {item.supportPanelUrl !== null && item.supportPanelUrl !== item.deepLink ? (
@@ -356,13 +426,17 @@ export function CourierEscalationIndex(): ReactElement {
                           rel="noreferrer"
                           className="af-link af-small ce-ext"
                         >
-                          {item.courierName} support
+                          {t('courierEscalationCourierEscalationIndex.support', {
+                            courierName: item.courierName,
+                          })}
                           <ExternalLink size={11} aria-hidden />
                         </a>
                       ) : null}
                       <span className="af-small">
                         {item.supportEmail ??
-                          `No support email — set ${item.supportEmailSettingKey}`}
+                          t('courierEscalationCourierEscalationIndex.noSupportEmailSet', {
+                            supportEmailSettingKey: item.supportEmailSettingKey,
+                          })}
                       </span>
                     </div>
                   </Td>
@@ -380,7 +454,7 @@ export function CourierEscalationIndex(): ReactElement {
                           icon={<Copy size={13} />}
                           onClick={() => copy(item.body)}
                         >
-                          Copy
+                          {t('courierEscalationCourierEscalationIndex.copy')}
                         </Button>
                       </div>
                     </div>
@@ -405,22 +479,35 @@ export function CourierEscalationIndex(): ReactElement {
                   </Td>
                   <Td>
                     <div className="af-stack af-stack--tight ce-actions">
-                      {!canWrite ? <span className="af-small">View only</span> : null}
+                      {!canWrite ? (
+                        <span className="af-small">
+                          {t('courierEscalationCourierEscalationIndex.viewOnly')}
+                        </span>
+                      ) : null}
                       {canWrite && item.status === 'PENDING' ? (
                         <AsyncButton
                           variant="primary"
                           size="sm"
-                          labels={{ idle: 'Claim', busy: 'Claiming…', done: 'Claimed' }}
+                          labels={{
+                            idle: t('courierEscalationCourierEscalationIndex.claim'),
+                            busy: t('courierEscalationCourierEscalationIndex.claiming'),
+                            done: t('courierEscalationCourierEscalationIndex.claimed'),
+                          }}
                           onAction={() =>
-                            act(() => claim.mutateAsync(item.id), 'Claimed for 10 minutes')
+                            act(
+                              () => claim.mutateAsync(item.id),
+                              t('courierEscalationCourierEscalationIndex.claimedFor10Minutes'),
+                            )
                           }
                         />
                       ) : null}
                       {canWrite && item.status === 'SENDING' ? (
                         <>
                           <TextField
-                            label="Ticket ID"
-                            placeholder="Ticket ID (paste it here)"
+                            label={t('courierEscalationCourierEscalationIndex.ticketId')}
+                            placeholder={t(
+                              'courierEscalationCourierEscalationIndex.ticketIdPasteItHere',
+                            )}
                             value={ticketIds[item.id] ?? ''}
                             onChange={(e) =>
                               setTicketIds((s) => ({ ...s, [item.id]: e.target.value }))
@@ -429,7 +516,11 @@ export function CourierEscalationIndex(): ReactElement {
                           <AsyncButton
                             variant="primary"
                             size="sm"
-                            labels={{ idle: 'Mark sent', busy: 'Recording…', done: 'Recorded' }}
+                            labels={{
+                              idle: t('courierEscalationCourierEscalationIndex.markSent'),
+                              busy: t('courierEscalationCourierEscalationIndex.recording'),
+                              done: t('courierEscalationCourierEscalationIndex.recorded'),
+                            }}
                             onAction={() =>
                               act(
                                 () =>
@@ -443,16 +534,25 @@ export function CourierEscalationIndex(): ReactElement {
                                       externalTicketId?: string;
                                     }),
                                   }),
-                                'Recorded as sent — awaiting read-back',
+                                t(
+                                  'courierEscalationCourierEscalationIndex.recordedAsSentAwaitingRead',
+                                ),
                               )
                             }
                           />
                           <AsyncButton
                             variant="ghost"
                             size="sm"
-                            labels={{ idle: 'Give back', busy: 'Returning…', done: 'Returned' }}
+                            labels={{
+                              idle: t('courierEscalationCourierEscalationIndex.giveBack'),
+                              busy: t('courierEscalationCourierEscalationIndex.returning'),
+                              done: t('courierEscalationCourierEscalationIndex.returned'),
+                            }}
                             onAction={() =>
-                              act(() => release.mutateAsync(item.id), 'Returned to the queue')
+                              act(
+                                () => release.mutateAsync(item.id),
+                                t('courierEscalationCourierEscalationIndex.returnedToTheQueue'),
+                              )
                             }
                           />
                         </>
@@ -472,15 +572,21 @@ export function CourierEscalationIndex(): ReactElement {
           if (!o) setConfirmChannel(null);
         }}
         title={
-          confirmChannel === 'resume' ? 'Resume the write channel?' : 'Pause the write channel?'
+          confirmChannel === 'resume'
+            ? t('courierEscalationCourierEscalationIndex.resumeTheWriteChannel')
+            : t('courierEscalationCourierEscalationIndex.pauseTheWriteChannel')
         }
-        entity="Courier escalation write channel"
+        entity={t('courierEscalationCourierEscalationIndex.courierEscalationWriteChannel')}
         consequence={
           confirmChannel === 'resume'
-            ? 'Messages can leave the queue by the write mode again at once, without a person where the mode allows it.'
-            : 'For the next 60 minutes nothing leaves the queue on its own; every message waits for a person.'
+            ? t('courierEscalationCourierEscalationIndex.messagesCanLeaveTheQueue')
+            : t('courierEscalationCourierEscalationIndex.forTheNext60Minutes')
         }
-        confirmLabel={confirmChannel === 'resume' ? 'Resume' : 'Pause for 60 minutes'}
+        confirmLabel={
+          confirmChannel === 'resume'
+            ? t('courierEscalationCourierEscalationIndex.resume')
+            : t('courierEscalationCourierEscalationIndex.pauseFor60Minutes')
+        }
         destructive={confirmChannel === 'pause'}
         error={channelError}
         onConfirm={onChannelConfirm}
@@ -497,6 +603,7 @@ export function CourierEscalationIndex(): ReactElement {
  * and the mailbox is what proves the session belongs to them.
  */
 function ModeSwitch(): ReactElement {
+  const t = useT();
   const toast = useToast();
   const request = useRequestModeChange();
   const confirm = useConfirmModeChange();
@@ -534,7 +641,7 @@ function ModeSwitch(): ReactElement {
         reason,
       });
       setChallengeId(r.challengeId);
-      toast.success('Code sent to your email');
+      toast.success(t('courierEscalationCourierEscalationIndex.codeSentToYourEmail'));
     } catch (err) {
       toast.error(serverVerdict(err));
       throw err;
@@ -548,7 +655,7 @@ function ModeSwitch(): ReactElement {
       setChallengeId(null);
       setCode('');
       setReason('');
-      toast.success('Write mode changed');
+      toast.success(t('courierEscalationCourierEscalationIndex.writeModeChanged'));
     } catch (err) {
       toast.error(serverVerdict(err));
       throw err;
@@ -557,19 +664,33 @@ function ModeSwitch(): ReactElement {
 
   return (
     <AfCard>
-      <h3 className="af-card__title">Change the write mode</h3>
+      <h3 className="af-card__title">
+        {t('courierEscalationCourierEscalationIndex.changeTheWriteMode')}
+      </h3>
       {challengeId === null ? (
         <div className="af-form">
-          <Select label="Write mode" value={mode} onChange={(e) => setMode(e.target.value)}>
-            <option value="MANUAL">MANUAL — everything to this queue</option>
-            <option value="SUPERVISED">SUPERVISED — prepared, held for approval</option>
-            <option value="AUTO">AUTO — unattended, except locked categories</option>
+          <Select
+            label={t('courierEscalationCourierEscalationIndex.writeMode')}
+            value={mode}
+            onChange={(e) => setMode(e.target.value)}
+          >
+            <option value="MANUAL">
+              {t('courierEscalationCourierEscalationIndex.manualEverythingToThisQueue')}
+            </option>
+            <option value="SUPERVISED">
+              {t('courierEscalationCourierEscalationIndex.supervisedPreparedHeldForApproval')}
+            </option>
+            <option value="AUTO">
+              {t('courierEscalationCourierEscalationIndex.autoUnattendedExceptLockedCategories')}
+            </option>
           </Select>
           {mode === 'AUTO' ? (
             <div className="af-inner">
-              <p className="af-title">Which categories may go unattended</p>
+              <p className="af-title">
+                {t('courierEscalationCourierEscalationIndex.whichCategoriesMayGoUnattended')}
+              </p>
               <p className="af-small">
-                Anything not ticked still goes to the queue for a person, even in AUTO.
+                {t('courierEscalationCourierEscalationIndex.anythingNotTickedStillGoes')}
               </p>
               <div className="af-scroll af-stack af-stack--tight">
                 {selectable.map((c) => (
@@ -589,9 +710,9 @@ function ModeSwitch(): ReactElement {
             </div>
           ) : null}
           <TextArea
-            label="Why"
+            label={t('courierEscalationCourierEscalationIndex.why')}
             rows={2}
-            placeholder="Why (at least 30 characters — this goes in the audit log)"
+            placeholder={t('courierEscalationCourierEscalationIndex.whyAtLeast30Characters')}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
           />
@@ -600,10 +721,10 @@ function ModeSwitch(): ReactElement {
               variant="primary"
               size="sm"
               labels={{
-                idle: 'Send confirmation code',
-                busy: 'Sending…',
-                done: 'Code sent',
-                error: 'Not sent',
+                idle: t('courierEscalationCourierEscalationIndex.sendConfirmationCode'),
+                busy: t('courierEscalationCourierEscalationIndex.sending'),
+                done: t('courierEscalationCourierEscalationIndex.codeSent'),
+                error: t('courierEscalationCourierEscalationIndex.notSent'),
               }}
               onAction={sendCode}
             />
@@ -611,10 +732,12 @@ function ModeSwitch(): ReactElement {
         </div>
       ) : (
         <div className="af-form">
-          <p className="af-muted">A six-digit code was emailed to you. It expires in 10 minutes.</p>
+          <p className="af-muted">
+            {t('courierEscalationCourierEscalationIndex.aSixDigitCodeWas')}
+          </p>
           <SegmentedCode
             length={6}
-            label="Six-digit code"
+            label={t('courierEscalationCourierEscalationIndex.sixDigitCode')}
             value={code}
             onChange={setCode}
             autoFocus
@@ -623,11 +746,16 @@ function ModeSwitch(): ReactElement {
             <AsyncButton
               variant="primary"
               size="sm"
-              labels={{ idle: 'Confirm', busy: 'Confirming…', done: 'Changed', error: 'Refused' }}
+              labels={{
+                idle: t('courierEscalationCourierEscalationIndex.confirm'),
+                busy: t('courierEscalationCourierEscalationIndex.confirming'),
+                done: t('courierEscalationCourierEscalationIndex.changed'),
+                error: t('courierEscalationCourierEscalationIndex.refused'),
+              }}
               onAction={confirmCode}
             />
             <Button variant="ghost" size="sm" onClick={() => setChallengeId(null)}>
-              Cancel
+              {t('courierEscalationCourierEscalationIndex.cancel')}
             </Button>
           </div>
         </div>

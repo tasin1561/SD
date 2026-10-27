@@ -10,6 +10,7 @@ import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
 import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { AcAlert, AcDl, phaseOf } from '../../settings/_components/ac-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * Correct the company name / phone a seller was APPROVED under.
@@ -45,6 +46,7 @@ export function IdentityCorrectionPanel({
   readonly currentCompanyName: string;
   readonly currentPhone: string;
 }): ReactElement {
+  const t = useT();
   const canCorrect = usePermission('sellers.approve');
   const correct = useUpdateSellerIdentity(sellerId);
 
@@ -86,7 +88,7 @@ export function IdentityCorrectionPanel({
       });
       close();
     } catch (err) {
-      setError(serverVerdict(err, 'Failed to correct the client identity.'));
+      setError(serverVerdict(err, t('sellersIdentityCorrectionPanel.failedToCorrectTheClient')));
     }
   }
 
@@ -94,8 +96,11 @@ export function IdentityCorrectionPanel({
     <>
       <AcDl
         items={[
-          { label: 'Company name', value: currentCompanyName },
-          { label: 'Phone', value: <span className="sk-figure">{currentPhone}</span> },
+          { label: t('sellersIdentityCorrectionPanel.companyName'), value: currentCompanyName },
+          {
+            label: t('sellersIdentityCorrectionPanel.phone'),
+            value: <span className="sk-figure">{currentPhone}</span>,
+          },
         ]}
       />
 
@@ -106,17 +111,18 @@ export function IdentityCorrectionPanel({
           icon={<PencilLine size={15} />}
           disabled={!canCorrect || correct.isPending}
           onClick={openPanel}
-          title={!canCorrect ? "Requires the 'sellers.approve' permission" : undefined}
+          title={
+            !canCorrect
+              ? t('sellersIdentityCorrectionPanel.requiresTheSellersApprovePermission')
+              : undefined
+          }
         >
-          Correct these details…
+          {t('sellersIdentityCorrectionPanel.correctTheseDetails')}
         </Button>
       </div>
 
       {!canCorrect && (
-        <p className="ac-faint">
-          Your role can&apos;t correct an approved identity. Ask a super-admin if a client has
-          reported one of these is wrong.
-        </p>
+        <p className="ac-faint">{t('sellersIdentityCorrectionPanel.yourRoleCanTCorrect')}</p>
       )}
 
       <Dialog
@@ -124,21 +130,25 @@ export function IdentityCorrectionPanel({
         onOpenChange={(o) => {
           if (!o) close();
         }}
-        title="Correct this client's identity"
-        description="Use this when the approved details are wrong — a mistyped company name, a phone number captured incorrectly at registration. It corrects the record; it does not move the account to a different business."
+        title={t('sellersIdentityCorrectionPanel.correctThisClientSIdentity')}
+        description={t('sellersIdentityCorrectionPanel.useThisWhenTheApproved')}
         icon={<PencilLine size={18} />}
         size="lg"
         locked={correct.isPending}
         footer={
           <DialogFooter>
             <Button variant="ghost" size="md" onClick={close} disabled={correct.isPending}>
-              Cancel
+              {t('sellersIdentityCorrectionPanel.cancel')}
             </Button>
             <AsyncButton
               variant="primary"
               size="md"
               state={phaseOf(correct.isPending, error)}
-              labels={{ idle: 'Apply correction', busy: 'Correcting…', error: 'Not applied' }}
+              labels={{
+                idle: t('sellersIdentityCorrectionPanel.applyCorrection'),
+                busy: t('sellersIdentityCorrectionPanel.correcting'),
+                error: t('sellersIdentityCorrectionPanel.notApplied'),
+              }}
               // The ONLY client-side block: a reason that is blank or all
               // whitespace. Everything else — length, phone shape, whether
               // anything changed — is the server's to refuse.
@@ -152,9 +162,9 @@ export function IdentityCorrectionPanel({
       >
         <div className="ac-form">
           <TextField
-            label="Company name"
+            label={t('sellersIdentityCorrectionPanel.companyName')}
             id="identity-company-name"
-            hint="As approved. Leave it exactly as it is if only the phone is wrong."
+            hint={t('sellersIdentityCorrectionPanel.asApprovedLeaveItExactly')}
             value={companyName}
             onChange={(e) => setCompanyName(e.target.value)}
             maxLength={120}
@@ -162,9 +172,9 @@ export function IdentityCorrectionPanel({
           />
 
           <TextField
-            label="Phone"
+            label={t('sellersIdentityCorrectionPanel.phone')}
             id="identity-phone"
-            hint="Bangladesh number in E.164 — starts +880, digits only after it."
+            hint={t('sellersIdentityCorrectionPanel.bangladeshNumberInE164')}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             inputClassName="sk-figure"
@@ -172,14 +182,14 @@ export function IdentityCorrectionPanel({
           />
 
           <TextArea
-            label="Reason for the correction (required)"
+            label={t('sellersIdentityCorrectionPanel.reasonForTheCorrectionRequired')}
             id="identity-reason"
-            hint="This is the only record of why an approved identity changed. Whoever reads the audit row in six months has nothing else to go on — say what was wrong and who asked for it. At least 20 characters."
+            hint={t('sellersIdentityCorrectionPanel.thisIsTheOnlyRecord')}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             maxLength={500}
             rows={4}
-            placeholder="e.g. Client emailed 2026-08-14: trade licence reads “Nabeela Traders”, registered here as “Nabila Traders”. Corrected to match the licence."
+            placeholder={t('sellersIdentityCorrectionPanel.eGClientEmailed2026')}
             disabled={correct.isPending}
           />
 

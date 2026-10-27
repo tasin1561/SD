@@ -14,6 +14,7 @@ import { usePayForwarder, useSetFreightOurCost, type FreightChargeView } from '@
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { useT } from '@/i18n/client';
 
 /**
  * What the FORWARDER charged us, against what we billed the seller.
@@ -38,6 +39,7 @@ import { usePermission } from '@/lib/use-permission';
  * measured", it cannot say "measured, but made up".
  */
 export function OurCostCell({ row }: { readonly row: FreightChargeView }): ReactElement {
+  const t = useT();
   // Read here rather than threaded down: the gate is cosmetic (FE-2 —
   // the server is the boundary), and a prop through every row exists
   // only to be forgotten on the next one added.
@@ -56,19 +58,19 @@ export function OurCostCell({ row }: { readonly row: FreightChargeView }): React
                 consignment read as pure profit, and nothing else on the
                 page says so. */}
             <Button size="sm" icon={<Banknote size={14} />} onClick={() => setPayOpen(true)}>
-              Record payment
+              {t('freightOurCostCell.recordPayment')}
             </Button>
             <button
               type="button"
               className="mk-inline-link mk-small"
               onClick={() => setCostOpen(true)}
             >
-              cost only, not paid yet
+              {t('freightOurCostCell.costOnlyNotPaidYet')}
             </button>
           </div>
         ) : (
           <span className="mk-text mk-small" data-tone="warn">
-            Not recorded
+            {t('freightOurCostCell.notRecorded')}
           </span>
         )
       ) : (
@@ -84,7 +86,7 @@ export function OurCostCell({ row }: { readonly row: FreightChargeView }): React
               <span
                 className="mk-text mk-small"
                 data-tone={margin < 0 ? 'critical' : undefined}
-                title="What we billed the client, less what the forwarder charged us"
+                title={t('freightOurCostCell.whatWeBilledTheClient')}
               >
                 <Money
                   amount={margin}
@@ -102,7 +104,7 @@ export function OurCostCell({ row }: { readonly row: FreightChargeView }): React
               className="mk-inline-link mk-small"
               onClick={() => setPayOpen(true)}
             >
-              record a payment
+              {t('freightOurCostCell.recordAPayment')}
             </button>
           )}
         </div>
@@ -122,6 +124,7 @@ function CostOnlyModal({
   readonly row: FreightChargeView;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const set = useSetFreightOurCost();
   const [value, setValue] = useState(row.ourCostInr ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +132,7 @@ function CostOnlyModal({
   async function save(): Promise<void> {
     setError(null);
     if (value.trim() === '' || Number.isNaN(Number(value))) {
-      setError('Enter what the forwarder charged, in INR');
+      setError(t('freightOurCostCell.enterWhatTheForwarderCharged'));
       // Rejected, so the button says it did not save.
       throw new Error('invalid');
     }
@@ -149,15 +152,20 @@ function CostOnlyModal({
         if (!next) onClose();
       }}
       locked={set.isPending}
-      title="What did the forwarder charge us?"
-      description="The cost only — no money is recorded as leaving any account. Use this when their invoice has arrived but has not been paid; record the payment itself when it goes out, so the cash and the cost stay together."
+      title={t('freightOurCostCell.whatDidTheForwarderCharge')}
+      description={t('freightOurCostCell.theCostOnlyNoMoney')}
       footer={
         <DialogFooter>
           <Button variant="secondary" onClick={onClose} disabled={set.isPending}>
-            Cancel
+            {t('freightOurCostCell.cancel')}
           </Button>
           <AsyncButton
-            labels={{ idle: 'Save', busy: 'Saving…', done: 'Saved', error: 'Refused' }}
+            labels={{
+              idle: t('freightOurCostCell.save'),
+              busy: t('freightOurCostCell.saving'),
+              done: t('freightOurCostCell.saved'),
+              error: t('freightOurCostCell.refused'),
+            }}
             onAction={save}
           />
         </DialogFooter>
@@ -165,7 +173,7 @@ function CostOnlyModal({
     >
       <div className="mk-stack">
         <TextField
-          label="Forwarder's charge (INR)"
+          label={t('freightOurCostCell.forwarderSChargeInr')}
           type="number"
           step="0.01"
           min="0"
@@ -175,7 +183,7 @@ function CostOnlyModal({
           autoFocus
         />
         <p className="mk-small">
-          Billed to the client: <Money amount={row.totalInr} />
+          {t('freightOurCostCell.billedToTheClient')} <Money amount={row.totalInr} />
         </p>
         {error !== null && <MkAlert>{error}</MkAlert>}
       </div>
@@ -191,6 +199,7 @@ function PayForwarderModal({
   readonly row: FreightChargeView;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const pay = usePayForwarder();
   const banks = usePlatformBankAccounts(usePermission('money.view'));
   const [bankAccountId, setBankAccountId] = useState('');
@@ -212,7 +221,7 @@ function PayForwarderModal({
   async function save(): Promise<void> {
     setError(null);
     if (bankAccountId === '' || amountPaid.trim() === '' || Number.isNaN(Number(amountPaid))) {
-      setError('Choose the account and enter what was paid');
+      setError(t('freightOurCostCell.chooseTheAccountAndEnter'));
       // Rejected, so the button says it did not save.
       throw new Error('invalid');
     }
@@ -239,19 +248,19 @@ function PayForwarderModal({
         if (!next) onClose();
       }}
       locked={pay.isPending}
-      title="Pay the forwarder"
-      description="Records the money leaving the account AND attributes it to this consignment, in one step. Our cost for the consignment becomes the sum of every payment against it. Recording it as a loose expense instead would count the same cost twice in the P&L."
+      title={t('freightOurCostCell.payTheForwarder')}
+      description={t('freightOurCostCell.recordsTheMoneyLeavingThe')}
       footer={
         <DialogFooter>
           <Button variant="secondary" onClick={onClose} disabled={pay.isPending}>
-            Cancel
+            {t('freightOurCostCell.cancel')}
           </Button>
           <AsyncButton
             labels={{
-              idle: 'Record the payment',
-              busy: 'Recording…',
-              done: 'Recorded',
-              error: 'Refused',
+              idle: t('freightOurCostCell.recordThePayment'),
+              busy: t('freightOurCostCell.recording'),
+              done: t('freightOurCostCell.recorded'),
+              error: t('freightOurCostCell.refused'),
             }}
             onAction={save}
           />
@@ -260,12 +269,12 @@ function PayForwarderModal({
     >
       <div className="mk-stack">
         <Select
-          label="Paid from"
+          label={t('freightOurCostCell.paidFrom')}
           requiredMark
           value={bankAccountId}
           onChange={(e) => setBankAccountId(e.target.value)}
         >
-          <option value="">Choose an account…</option>
+          <option value="">{t('freightOurCostCell.chooseAnAccount')}</option>
           {accounts.map((b) => (
             <option key={b.id} value={b.id}>
               {b.label} · {b.bankName} · {b.currency}
@@ -274,12 +283,14 @@ function PayForwarderModal({
         </Select>
         <div className="mk-form mk-form--2">
           <TextField
-            label={`Amount paid${account === undefined ? '' : ` (${account.currency})`}`}
+            label={t('freightOurCostCell.amountPaid', {
+              value: account === undefined ? '' : ` (${account.currency})`,
+            })}
             requiredMark
             hint={
               crossCurrency
-                ? 'What actually left that account, in its own currency. It is priced in rupees at the rate recorded for the payment date.'
-                : 'What left the account'
+                ? t('freightOurCostCell.whatActuallyLeftThatAccount')
+                : t('freightOurCostCell.whatLeftTheAccount')
             }
             type="number"
             step="0.01"
@@ -290,15 +301,15 @@ function PayForwarderModal({
             autoFocus
           />
           <DateField
-            label="Date paid"
+            label={t('freightOurCostCell.datePaid')}
             requiredMark
             value={occurredAt}
             onChange={(e) => setOccurredAt(e.target.value)}
           />
         </div>
         <TextField
-          label="Reference"
-          hint="Their invoice number or the bank's transaction id"
+          label={t('freightOurCostCell.reference')}
+          hint={t('freightOurCostCell.theirInvoiceNumberOrThe')}
           value={reference}
           onChange={(e) => setReference(e.target.value)}
           inputClassName="sk-ident"
@@ -306,14 +317,14 @@ function PayForwarderModal({
         <MkDl
           items={[
             {
-              label: 'Billed to the client for this consignment',
+              label: t('freightOurCostCell.billedToTheClientFor'),
               value: <Money amount={row.totalInr} />,
             },
             ...(row.ourCostInr === null
               ? []
               : [
                   {
-                    label: 'Paid to the forwarder so far',
+                    label: t('freightOurCostCell.paidToTheForwarderSo'),
                     value: <Money amount={row.ourCostInr} />,
                   },
                 ]),

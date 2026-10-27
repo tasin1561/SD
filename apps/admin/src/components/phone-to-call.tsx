@@ -2,6 +2,7 @@
 
 import { useState, type ReactElement } from 'react';
 import { Check, Copy } from 'lucide-react';
+import { useT } from '@/i18n/client';
 
 /**
  * The number the agent is about to dial.
@@ -23,6 +24,7 @@ export function PhoneToCall({
   readonly phone: string;
   readonly altPhone?: string | null;
 }): ReactElement {
+  const t = useT();
   const [copied, setCopied] = useState<string | null>(null);
 
   async function copy(value: string): Promise<void> {
@@ -38,6 +40,7 @@ export function PhoneToCall({
   }
 
   function Row({ value, label }: { value: string; label?: string }): ReactElement {
+    const t = useT();
     return (
       <div className="flex items-center gap-2">
         <a
@@ -51,12 +54,15 @@ export function PhoneToCall({
           type="button"
           onClick={() => void copy(value)}
           className="text-text-muted hover:text-text-bright inline-flex items-center gap-1 rounded-[4px] px-1.5 py-1 text-xs"
-          aria-label={`Copy ${label ?? 'phone number'} ${value}`}
+          aria-label={t('phoneToCall.copy', {
+            value: label ?? t('phoneToCall.phoneNumber'),
+            value2: value,
+          })}
         >
           {copied === value ? (
             <>
               <Check className="h-3.5 w-3.5" aria-hidden />
-              Copied
+              {t('phoneToCall.copied')}
             </>
           ) : (
             <Copy className="h-3.5 w-3.5" aria-hidden />
@@ -68,7 +74,9 @@ export function PhoneToCall({
 
   return (
     <div className="border-accent/40 bg-accent/5 rounded-[6px] border px-3 py-2">
-      <div className="text-text-faint mb-0.5 text-[11px] tracking-wide uppercase">Call</div>
+      <div className="text-text-faint mb-0.5 text-[11px] tracking-wide uppercase">
+        {t('phoneToCall.call')}
+      </div>
       <Row value={phone} />
       {altPhone !== null && altPhone !== '' && <Row value={altPhone} label="alt" />}
     </div>

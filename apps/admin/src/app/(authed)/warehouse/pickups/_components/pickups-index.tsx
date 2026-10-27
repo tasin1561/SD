@@ -36,6 +36,7 @@ import {
   Stack,
   mutationPhase,
 } from '../../../inventory/_components/stock-kit';
+import { useT } from '@/i18n/client';
 
 const MIN_RELEASE_REASON = 10;
 
@@ -61,6 +62,7 @@ function pickupKind(status: PickupRequestView['status']): StatusKind {
  * thinks in parcels will otherwise raise one per parcel.
  */
 export function PickupsIndex(): ReactElement {
+  const t = useT();
   const [raising, setRaising] = useState(false);
   const list = usePickupRequests();
   const rows = list.data ?? [];
@@ -68,9 +70,12 @@ export function PickupsIndex(): ReactElement {
   return (
     <AreaPage>
       <PageHeader
-        breadcrumbs={[{ label: 'Warehouse', href: '/warehouse' }, { label: 'Pickups' }]}
-        title="Pickups"
-        subtitle="One request per warehouse per day covers the whole handover — not one per parcel. Raise it when the parcels are packed and ready to hand over."
+        breadcrumbs={[
+          { label: t('warehousePickupsPickupsIndex.warehouse'), href: '/warehouse' },
+          { label: t('warehousePickupsPickupsIndex.pickups') },
+        ]}
+        title={t('warehousePickupsPickupsIndex.pickups')}
+        subtitle={t('warehousePickupsPickupsIndex.oneRequestPerWarehousePer')}
         action={
           <Button
             variant="primary"
@@ -78,7 +83,7 @@ export function PickupsIndex(): ReactElement {
             icon={<Truck size={16} />}
             onClick={() => setRaising(true)}
           >
-            Request a pickup
+            {t('warehousePickupsPickupsIndex.requestAPickup')}
           </Button>
         }
       />
@@ -89,11 +94,11 @@ export function PickupsIndex(): ReactElement {
         <SkeletonRows rows={4} cols={6} />
       ) : rows.length === 0 ? (
         <EmptyState
-          title="No pickups requested"
-          description="Once the day's parcels are packed, raise one request for the warehouse and the courier sends a van."
+          title={t('warehousePickupsPickupsIndex.noPickupsRequested')}
+          description={t('warehousePickupsPickupsIndex.onceTheDaySParcels')}
           action={
             <Button variant="primary" size="sm" onClick={() => setRaising(true)}>
-              Request a pickup
+              {t('warehousePickupsPickupsIndex.requestAPickup')}
             </Button>
           }
         />
@@ -101,12 +106,12 @@ export function PickupsIndex(): ReactElement {
         <Table>
           <THead>
             <Tr>
-              <Th>Date</Th>
-              <Th>Warehouse</Th>
-              <Th>Time</Th>
-              <Th align="right">Parcels</Th>
-              <Th>Status</Th>
-              <Th align="right">Actions</Th>
+              <Th>{t('warehousePickupsPickupsIndex.date')}</Th>
+              <Th>{t('warehousePickupsPickupsIndex.warehouse')}</Th>
+              <Th>{t('warehousePickupsPickupsIndex.time')}</Th>
+              <Th align="right">{t('warehousePickupsPickupsIndex.parcels')}</Th>
+              <Th>{t('warehousePickupsPickupsIndex.status')}</Th>
+              <Th align="right">{t('warehousePickupsPickupsIndex.actions')}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -118,11 +123,7 @@ export function PickupsIndex(): ReactElement {
       )}
 
       <Panel>
-        <Note>
-          The courier accepts only one open request per location per day. A failed attempt keeps the
-          day claimed on purpose — when a call fails we cannot tell whether they registered it, and
-          assuming they did not is how two vans arrive. Free it only after checking their panel.
-        </Note>
+        <Note>{t('warehousePickupsPickupsIndex.theCourierAcceptsOnlyOne')}</Note>
       </Panel>
 
       <RaisePickupModal open={raising} onOpenChange={setRaising} />
@@ -131,6 +132,7 @@ export function PickupsIndex(): ReactElement {
 }
 
 function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const close = useClosePickup();
   const release = useReleasePickupDay();
@@ -144,7 +146,11 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
   async function mark(status: 'CLOSED' | 'CANCELLED'): Promise<void> {
     try {
       await close.mutateAsync({ requestId: row.id, status });
-      toast.success(status === 'CLOSED' ? 'Marked collected.' : 'Called off.');
+      toast.success(
+        status === 'CLOSED'
+          ? t('warehousePickupsPickupsIndex.markedCollected')
+          : t('warehousePickupsPickupsIndex.calledOff'),
+      );
     } catch (err) {
       toast.error(serverVerdict(err));
     }
@@ -154,7 +160,7 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
     setError(null);
     try {
       await release.mutateAsync({ requestId: row.id, reason: reason.trim() });
-      toast.success('Day freed. A new request can be raised for it.');
+      toast.success(t('warehousePickupsPickupsIndex.dayFreedANewRequest'));
       setReleasing(false);
       setReason('');
     } catch (err) {
@@ -169,7 +175,9 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
       </Td>
       <Td>
         {row.warehouseName ?? <Ident value={row.warehouseId.slice(0, 8)} />}
-        <span className="stk-sub">as &ldquo;{row.pickupLocationName}&rdquo;</span>
+        <span className="stk-sub">
+          {t('warehousePickupsPickupsIndex.as', { pickupLocationName: row.pickupLocationName })}
+        </span>
       </Td>
       <Td className="stk-muted stk-nowrap sk-figure">{row.pickupTime}</Td>
       <Td align="right" className="sk-figure">
@@ -193,7 +201,7 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
                 disabled={close.isPending}
                 onClick={() => void mark('CLOSED')}
               >
-                Collected
+                {t('warehousePickupsPickupsIndex.collected')}
               </Button>
               <Button
                 variant="ghost"
@@ -201,13 +209,13 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
                 disabled={close.isPending}
                 onClick={() => void mark('CANCELLED')}
               >
-                Call off
+                {t('warehousePickupsPickupsIndex.callOff')}
               </Button>
             </>
           )}
           {releasable && (
             <Button variant="ghost" size="sm" onClick={() => setReleasing(true)}>
-              Free the day
+              {t('warehousePickupsPickupsIndex.freeTheDay')}
             </Button>
           )}
           {!openRequest && !releasable && <span className="stk-faint">—</span>}
@@ -221,18 +229,21 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
           }}
           size="md"
           tone="critical"
-          title="Free this day for a new request?"
-          description="Only after confirming in the courier's panel that no request exists for this warehouse on this date. If one does, freeing the slot books a second van against a live request."
+          title={t('warehousePickupsPickupsIndex.freeThisDayForA')}
+          description={t('warehousePickupsPickupsIndex.onlyAfterConfirmingInThe')}
           footer={
             <DialogFooter>
               <Button variant="ghost" size="md" onClick={() => setReleasing(false)}>
-                Cancel
+                {t('warehousePickupsPickupsIndex.cancel')}
               </Button>
               <AsyncButton
                 variant="destructive"
                 size="md"
                 state={mutationPhase(release)}
-                labels={{ idle: 'Free the day', busy: 'Freeing…' }}
+                labels={{
+                  idle: t('warehousePickupsPickupsIndex.freeTheDay'),
+                  busy: t('warehousePickupsPickupsIndex.freeing'),
+                }}
                 disabled={reason.trim().length < MIN_RELEASE_REASON || release.isPending}
                 onClick={() => void doRelease()}
               />
@@ -243,9 +254,7 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
             <div role="alert">
               <Callout tone="bad" icon={<AlertTriangle size={14} />}>
                 <p className="pku-callout">
-                  This attempt failed without the courier returning an id, so it probably never
-                  registered — but &ldquo;probably&rdquo; is why this is a deliberate act and
-                  audited.
+                  {t('warehousePickupsPickupsIndex.thisAttemptFailedWithoutThe')}
                 </p>
               </Callout>
             </div>
@@ -255,13 +264,15 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
             </p>
             <TextArea
               id={`release-${row.id}`}
-              label="Reason"
+              label={t('warehousePickupsPickupsIndex.reason')}
               requiredMark
-              hint={`At least ${MIN_RELEASE_REASON} characters. Say what you checked.`}
+              hint={t('warehousePickupsPickupsIndex.atLeastCharactersSayWhat', {
+                minReleaseReason: MIN_RELEASE_REASON,
+              })}
               rows={2}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Checked the One panel — no request listed for this date."
+              placeholder={t('warehousePickupsPickupsIndex.checkedTheOnePanelNo')}
             />
             {error !== null && <InlineError message={error} />}
           </Stack>
@@ -278,6 +289,7 @@ function RaisePickupModal({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const warehouses = useWarehouseOptions();
   const raise = useRaisePickup();
@@ -303,7 +315,7 @@ function RaisePickupModal({
         pickupTime,
         expectedPackageCount: Number(count),
       });
-      toast.success('Pickup requested.');
+      toast.success(t('warehousePickupsPickupsIndex.pickupRequested'));
       setCount('');
       onOpenChange(false);
     } catch (err) {
@@ -319,19 +331,22 @@ function RaisePickupModal({
         if (!next) setError(null);
       }}
       size="md"
-      title="Request a pickup"
-      description="One request covers every parcel leaving this warehouse today. Raise it when they are packed and ready to hand over — not when they are manifested."
+      title={t('warehousePickupsPickupsIndex.requestAPickup')}
+      description={t('warehousePickupsPickupsIndex.oneRequestCoversEveryParcel')}
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('warehousePickupsPickupsIndex.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
             icon={<Truck size={16} />}
             state={mutationPhase(raise)}
-            labels={{ idle: 'Request pickup', busy: 'Requesting…' }}
+            labels={{
+              idle: t('warehousePickupsPickupsIndex.requestPickup'),
+              busy: t('warehousePickupsPickupsIndex.requesting'),
+            }}
             disabled={
               warehouseId === '' || count.trim() === '' || Number(count) < 1 || raise.isPending
             }
@@ -343,26 +358,26 @@ function RaisePickupModal({
       <Stack>
         <Select
           id="pu-courier"
-          label="Courier"
+          label={t('warehousePickupsPickupsIndex.courier')}
           requiredMark
-          hint="One van per courier per building per day — a warehouse handing over to both needs one request each."
+          hint={t('warehousePickupsPickupsIndex.oneVanPerCourierPer')}
           value={courierCode}
           onChange={(e) =>
             setCourierCode(e.target.value === 'shiprocket' ? 'shiprocket' : 'delhivery')
           }
         >
-          <option value="delhivery">Delhivery</option>
-          <option value="shiprocket">Shiprocket</option>
+          <option value="delhivery">{t('warehousePickupsPickupsIndex.delhivery')}</option>
+          <option value="shiprocket">{t('warehousePickupsPickupsIndex.shiprocket')}</option>
         </Select>
 
         <Select
           id="pu-warehouse"
-          label="Warehouse"
+          label={t('warehousePickupsPickupsIndex.warehouse')}
           requiredMark
           value={warehouseId}
           onChange={(e) => setWarehouseId(e.target.value)}
         >
-          <option value="">Choose a warehouse…</option>
+          <option value="">{t('warehousePickupsPickupsIndex.chooseAWarehouse')}</option>
           {warehouses.data?.map((w) => (
             <option key={w.id} value={w.id}>
               {w.name} ({w.code})
@@ -373,7 +388,7 @@ function RaisePickupModal({
         <FieldGrid columns={2}>
           <TextField
             id="pu-date"
-            label="Date"
+            label={t('warehousePickupsPickupsIndex.date')}
             requiredMark
             type="date"
             floatLabel
@@ -382,7 +397,7 @@ function RaisePickupModal({
           />
           <TextField
             id="pu-time"
-            label="Time"
+            label={t('warehousePickupsPickupsIndex.time')}
             requiredMark
             type="time"
             floatLabel
@@ -396,9 +411,9 @@ function RaisePickupModal({
 
         <TextField
           id="pu-count"
-          label="Parcels to hand over"
+          label={t('warehousePickupsPickupsIndex.parcelsToHandOver')}
           requiredMark
-          hint="The whole handover, not one parcel."
+          hint={t('warehousePickupsPickupsIndex.theWholeHandoverNotOne')}
           inputMode="numeric"
           value={count}
           onChange={(e) => setCount(e.target.value)}

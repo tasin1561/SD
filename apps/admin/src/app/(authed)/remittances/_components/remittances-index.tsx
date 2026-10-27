@@ -15,12 +15,14 @@ import { useWithdrawalsList } from '@/lib/ops-hooks';
 import { RemittanceFormModal } from './remittance-form-modal';
 import { usePermission } from '@/lib/use-permission';
 import { MkCard, MkSection } from '../../seller-wallets/_components/money-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * Paginated list of recorded remittances. Each row links to the
  * seller detail page. The Record button opens the form modal.
  */
 export function RemittancesIndex(): ReactElement {
+  const t = useT();
   const [creating, setCreating] = useState(false);
   // The REQUEST being paid, not just its seller: recording the payment
   // and closing the request it settles is one act, and making an
@@ -54,8 +56,8 @@ export function RemittancesIndex(): ReactElement {
   return (
     <div className="mk-page">
       <PageHeader
-        title="Remittances"
-        subtitle="Recorded withdrawals to clients. Each entry debits the client's wallet (and writes a paired FX credit for cross-currency)."
+        title={t('remittancesRemittancesIndex.remittances')}
+        subtitle={t('remittancesRemittancesIndex.recordedWithdrawalsToClientsEach')}
         action={
           canWrite ? (
             <Button
@@ -64,7 +66,7 @@ export function RemittancesIndex(): ReactElement {
               icon={<Plus size={15} />}
               onClick={() => setCreating(true)}
             >
-              Record remittance
+              {t('remittancesRemittancesIndex.recordRemittance')}
             </Button>
           ) : null
         }
@@ -72,16 +74,16 @@ export function RemittancesIndex(): ReactElement {
 
       {canPayApproved && owedItems.length > 0 && (
         <MkSection>
-          <SectionHeading title="Approved, waiting to be paid" />
+          <SectionHeading title={t('remittancesRemittancesIndex.approvedWaitingToBePaid')} />
           <MkCard flush>
-            <Table caption="Approved, waiting to be paid">
+            <Table caption={t('remittancesRemittancesIndex.approvedWaitingToBePaid')}>
               <THead>
                 <Tr>
-                  <Th>Client</Th>
-                  <Th align="right">Amount</Th>
-                  <Th align="right">They receive</Th>
-                  <Th align="right">Wallet balance</Th>
-                  <Th>Waiting</Th>
+                  <Th>{t('remittancesRemittancesIndex.client')}</Th>
+                  <Th align="right">{t('remittancesRemittancesIndex.amount')}</Th>
+                  <Th align="right">{t('remittancesRemittancesIndex.theyReceive')}</Th>
+                  <Th align="right">{t('remittancesRemittancesIndex.walletBalance')}</Th>
+                  <Th>{t('remittancesRemittancesIndex.waiting')}</Th>
                   <Th align="right" />
                 </Tr>
               </THead>
@@ -108,7 +110,11 @@ export function RemittancesIndex(): ReactElement {
                         <span className="mk-faint">—</span>
                       ) : (
                         <span
-                          title={`At the rate when requested: 1 ${w.currency} = ${w.fxRateSnapshot ?? '?'} ${w.homeCurrency}`}
+                          title={t('remittancesRemittancesIndex.atTheRateWhenRequested', {
+                            currency: w.currency,
+                            value: w.fxRateSnapshot ?? '?',
+                            homeCurrency: w.homeCurrency,
+                          })}
                         >
                           <Money
                             amount={w.amountInHomeCurrency}
@@ -154,7 +160,7 @@ export function RemittancesIndex(): ReactElement {
                           })
                         }
                       >
-                        Pay
+                        {t('remittancesRemittancesIndex.pay')}
                       </Button>
                     </Td>
                   </Tr>
@@ -166,32 +172,39 @@ export function RemittancesIndex(): ReactElement {
       )}
 
       {list.isLoading ? (
-        <SkeletonRows rows={5} cols={7} label="Loading remittances…" />
+        <SkeletonRows
+          rows={5}
+          cols={7}
+          label={t('remittancesRemittancesIndex.loadingRemittances')}
+        />
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed.'} retry={() => void list.refetch()} />
+        <ErrorState
+          message={list.error?.message ?? t('remittancesRemittancesIndex.failed')}
+          retry={() => void list.refetch()}
+        />
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
-          title="No remittances yet"
-          description="Record one to debit a client's wallet and reflect the bank transfer in their ledger."
+          title={t('remittancesRemittancesIndex.noRemittancesYet')}
+          description={t('remittancesRemittancesIndex.recordOneToDebitA')}
           action={
             canWrite ? (
               <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
-                Record remittance
+                {t('remittancesRemittancesIndex.recordRemittance')}
               </Button>
             ) : null
           }
         />
       ) : (
         <MkCard flush>
-          <Table caption="Recorded remittances">
+          <Table caption={t('remittancesRemittancesIndex.recordedRemittances')}>
             <THead>
               <Tr>
-                <Th>Paid at</Th>
-                <Th>Client</Th>
-                <Th align="right">Source</Th>
-                <Th align="right">Destination</Th>
-                <Th>Paid from</Th>
-                <Th>Bank ref</Th>
+                <Th>{t('remittancesRemittancesIndex.paidAt')}</Th>
+                <Th>{t('remittancesRemittancesIndex.client')}</Th>
+                <Th align="right">{t('remittancesRemittancesIndex.source')}</Th>
+                <Th align="right">{t('remittancesRemittancesIndex.destination')}</Th>
+                <Th>{t('remittancesRemittancesIndex.paidFrom')}</Th>
+                <Th>{t('remittancesRemittancesIndex.bankRef')}</Th>
                 <Th align="right">FX</Th>
               </Tr>
             </THead>
@@ -225,7 +238,9 @@ export function RemittancesIndex(): ReactElement {
                         where from, which is the one thing needed to
                         match it against a statement. */}
                     {r.paidFromLabel === null ? (
-                      <span className="mk-faint">Not recorded</span>
+                      <span className="mk-faint">
+                        {t('remittancesRemittancesIndex.notRecorded')}
+                      </span>
                     ) : (
                       <div className="mk-cell mk-small">
                         <span className="mk-body">{r.paidFromLabel}</span>
@@ -239,7 +254,11 @@ export function RemittancesIndex(): ReactElement {
                     <div className="mk-cell">
                       <Ident value={r.bankReference} />
                       {r.recordedByName !== null && (
-                        <span className="mk-faint">by {r.recordedByName}</span>
+                        <span className="mk-faint">
+                          {t('remittancesRemittancesIndex.by', {
+                            recordedByName: r.recordedByName,
+                          })}
+                        </span>
                       )}
                     </div>
                   </Td>
@@ -258,7 +277,7 @@ export function RemittancesIndex(): ReactElement {
           onClose={() => setCreating(false)}
           onSuccess={() => {
             setCreating(false);
-            toast.success('Remittance recorded.');
+            toast.success(t('remittancesRemittancesIndex.remittanceRecorded'));
           }}
         />
       )}
@@ -275,7 +294,7 @@ export function RemittancesIndex(): ReactElement {
             // second caller of the same rule, and the two would drift —
             // it now happens however the remittance was created, not
             // only when it came from this button.
-            toast.success('Paid. The request closes itself when the amounts match.');
+            toast.success(t('remittancesRemittancesIndex.paidTheRequestClosesItself'));
           }}
         />
       )}

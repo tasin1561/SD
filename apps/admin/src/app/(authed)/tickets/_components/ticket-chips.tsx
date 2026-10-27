@@ -1,8 +1,11 @@
+'use client';
+
 import { Bot, Hand } from 'lucide-react';
 import type { ReactElement } from 'react';
 import type { TicketStatus } from '@skydrop/db';
 import { ticketStatusKind, ticketStatusLabel } from '@skydrop/ui/status';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { useLocale, useT } from '@/i18n/client';
 
 /** The ticket's status: kind and word from `@skydrop/ui/status`, unchanged. */
 export function TicketStatusChip({
@@ -12,10 +15,11 @@ export function TicketStatusChip({
   readonly status: TicketStatus;
   readonly size?: 'sm' | 'md';
 }): ReactElement {
+  const locale = useLocale();
   return (
     <StatusChip
       kind={ticketStatusKind(status)}
-      label={ticketStatusLabel(status)}
+      label={ticketStatusLabel(status, locale)}
       size={size ?? 'md'}
     />
   );
@@ -31,23 +35,20 @@ export function TicketHandlingChip({
 }: {
   readonly handling: 'NONE' | 'AUTO' | 'MANUAL';
 }): ReactElement | null {
+  const t = useT();
   if (handling === 'NONE') return null;
   if (handling === 'AUTO') {
     return (
-      <span className="tk-handling" title="Skydrop is raising this with the courier automatically">
+      <span className="tk-handling" title={t('ticketsTicketChips.autoTitle')}>
         <Bot size={14} aria-hidden />
-        Auto
+        {t('ticketsTicketChips.auto')}
       </span>
     );
   }
   return (
-    <span
-      className="tk-handling"
-      data-manual="1"
-      title="No automation for this courier, or the automated attempt failed — somebody has to raise this by hand"
-    >
+    <span className="tk-handling" data-manual="1" title={t('ticketsTicketChips.manualTitle')}>
       <Hand size={14} aria-hidden />
-      Manual
+      {t('ticketsTicketChips.manual')}
     </span>
   );
 }

@@ -14,7 +14,7 @@ import { useBinContents } from '@/lib/bin-contents-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { BatchCell, ProductCell } from '../../_components/bin-contents-overview';
-import { BinNote, binTypeLabel } from '../../_components/bin-note';
+import { BinNote, binTypeLabelIn } from '../../_components/bin-note';
 import {
   Actions,
   AreaPage,
@@ -25,6 +25,7 @@ import {
   PanelPad,
   TextLink,
 } from '../../../../inventory/_components/stock-kit';
+import { useT } from '@/i18n/client';
 
 const PAGE_SIZE = 50;
 
@@ -35,6 +36,7 @@ const PAGE_SIZE = 50;
  * the movement ledger filtered to it.
  */
 export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
+  const t = useT();
   const [page, setPage] = useState(1);
   const contents = useBinContents(binId, page, PAGE_SIZE);
   const canSeeMovements = usePermission('inventory.view');
@@ -46,20 +48,32 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
       <PageHeader
         Link={Link}
         breadcrumbs={[
-          { label: 'Warehouse', href: '/warehouse' },
-          { label: 'Bins', href: '/warehouse/bins' },
-          { label: bin === undefined ? 'Bin' : bin.code },
+          { label: t('warehouseBinsBinIdBinDetail.warehouse'), href: '/warehouse' },
+          { label: t('warehouseBinsBinIdBinDetail.bins'), href: '/warehouse/bins' },
+          { label: bin === undefined ? t('warehouseBinsBinIdBinDetail.bin') : bin.code },
         ]}
-        title={bin === undefined ? 'Bin' : `Bin ${bin.code}`}
+        title={
+          bin === undefined
+            ? t('warehouseBinsBinIdBinDetail.bin')
+            : t('warehouseBinsBinIdBinDetail.bin2', { code: bin.code })
+        }
         subtitle={
           bin === undefined
-            ? 'What this bin holds.'
-            : `${bin.warehouseCode} — ${bin.warehouseName} · zone ${bin.zoneCode ?? '—'} · ${binTypeLabel(bin.type)} · ${bin.pickable ? 'pickable' : 'not pickable'}`
+            ? t('warehouseBinsBinIdBinDetail.whatThisBinHolds')
+            : t('warehouseBinsBinIdBinDetail.subtitleLine', {
+                warehouseCode: bin.warehouseCode,
+                warehouseName: bin.warehouseName,
+                zone: bin.zoneCode ?? '—',
+                type: binTypeLabelIn(t, bin.type),
+                pickable: bin.pickable
+                  ? t('warehouseBinsBinIdBinDetail.pickable')
+                  : t('warehouseBinsBinIdBinDetail.notPickable'),
+              })
         }
         action={
           <Actions>
             <LinkButton href="/warehouse/bins" variant="ghost" icon={<ArrowLeft size={15} />}>
-              All bins
+              {t('warehouseBinsBinIdBinDetail.allBins')}
             </LinkButton>
             {canSeeMovements && bin !== undefined && (
               <LinkButton
@@ -67,7 +81,7 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
                 variant="secondary"
                 icon={<History size={15} />}
               >
-                Movements for this bin
+                {t('warehouseBinsBinIdBinDetail.movementsForThisBin')}
               </LinkButton>
             )}
           </Actions>
@@ -82,7 +96,10 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
           retry={() => void contents.refetch()}
         />
       ) : bin === undefined || bin.lineCount === 0 ? (
-        <EmptyState title="This bin is empty" description="Nothing is on hand or reserved here." />
+        <EmptyState
+          title={t('warehouseBinsBinIdBinDetail.thisBinIsEmpty')}
+          description={t('warehouseBinsBinIdBinDetail.nothingIsOnHandOr')}
+        />
       ) : (
         <Panel flush>
           <PanelPad>
@@ -92,7 +109,8 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
               {bin.unitsReserved > 0 && (
                 <>
                   {' '}
-                  · <Num value={bin.unitsReserved} /> reserved for picks
+                  · <Num value={bin.unitsReserved} />{' '}
+                  {t('warehouseBinsBinIdBinDetail.reservedForPicks')}
                 </>
               )}
             </p>
@@ -101,14 +119,14 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
           <Table>
             <THead>
               <Tr>
-                <Th>Product</Th>
+                <Th>{t('warehouseBinsBinIdBinDetail.product')}</Th>
                 <Th>SKU</Th>
-                <Th>Client</Th>
-                <Th>Batch</Th>
-                <Th align="right">On hand</Th>
-                <Th align="right">Reserved</Th>
-                <Th>Last moved</Th>
-                {canAdjust && <Th>Adjust</Th>}
+                <Th>{t('warehouseBinsBinIdBinDetail.client')}</Th>
+                <Th>{t('warehouseBinsBinIdBinDetail.batch')}</Th>
+                <Th align="right">{t('warehouseBinsBinIdBinDetail.onHand')}</Th>
+                <Th align="right">{t('warehouseBinsBinIdBinDetail.reserved')}</Th>
+                <Th>{t('warehouseBinsBinIdBinDetail.lastMoved')}</Th>
+                {canAdjust && <Th>{t('warehouseBinsBinIdBinDetail.adjust')}</Th>}
               </Tr>
             </THead>
             <TBody>
@@ -145,9 +163,14 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
                           binId: bin.id,
                           binType: bin.type,
                         })}
-                        aria-label={`Adjust ${l.skuCode ?? 'this line'} in bin ${bin.code}`}
+                        aria-label={t('warehouseBinsBinIdBinDetail.adjustAria', {
+                          line: l.skuCode ?? t('warehouseBinsBinIdBinDetail.thisLine'),
+                          code: bin.code,
+                        })}
                       >
-                        {bin.type === 'DAMAGED' ? 'Return or scrap' : 'Adjust'}
+                        {bin.type === 'DAMAGED'
+                          ? t('warehouseBinsBinIdBinDetail.returnOrScrap')
+                          : t('warehouseBinsBinIdBinDetail.adjust')}
                       </TextLink>
                     </Td>
                   )}

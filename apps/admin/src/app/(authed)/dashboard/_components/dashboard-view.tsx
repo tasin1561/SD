@@ -24,6 +24,7 @@ import { useTicketsList, useWithdrawalsList } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { AfCard, MetaFact, Meter } from '@/app/(authed)/system/_components/af-parts';
 import './dashboard.css';
+import { useT } from '@/i18n/client';
 
 /**
  * The admin landing page — the operations cockpit.
@@ -105,6 +106,7 @@ function AttentionCard({
   badge?: string;
   tone?: 'neutral' | 'warn' | 'bad' | 'info';
 }): ReactElement {
+  const t = useT();
   const active = (count ?? 0) > 0;
 
   // A card with work on it carries its tone in THREE places at once —
@@ -150,8 +152,12 @@ function AttentionCard({
         <Link href={href} className="db-attn__link" aria-label={`${area}: ${label}`}>
           {label}
         </Link>
-        <TooltipCard title="What this counts" description={hint}>
-          <button type="button" className="db-attn__info" aria-label={`About ${label}`}>
+        <TooltipCard title={t('dashboardDashboardView.whatThisCounts')} description={hint}>
+          <button
+            type="button"
+            className="db-attn__info"
+            aria-label={t('dashboardDashboardView.about', { label })}
+          >
             <Info size={14} aria-hidden />
           </button>
         </TooltipCard>
@@ -345,6 +351,7 @@ function pct(value: number): string {
 }
 
 export function DashboardView(): ReactElement {
+  const t = useT();
   const canOrders = usePermission('orders.view');
   const canTickets = usePermission('tickets.view');
   const canMoney = usePermission('money.view');
@@ -384,34 +391,37 @@ export function DashboardView(): ReactElement {
   return (
     <div className="af-page">
       <PageHeader
-        title="Overview"
-        subtitle="What is waiting on someone right now, and how the last 30 days have gone."
+        title={t('dashboardDashboardView.overview')}
+        subtitle={t('dashboardDashboardView.whatIsWaitingOnSomeone')}
         meta={
           <MetaFact tone="good" dot>
-            Live operations
+            {t('dashboardDashboardView.liveOperations')}
           </MetaFact>
         }
       />
 
       {nothingToShow && (
         <AfCard>
-          <p className="af-body">
-            Your account has no permissions that show anything here yet. Ask a super admin to grant
-            the areas you work in.
-          </p>
+          <p className="af-body">{t('dashboardDashboardView.yourAccountHasNoPermissions')}</p>
         </AfCard>
       )}
 
       {(canOrders || canTickets || canMoney) && (
         <section className="db-section">
           <SectionHead
-            title="Operations attention queue"
+            title={t('dashboardDashboardView.operationsAttentionQueue')}
             icon={<AlertTriangle size={14} />}
             iconTone="warn"
             note={
               needingAttention === 0
-                ? 'Nothing is waiting on a person'
-                : `${needingAttention} ${needingAttention === 1 ? 'queue needs' : 'queues need'} staff attention`
+                ? t('dashboardDashboardView.nothingIsWaitingOnA')
+                : t('dashboardDashboardView.staffAttention', {
+                    needingAttention,
+                    value:
+                      needingAttention === 1
+                        ? t('dashboardDashboardView.queueNeeds')
+                        : t('dashboardDashboardView.queuesNeed'),
+                  })
             }
           />
           <div className="db-attn-grid">
@@ -419,50 +429,50 @@ export function DashboardView(): ReactElement {
               <>
                 <AttentionCard
                   href="/call-center/queue"
-                  area="Call centre"
-                  label="Awaiting call"
+                  area={t('dashboardDashboardView.callCentre')}
+                  label={t('dashboardDashboardView.awaitingCall')}
                   count={awaitingCall.data?.total}
                   loading={awaitingCall.isLoading}
-                  hint="Customer not yet reached."
+                  hint={t('dashboardDashboardView.customerNotYetReached')}
                   badge="P0"
                   tone="warn"
                 />
                 <AttentionCard
                   href="/orders?status=AWAITING_SELLER_DECISION"
-                  area="Merchant"
-                  label="Client decision"
+                  area={t('dashboardDashboardView.merchant')}
+                  label={t('dashboardDashboardView.clientDecision')}
                   count={awaitingSeller.data?.total}
                   loading={awaitingSeller.isLoading}
-                  hint="Call cap reached; awaiting the client."
-                  badge="Action"
+                  hint={t('dashboardDashboardView.callCapReachedAwaitingThe')}
+                  badge={t('dashboardDashboardView.action')}
                   tone="warn"
                 />
                 <AttentionCard
                   href="/warehouse/printing"
-                  area="Warehouse"
-                  label="To pick"
+                  area={t('dashboardDashboardView.warehouse')}
+                  label={t('dashboardDashboardView.toPick')}
                   count={toPick.data?.total}
                   loading={toPick.isLoading}
-                  hint="Confirmed and ready for a picking batch."
+                  hint={t('dashboardDashboardView.confirmedAndReadyForA')}
                 />
                 <AttentionCard
                   href="/manual-placement"
-                  area="Dispatch"
-                  label="Manual placement"
+                  area={t('dashboardDashboardView.dispatch')}
+                  label={t('dashboardDashboardView.manualPlacement')}
                   count={manualPlacement.data?.total}
                   loading={manualPlacement.isLoading}
-                  hint="No courier would carry it; needs arranging."
-                  badge="Blocked"
+                  hint={t('dashboardDashboardView.noCourierWouldCarryIt')}
+                  badge={t('dashboardDashboardView.blocked')}
                   tone="bad"
                 />
                 <AttentionCard
                   href="/orders?status=OUT_OF_STOCK"
-                  area="Stock"
-                  label="Out of stock"
+                  area={t('dashboardDashboardView.stock')}
+                  label={t('dashboardDashboardView.outOfStock')}
                   count={outOfStock.data?.total}
                   loading={outOfStock.isLoading}
-                  hint="Confirmed orders with nothing on the shelf."
-                  badge="Blocked"
+                  hint={t('dashboardDashboardView.confirmedOrdersWithNothingOn')}
+                  badge={t('dashboardDashboardView.blocked')}
                   tone="bad"
                 />
               </>
@@ -470,24 +480,24 @@ export function DashboardView(): ReactElement {
             {canTickets && (
               <AttentionCard
                 href="/tickets"
-                area="Support"
-                label="Open tickets"
+                area={t('dashboardDashboardView.support')}
+                label={t('dashboardDashboardView.openTickets')}
                 count={openTickets.data?.total}
                 loading={openTickets.isLoading}
-                hint="Damage claims, missing items, client issues."
-                badge="Action"
+                hint={t('dashboardDashboardView.damageClaimsMissingItemsClient')}
+                badge={t('dashboardDashboardView.action')}
                 tone="warn"
               />
             )}
             {canMoney && (
               <AttentionCard
                 href="/withdrawals"
-                area="Settlements"
-                label="Withdrawal requests"
+                area={t('dashboardDashboardView.settlements')}
+                label={t('dashboardDashboardView.withdrawalRequests')}
                 count={pendingWithdrawals.data?.total}
                 loading={pendingWithdrawals.isLoading}
-                hint="Clients waiting to be paid out."
-                badge="Escrow"
+                hint={t('dashboardDashboardView.clientsWaitingToBePaid')}
+                badge={t('dashboardDashboardView.escrow')}
                 tone="warn"
               />
             )}
@@ -498,16 +508,16 @@ export function DashboardView(): ReactElement {
       {canReports && (
         <section className="db-section">
           <SectionHead
-            title="Performance & fulfilment (last 30 days)"
+            title={t('dashboardDashboardView.performanceFulfilmentLast30Days')}
             icon={<TrendingUp size={14} />}
             iconTone="good"
             note={
               <span className="db-legend">
                 {(
                   [
-                    ['accent', 'Confirmed'],
-                    ['good', 'Delivered'],
-                    ['bad', 'Returned'],
+                    ['accent', t('dashboardDashboardView.confirmed')],
+                    ['good', t('dashboardDashboardView.delivered')],
+                    ['bad', t('dashboardDashboardView.returned')],
                   ] as ReadonlyArray<[string, string]>
                 ).map(([dot, name]) => (
                   <span key={name} className="db-legend__item">
@@ -520,21 +530,21 @@ export function DashboardView(): ReactElement {
           />
           {summary.isError ? (
             <ErrorState
-              message={summary.error?.message ?? 'Could not load the summary.'}
+              message={summary.error?.message ?? t('dashboardDashboardView.couldNotLoadTheSummary')}
               retry={() => void summary.refetch()}
             />
           ) : (
             <div className="db-metric-grid">
               <MetricCard
-                label="Orders created"
+                label={t('dashboardDashboardView.ordersCreated')}
                 count={summary.data?.orders.created}
-                hint="Total pipeline orders."
+                hint={t('dashboardDashboardView.totalPipelineOrders')}
                 loading={summary.isLoading}
               />
               <MetricCard
-                label="Confirmed on call"
+                label={t('dashboardDashboardView.confirmedOnCall')}
                 value={summary.data === undefined ? '—' : pct(summary.data.orders.confirmRate)}
-                hint="Reached and confirmed by an agent."
+                hint={t('dashboardDashboardView.reachedAndConfirmedByAn')}
                 chip={
                   summary.data === undefined
                     ? undefined
@@ -546,21 +556,27 @@ export function DashboardView(): ReactElement {
                 loading={summary.isLoading}
               />
               <MetricCard
-                label="Delivered"
+                label={t('dashboardDashboardView.delivered')}
                 value={summary.data === undefined ? '—' : pct(summary.data.orders.deliveryRate)}
-                hint="Of everything dispatched."
+                hint={t('dashboardDashboardView.ofEverythingDispatched')}
                 bar={summary.data?.orders.deliveryRate}
                 barTone="good"
-                chip={summary.data === undefined ? undefined : 'Completed'}
+                chip={
+                  summary.data === undefined ? undefined : t('dashboardDashboardView.completed')
+                }
                 chipTone="good"
                 valueTone="good"
                 loading={summary.isLoading}
               />
               <MetricCard
-                label="Returned (RTO)"
+                label={t('dashboardDashboardView.returnedRto')}
                 value={summary.data === undefined ? '—' : pct(summary.data.orders.rtoRate)}
-                hint="Came back instead of delivering."
-                chip={summary.data?.orders.rtoRate === 0 ? 'Zero RTO' : 'Returns'}
+                hint={t('dashboardDashboardView.cameBackInsteadOfDelivering')}
+                chip={
+                  summary.data?.orders.rtoRate === 0
+                    ? t('dashboardDashboardView.zeroRto')
+                    : t('dashboardDashboardView.returns')
+                }
                 chipTone={summary.data?.orders.rtoRate === 0 ? 'good' : 'bad'}
                 valueTone={summary.data?.orders.rtoRate === 0 ? 'good' : 'bad'}
                 bar={summary.data?.orders.rtoRate}
@@ -568,10 +584,14 @@ export function DashboardView(): ReactElement {
                 loading={summary.isLoading}
               />
               <MetricCard
-                label="Rejected on NDR"
+                label={t('dashboardDashboardView.rejectedOnNdr')}
                 value={summary.data === undefined ? '—' : pct(summary.data.orders.ndrRate)}
-                hint="Gave up after repeated failed delivery."
-                chip={summary.data?.orders.ndrRate === 0 ? 'No cases' : 'Cases'}
+                hint={t('dashboardDashboardView.gaveUpAfterRepeatedFailed')}
+                chip={
+                  summary.data?.orders.ndrRate === 0
+                    ? t('dashboardDashboardView.noCases')
+                    : t('dashboardDashboardView.cases')
+                }
                 chipTone={summary.data?.orders.ndrRate === 0 ? 'good' : 'bad'}
                 valueTone={summary.data?.orders.ndrRate === 0 ? 'good' : 'bad'}
                 bar={summary.data?.orders.ndrRate}
@@ -579,10 +599,10 @@ export function DashboardView(): ReactElement {
                 loading={summary.isLoading}
               />
               <MetricCard
-                label="Dispatched"
+                label={t('dashboardDashboardView.dispatched')}
                 count={summary.data?.shipments.dispatched}
-                hint="Parcels handed to a courier."
-                chip="In transit"
+                hint={t('dashboardDashboardView.parcelsHandedToACourier')}
+                chip={t('dashboardDashboardView.inTransit')}
                 chipTone="info"
                 valueTone="accent"
                 loading={summary.isLoading}
@@ -595,52 +615,52 @@ export function DashboardView(): ReactElement {
       {canReports && canMoney && (
         <section className="db-section">
           <SectionHead
-            title="Financial treasury & settlements"
+            title={t('dashboardDashboardView.financialTreasurySettlements')}
             icon={<Landmark size={14} />}
             note={
               <Link href="/treasury" className="af-link">
-                Complete ledger →
+                {t('dashboardDashboardView.completeLedger')}
               </Link>
             }
           />
           <div className="db-money-grid">
             <MoneyCard
-              label="COD collected"
+              label={t('dashboardDashboardView.codCollected')}
               amount={summary.data?.wallet.codCollected}
-              hint="Customer payments gathered on delivery."
+              hint={t('dashboardDashboardView.customerPaymentsGatheredOnDelivery')}
               icon={<Banknote size={13} />}
               iconTone="good"
-              footLeft="From courier settlements"
+              footLeft={t('dashboardDashboardView.fromCourierSettlements')}
               loading={summary.isLoading}
             />
             <MoneyCard
-              label="Charges debited"
+              label={t('dashboardDashboardView.chargesDebited')}
               amount={summary.data?.wallet.chargesDebited}
-              hint="Freight, fulfilment and return fees."
+              hint={t('dashboardDashboardView.freightFulfilmentAndReturnFees')}
               icon={<Receipt size={13} />}
               iconTone="bad"
-              footLeft="Auto-debited from wallets"
+              footLeft={t('dashboardDashboardView.autoDebitedFromWallets')}
               loading={summary.isLoading}
             />
             <MoneyCard
-              label="Remitted to clients"
+              label={t('dashboardDashboardView.remittedToClients')}
               amount={summary.data?.wallet.remittancesPaid}
-              hint="Paid out to client bank accounts."
+              hint={t('dashboardDashboardView.paidOutToClientBank')}
               icon={<Send size={13} />}
               iconTone="info"
-              footLeft="Completed remittances"
+              footLeft={t('dashboardDashboardView.completedRemittances')}
               loading={summary.isLoading}
             />
             <MoneyCard
-              label="Outstanding owed"
+              label={t('dashboardDashboardView.outstandingOwed')}
               amount={summary.data?.wallet.netOutstanding}
-              hint="Client balances we hold and have not yet paid out."
+              hint={t('dashboardDashboardView.clientBalancesWeHoldAnd')}
               icon={<Wallet size={13} />}
               iconTone="accent"
-              footLeft="Wallet liability"
+              footLeft={t('dashboardDashboardView.walletLiability')}
               footRight={
                 <Link href="/what-we-owe" className="af-link">
-                  View ledger →
+                  {t('dashboardDashboardView.viewLedger')}
                 </Link>
               }
               loading={summary.isLoading}
@@ -652,7 +672,7 @@ export function DashboardView(): ReactElement {
 
       <div className="db-foot">
         <Activity size={12} aria-hidden />
-        Figures cover the last 30 days and refresh when you reload.
+        {t('dashboardDashboardView.figuresCoverTheLast30')}
       </div>
     </div>
   );

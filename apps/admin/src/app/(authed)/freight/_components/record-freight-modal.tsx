@@ -16,6 +16,10 @@ import { useConsignmentFreightMode, useConsignmentsList } from '@/lib/api-hooks'
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { MkAlert, MkCallout } from '../../seller-wallets/_components/money-parts';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { richMessage } from '@/i18n/client';
 
 /**
  * What a freight rate may be AGREED in.
@@ -31,38 +35,46 @@ import { MkAlert, MkCallout } from '../../seller-wallets/_components/money-parts
  *
  * FE-2: convenience, not enforcement. The server validates regardless.
  */
-const BILL_CURRENCIES = [
-  { value: Currency.INR, label: 'INR — rupees (₹)' },
-  { value: Currency.BDT, label: 'BDT — taka (৳)' },
-] as const;
+const BILL_CURRENCIES = (t: Translate<MessageKey>) =>
+  [
+    { value: Currency.INR, label: t('freightRecordFreightModal.inrRupees') },
+    { value: Currency.BDT, label: t('freightRecordFreightModal.bdtTaka') },
+  ] as const;
 
 const SYMBOL: Record<Currency, string> = { INR: '₹', BDT: '৳' };
 
 /** What each mode means for WHICH stop carries the bill. */
-const MODE_OPTIONS = [
-  {
-    value: InboundFreightMode.PAY_ADVANCE,
-    label: 'Pay in advance — bill the Bangladesh intake, before it flies',
-  },
-  { value: InboundFreightMode.PAY_NOW, label: 'Pay now — debit the wallet on record' },
-  { value: InboundFreightMode.PAY_LATER, label: 'Pay later — leave a receivable' },
-] as const;
-
-const LEG_WORDS = { BD_INTAKE: 'Bangladesh intake', IN_FINAL: 'India arrival' } as const;
+const MODE_OPTIONS = (t: Translate<MessageKey>) =>
+  [
+    {
+      value: InboundFreightMode.PAY_ADVANCE,
+      label: t('freightRecordFreightModal.payInAdvanceBillThe'),
+    },
+    {
+      value: InboundFreightMode.PAY_NOW,
+      label: t('freightRecordFreightModal.payNowDebitTheWallet'),
+    },
+    {
+      value: InboundFreightMode.PAY_LATER,
+      label: t('freightRecordFreightModal.payLaterLeaveAReceivable'),
+    },
+  ] as const;
 
 /** `null` is a goods receipt that belongs to no consignment leg — the
  *  picker never offers one, so this only guards the type. */
-function legWords(leg: string | null): string {
-  if (leg === 'BD_INTAKE') return LEG_WORDS.BD_INTAKE;
-  if (leg === 'IN_FINAL') return LEG_WORDS.IN_FINAL;
-  return 'stop';
+function legWords(tr: Translate<MessageKey>, leg: string | null): string {
+  if (leg === 'BD_INTAKE') return tr('freightRecordFreightModal.legBdIntake');
+  if (leg === 'IN_FINAL') return tr('freightRecordFreightModal.legInFinal');
+  return tr('freightRecordFreightModal.legStop');
 }
 
-const SOURCE_WORDS: Record<'CONSIGNMENT' | 'SELLER' | 'SYSTEM_DEFAULT', string> = {
-  CONSIGNMENT: 'pinned on this consignment',
-  SELLER: "from the client's settings",
-  SYSTEM_DEFAULT: 'the platform default',
-};
+const SOURCE_WORDS = (
+  t: Translate<MessageKey>,
+): Record<'CONSIGNMENT' | 'SELLER' | 'SYSTEM_DEFAULT', string> => ({
+  CONSIGNMENT: t('freightRecordFreightModal.pinnedOnThisConsignment'),
+  SELLER: t('freightRecordFreightModal.fromTheClientSSettings'),
+  SYSTEM_DEFAULT: t('freightRecordFreightModal.thePlatformDefault'),
+});
 
 /**
  * Record the freight invoice for one ARRIVAL.
@@ -101,6 +113,8 @@ export function RecordFreightModal({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }): ReactElement {
+  const t = useT();
+
   const toast = useToast();
   const record = useRecordFreight();
   /**
@@ -137,7 +151,7 @@ export function RecordFreightModal({
       .map((r) => ({
         id: r.id,
         leg: r.leg,
-        legWords: legWords(r.leg),
+        legWords: legWords(t, r.leg),
         receiptNumber: r.receiptNumber,
         consignmentNumber: c.consignmentNumber,
         company: c.seller.companyName,
@@ -248,7 +262,7 @@ export function RecordFreightModal({
         ...(mode === '' ? {} : { mode }),
         ...(note.trim() === '' ? {} : { note: note.trim() }),
       });
-      toast.success('Freight bill recorded.');
+      toast.success(t('freightRecordFreightModal.freightBillRecorded'));
       reset();
       onOpenChange(false);
     } catch (err) {
@@ -266,8 +280,8 @@ export function RecordFreightModal({
       }}
       size="xl"
       locked={record.isPending}
-      title="Record a freight bill"
-      description="The BD→India cost for one arrival. Pay-now debits the client's wallet immediately; pay-later leaves a receivable that amortises as the stock sells."
+      title={t('freightRecordFreightModal.recordAFreightBill')}
+      description={t('freightRecordFreightModal.theBdIndiaCostFor')}
       footer={
         <DialogFooter>
           <Button
@@ -276,13 +290,18 @@ export function RecordFreightModal({
             onClick={() => onOpenChange(false)}
             disabled={record.isPending}
           >
-            Cancel
+            {t('freightRecordFreightModal.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
             disabled={goodsReceiptId === '' || !allPriced}
-            labels={{ idle: 'Record bill', busy: 'Recording…', done: 'Recorded', error: 'Refused' }}
+            labels={{
+              idle: t('freightRecordFreightModal.recordBill'),
+              busy: t('freightRecordFreightModal.recording'),
+              done: t('freightRecordFreightModal.recorded'),
+              error: t('freightRecordFreightModal.refused'),
+            }}
             onAction={submit}
           />
         </DialogFooter>
@@ -292,27 +311,34 @@ export function RecordFreightModal({
         {maySeeConsignments ? (
           <Select
             id="freight-arrival"
-            label="Which stop is being billed"
-            hint="On pay-in-advance terms that is the BANGLADESH INTAKE — the count and weight the rate is applied to, billed before the goods fly. On pay-now and pay-later it is the INDIA ARRIVAL, which is what a forwarder invoices; a consignment landing in two shipments gets one bill each. Only counted stops on Bangladesh-routed consignments appear."
+            label={t('freightRecordFreightModal.whichStopIsBeingBilled')}
+            hint={t('freightRecordFreightModal.onPayInAdvanceTerms')}
             requiredMark
             value={goodsReceiptId}
             onChange={(e) => setGoodsReceiptId(e.target.value)}
           >
             <option value="">
-              {arrivals.length === 0 ? 'No counted India arrivals yet' : 'Select an arrival'}
+              {arrivals.length === 0
+                ? t('freightRecordFreightModal.noCountedIndiaArrivalsYet')
+                : t('freightRecordFreightModal.selectAnArrival')}
             </option>
             {arrivals.map((a) => (
               <option key={a.id} value={a.id} disabled={a.billed}>
-                {a.consignmentNumber} · {a.legWords} · {a.units} units — {a.company}
-                {a.billed ? ' (already billed)' : ''}
+                {t('freightRecordFreightModal.units', {
+                  consignmentNumber: a.consignmentNumber,
+                  legWords: a.legWords,
+                  units: a.units,
+                  company: a.company,
+                  value: a.billed ? t('freightRecordFreightModal.alreadyBilled') : '',
+                })}
               </option>
             ))}
           </Select>
         ) : (
           <TextField
             id="freight-arrival"
-            label="Which stop is being billed"
-            hint="On pay-in-advance terms that is the BANGLADESH INTAKE — the count and weight the rate is applied to, billed before the goods fly. On pay-now and pay-later it is the INDIA ARRIVAL, which is what a forwarder invoices; a consignment landing in two shipments gets one bill each. Only counted stops on Bangladesh-routed consignments appear."
+            label={t('freightRecordFreightModal.whichStopIsBeingBilled')}
+            hint={t('freightRecordFreightModal.onPayInAdvanceTerms')}
             requiredMark
             value={goodsReceiptId}
             onChange={(e) => setGoodsReceiptId(e.target.value)}
@@ -332,11 +358,16 @@ export function RecordFreightModal({
           >
             <p>
               {freightModeWords(freightMode.data.mode, 'STAFF')} —{' '}
-              {SOURCE_WORDS[freightMode.data.source]}
-              {freightMode.data.locked ? ', and fixed now a bill exists' : ''}.{' '}
+              {SOURCE_WORDS(t)[freightMode.data.source]}
+              {freightMode.data.locked ? t('freightRecordFreightModal.andFixedNowABill') : ''}.{' '}
               {legDisagrees
-                ? `That bills the ${legWords(expectedLeg).toLowerCase()}, and this is the ${legWords(selectedLeg).toLowerCase()}. Pin the mode below if this stop is the one you mean.`
-                : `This is the ${legWords(selectedLeg).toLowerCase()}, which is the stop that mode bills.`}
+                ? t('freightRecordFreightModal.thatBillsTheAndThis', {
+                    value: legWords(t, expectedLeg).toLowerCase(),
+                    value2: legWords(t, selectedLeg).toLowerCase(),
+                  })
+                : t('freightRecordFreightModal.thisIsTheWhichIs', {
+                    value: legWords(t, selectedLeg).toLowerCase(),
+                  })}
             </p>
           </MkCallout>
         )}
@@ -344,27 +375,28 @@ export function RecordFreightModal({
         {goodsReceiptId !== '' && (
           <div className="mk-stack">
             <h3 className="mk-form__heading">
-              What the forwarder charged
-              <span className="mk-faint">
-                {products.length} product{products.length === 1 ? '' : 's'}
-              </span>
+              {richMessage(t('freightRecordFreightModal.whatTheForwarderCharged'), {
+                span: (
+                  <span className="mk-faint">
+                    {t('freightRecordFreightModal.product', {
+                      length: products.length,
+                      value: products.length === 1 ? '' : t('common.pluralS'),
+                    })}
+                  </span>
+                ),
+              })}
             </h3>
-            <p className="mk-small">
-              Price each product the way the invoice does — per kg or per piece, at its own rate. A
-              per-kg line needs the chargeable weight from the invoice, not one worked out from the
-              catalogue: volumetric weight and rounding up to the next half-kilo are both normal.
-              Every product must be priced.
-            </p>
+            <p className="mk-small">{t('freightRecordFreightModal.priceEachProductTheWay')}</p>
 
             <div className="mk-filters">
               <Select
                 id="freight-currency"
-                label="Agreed in"
-                hint="The currency the rate was agreed in on the phone — type the figures exactly as they are on the invoice. The bill is converted to rupees at the rate in force when it is recorded, and the client is charged rupees either way."
+                label={t('freightRecordFreightModal.agreedIn')}
+                hint={t('freightRecordFreightModal.theCurrencyTheRateWas')}
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value as Currency)}
               >
-                {BILL_CURRENCIES.map((c) => (
+                {BILL_CURRENCIES(t).map((c) => (
                   <option key={c.value} value={c.value}>
                     {c.label}
                   </option>
@@ -373,7 +405,7 @@ export function RecordFreightModal({
             </div>
 
             {products.length === 0 ? (
-              <p className="mk-muted">This arrival has no counted products.</p>
+              <p className="mk-muted">{t('freightRecordFreightModal.thisArrivalHasNoCounted')}</p>
             ) : (
               <div className="mk-scroll">
                 <table className="mk-grid-table">
@@ -391,12 +423,12 @@ export function RecordFreightModal({
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>Product</th>
-                      <th data-align="right">Units</th>
-                      <th>Priced</th>
-                      <th data-align="right">Rate {symbol}</th>
-                      <th data-align="right">Kg</th>
-                      <th data-align="right">Line {symbol}</th>
+                      <th>{t('freightRecordFreightModal.product2')}</th>
+                      <th data-align="right">{t('freightRecordFreightModal.units2')}</th>
+                      <th>{t('freightRecordFreightModal.priced')}</th>
+                      <th data-align="right">{t('freightRecordFreightModal.rate', { symbol })}</th>
+                      <th data-align="right">{t('freightRecordFreightModal.kg')}</th>
+                      <th data-align="right">{t('freightRecordFreightModal.line', { symbol })}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -421,17 +453,23 @@ export function RecordFreightModal({
                           </td>
                           <td>
                             <Select
-                              aria-label={`Basis for ${l.variant.skuCode}`}
+                              aria-label={t('freightRecordFreightModal.basisFor', {
+                                skuCode: l.variant.skuCode,
+                              })}
                               value={p.basis}
                               onChange={(e) => setPrice(l.id, { basis: e.target.value })}
                             >
-                              <option value="PER_KG">per kg</option>
-                              <option value="PER_PIECE">per pcs</option>
+                              <option value="PER_KG">{t('freightRecordFreightModal.perKg')}</option>
+                              <option value="PER_PIECE">
+                                {t('freightRecordFreightModal.perPcs')}
+                              </option>
                             </Select>
                           </td>
                           <td>
                             <TextField
-                              aria-label={`Rate for ${l.variant.skuCode}`}
+                              aria-label={t('freightRecordFreightModal.rateFor', {
+                                skuCode: l.variant.skuCode,
+                              })}
                               inputMode="decimal"
                               value={p.rate}
                               onChange={(e) => setPrice(l.id, { rate: e.target.value })}
@@ -441,7 +479,9 @@ export function RecordFreightModal({
                           <td>
                             {perKg ? (
                               <TextField
-                                aria-label={`Chargeable weight for ${l.variant.skuCode}`}
+                                aria-label={t('freightRecordFreightModal.chargeableWeightFor', {
+                                  skuCode: l.variant.skuCode,
+                                })}
                                 inputMode="decimal"
                                 value={p.weightKg}
                                 onChange={(e) => setPrice(l.id, { weightKg: e.target.value })}
@@ -461,10 +501,12 @@ export function RecordFreightModal({
                   <tfoot>
                     <tr>
                       <td className="mk-small" colSpan={5}>
-                        Freight total, before any pay-later service charge
-                        {currency === Currency.INR
-                          ? ''
-                          : ' — converted to rupees at the rate in force when this is recorded'}
+                        {t('freightRecordFreightModal.freightTotalBeforeAnyPay', {
+                          value:
+                            currency === Currency.INR
+                              ? ''
+                              : t('freightRecordFreightModal.convertedToRupeesAtThe'),
+                        })}
                       </td>
                       <td data-align="right" className="mk-strong">
                         <Money amount={grandTotal} currency={currency} convert={false} />
@@ -479,17 +521,20 @@ export function RecordFreightModal({
 
         <Select
           id="freight-mode"
-          label="Mode"
-          hint="Leave it alone unless this consignment is an exception — whatever is already in force applies. Choosing one here PINS the consignment to it, and it decides which stop the bill hangs on."
+          label={t('freightRecordFreightModal.mode')}
+          hint={t('freightRecordFreightModal.leaveItAloneUnlessThis')}
           value={mode}
           onChange={(e) => setMode(e.target.value)}
         >
           <option value="">
             {freightMode.data === undefined
-              ? 'Use whatever is already in force'
-              : `Use whatever is already in force (${freightModeWords(freightMode.data.mode, 'STAFF')}, ${SOURCE_WORDS[freightMode.data.source]})`}
+              ? t('freightRecordFreightModal.useWhateverIsAlreadyIn')
+              : t('freightRecordFreightModal.useWhateverIsAlreadyIn2', {
+                  value: freightModeWords(freightMode.data.mode, 'STAFF'),
+                  value2: SOURCE_WORDS(t)[freightMode.data.source],
+                })}
           </option>
-          {MODE_OPTIONS.map((m) => (
+          {MODE_OPTIONS(t).map((m) => (
             <option key={m.value} value={m.value}>
               {m.label}
             </option>
@@ -498,8 +543,8 @@ export function RecordFreightModal({
 
         <TextArea
           id="freight-note"
-          label="Note"
-          hint="Optional."
+          label={t('freightRecordFreightModal.note')}
+          hint={t('freightRecordFreightModal.optional')}
           rows={2}
           value={note}
           onChange={(e) => setNote(e.target.value)}

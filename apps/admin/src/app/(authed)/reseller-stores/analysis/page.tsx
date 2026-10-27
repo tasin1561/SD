@@ -23,6 +23,8 @@ import {
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { PauseStoreModal } from '../_components/pause-store-modal';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Reseller stores across sellers (RS-9): fraud flags (a threshold crossed,
@@ -31,6 +33,8 @@ import { PauseStoreModal } from '../_components/pause-store-modal';
  * new orders; only its seller can resume it.
  */
 export default function ResellerAnalysisPage(): ReactElement {
+  const locale = useLocale();
+  const tr = useT();
   const mayPause = usePermission('reseller.stores.pause');
   const mayFloat = usePermission('money.treasury.view');
   const fraud = useResellerFraudFlags();
@@ -41,40 +45,58 @@ export default function ResellerAnalysisPage(): ReactElement {
   return (
     <AcPage>
       <AcHeader
-        crumbs={[{ label: 'Member stores', href: '/reseller-stores' }, { label: 'Analysis' }]}
-        title="Member store analysis"
-        subtitle="Fraud signals, disputes and float across every client's member stores."
+        crumbs={[
+          { label: tr('resellerStoresAnalysisPage.memberStores'), href: '/reseller-stores' },
+          { label: tr('resellerStoresAnalysisPage.analysis') },
+        ]}
+        title={tr('resellerStoresAnalysisPage.memberStoreAnalysis')}
+        subtitle={tr('resellerStoresAnalysisPage.fraudSignalsDisputesAndFloat')}
         action={
           <Link href="/reseller-stores" className={buttonClassName('secondary', 'md')}>
-            <span className="sk-btn__label">All member stores</span>
+            <span className="sk-btn__label">
+              {tr('resellerStoresAnalysisPage.allMemberStores')}
+            </span>
           </Link>
         }
       />
 
       <AcSection
-        title="Fraud flags"
+        title={tr('resellerStoresAnalysisPage.fraudFlags')}
         note={
           fraud.data === undefined
             ? undefined
-            : `${fraud.data.storesChecked} stores with orders in the last ${fraud.data.thresholds.windowDays} days. Thresholds are the reseller.fraud_* settings; each flag raises a system issue that clears itself once back under.`
+            : tr('resellerStoresAnalysisPage.storesWithOrdersInThe', {
+                storesChecked: fraud.data.storesChecked,
+                windowDays: fraud.data.thresholds.windowDays,
+              })
         }
         flush
       >
-        {fraud.isPending && <SkeletonRows rows={4} cols={4} label="Loading fraud flags" />}
+        {fraud.isPending && (
+          <SkeletonRows
+            rows={4}
+            cols={4}
+            label={tr('resellerStoresAnalysisPage.loadingFraudFlags')}
+          />
+        )}
         {fraud.isError && (
           <ErrorState message={serverVerdict(fraud.error)} retry={() => void fraud.refetch()} />
         )}
         {fraud.data !== undefined &&
           (fraud.data.flags.length === 0 ? (
-            <EmptyState bare tone="positive" title="No store is over a threshold" />
+            <EmptyState
+              bare
+              tone="positive"
+              title={tr('resellerStoresAnalysisPage.noStoreIsOverA')}
+            />
           ) : (
-            <Table caption="Fraud flags">
+            <Table caption={tr('resellerStoresAnalysisPage.fraudFlags')}>
               <THead>
                 <Tr>
-                  <Th>Store</Th>
-                  <Th>Signal</Th>
-                  <Th>Why</Th>
-                  <Th align="right">Actions</Th>
+                  <Th>{tr('resellerStoresAnalysisPage.store')}</Th>
+                  <Th>{tr('resellerStoresAnalysisPage.signal')}</Th>
+                  <Th>{tr('resellerStoresAnalysisPage.why')}</Th>
+                  <Th align="right">{tr('resellerStoresAnalysisPage.actions')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -107,7 +129,7 @@ export default function ResellerAnalysisPage(): ReactElement {
                           icon={<PauseCircle size={14} />}
                           onClick={() => setPausing(f)}
                         >
-                          Pause store
+                          {tr('resellerStoresAnalysisPage.pauseStore')}
                         </Button>
                       )}
                     </Td>
@@ -119,11 +141,17 @@ export default function ResellerAnalysisPage(): ReactElement {
       </AcSection>
 
       <AcSection
-        title="Disputes"
-        note="Tickets on member store orders placed in the last year."
+        title={tr('resellerStoresAnalysisPage.disputes')}
+        note={tr('resellerStoresAnalysisPage.ticketsOnMemberStoreOrders')}
         bare
       >
-        {disputes.isPending && <SkeletonRows rows={3} cols={5} label="Loading disputes" />}
+        {disputes.isPending && (
+          <SkeletonRows
+            rows={3}
+            cols={5}
+            label={tr('resellerStoresAnalysisPage.loadingDisputes')}
+          />
+        )}
         {disputes.isError && (
           <ErrorState
             message={serverVerdict(disputes.error)}
@@ -134,25 +162,28 @@ export default function ResellerAnalysisPage(): ReactElement {
           <>
             <div className="ac-kpis">
               <KpiCard
-                label="Open"
+                label={tr('resellerStoresAnalysisPage.open')}
                 tone={disputes.data.open > 0 ? 'pending' : 'neutral'}
                 value={disputes.data.open}
                 icon={<ShieldAlert size={16} />}
               />
-              <KpiCard label="Settled" value={disputes.data.settled} />
+              <KpiCard
+                label={tr('resellerStoresAnalysisPage.settled')}
+                value={disputes.data.settled}
+              />
             </div>
             {disputes.data.openTickets.length === 0 ? (
-              <EmptyState tone="positive" title="No open disputes" />
+              <EmptyState tone="positive" title={tr('resellerStoresAnalysisPage.noOpenDisputes')} />
             ) : (
               <AcCard flush>
-                <Table caption="Open disputes">
+                <Table caption={tr('resellerStoresAnalysisPage.openDisputes')}>
                   <THead>
                     <Tr>
-                      <Th>Ticket</Th>
-                      <Th>Store</Th>
-                      <Th>Order</Th>
-                      <Th>Status</Th>
-                      <Th>Opened</Th>
+                      <Th>{tr('resellerStoresAnalysisPage.ticket')}</Th>
+                      <Th>{tr('resellerStoresAnalysisPage.store')}</Th>
+                      <Th>{tr('resellerStoresAnalysisPage.order')}</Th>
+                      <Th>{tr('resellerStoresAnalysisPage.status')}</Th>
+                      <Th>{tr('resellerStoresAnalysisPage.opened')}</Th>
                     </Tr>
                   </THead>
                   <TBody>
@@ -186,7 +217,7 @@ export default function ResellerAnalysisPage(): ReactElement {
                         <Td>
                           <StatusChip
                             kind={ticketStatusKind(t.status as TicketStatus)}
-                            label={ticketStatusLabel(t.status as TicketStatus)}
+                            label={ticketStatusLabel(t.status as TicketStatus, locale)}
                             size="sm"
                           />
                         </Td>
@@ -205,11 +236,17 @@ export default function ResellerAnalysisPage(): ReactElement {
 
       {mayFloat && (
         <AcSection
-          title="Float and advances"
-          note="Store balances (a negative one is its client's exposure), money credited to a store before the courier paid, and Instant Pay advanced on member store orders."
+          title={tr('resellerStoresAnalysisPage.floatAndAdvances')}
+          note={tr('resellerStoresAnalysisPage.storeBalancesANegativeOne')}
           bare
         >
-          {float.isPending && <SkeletonRows rows={3} cols={4} label="Loading float and advances" />}
+          {float.isPending && (
+            <SkeletonRows
+              rows={3}
+              cols={4}
+              label={tr('resellerStoresAnalysisPage.loadingFloatAndAdvances')}
+            />
+          )}
           {float.isError && (
             <ErrorState message={serverVerdict(float.error)} retry={() => void float.refetch()} />
           )}
@@ -217,31 +254,31 @@ export default function ResellerAnalysisPage(): ReactElement {
             <>
               <div className="ac-kpis">
                 <KpiCard
-                  label="Store wallets"
+                  label={tr('resellerStoresAnalysisPage.storeWallets')}
                   figure={<Money amount={float.data.totals.storesWalletInr} />}
                 />
                 <KpiCard
-                  label="Stores below zero"
+                  label={tr('resellerStoresAnalysisPage.storesBelowZero')}
                   tone="pending"
                   figure={<Money amount={float.data.totals.storesNegativeInr} />}
                 />
                 <KpiCard
-                  label="Credited before payout"
+                  label={tr('resellerStoresAnalysisPage.creditedBeforePayout')}
                   figure={<Money amount={float.data.totals.creditedBeforePayoutInr} />}
                 />
                 <KpiCard
-                  label="Instant Pay advanced"
+                  label={tr('resellerStoresAnalysisPage.instantPayAdvanced')}
                   figure={<Money amount={float.data.totals.instantPayAdvanceInr} />}
                 />
               </div>
               <AcCard flush>
-                <Table caption="Float by client and store">
+                <Table caption={tr('resellerStoresAnalysisPage.floatByClientAndStore')}>
                   <THead>
                     <Tr>
-                      <Th>Client / store</Th>
-                      <Th align="right">Wallet</Th>
-                      <Th align="right">Credited before payout</Th>
-                      <Th align="right">Instant Pay advanced</Th>
+                      <Th>{tr('resellerStoresAnalysisPage.clientStore')}</Th>
+                      <Th align="right">{tr('resellerStoresAnalysisPage.wallet')}</Th>
+                      <Th align="right">{tr('resellerStoresAnalysisPage.creditedBeforePayout')}</Th>
+                      <Th align="right">{tr('resellerStoresAnalysisPage.instantPayAdvanced')}</Th>
                     </Tr>
                   </THead>
                   <TBody>
@@ -250,8 +287,10 @@ export default function ResellerAnalysisPage(): ReactElement {
                         <Td>
                           <span className="ac-strong">{s.sellerName}</span>
                           <span className="ac-cell-sub">
-                            own <Money amount={s.sellerWalletInr} /> · group{' '}
-                            <Money amount={s.groupInr} />
+                            {richMessage(tr('resellerStoresAnalysisPage.ownGroup'), {
+                              money: <Money amount={s.sellerWalletInr} />,
+                              money2: <Money amount={s.groupInr} />,
+                            })}
                           </span>
                         </Td>
                         <Td align="right">
@@ -261,7 +300,9 @@ export default function ResellerAnalysisPage(): ReactElement {
                         <Td align="right">
                           <Money amount={s.instantPayAdvanceInr} />
                           <span className="ac-cell-sub">
-                            <span className="sk-figure">{s.instantPayAdvanceOrders}</span> orders
+                            {richMessage(tr('resellerStoresAnalysisPage.orders'), {
+                              span: <span className="sk-figure">{s.instantPayAdvanceOrders}</span>,
+                            })}
                           </span>
                         </Td>
                       </Tr>,
@@ -274,10 +315,12 @@ export default function ResellerAnalysisPage(): ReactElement {
                               </Link>
                             </span>
                             <span className="ac-cell-sub ac-indent">
-                              {st.status === null
-                                ? ''
-                                : `${resellerStoreStatusLabel(st.status as ResellerStoreStatus)} · `}
-                              may go below zero by{' '}
+                              {tr('resellerStoresAnalysisPage.mayGoBelowZeroBy', {
+                                value:
+                                  st.status === null
+                                    ? ''
+                                    : `${resellerStoreStatusLabel(st.status as ResellerStoreStatus)} · `,
+                              })}{' '}
                               <Money amount={st.negativeLimitInr} convert={false} />
                             </span>
                           </Td>
@@ -287,8 +330,11 @@ export default function ResellerAnalysisPage(): ReactElement {
                           <Td align="right">
                             <Money amount={st.creditedBeforePayoutInr} />
                             <span className="ac-cell-sub">
-                              <span className="sk-figure">{st.creditedBeforePayoutOrders}</span>{' '}
-                              orders
+                              {richMessage(tr('resellerStoresAnalysisPage.orders'), {
+                                span: (
+                                  <span className="sk-figure">{st.creditedBeforePayoutOrders}</span>
+                                ),
+                              })}
                             </span>
                           </Td>
                           <Td />

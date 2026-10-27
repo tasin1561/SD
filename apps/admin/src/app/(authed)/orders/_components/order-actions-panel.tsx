@@ -21,6 +21,10 @@ import { ForceMutationDialog } from './force-mutation-dialog';
 import { ReleaseReservationsDialog } from './release-reservations-dialog';
 import { RestoreReservationsDialog } from './restore-reservations-dialog';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 const TERMINAL_STATUSES: readonly OrderStatus[] = [
   OrderStatus.DELIVERED,
@@ -45,23 +49,48 @@ const TERMINAL_STATUSES: readonly OrderStatus[] = [
 // a disabled button and told to contact a super admin. The permission is
 // the thing the server actually checks, so it is the thing to ask about.
 
-const CANCELLATION_REASONS: ReadonlyArray<{
+const CANCELLATION_REASONS = (
+  t: Translate<MessageKey>,
+): ReadonlyArray<{
   value: OrderCancellationReason;
   label: string;
-}> = [
-  { value: OrderCancellationReason.CUSTOMER_REQUESTED, label: 'Customer requested' },
-  { value: OrderCancellationReason.CUSTOMER_UNREACHABLE, label: 'Customer unreachable' },
-  { value: OrderCancellationReason.WRONG_ADDRESS, label: 'Wrong address' },
-  { value: OrderCancellationReason.OUT_OF_STOCK, label: 'Out of stock' },
-  { value: OrderCancellationReason.FAKE_ORDER, label: 'Fake order' },
-  { value: OrderCancellationReason.HIGH_RISK_CUSTOMER, label: 'High-risk customer' },
-  { value: OrderCancellationReason.DUPLICATE_ORDER, label: 'Duplicate order' },
-  { value: OrderCancellationReason.NO_COURIER_AVAILABLE, label: 'No courier available' },
-  { value: OrderCancellationReason.SELLER_REQUESTED, label: 'Client requested' },
-  { value: OrderCancellationReason.OTHER, label: 'Other' },
+}> => [
+  {
+    value: OrderCancellationReason.CUSTOMER_REQUESTED,
+    label: t('ordersOrderActionsPanel.customerRequested'),
+  },
+  {
+    value: OrderCancellationReason.CUSTOMER_UNREACHABLE,
+    label: t('ordersOrderActionsPanel.customerUnreachable'),
+  },
+  {
+    value: OrderCancellationReason.WRONG_ADDRESS,
+    label: t('ordersOrderActionsPanel.wrongAddress'),
+  },
+  { value: OrderCancellationReason.OUT_OF_STOCK, label: t('ordersOrderActionsPanel.outOfStock') },
+  { value: OrderCancellationReason.FAKE_ORDER, label: t('ordersOrderActionsPanel.fakeOrder') },
+  {
+    value: OrderCancellationReason.HIGH_RISK_CUSTOMER,
+    label: t('ordersOrderActionsPanel.highRiskCustomer'),
+  },
+  {
+    value: OrderCancellationReason.DUPLICATE_ORDER,
+    label: t('ordersOrderActionsPanel.duplicateOrder'),
+  },
+  {
+    value: OrderCancellationReason.NO_COURIER_AVAILABLE,
+    label: t('ordersOrderActionsPanel.noCourierAvailable'),
+  },
+  {
+    value: OrderCancellationReason.SELLER_REQUESTED,
+    label: t('ordersOrderActionsPanel.clientRequested'),
+  },
+  { value: OrderCancellationReason.OTHER, label: t('ordersOrderActionsPanel.other') },
 ];
 
 export function OrderActionsPanel({ order }: { readonly order: OrderView }): ReactElement {
+  const t = useT();
+
   const canOverride = usePermission('orders.override');
   const canCancel = usePermission('orders.cancel');
 
@@ -98,7 +127,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
       });
       closeCancel();
     } catch (err) {
-      setServerError(serverVerdict(err, 'Failed to cancel order.'));
+      setServerError(serverVerdict(err, t('ordersOrderActionsPanel.failedToCancelOrder')));
       throw err;
     }
   }
@@ -107,16 +136,13 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
     <OoCard>
       <div className="oo-card__head">
         <div className="oo-stack oo-stack--tight">
-          <p className="oo-card__title">Lifecycle actions</p>
-          <p className="oo-p">
-            State-machine-guarded transitions. The server enforces legal moves; the UI shows the
-            action and surfaces the server&apos;s verdict.
-          </p>
+          <p className="oo-card__title">{t('ordersOrderActionsPanel.lifecycleActions')}</p>
+          <p className="oo-p">{t('ordersOrderActionsPanel.stateMachineGuardedTransitionsThe')}</p>
         </div>
       </div>
 
       <div className="oc-group">
-        <p className="oc-group__label">Sane actions</p>
+        <p className="oc-group__label">{t('ordersOrderActionsPanel.saneActions')}</p>
         <div className="oo-row">
           <Button
             variant="destructive"
@@ -125,11 +151,13 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
             onClick={() => setCancelOpen(true)}
             title={
               inTerminalState
-                ? `Already in a terminal state (${order.status.toLowerCase()})`
-                : 'Cancel via the matrix (releases stock if reserved)'
+                ? t('ordersOrderActionsPanel.alreadyInATerminalState', {
+                    value: order.status.toLowerCase(),
+                  })
+                : t('ordersOrderActionsPanel.cancelViaTheMatrixReleases')
             }
           >
-            Cancel order
+            {t('ordersOrderActionsPanel.cancelOrder')}
           </Button>
 
           {/* DELIVERED is terminal for everything else, which is why
@@ -142,30 +170,27 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
               variant="secondary"
               size="md"
               onClick={() => setReturnOpen(true)}
-              title="The customer wants to send it back — charged to the client as a second delivery"
+              title={t('ordersOrderActionsPanel.theCustomerWantsToSend')}
             >
-              Request return
+              {t('ordersOrderActionsPanel.requestReturn')}
             </Button>
           )}
         </div>
         {inTerminalState && (
-          <p className="oo-faint">
-            This order is in a terminal state; further sane lifecycle actions aren&apos;t available.
-            God-mode override below is the extraordinary-correction path.
-          </p>
+          <p className="oo-faint">{t('ordersOrderActionsPanel.thisOrderIsInA')}</p>
         )}
       </div>
 
       <div className="oc-god-panel">
         <p className="oc-god-panel__title">
           <ShieldAlert size={14} aria-hidden />
-          God-mode (ORD-2)
+          {t('ordersOrderActionsPanel.godModeOrd2')}
         </p>
         <p className="oc-god-panel__body">
-          Bypass the state machine and edit rules. Audited{' '}
-          <span className="sk-ident">CRITICAL</span>. The order will be marked with{' '}
-          <span className="sk-ident">hasAdminOverride</span> permanently — a flag that is set once
-          and never cleared.
+          {richMessage(t('ordersOrderActionsPanel.bypassTheStateMachineAnd'), {
+            span: <span className="sk-ident">CRITICAL</span>,
+            span2: <span className="sk-ident">hasAdminOverride</span>,
+          })}
         </p>
         <div className="oo-row">
           <Button
@@ -174,9 +199,11 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
             icon={<ShieldAlert size={14} />}
             onClick={() => setOverrideOpen(true)}
             disabled={!canOverride}
-            title={canOverride ? undefined : 'Requires the god-mode override permission'}
+            title={
+              canOverride ? undefined : t('ordersOrderActionsPanel.requiresTheGodModeOverride')
+            }
           >
-            Force-mutate…
+            {t('ordersOrderActionsPanel.forceMutate')}
           </Button>
           <Button
             variant="destructive"
@@ -185,11 +212,11 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
             disabled={!canOverride}
             title={
               canOverride
-                ? 'Release every ACTIVE reservation (cleanup after a god-mode move). Idempotent.'
-                : 'Requires SUPER_ADMIN role'
+                ? t('ordersOrderActionsPanel.releaseEveryActiveReservationCleanup')
+                : t('ordersOrderActionsPanel.requiresSuperAdminRole')
             }
           >
-            Release reservations…
+            {t('ordersOrderActionsPanel.releaseReservations')}
           </Button>
           {/* The mirror. Sits beside the release because they are the
               two halves of one question — this order's stock claim —
@@ -202,18 +229,15 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
             disabled={!canOverride}
             title={
               canOverride
-                ? 'Re-reserve stock for an order that lost its claim to an expired reservation. Refused if it already holds one.'
-                : 'Requires SUPER_ADMIN role'
+                ? t('ordersOrderActionsPanel.reReserveStockForAn')
+                : t('ordersOrderActionsPanel.requiresSuperAdminRole')
             }
           >
-            Restore stock claim…
+            {t('ordersOrderActionsPanel.restoreStockClaim')}
           </Button>
         </div>
         {!canOverride && (
-          <p className="oo-faint">
-            Your role does not include the god-mode override permission. Ask a super admin if an
-            extraordinary correction is required.
-          </p>
+          <p className="oo-faint">{t('ordersOrderActionsPanel.yourRoleDoesNotInclude')}</p>
         )}
       </div>
 
@@ -248,12 +272,12 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
         onOpenChange={(o) => {
           if (!o) closeCancel();
         }}
-        title="Cancel this order?"
+        title={t('ordersOrderActionsPanel.cancelThisOrder')}
         entity={order.orderNumber}
         entityIsIdentifier
-        consequence="Sane admin cancel — drives the order through the state machine to CANCELLED_BY_ADMIN. Any active stock reservation will be released by the saga."
-        confirmLabel="Confirm cancel"
-        cancelLabel="Keep order"
+        consequence={t('ordersOrderActionsPanel.saneAdminCancelDrivesThe')}
+        confirmLabel={t('ordersOrderActionsPanel.confirmCancel')}
+        cancelLabel={t('ordersOrderActionsPanel.keepOrder')}
         destructive
         onConfirm={confirmCancel}
         error={serverError}
@@ -264,20 +288,16 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
               Stated as a rule, not a figure: the panel does not know
               whether this particular order was charged, and inventing a
               number would be worse than naming the condition. */}
-          <p className="oo-faint">
-            If a delivery fee has already been charged for this order and the parcel has not been
-            dispatched, it is credited back to the client&apos;s wallet automatically. Once
-            dispatched, the fee stands — the courier already has the parcel.
-          </p>
+          <p className="oo-faint">{t('ordersOrderActionsPanel.ifADeliveryFeeHas')}</p>
           <Select
             id="cancel-reason"
-            label="Cancellation reason"
+            label={t('ordersOrderActionsPanel.cancellationReason')}
             requiredMark
             value={reason}
             onChange={(e) => setReason(e.target.value as OrderCancellationReason)}
             disabled={cancel.isPending}
           >
-            {CANCELLATION_REASONS.map((r) => (
+            {CANCELLATION_REASONS(t).map((r) => (
               <option key={r.value} value={r.value}>
                 {r.label}
               </option>
@@ -285,8 +305,8 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
           </Select>
           <TextArea
             id="cancel-note"
-            label="Internal note (optional)"
-            hint="Recorded in the order event + audit log; not visible to the client."
+            label={t('ordersOrderActionsPanel.internalNoteOptional')}
+            hint={t('ordersOrderActionsPanel.recordedInTheOrderEvent')}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={500}
@@ -318,8 +338,11 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
         onSuccess={(result) => {
           setRestoreNote(
             result.shortfall === null
-              ? `Reserved ${result.reservedCount} line(s) again — ${result.orderNumber} can be picked.`
-              : `Nothing reserved: ${result.shortfall}`,
+              ? t('ordersOrderActionsPanel.reservedLineSAgainCan', {
+                  reservedCount: result.reservedCount,
+                  orderNumber: result.orderNumber,
+                })
+              : t('ordersOrderActionsPanel.nothingReserved', { shortfall: result.shortfall }),
           );
         }}
       />
@@ -344,28 +367,29 @@ function OverrideResultPanel({
   readonly result: ForceMutationResult;
   readonly onDismiss: () => void;
 }): ReactElement {
+  const t = useT();
   return (
     <div className="oc-result" data-tone="critical" role="status">
       <div className="oc-result__head">
-        <p className="oc-result__title">Force-mutation applied</p>
+        <p className="oc-result__title">{t('ordersOrderActionsPanel.forceMutationApplied')}</p>
         <button type="button" onClick={onDismiss} className="oo-link">
-          Dismiss
+          {t('ordersOrderActionsPanel.dismiss')}
         </button>
       </div>
       <Facts
         items={[
           {
-            label: 'Status',
+            label: t('ordersOrderActionsPanel.status'),
             value: (
               <span className="sk-ident">
                 {result.fromStatus !== result.status
                   ? `${result.fromStatus} → ${result.status}`
-                  : `unchanged (${result.status})`}
+                  : t('ordersOrderActionsPanel.unchanged', { status: result.status })}
               </span>
             ),
           },
           {
-            label: 'Fields applied',
+            label: t('ordersOrderActionsPanel.fieldsApplied'),
             value: (
               <span className="sk-ident">
                 {result.fieldChangesApplied.length === 0
@@ -376,53 +400,58 @@ function OverrideResultPanel({
           },
           {
             label: 'hasAdminOverride',
-            value: <span className="oo-bad">true (permanent)</span>,
+            value: <span className="oo-bad">{t('ordersOrderActionsPanel.truePermanent')}</span>,
           },
         ]}
       />
 
       {result.resellerMoney?.refusal != null && (
         <div className="oc-result__rule">
-          <p className="oo-strong">
-            The money on this member store order did NOT follow the change
-          </p>
+          <p className="oo-strong">{t('ordersOrderActionsPanel.theMoneyOnThisMember')}</p>
           <p className="oo-bad oo-p">
             {result.resellerMoney.refusal === 'ALREADY_PAID'
-              ? 'A credit on this order had already been paid, so it could not be worked out again. The order now says one figure and the wallets say another.'
-              : 'Re-pricing this order failed. The stale figures are what would be paid until it succeeds.'}
+              ? t('ordersOrderActionsPanel.aCreditOnThisOrder')
+              : t('ordersOrderActionsPanel.rePricingThisOrderFailed')}
           </p>
-          <p className="oo-faint">
-            This is open on /system-issues (MONEY, HIGH) and the store and client staff have been
-            told. Settle the difference on the order’s ticket, or call the order off and place it
-            again.
-          </p>
+          <p className="oo-faint">{t('ordersOrderActionsPanel.thisIsOpenOnSystem')}</p>
         </div>
       )}
 
       {result.reserveOutcomes && result.reserveOutcomes.length > 0 && (
         <div className="oc-result__rule">
-          <p className="oo-strong">Reserve attempts (attempted, NOT blocking)</p>
+          <p className="oo-strong">
+            {t('ordersOrderActionsPanel.reserveAttemptsAttemptedNotBlocking')}
+          </p>
           <ul className="oc-outcomes">
             {result.reserveOutcomes.map((o) => (
               <li key={o.orderItemId}>
                 {o.ok ? (
-                  <Check size={14} className="oo-good" aria-label="Reserved" />
+                  <Check
+                    size={14}
+                    className="oo-good"
+                    aria-label={t('ordersOrderActionsPanel.reserved')}
+                  />
                 ) : (
-                  <X size={14} className="oo-bad" aria-label="Failed" />
+                  <X
+                    size={14}
+                    className="oo-bad"
+                    aria-label={t('ordersOrderActionsPanel.failed')}
+                  />
                 )}
                 <span className="oc-outcomes__text sk-ident">
                   {o.orderItemId.slice(0, 8)}…{' '}
                   {o.ok
-                    ? `reserved (${o.reservationId?.slice(0, 8)}…)`
-                    : `failed: ${o.error ?? 'unknown'}`}
+                    ? t('ordersOrderActionsPanel.reserved2', {
+                        value: String(o.reservationId?.slice(0, 8)),
+                      })
+                    : t('ordersOrderActionsPanel.failedError', {
+                        error: o.error ?? t('ordersOrderActionsPanel.unknown'),
+                      })}
                 </span>
               </li>
             ))}
           </ul>
-          <p className="oo-faint">
-            Some attempts may have failed (e.g., insufficient stock); the saga did NOT block or
-            compensate. Use the release-reservations action above if cleanup is needed.
-          </p>
+          <p className="oo-faint">{t('ordersOrderActionsPanel.someAttemptsMayHaveFailed')}</p>
         </div>
       )}
     </div>
@@ -436,25 +465,33 @@ function ReleaseResultPanel({
   readonly result: ReleaseReservationsResult;
   readonly onDismiss: () => void;
 }): ReactElement {
+  const t = useT();
+
   return (
     <div className="oc-result" role="status">
       <div className="oc-result__head">
-        <p className="oc-result__title">Reservations released</p>
+        <p className="oc-result__title">{t('ordersOrderActionsPanel.reservationsReleased')}</p>
         <button type="button" onClick={onDismiss} className="oo-link">
-          Dismiss
+          {t('ordersOrderActionsPanel.dismiss')}
         </button>
       </div>
       <p className="oo-p">
-        Released <span className="sk-figure oo-strong">{result.releasedCount}</span> reservation(s).
+        {richMessage(t('ordersOrderActionsPanel.releasedReservationS'), {
+          span: <span className="sk-figure oo-strong">{result.releasedCount}</span>,
+        })}
       </p>
       {result.released.length > 0 && (
         <ul className="oc-outcomes">
           {result.released.map((r) => (
             <li key={r.reservationId} className="oo-muted">
               <span className="oc-outcomes__text">
-                <span className="sk-ident">{r.reservationId.slice(0, 8)}…</span> · qty{' '}
-                <span className="sk-figure">{r.qtyReleased}</span>
-                {r.alreadyInactive && <span className="oo-faint"> (already inactive)</span>}
+                {richMessage(t('ordersOrderActionsPanel.qty'), {
+                  span: <span className="sk-ident">{r.reservationId.slice(0, 8)}…</span>,
+                  span2: <span className="sk-figure">{r.qtyReleased}</span>,
+                })}
+                {r.alreadyInactive && (
+                  <span className="oo-faint"> {t('ordersOrderActionsPanel.alreadyInactive')}</span>
+                )}
               </span>
             </li>
           ))}

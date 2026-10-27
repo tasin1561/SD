@@ -24,6 +24,7 @@ import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { useInstantPayAdvances, type InstantPayAdvanceRowView } from '@/lib/ops-hooks';
 import { AgeChip, LinkButton } from '../../../treasury/_components/money-parts';
 import '../../_components/liabilities.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Money we advanced to sellers under Instant Pay, still owed to us by
@@ -45,6 +46,7 @@ export function InstantPayAdvances({
   readonly initialSellerId: string;
   readonly initialCourierAccountId: string;
 }): ReactElement {
+  const t = useT();
   const [sellerId, setSellerId] = useState(initialSellerId);
   const [courierAccountId, setCourierAccountId] = useState(initialCourierAccountId);
   const [sortKey, setSortKey] = useState<string | null>('age');
@@ -73,40 +75,46 @@ export function InstantPayAdvances({
   return (
     <div className="mo-page">
       <PageHeader
-        title="Instant Pay advances"
-        subtitle="Paid to clients at delivery out of our money, not yet paid to us by the courier."
+        title={t('liabilitiesInstantPayInstantPayAdvances.instantPayAdvances')}
+        subtitle={t('liabilitiesInstantPayInstantPayAdvances.paidToClientsAtDelivery')}
         action={
           <LinkButton href="/liabilities" variant="ghost" size="sm" icon={<ArrowLeft size={14} />}>
-            What we owe
+            {t('liabilitiesInstantPayInstantPayAdvances.whatWeOwe')}
           </LinkButton>
         }
       />
 
       {q.isLoading ? (
-        <SkeletonRows rows={6} cols={8} label="Reading the ledgers…" />
+        <SkeletonRows
+          rows={6}
+          cols={8}
+          label={t('liabilitiesInstantPayInstantPayAdvances.readingTheLedgers')}
+        />
       ) : q.isError || q.data === undefined ? (
         <ErrorState
-          message={q.error?.message ?? 'Could not read the advances.'}
+          message={
+            q.error?.message ?? t('liabilitiesInstantPayInstantPayAdvances.couldNotReadTheAdvances')
+          }
           retry={() => void q.refetch()}
         />
       ) : (
         <>
           <div className="mo-kpis">
             <KpiCard
-              label="COD awaiting the courier"
+              label={t('liabilitiesInstantPayInstantPayAdvances.codAwaitingTheCourier')}
               tone="pending"
               figure={<Money amount={q.data.totalCodInr} currency="INR" convert={false} />}
               hint={`${q.data.count} ${q.data.count === 1 ? 'order' : 'orders'}`}
             />
             <KpiCard
-              label="Cash we fronted"
+              label={t('liabilitiesInstantPayInstantPayAdvances.cashWeFronted')}
               figure={<Money amount={q.data.totalFrontedInr} currency="INR" convert={false} />}
-              hint="Out of capital — less than the COD where it cleared a client's debt"
+              hint={t('liabilitiesInstantPayInstantPayAdvances.outOfCapitalLessThan')}
             />
             <KpiCard
-              label="Credited to clients"
+              label={t('liabilitiesInstantPayInstantPayAdvances.creditedToClients')}
               figure={<Money amount={q.data.totalNetCreditedInr} currency="INR" convert={false} />}
-              hint="COD less tax and fees"
+              hint={t('liabilitiesInstantPayInstantPayAdvances.codLessTaxAndFees')}
             />
           </div>
 
@@ -120,11 +128,13 @@ export function InstantPayAdvances({
             >
               <FilterField icon={<Store size={16} />}>
                 <Select
-                  label="Client"
+                  label={t('liabilitiesInstantPayInstantPayAdvances.client')}
                   value={sellerId}
                   onChange={(e) => setSellerId(e.target.value)}
                 >
-                  <option value="">All clients</option>
+                  <option value="">
+                    {t('liabilitiesInstantPayInstantPayAdvances.allClients')}
+                  </option>
                   {(all.data?.bySeller ?? []).map((g) => (
                     <option key={g.key ?? ''} value={g.key ?? ''}>
                       {g.label} ({g.count})
@@ -134,11 +144,13 @@ export function InstantPayAdvances({
               </FilterField>
               <FilterField icon={<Building2 size={16} />}>
                 <Select
-                  label="Courier account"
+                  label={t('liabilitiesInstantPayInstantPayAdvances.courierAccount')}
                   value={courierAccountId}
                   onChange={(e) => setCourierAccountId(e.target.value)}
                 >
-                  <option value="">All courier accounts</option>
+                  <option value="">
+                    {t('liabilitiesInstantPayInstantPayAdvances.allCourierAccounts')}
+                  </option>
                   {(all.data?.byCourierAccount ?? [])
                     .filter((g) => g.key !== null)
                     .map((g) => (
@@ -149,14 +161,16 @@ export function InstantPayAdvances({
                 </Select>
               </FilterField>
             </FilterBar>
-            <Table caption="Instant Pay advances awaiting the courier">
+            <Table
+              caption={t('liabilitiesInstantPayInstantPayAdvances.instantPayAdvancesAwaitingThe')}
+            >
               <THead>
                 <Tr>
-                  <Th>Order</Th>
-                  <Th>Client</Th>
-                  <Th>Owed by</Th>
+                  <Th>{t('liabilitiesInstantPayInstantPayAdvances.order')}</Th>
+                  <Th>{t('liabilitiesInstantPayInstantPayAdvances.client')}</Th>
+                  <Th>{t('liabilitiesInstantPayInstantPayAdvances.owedBy')}</Th>
                   <SortableTh
-                    label="Age"
+                    label={t('liabilitiesInstantPayInstantPayAdvances.age')}
                     columnKey="age"
                     activeKey={sortKey}
                     direction={dir}
@@ -171,16 +185,16 @@ export function InstantPayAdvances({
                     onSort={onSort}
                     align="right"
                   />
-                  <Th align="right">Credited</Th>
+                  <Th align="right">{t('liabilitiesInstantPayInstantPayAdvances.credited')}</Th>
                   <SortableTh
-                    label="Fronted"
+                    label={t('liabilitiesInstantPayInstantPayAdvances.fronted')}
                     columnKey="fronted"
                     activeKey={sortKey}
                     direction={dir}
                     onSort={onSort}
                     align="right"
                   />
-                  <Th>Fronted from</Th>
+                  <Th>{t('liabilitiesInstantPayInstantPayAdvances.frontedFrom')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -188,7 +202,9 @@ export function InstantPayAdvances({
                   <TableEmpty colSpan={8}>
                     {filtered ? (
                       <>
-                        Nothing outstanding for this filter.{' '}
+                        {t(
+                          'liabilitiesInstantPayInstantPayAdvances.nothingOutstandingForThisFilter',
+                        )}{' '}
                         <button
                           type="button"
                           className="mo-link li-inline-btn"
@@ -197,14 +213,14 @@ export function InstantPayAdvances({
                             setCourierAccountId('');
                           }}
                         >
-                          Show all
+                          {t('liabilitiesInstantPayInstantPayAdvances.showAll')}
                         </button>
                       </>
                     ) : (
                       <>
-                        Every Instant Pay credit has been paid by its courier.{' '}
+                        {t('liabilitiesInstantPayInstantPayAdvances.everyInstantPayCreditHas')}{' '}
                         <Link href="/settlements" className="mo-link">
-                          See courier payouts
+                          {t('liabilitiesInstantPayInstantPayAdvances.seeCourierPayouts')}
                         </Link>
                       </>
                     )}
@@ -217,8 +233,11 @@ export function InstantPayAdvances({
                           {r.orderNumber}
                         </Link>
                         <span className="mo-sub">
-                          delivered{' '}
-                          {new Date(r.deliveredAt ?? r.creditedAt).toLocaleDateString('en-IN')}
+                          {t('liabilitiesInstantPayInstantPayAdvances.delivered', {
+                            value: new Date(r.deliveredAt ?? r.creditedAt).toLocaleDateString(
+                              'en-IN',
+                            ),
+                          })}
                         </span>
                       </Td>
                       <Td>

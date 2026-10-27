@@ -12,6 +12,7 @@ import './delhivery.css';
 import { useTrackingLookup, type TrackingLookupResult } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { useT } from '@/i18n/client';
 
 /**
  * Ask Delhivery about specific waybills and see what we would make of
@@ -28,6 +29,7 @@ import { usePermission } from '@/lib/use-permission';
  * Delhivery's end — unlike a manifest, a cancel or an NDR action.
  */
 export function TrackingLookupPanel(): ReactElement | null {
+  const t = useT();
   const mayLookup = usePermission('orders.tracking.run_poll');
   const toast = useToast();
   const lookup = useTrackingLookup();
@@ -44,7 +46,7 @@ export function TrackingLookupPanel(): ReactElement | null {
       .map((s) => s.trim())
       .filter((s) => s !== '');
     if (awbNumbers.length === 0) {
-      toast.error('Paste at least one AWB.');
+      toast.error(t('delhiveryTrackingLookupPanel.pasteAtLeastOneAwb'));
       // Rejects so the button shows it did not look anything up.
       throw new Error('Paste at least one AWB.');
     }
@@ -52,7 +54,7 @@ export function TrackingLookupPanel(): ReactElement | null {
       const r = await lookup.mutateAsync(awbNumbers);
       setResults(r.results);
       if (r.stubMode) {
-        toast.error('Stub mode is on — no courier was asked anything. Set the API base URLs.');
+        toast.error(t('delhiveryTrackingLookupPanel.stubModeOn'));
         return;
       }
       const known = r.results.filter((x) => x.known).length;
@@ -61,13 +63,14 @@ export function TrackingLookupPanel(): ReactElement | null {
       const unasked = r.unaskedCouriers ?? [];
       if (unasked.length > 0) {
         toast.error(
-          `${unasked.join(', ')} could not be asked — no active courier account, so no token. ` +
-            'A waybill of theirs will read as unknown whatever its real state.',
+          t('delhiveryTrackingLookupPanel.unaskedCouriers', { couriers: unasked.join(', ') }),
         );
       }
       toast.success(
-        `${known} of ${r.results.length} known to the couriers asked.` +
-          (known < r.results.length ? ' The rest returned no scans.' : ''),
+        t('delhiveryTrackingLookupPanel.knownOfTotal', { known, total: r.results.length }) +
+          (known < r.results.length
+            ? t('delhiveryTrackingLookupPanel.theRestReturnedNoScans')
+            : ''),
       );
     } catch (err) {
       toast.error(serverVerdict(err));
@@ -77,19 +80,19 @@ export function TrackingLookupPanel(): ReactElement | null {
 
   return (
     <AfSection
-      title="Look up a waybill"
-      note="What our couriers know about an AWB, and what our mapping makes of it. Every integrated courier is asked — Delhivery with the estate credential, Shiprocket with the account that booked the parcel. Reads only — no tracking event is written and no order moves."
+      title={t('delhiveryTrackingLookupPanel.lookUpAWaybill')}
+      note={t('delhiveryTrackingLookupPanel.whatOurCouriersKnowAbout')}
     >
       <AfCard>
         <div className="dl-awbs">
           <TextArea
-            label="AWB numbers"
+            label={t('delhiveryTrackingLookupPanel.awbNumbers')}
             rows={3}
             placeholder={'38061110518534\n38061110518535'}
             value={raw}
             onChange={(e) => setRaw(e.target.value)}
-            aria-label="AWB numbers"
-            hint="One per line or comma-separated. Up to 50 — their cap per call."
+            aria-label={t('delhiveryTrackingLookupPanel.awbNumbers')}
+            hint={t('delhiveryTrackingLookupPanel.onePerLineOrComma')}
           />
         </div>
         <div>
@@ -98,10 +101,10 @@ export function TrackingLookupPanel(): ReactElement | null {
             size="md"
             icon={<Search size={14} />}
             labels={{
-              idle: 'Look up',
-              busy: 'Asking Delhivery…',
-              done: 'Looked up',
-              error: 'Lookup failed',
+              idle: t('delhiveryTrackingLookupPanel.lookUp'),
+              busy: t('delhiveryTrackingLookupPanel.askingDelhivery'),
+              done: t('delhiveryTrackingLookupPanel.lookedUp'),
+              error: t('delhiveryTrackingLookupPanel.lookupFailed'),
             }}
             disabled={lookup.isPending}
             onAction={run}
@@ -116,24 +119,30 @@ export function TrackingLookupPanel(): ReactElement | null {
             <StatusChip
               size="sm"
               kind={r.known ? 'delivered' : 'failed'}
-              label={r.known ? `${r.scans.length} scans` : 'Delhivery has no scans'}
+              label={
+                r.known
+                  ? `${r.scans.length} scans`
+                  : t('delhiveryTrackingLookupPanel.delhiveryHasNoScans')
+              }
             />
             {r.ourShipmentId === null ? (
-              <span className="af-faint">not one of ours</span>
+              <span className="af-faint">{t('delhiveryTrackingLookupPanel.notOneOfOurs')}</span>
             ) : (
-              <span className="af-faint">we hold this shipment</span>
+              <span className="af-faint">
+                {t('delhiveryTrackingLookupPanel.weHoldThisShipment')}
+              </span>
             )}
           </div>
           {r.scans.length > 0 && (
             <Table>
               <THead>
                 <Tr>
-                  <Th>Courier time (theirs)</Th>
-                  <Th>Stored as (UTC)</Th>
-                  <Th>Leg</Th>
-                  <Th>Status</Th>
+                  <Th>{t('delhiveryTrackingLookupPanel.courierTimeTheirs')}</Th>
+                  <Th>{t('delhiveryTrackingLookupPanel.storedAsUtc')}</Th>
+                  <Th>{t('delhiveryTrackingLookupPanel.leg')}</Th>
+                  <Th>{t('delhiveryTrackingLookupPanel.status')}</Th>
                   <Th>NSL</Th>
-                  <Th>We read it as</Th>
+                  <Th>{t('delhiveryTrackingLookupPanel.weReadItAs')}</Th>
                 </Tr>
               </THead>
               <TBody>

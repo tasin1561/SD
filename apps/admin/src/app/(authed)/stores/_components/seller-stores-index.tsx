@@ -24,6 +24,7 @@ import {
 } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * Every seller's shopfronts, and the ability to fix one.
@@ -40,6 +41,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  * asked when they ring back about a store they do not remember closing.
  */
 export function SellerStoresIndex(): ReactElement {
+  const t = useT();
   const canManage = usePermission('sellers.settings.manage');
   const [term, setTerm] = useState('');
   const groups = useSellerStores('');
@@ -78,15 +80,15 @@ export function SellerStoresIndex(): ReactElement {
   return (
     <AcPage>
       <AcHeader
-        title="Shops"
-        subtitle="The shops each client sells under. A shop decides which brand an order belongs to — their products, stock, wallet and couriers are shared across all of them."
+        title={t('storesSellerStoresIndex.shops')}
+        subtitle={t('storesSellerStoresIndex.theShopsEachClientSells')}
       />
 
       {groups.isLoading ? (
         <SkeletonRows rows={6} cols={4} />
       ) : groups.isError || groups.data === undefined ? (
         <ErrorState
-          message={groups.error?.message ?? 'Could not load the shops.'}
+          message={groups.error?.message ?? t('storesSellerStoresIndex.couldNotLoadTheShops')}
           retry={() => void groups.refetch()}
         />
       ) : (
@@ -94,15 +96,15 @@ export function SellerStoresIndex(): ReactElement {
           <div className="ac-toolbar">
             <TextField
               icon={<Search size={15} />}
-              placeholder="Filter by client or shop name…"
-              aria-label="Filter"
+              placeholder={t('storesSellerStoresIndex.filterByClientOrShop')}
+              aria-label={t('storesSellerStoresIndex.filter')}
               value={term}
               onChange={(e) => setTerm(e.target.value)}
             />
           </div>
 
           {shown.length === 0 ? (
-            <EmptyState title="No client matches that." />
+            <EmptyState title={t('storesSellerStoresIndex.noClientMatchesThat')} />
           ) : (
             shown.map((g) => (
               <AcSection
@@ -121,19 +123,21 @@ export function SellerStoresIndex(): ReactElement {
                       icon={<StoreIcon size={14} />}
                       onClick={() => setAdding(g)}
                     >
-                      Add a store
+                      {t('storesSellerStoresIndex.addAStore')}
                     </Button>
                   ) : undefined
                 }
                 flush
               >
-                <Table caption={`Stores for ${g.companyName}`}>
+                <Table
+                  caption={t('storesSellerStoresIndex.storesFor', { companyName: g.companyName })}
+                >
                   <THead>
                     <Tr>
-                      <Th>Shop</Th>
-                      <Th align="right">Orders</Th>
-                      <Th>State</Th>
-                      <Th align="right">Actions</Th>
+                      <Th>{t('storesSellerStoresIndex.shop')}</Th>
+                      <Th align="right">{t('storesSellerStoresIndex.orders')}</Th>
+                      <Th>{t('storesSellerStoresIndex.state')}</Th>
+                      <Th align="right">{t('storesSellerStoresIndex.actions')}</Th>
                     </Tr>
                   </THead>
                   <TBody>
@@ -143,7 +147,7 @@ export function SellerStoresIndex(): ReactElement {
                       // happen for a company created after stores
                       // shipped — so seeing it is a finding.
                       <TableEmpty colSpan={4}>
-                        No stores. Their orders have nowhere to be filed — add one.
+                        {t('storesSellerStoresIndex.noStoresTheirOrdersHave')}
                       </TableEmpty>
                     ) : (
                       g.stores.map((s) => (
@@ -158,11 +162,19 @@ export function SellerStoresIndex(): ReactElement {
                           <Td>
                             <span className="ac-inline">
                               {s.isDefault && (
-                                <StatusChip kind="confirmed" label="Default" size="sm" />
+                                <StatusChip
+                                  kind="confirmed"
+                                  label={t('storesSellerStoresIndex.default')}
+                                  size="sm"
+                                />
                               )}
                               <StatusChip
                                 kind={s.isActive ? 'delivered' : 'cancelled'}
-                                label={s.isActive ? 'Open' : 'Closed'}
+                                label={
+                                  s.isActive
+                                    ? t('storesSellerStoresIndex.open')
+                                    : t('storesSellerStoresIndex.closed')
+                                }
                                 size="sm"
                               />
                             </span>
@@ -176,7 +188,7 @@ export function SellerStoresIndex(): ReactElement {
                                   icon={<PencilLine size={14} />}
                                   onClick={() => setEditing({ seller: g, store: s })}
                                 >
-                                  Rename
+                                  {t('storesSellerStoresIndex.rename')}
                                 </Button>
                                 {!s.isDefault && s.isActive && (
                                   <Button
@@ -191,11 +203,14 @@ export function SellerStoresIndex(): ReactElement {
                                             sellerId: g.sellerId,
                                             storeId: s.id,
                                           }),
-                                        `New orders for ${g.companyName} will be filed under “${s.name}”.`,
+                                        t('storesSellerStoresIndex.newOrdersForWillBe', {
+                                          companyName: g.companyName,
+                                          name: s.name,
+                                        }),
                                       )
                                     }
                                   >
-                                    Make default
+                                    {t('storesSellerStoresIndex.makeDefault')}
                                   </Button>
                                 )}
                                 {!s.isDefault && (
@@ -212,12 +227,14 @@ export function SellerStoresIndex(): ReactElement {
                                             isActive: !s.isActive,
                                           }),
                                         s.isActive
-                                          ? `“${s.name}” is closed.`
-                                          : `“${s.name}” is open.`,
+                                          ? t('storesSellerStoresIndex.isClosed', { name: s.name })
+                                          : t('storesSellerStoresIndex.isOpen', { name: s.name }),
                                       )
                                     }
                                   >
-                                    {s.isActive ? 'Close' : 'Reopen'}
+                                    {s.isActive
+                                      ? t('storesSellerStoresIndex.close')
+                                      : t('storesSellerStoresIndex.reopen')}
                                   </Button>
                                 )}
                               </div>
@@ -257,6 +274,7 @@ function StoreModal({
   readonly store?: AdminStoreView;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const create = useAdminCreateStore();
   const rename = useAdminRenameStore();
   const [name, setName] = useState(store?.name ?? '');
@@ -268,7 +286,7 @@ function StoreModal({
   async function save(): Promise<void> {
     setError(null);
     if (name.trim() === '') {
-      setError('Give the shop a name');
+      setError(t('storesSellerStoresIndex.giveTheShopAName'));
       return;
     }
     try {
@@ -300,27 +318,29 @@ function StoreModal({
       }}
       title={
         editing
-          ? `Rename a store for ${seller.companyName}`
-          : `Add a store for ${seller.companyName}`
+          ? t('storesSellerStoresIndex.renameAStoreFor', { companyName: seller.companyName })
+          : t('storesSellerStoresIndex.addAStoreFor', { companyName: seller.companyName })
       }
       description={
         editing
-          ? 'Orders already placed keep the name they were placed under. This is recorded against the client as a change WE made.'
-          : 'It never becomes the default, so adding one cannot move where their orders are filed. Recorded against the client as a change WE made.'
+          ? t('storesSellerStoresIndex.ordersAlreadyPlacedKeepThe')
+          : t('storesSellerStoresIndex.itNeverBecomesTheDefault')
       }
       icon={<StoreIcon size={18} />}
       locked={busy}
       footer={
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('storesSellerStoresIndex.cancel')}
           </Button>
           <AsyncButton
             state={phaseOf(busy, error)}
             labels={{
-              idle: editing ? 'Save' : 'Add shop',
-              busy: 'Saving…',
-              error: 'Not saved',
+              idle: editing
+                ? t('storesSellerStoresIndex.save')
+                : t('storesSellerStoresIndex.addShop'),
+              busy: t('storesSellerStoresIndex.saving'),
+              error: t('storesSellerStoresIndex.notSaved'),
             }}
             disabled={busy}
             onClick={() => void save()}
@@ -330,7 +350,7 @@ function StoreModal({
     >
       <div className="ac-form">
         <TextField
-          label="Name"
+          label={t('storesSellerStoresIndex.name')}
           requiredMark
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -338,7 +358,12 @@ function StoreModal({
           showCount
           autoFocus
         />
-        <TextArea label="Note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+        <TextArea
+          label={t('storesSellerStoresIndex.note')}
+          rows={2}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
         {error !== null && <AcAlert message={error} />}
       </div>
     </Dialog>

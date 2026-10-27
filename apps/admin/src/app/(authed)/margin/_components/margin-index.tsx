@@ -17,6 +17,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { useRouter } from 'next/navigation';
 import { MoCard, MoSection } from '../../treasury/_components/money-parts';
 import './margin.css';
+import { useT } from '@/i18n/client';
 
 /**
  * What our lanes actually earn.
@@ -37,6 +38,7 @@ import './margin.css';
  *    P&L reads that column as measured cost.
  */
 export function MarginIndex(): ReactElement {
+  const t = useT();
   const router = useRouter();
   const [limit, setLimit] = useState(25);
   const [run, setRun] = useState(false);
@@ -61,20 +63,20 @@ export function MarginIndex(): ReactElement {
   return (
     <div className="mo-page">
       <PageHeader
-        title="Lane margin"
-        subtitle="What we billed against what the courier actually charged. Measured from Delhivery's own figures, not the rate card's assumption."
+        title={t('marginMarginIndex.laneMargin')}
+        subtitle={t('marginMarginIndex.whatWeBilledAgainstWhat')}
         action={
           <div className="mg-actions">
             <Select
-              label="Sample size"
+              label={t('marginMarginIndex.sampleSize')}
               value={limit}
               onChange={(e) => setLimit(Number(e.target.value))}
               className="mg-sample"
-              aria-label="Sample size"
+              aria-label={t('marginMarginIndex.sampleSize')}
             >
               {[10, 25, 50, 100].map((n) => (
                 <option key={n} value={n}>
-                  Sample {n}
+                  {t('marginMarginIndex.sample', { n })}
                 </option>
               ))}
             </Select>
@@ -83,13 +85,16 @@ export function MarginIndex(): ReactElement {
               size="md"
               icon={<Play size={14} />}
               state={live.isFetching ? 'busy' : 'idle'}
-              labels={{ idle: 'Quote against the rate card', busy: 'Quoting…' }}
+              labels={{
+                idle: t('marginMarginIndex.quoteAgainstTheRateCard'),
+                busy: t('marginMarginIndex.quoting'),
+              }}
               disabled={live.isFetching}
               onClick={() => {
                 setRun(true);
                 void live.refetch();
               }}
-              title="Asks the courier's rate calculator what each parcel WOULD cost. An estimate — it writes nothing, and never replaces the invoiced figure."
+              title={t('marginMarginIndex.asksTheCourierSRate')}
             />
           </div>
         }
@@ -103,23 +108,26 @@ export function MarginIndex(): ReactElement {
         </MoCard>
       ) : data.rows.length === 0 ? (
         <EmptyState
-          title="Not invoiced yet"
-          description="Nothing in this window has been billed by the courier. Their ledger is imported every night, and each parcel appears here once they charge for it."
+          title={t('marginMarginIndex.notInvoicedYet')}
+          description={t('marginMarginIndex.nothingInThisWindowHas')}
         />
       ) : (
         <>
           {!run && (
             <MoCard>
               <p className="mo-p">
-                What the courier actually BILLED, from their own ledger — imported nightly and
-                overwritten whenever a charge is re-cut.
+                {t('marginMarginIndex.whatTheCourierActuallyBilled')}
                 {unpriced > 0 && (
                   <>
                     {' '}
-                    {unpriced} parcel{unpriced === 1 ? '' : 's'} in this window{' '}
-                    {unpriced === 1 ? 'has' : 'have'} no cost yet and{' '}
-                    {unpriced === 1 ? 'is' : 'are'} left out of the totals rather than counted as
-                    zero.
+                    {t('marginMarginIndex.parcelInThisWindowNo', {
+                      unpriced,
+                      value: unpriced === 1 ? '' : t('common.pluralS'),
+                      value2:
+                        unpriced === 1 ? t('marginMarginIndex.has') : t('marginMarginIndex.have'),
+                      value3:
+                        unpriced === 1 ? t('marginMarginIndex.is') : t('marginMarginIndex.are'),
+                    })}
                   </>
                 )}
               </p>
@@ -127,46 +135,47 @@ export function MarginIndex(): ReactElement {
           )}
           <div className="mo-kpis">
             <KpiCard
-              label="Billed to clients"
+              label={t('marginMarginIndex.billedToClients')}
               figure={<Money amount={data.totalBilledInr} decimals={false} />}
-              hint={`Across ${data.sampledShipments} priced shipment${
-                data.sampledShipments === 1 ? '' : 's'
-              }`}
+              hint={t('marginMarginIndex.acrossPricedShipment', {
+                sampledShipments: data.sampledShipments,
+                value: data.sampledShipments === 1 ? '' : t('common.pluralS'),
+              })}
             />
             <KpiCard
-              label="Courier charged us"
+              label={t('marginMarginIndex.courierChargedUs')}
               figure={<Money amount={data.totalActualCostInr} decimals={false} />}
-              hint="Delhivery's own figures"
+              hint={t('marginMarginIndex.delhiverySOwnFigures')}
             />
             <KpiCard
-              label="Margin"
+              label={t('marginMarginIndex.margin')}
               figure={<Money amount={data.totalMarginInr} decimals={false} />}
               tone={Number(data.totalMarginInr) < 0 ? 'debit' : 'credit'}
-              hint="Billed minus actual, pre-tax on both sides"
+              hint={t('marginMarginIndex.billedMinusActualPreTax')}
             />
             <KpiCard
-              label="Loss-making lanes"
+              label={t('marginMarginIndex.lossMakingLanes')}
               value={data.lossMakingCount}
               tone={data.lossMakingCount > 0 ? 'debit' : 'neutral'}
-              hint="Shipped for less than they cost"
+              hint={t('marginMarginIndex.shippedForLessThanThey')}
             />
           </div>
 
           {data.rows.length === 0 ? (
             <EmptyState
-              title="Nothing could be priced"
-              description="Every shipment in the window was skipped. The reasons are listed below."
+              title={t('marginMarginIndex.nothingCouldBePriced')}
+              description={t('marginMarginIndex.everyShipmentInTheWindow')}
             />
           ) : (
-            <Table caption="Lane margin by shipment">
+            <Table caption={t('marginMarginIndex.laneMarginByShipment')}>
               <THead>
                 <Tr>
-                  <Th>Shipment</Th>
-                  <Th>Lane</Th>
-                  <Th align="right">Billed</Th>
-                  <Th align="right">Actual cost</Th>
-                  <Th align="right">Margin</Th>
-                  <Th align="right">Card drift</Th>
+                  <Th>{t('marginMarginIndex.shipment')}</Th>
+                  <Th>{t('marginMarginIndex.lane')}</Th>
+                  <Th align="right">{t('marginMarginIndex.billed')}</Th>
+                  <Th align="right">{t('marginMarginIndex.actualCost')}</Th>
+                  <Th align="right">{t('marginMarginIndex.margin')}</Th>
+                  <Th align="right">{t('marginMarginIndex.cardDrift')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -212,8 +221,8 @@ export function MarginIndex(): ReactElement {
 
           {data.skipped.length > 0 && (
             <MoSection
-              title={`Skipped (${data.skipped.length})`}
-              note="Named rather than dropped — a total over an unstated sample reads as the whole business."
+              title={t('marginMarginIndex.skipped', { skippedLength: data.skipped.length })}
+              note={t('marginMarginIndex.namedRatherThanDroppedA')}
             >
               <ul className="mg-skipped">
                 {data.skipped.slice(0, 20).map((s) => (
@@ -222,16 +231,18 @@ export function MarginIndex(): ReactElement {
                   </li>
                 ))}
                 {data.skipped.length > 20 && (
-                  <li className="mo-faint">…and {data.skipped.length - 20} more.</li>
+                  <li className="mo-faint">
+                    {t('marginMarginIndex.andMore', { value: data.skipped.length - 20 })}
+                  </li>
                 )}
               </ul>
             </MoSection>
           )}
 
           <p className="mo-faint mg-foot">
-            Generated {new Date(data.generatedAt).toLocaleString()}. This report never changes a
-            rate card, a charge or a wallet — repricing off a single lane&apos;s reading would be a
-            bad decision.
+            {t('marginMarginIndex.generatedThisReportNeverChanges', {
+              value: new Date(data.generatedAt).toLocaleString(),
+            })}
           </p>
         </>
       )}

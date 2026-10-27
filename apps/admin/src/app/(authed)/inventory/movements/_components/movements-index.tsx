@@ -22,6 +22,7 @@ import {
   ToneText,
   Toolbar,
 } from '../../_components/stock-kit';
+import { useT } from '@/i18n/client';
 
 const PAGE_SIZE = 50;
 
@@ -46,6 +47,7 @@ export function MovementsIndex({
   readonly initialWarehouseId?: string;
   readonly initialBinId?: string;
 }): ReactElement {
+  const tr = useT();
   const warehouses = useWarehouseOptions();
   const [variantId, setVariantId] = useState('');
   const [warehouseId, setWarehouseId] = useState(initialWarehouseId);
@@ -72,7 +74,8 @@ export function MovementsIndex({
   const binOptions = bins.data ?? [];
   const selectedFromRows =
     binId !== '' && !binOptions.some((b) => b.id === binId)
-      ? (items.find((m) => m.binId === binId)?.binCode ?? 'Selected bin')
+      ? (items.find((m) => m.binId === binId)?.binCode ??
+        tr('inventoryMovementsMovementsIndex.selectedBin'))
       : null;
 
   function change(apply: () => void): void {
@@ -83,24 +86,27 @@ export function MovementsIndex({
   return (
     <AreaPage>
       <PageHeader
-        breadcrumbs={[{ label: 'Inventory' }, { label: 'Movements' }]}
-        title="Stock movements"
-        subtitle="Append-only. Every change to a quantity, and what caused it. Read this when a number does not add up."
+        breadcrumbs={[
+          { label: tr('inventoryMovementsMovementsIndex.inventory') },
+          { label: tr('inventoryMovementsMovementsIndex.movements') },
+        ]}
+        title={tr('inventoryMovementsMovementsIndex.stockMovements')}
+        subtitle={tr('inventoryMovementsMovementsIndex.appendOnlyEveryChangeTo')}
       />
 
       <Stack>
         <Toolbar>
           <TextField
             id="mv-variant"
-            label="Variant id"
+            label={tr('inventoryMovementsMovementsIndex.variantId')}
             inputClassName="sk-ident"
             value={variantId}
             onChange={(e) => change(() => setVariantId(e.target.value))}
-            placeholder="Paste a variant id to trace one SKU"
+            placeholder={tr('inventoryMovementsMovementsIndex.pasteAVariantIdTo')}
           />
           <Select
             id="mv-wh"
-            label="Warehouse"
+            label={tr('inventoryMovementsMovementsIndex.warehouse')}
             value={warehouseId}
             onChange={(e) =>
               change(() => {
@@ -111,7 +117,7 @@ export function MovementsIndex({
               })
             }
           >
-            <option value="">All warehouses</option>
+            <option value="">{tr('inventoryMovementsMovementsIndex.allWarehouses')}</option>
             {(warehouses.data ?? []).map((w) => (
               <option key={w.id} value={w.id}>
                 {w.name}
@@ -120,12 +126,16 @@ export function MovementsIndex({
           </Select>
           <Select
             id="mv-bin"
-            label="Bin"
+            label={tr('inventoryMovementsMovementsIndex.bin')}
             value={binId}
             disabled={warehouseId === '' && binId === ''}
             onChange={(e) => change(() => setBinId(e.target.value))}
           >
-            <option value="">{warehouseId === '' ? 'Pick a warehouse' : 'All bins'}</option>
+            <option value="">
+              {warehouseId === ''
+                ? tr('inventoryMovementsMovementsIndex.pickAWarehouse')
+                : tr('inventoryMovementsMovementsIndex.allBins')}
+            </option>
             {selectedFromRows !== null && <option value={binId}>{selectedFromRows}</option>}
             {binOptions.map((b) => (
               <option key={b.id} value={b.id}>
@@ -135,11 +145,11 @@ export function MovementsIndex({
           </Select>
           <Select
             id="mv-type"
-            label="Type"
+            label={tr('inventoryMovementsMovementsIndex.type')}
             value={type}
             onChange={(e) => change(() => setType(e.target.value))}
           >
-            <option value="">All types</option>
+            <option value="">{tr('inventoryMovementsMovementsIndex.allTypes')}</option>
             {MOVEMENT_TYPES.map((t) => (
               <option key={t} value={t}>
                 {t.replace(/_/g, ' ').toLowerCase()}
@@ -154,22 +164,22 @@ export function MovementsIndex({
           <InlineError message={serverVerdict(list.error)} retry={() => void list.refetch()} />
         ) : items.length === 0 ? (
           <EmptyState
-            title="No movements match"
-            description="Widen the filters, or check the variant id — an id that does not exist looks exactly like a SKU that never moved."
+            title={tr('inventoryMovementsMovementsIndex.noMovementsMatch')}
+            description={tr('inventoryMovementsMovementsIndex.widenTheFiltersOrCheck')}
           />
         ) : (
           <>
             <Table>
               <THead>
                 <Tr>
-                  <Th>When</Th>
-                  <Th>Type</Th>
-                  <Th>Variant</Th>
-                  <Th>Bin</Th>
-                  <Th align="right">Change</Th>
-                  <Th align="right">After</Th>
-                  <Th>Reason</Th>
-                  <Th>Caused by</Th>
+                  <Th>{tr('inventoryMovementsMovementsIndex.when')}</Th>
+                  <Th>{tr('inventoryMovementsMovementsIndex.type')}</Th>
+                  <Th>{tr('inventoryMovementsMovementsIndex.variant')}</Th>
+                  <Th>{tr('inventoryMovementsMovementsIndex.bin')}</Th>
+                  <Th align="right">{tr('inventoryMovementsMovementsIndex.change')}</Th>
+                  <Th align="right">{tr('inventoryMovementsMovementsIndex.after')}</Th>
+                  <Th>{tr('inventoryMovementsMovementsIndex.reason')}</Th>
+                  <Th>{tr('inventoryMovementsMovementsIndex.causedBy')}</Th>
                 </Tr>
               </THead>
               <TBody>

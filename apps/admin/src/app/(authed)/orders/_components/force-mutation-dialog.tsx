@@ -17,6 +17,9 @@ import { Select } from '@skydrop/ui/app/select';
 import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import './order-core.css';
 import { serverVerdict } from '@/lib/server-verdict';
+import type { MessageKey } from '@/i18n/catalog';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * The god-mode override surface (CP2.10).
@@ -52,56 +55,118 @@ const CANCELLATION_REASONS = Object.values(OrderCancellationReason);
 type FieldKey = keyof ForceMutationFields;
 
 const FIELD_GROUPS: ReadonlyArray<{
-  readonly title: string;
+  readonly titleKey: MessageKey;
   readonly fields: ReadonlyArray<{
     readonly key: FieldKey;
-    readonly label: string;
+    readonly labelKey: MessageKey;
     readonly kind: 'text' | 'long-text' | 'number' | 'bool' | 'select';
     readonly options?: ReadonlyArray<string>;
   }>;
 }> = [
   {
-    title: 'Recipient',
+    titleKey: 'ordersForceMutationDialog.fieldRecipient',
     fields: [
-      { key: 'recipientName', label: 'Name', kind: 'text' },
-      { key: 'recipientPhoneE164', label: 'Phone (E.164)', kind: 'text' },
-      { key: 'recipientAltPhoneE164', label: 'Alt phone (E.164)', kind: 'text' },
-      { key: 'recipientEmail', label: 'Email', kind: 'text' },
-      { key: 'recipientAddressLine1', label: 'Address line 1', kind: 'text' },
-      { key: 'recipientAddressLine2', label: 'Address line 2', kind: 'text' },
-      { key: 'recipientLandmark', label: 'Landmark', kind: 'text' },
-      { key: 'recipientCity', label: 'City', kind: 'text' },
-      { key: 'recipientStateProvince', label: 'State / province', kind: 'text' },
-      { key: 'recipientPostalCode', label: 'Postal code', kind: 'text' },
-      { key: 'recipientCountryCode', label: 'Country (ISO)', kind: 'text' },
+      { key: 'recipientName', labelKey: 'ordersForceMutationDialog.fieldName', kind: 'text' },
+      {
+        key: 'recipientPhoneE164',
+        labelKey: 'ordersForceMutationDialog.fieldPhoneE164',
+        kind: 'text',
+      },
+      {
+        key: 'recipientAltPhoneE164',
+        labelKey: 'ordersForceMutationDialog.fieldAltPhoneE164',
+        kind: 'text',
+      },
+      { key: 'recipientEmail', labelKey: 'ordersForceMutationDialog.fieldEmail', kind: 'text' },
+      {
+        key: 'recipientAddressLine1',
+        labelKey: 'ordersForceMutationDialog.fieldAddressLine1',
+        kind: 'text',
+      },
+      {
+        key: 'recipientAddressLine2',
+        labelKey: 'ordersForceMutationDialog.fieldAddressLine2',
+        kind: 'text',
+      },
+      {
+        key: 'recipientLandmark',
+        labelKey: 'ordersForceMutationDialog.fieldLandmark',
+        kind: 'text',
+      },
+      { key: 'recipientCity', labelKey: 'ordersForceMutationDialog.fieldCity', kind: 'text' },
+      {
+        key: 'recipientStateProvince',
+        labelKey: 'ordersForceMutationDialog.fieldStateProvince',
+        kind: 'text',
+      },
+      {
+        key: 'recipientPostalCode',
+        labelKey: 'ordersForceMutationDialog.fieldPostalCode',
+        kind: 'text',
+      },
+      {
+        key: 'recipientCountryCode',
+        labelKey: 'ordersForceMutationDialog.fieldCountryIso',
+        kind: 'text',
+      },
     ],
   },
   {
-    title: 'Payment + value',
+    titleKey: 'ordersForceMutationDialog.fieldPaymentValue',
     fields: [
-      { key: 'paymentMode', label: 'Payment mode', kind: 'select', options: PAYMENT_MODES },
-      { key: 'codAmountInr', label: 'COD amount (INR)', kind: 'number' },
-      { key: 'declaredValueInr', label: 'Declared value (INR)', kind: 'number' },
+      {
+        key: 'paymentMode',
+        labelKey: 'ordersForceMutationDialog.fieldPaymentMode',
+        kind: 'select',
+        options: PAYMENT_MODES,
+      },
+      {
+        key: 'codAmountInr',
+        labelKey: 'ordersForceMutationDialog.fieldCodAmountInr',
+        kind: 'number',
+      },
+      {
+        key: 'declaredValueInr',
+        labelKey: 'ordersForceMutationDialog.fieldDeclaredValueInr',
+        kind: 'number',
+      },
     ],
   },
   {
-    title: 'Physical',
+    titleKey: 'ordersForceMutationDialog.fieldPhysical',
     fields: [
-      { key: 'totalWeightGrams', label: 'Total weight (g)', kind: 'number' },
-      { key: 'packageType', label: 'Package type', kind: 'select', options: PACKAGE_TYPES },
-      { key: 'isUrgent', label: 'Urgent', kind: 'bool' },
-      { key: 'isHighRisk', label: 'High risk', kind: 'bool' },
+      {
+        key: 'totalWeightGrams',
+        labelKey: 'ordersForceMutationDialog.fieldTotalWeightG',
+        kind: 'number',
+      },
+      {
+        key: 'packageType',
+        labelKey: 'ordersForceMutationDialog.fieldPackageType',
+        kind: 'select',
+        options: PACKAGE_TYPES,
+      },
+      { key: 'isUrgent', labelKey: 'ordersForceMutationDialog.fieldUrgent', kind: 'bool' },
+      { key: 'isHighRisk', labelKey: 'ordersForceMutationDialog.fieldHighRisk', kind: 'bool' },
     ],
   },
   {
-    title: 'Notes + cancellation',
+    titleKey: 'ordersForceMutationDialog.fieldNotesCancellation',
     fields: [
-      { key: 'sellerNotes', label: 'Client notes', kind: 'long-text' },
-      { key: 'internalNotes', label: 'Internal notes', kind: 'long-text' },
-      { key: 'callNotes', label: 'Call notes', kind: 'long-text' },
+      {
+        key: 'sellerNotes',
+        labelKey: 'ordersForceMutationDialog.fieldClientNotes',
+        kind: 'long-text',
+      },
+      {
+        key: 'internalNotes',
+        labelKey: 'ordersForceMutationDialog.fieldInternalNotes',
+        kind: 'long-text',
+      },
+      { key: 'callNotes', labelKey: 'ordersForceMutationDialog.fieldCallNotes', kind: 'long-text' },
       {
         key: 'cancellationReason',
-        label: 'Cancellation reason',
+        labelKey: 'ordersForceMutationDialog.fieldCancellationReason',
         kind: 'select',
         options: CANCELLATION_REASONS,
       },
@@ -125,6 +190,8 @@ export function ForceMutationDialog({
   readonly order: OrderView;
   readonly onSuccess: (result: ForceMutationResult) => void;
 }): ReactElement {
+  const t = useT();
+
   const [fieldStates, setFieldStates] = useState<Record<FieldKey, FieldState>>(() =>
     initFieldStates(),
   );
@@ -220,7 +287,7 @@ export function ForceMutationDialog({
       //   FORCE_MUTATION_RISK_NOT_ACKNOWLEDGED
       //   FORCE_MUTATION_NOOP
       // The UI does NOT reimplement these as client-side errors.
-      setServerError(serverVerdict(err, 'Force mutation failed.'));
+      setServerError(serverVerdict(err, t('ordersForceMutationDialog.forceMutationFailed')));
       setStage('edit');
     }
   }
@@ -233,7 +300,7 @@ export function ForceMutationDialog({
         onClick={() => onOpenChange(false)}
         disabled={mutate.isPending}
       >
-        Cancel
+        {t('ordersForceMutationDialog.cancel')}
       </Button>
       <Button
         variant="destructive"
@@ -242,15 +309,15 @@ export function ForceMutationDialog({
         disabled={!canSubmit}
         title={
           !reasonOk
-            ? `Reason must be at least ${MIN_REASON_LEN} characters`
+            ? t('ordersForceMutationDialog.reasonMustBeAtLeast', { minReasonLen: MIN_REASON_LEN })
             : !ack
-              ? 'You must acknowledge the data-integrity risk'
+              ? t('ordersForceMutationDialog.youMustAcknowledgeTheData')
               : !hasAtLeastOneMutation
-                ? 'Either change a field or change the status (or both)'
+                ? t('ordersForceMutationDialog.eitherChangeAFieldOr')
                 : undefined
         }
       >
-        Continue → confirmation
+        {t('ordersForceMutationDialog.continueConfirmation')}
       </Button>
     </DialogFooter>
   );
@@ -267,7 +334,7 @@ export function ForceMutationDialog({
         }}
         disabled={mutate.isPending}
       >
-        ← Back
+        {t('ordersForceMutationDialog.back')}
       </Button>
       <Button
         variant="destructive"
@@ -281,7 +348,7 @@ export function ForceMutationDialog({
         }}
         disabled={!typedOk || mutate.isPending}
       >
-        Force-mutate this order
+        {t('ordersForceMutationDialog.forceMutateThisOrder')}
       </Button>
     </DialogFooter>
   );
@@ -296,8 +363,8 @@ export function ForceMutationDialog({
       tone="critical"
       size="lg"
       icon={<ShieldAlert size={18} />}
-      title="God-mode override"
-      description="ORD-2. Bypasses the state machine and the standard edit rules. Audited CRITICAL. Marks the order with hasAdminOverride permanently."
+      title={t('ordersForceMutationDialog.godModeOverride')}
+      description={t('ordersForceMutationDialog.ord2BypassesTheState')}
       footer={stage === 'edit' ? editFooter : confirmFooter}
     >
       {stage === 'edit' ? (
@@ -306,8 +373,8 @@ export function ForceMutationDialog({
 
           {FIELD_GROUPS.map((group) => (
             <FieldGroupBlock
-              key={group.title}
-              title={group.title}
+              key={group.titleKey}
+              title={t(group.titleKey)}
               fields={group.fields}
               fieldStates={fieldStates}
               order={order}
@@ -322,17 +389,18 @@ export function ForceMutationDialog({
               checked={changeStatus}
               onChange={(e) => setChangeStatus(e.target.checked)}
               disabled={mutate.isPending}
-              label="Force order status"
+              label={t('ordersForceMutationDialog.forceOrderStatus')}
               description={
                 <>
-                  Bypasses the state-machine matrix. Currently:{' '}
-                  <span className="sk-ident">{order.status}</span>
+                  {richMessage(t('ordersForceMutationDialog.bypassesTheStateMachineMatrix'), {
+                    span: <span className="sk-ident">{order.status}</span>,
+                  })}
                 </>
               }
             />
             {changeStatus && (
               <Select
-                label="Target status"
+                label={t('ordersForceMutationDialog.targetStatus')}
                 value={targetStatus}
                 onChange={(e) => setTargetStatus(e.target.value as OrderStatus)}
                 disabled={mutate.isPending}
@@ -348,17 +416,17 @@ export function ForceMutationDialog({
 
           <TextArea
             id="god-reason"
-            label="Justification"
+            label={t('ordersForceMutationDialog.justification')}
             requiredMark
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
-            placeholder="Explain why the state machine + edit rules must be bypassed. Be specific — this is the only audit-time record of intent."
+            placeholder={t('ordersForceMutationDialog.explainWhyTheStateMachine')}
             disabled={mutate.isPending}
-            hint="Recorded in the audit log + order event. Visible forever."
+            hint={t('ordersForceMutationDialog.recordedInTheAuditLog')}
             after={
               <span className="oc-counter sk-figure" data-ok={reasonOk ? '1' : undefined}>
-                {reasonLen} / {MIN_REASON_LEN} min
+                {t('ordersForceMutationDialog.min', { reasonLen, minReasonLen: MIN_REASON_LEN })}
               </span>
             }
           />
@@ -370,13 +438,18 @@ export function ForceMutationDialog({
               disabled={mutate.isPending}
               label={
                 <>
-                  I acknowledge the data-integrity risk: this bypass opts OUT of the saga&apos;s
-                  compensation guarantee. Stock side-effects on{' '}
-                  <span className="sk-ident">→ CONFIRMED</span> are attempted but not enforced;
-                  transitioning away from <span className="sk-ident">CONFIRMED</span> leaves
-                  reservations intact (cleanup is the separate{' '}
-                  <span className="sk-ident">release-reservations</span> action). The order will
-                  carry <span className="sk-ident">hasAdminOverride: true</span> permanently.
+                  {richMessage(t('ordersForceMutationDialog.iAcknowledgeTheDataIntegrity'), {
+                    span: (
+                      <span className="sk-ident">{t('ordersForceMutationDialog.confirmed')}</span>
+                    ),
+                    span2: <span className="sk-ident">CONFIRMED</span>,
+                    span3: <span className="sk-ident">release-reservations</span>,
+                    span4: (
+                      <span className="sk-ident">
+                        {t('ordersForceMutationDialog.hasadminoverrideTrue')}
+                      </span>
+                    ),
+                  })}
                 </>
               }
             />
@@ -404,18 +477,15 @@ export function ForceMutationDialog({
 }
 
 function CriticalNotice(): ReactElement {
+  const t = useT();
+
   return (
     <div className="oo-god__banner" role="note">
       <AlertTriangle size={16} aria-hidden />
       <p className="oo-p oo-bad">
-        <strong>This is a deliberate bypass.</strong> The order&apos;s state machine, edit rules,
-        and saga compensation are all opted out of. Use it only when normal flows can&apos;t reach
-        the required state — and document why. A forced status has the same consequences as any
-        other change except stock: customer and client emails, client webhooks, invoices and
-        delivery-time billing fire for the status it lands on; it joins or leaves the call queue; a
-        forced CONFIRMED gets a shipment (so it can be picked and booked); and a cancel voids an
-        unpicked shipment and returns the delivery fee if the parcel never left with a courier. A
-        waybill already issued is NOT cancelled with the courier.
+        {richMessage(t('ordersForceMutationDialog.theOrderSStateMachine'), {
+          strong: <strong>{t('ordersForceMutationDialog.thisIsADeliberateBypass')}</strong>,
+        })}
       </p>
     </div>
   );
@@ -433,7 +503,7 @@ function FieldGroupBlock({
   readonly title: string;
   readonly fields: ReadonlyArray<{
     readonly key: FieldKey;
-    readonly label: string;
+    readonly labelKey: MessageKey;
     readonly kind: 'text' | 'long-text' | 'number' | 'bool' | 'select';
     readonly options?: ReadonlyArray<string>;
   }>;
@@ -443,12 +513,17 @@ function FieldGroupBlock({
   readonly onChange: (key: FieldKey, value: string | number | boolean) => void;
   readonly disabled: boolean;
 }): ReactElement {
+  const t = useT();
   const enabledCount = fields.filter((f) => fieldStates[f.key]?.enabled).length;
   return (
     <div className="oc-wl">
       <div className="oc-wl__head">
         <p className="oc-wl__title">{title}</p>
-        {enabledCount > 0 && <span className="oc-wl__count">{enabledCount} change(s)</span>}
+        {enabledCount > 0 && (
+          <span className="oc-wl__count">
+            {t('ordersForceMutationDialog.changeS', { enabledCount })}
+          </span>
+        )}
       </div>
       {fields.map((f) => {
         const state = fieldStates[f.key];
@@ -460,17 +535,19 @@ function FieldGroupBlock({
               checked={enabled}
               onChange={() => onToggle(f.key, currentValue)}
               disabled={disabled}
-              label={f.label}
+              label={t(f.labelKey)}
               description={
                 currentValue !== null && currentValue !== undefined ? (
-                  <span className="oc-wl__was sk-ident">was: {String(currentValue)}</span>
+                  <span className="oc-wl__was sk-ident">
+                    {t('ordersForceMutationDialog.was', { value: String(currentValue) })}
+                  </span>
                 ) : undefined
               }
             />
             {enabled && (
               <FieldInput
                 kind={f.kind}
-                label={f.label}
+                label={t(f.labelKey)}
                 {...(f.options !== undefined ? { options: f.options } : {})}
                 value={state?.value ?? ''}
                 disabled={disabled}
@@ -500,7 +577,8 @@ function FieldInput({
   readonly disabled: boolean;
   readonly onChange: (v: string | number | boolean) => void;
 }): ReactElement {
-  const name = `New ${label.toLowerCase()}`;
+  const t = useT();
+  const name = t('ordersForceMutationDialog.new', { value: label.toLowerCase() });
   if (kind === 'bool') {
     return (
       <Select
@@ -569,27 +647,39 @@ function TypedConfirmStep({
   readonly serverError: string | null;
   readonly pending: boolean;
 }): ReactElement {
+  const t = useT();
+
   return (
     <div className="oo-god">
       <CriticalNotice />
 
       <Summary
-        title="You are about to:"
+        title={t('ordersForceMutationDialog.youAreAboutTo')}
         rows={[
           fieldChangeCount > 0
-            ? `Modify ${fieldChangeCount} field(s): ${changedFields.join(', ')}`
+            ? t('ordersForceMutationDialog.modifyFieldS', {
+                fieldChangeCount,
+                value: changedFields.join(', '),
+              })
             : null,
-          statusChange ? `Force status: ${statusChange.from} → ${statusChange.to}` : null,
+          statusChange
+            ? t('ordersForceMutationDialog.forceStatus', {
+                from: statusChange.from,
+                to: statusChange.to,
+              })
+            : null,
         ].filter((r): r is string => r !== null)}
       />
 
       <div className="oc-critical-box">
         <p className="oo-p">
-          Type <span className="oc-typed-word">{TYPED_CONFIRM}</span> to confirm
+          {richMessage(t('ordersForceMutationDialog.typeToConfirmRich'), {
+            span: <span className="oc-typed-word">{TYPED_CONFIRM}</span>,
+          })}
         </p>
         <TextField
           className="oo-god__typed"
-          aria-label={`Type ${TYPED_CONFIRM} to confirm`}
+          aria-label={t('ordersForceMutationDialog.typeToConfirm', { typedConfirm: TYPED_CONFIRM })}
           value={typed}
           onChange={(e) => onTypedChange(e.target.value)}
           placeholder={TYPED_CONFIRM}

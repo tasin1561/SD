@@ -37,6 +37,7 @@ import {
   mutationPhase,
 } from '../../_components/stock-kit';
 import { NewAdjustmentPanel } from './new-adjustment-panel';
+import { useT } from '@/i18n/client';
 
 const PAGE_SIZE = 25;
 
@@ -60,6 +61,7 @@ export function AdjustmentsIndex({
 }: {
   readonly prefill?: AdjustmentPrefill | null;
 } = {}): ReactElement {
+  const t = useT();
   const [status, setStatus] = useState<string>('PENDING');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<StockAdjustmentView | null>(null);
@@ -81,24 +83,31 @@ export function AdjustmentsIndex({
   return (
     <AreaPage>
       <PageHeader
-        breadcrumbs={[{ label: 'Inventory' }, { label: 'Adjustments' }]}
-        title="Stock adjustments"
-        subtitle="Corrections to counted stock. Anything above the value threshold waits here for a second pair of eyes before it moves inventory."
+        breadcrumbs={[
+          { label: t('inventoryAdjustmentsAdjustmentsIndex.inventory') },
+          { label: t('inventoryAdjustmentsAdjustmentsIndex.adjustments') },
+        ]}
+        title={t('inventoryAdjustmentsAdjustmentsIndex.stockAdjustments')}
+        subtitle={t('inventoryAdjustmentsAdjustmentsIndex.correctionsToCountedStockAnything')}
         action={<NewAdjustmentPanel prefill={prefill} />}
       />
 
       <KpiGrid>
-        <KpiCard label="Rows shown" icon={<ClipboardList size={14} />} value={items.length} />
         <KpiCard
-          label="Awaiting approval"
+          label={t('inventoryAdjustmentsAdjustmentsIndex.rowsShown')}
+          icon={<ClipboardList size={14} />}
+          value={items.length}
+        />
+        <KpiCard
+          label={t('inventoryAdjustmentsAdjustmentsIndex.awaitingApproval')}
           icon={<Hourglass size={14} />}
           value={pending.length}
           tone={pending.length > 0 ? 'pending' : 'neutral'}
         />
         <KpiCard
-          label="Value at stake"
+          label={t('inventoryAdjustmentsAdjustmentsIndex.valueAtStake')}
           icon={<Scale size={14} />}
-          hint="Absolute impact of the pending rows on this page"
+          hint={t('inventoryAdjustmentsAdjustmentsIndex.absoluteImpactOfThePending')}
           figure={<Money amount={valueAtStake} decimals={false} />}
         />
       </KpiGrid>
@@ -107,14 +116,14 @@ export function AdjustmentsIndex({
         <Toolbar>
           <Select
             id="adj-status"
-            label="Status"
+            label={t('inventoryAdjustmentsAdjustmentsIndex.status')}
             value={status}
             onChange={(e) => {
               setStatus(e.target.value);
               setPage(1);
             }}
           >
-            <option value="">All statuses</option>
+            <option value="">{t('inventoryAdjustmentsAdjustmentsIndex.allStatuses')}</option>
             {STATUSES.map((s) => (
               <option key={s} value={s}>
                 {s.replace(/_/g, ' ').toLowerCase()}
@@ -130,11 +139,15 @@ export function AdjustmentsIndex({
         ) : items.length === 0 ? (
           <EmptyState
             tone={status === 'PENDING' ? 'positive' : 'neutral'}
-            title={status === 'PENDING' ? 'Nothing waiting' : 'No adjustments'}
+            title={
+              status === 'PENDING'
+                ? t('inventoryAdjustmentsAdjustmentsIndex.nothingWaiting')
+                : t('inventoryAdjustmentsAdjustmentsIndex.noAdjustments')
+            }
             description={
               status === 'PENDING'
-                ? 'No adjustment is above the approval threshold right now. Smaller corrections apply immediately — look under Executed for those.'
-                : 'Adjustments come from warehouse staff, or from completing a cycle count with discrepancies.'
+                ? t('inventoryAdjustmentsAdjustmentsIndex.noAdjustmentIsAboveThe')
+                : t('inventoryAdjustmentsAdjustmentsIndex.adjustmentsComeFromWarehouseStaff')
             }
           />
         ) : (
@@ -142,12 +155,12 @@ export function AdjustmentsIndex({
             <Table>
               <THead>
                 <Tr>
-                  <Th>Raised</Th>
-                  <Th>Type</Th>
-                  <Th>Reason</Th>
-                  <Th align="right">Lines</Th>
-                  <Th align="right">Value impact</Th>
-                  <Th>Status</Th>
+                  <Th>{t('inventoryAdjustmentsAdjustmentsIndex.raised')}</Th>
+                  <Th>{t('inventoryAdjustmentsAdjustmentsIndex.type')}</Th>
+                  <Th>{t('inventoryAdjustmentsAdjustmentsIndex.reason')}</Th>
+                  <Th align="right">{t('inventoryAdjustmentsAdjustmentsIndex.lines')}</Th>
+                  <Th align="right">{t('inventoryAdjustmentsAdjustmentsIndex.valueImpact')}</Th>
+                  <Th>{t('inventoryAdjustmentsAdjustmentsIndex.status')}</Th>
                   <Th align="right" />
                 </Tr>
               </THead>
@@ -177,7 +190,9 @@ export function AdjustmentsIndex({
                     </Td>
                     <Td align="right">
                       <Button variant="ghost" size="sm" onClick={() => setSelected(a)}>
-                        {a.status === 'PENDING' ? 'Review' : 'View'}
+                        {a.status === 'PENDING'
+                          ? t('inventoryAdjustmentsAdjustmentsIndex.review')
+                          : t('inventoryAdjustmentsAdjustmentsIndex.view')}
                       </Button>
                     </Td>
                   </Tr>
@@ -237,6 +252,7 @@ function AdjustmentReview({
   adjustment: StockAdjustmentView | null;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const [reason, setReason] = useState('');
   const [rejecting, setRejecting] = useState(false);
   const approve = useApproveAdjustment();
@@ -260,7 +276,7 @@ function AdjustmentReview({
         if (!next) close();
       }}
       size="lg"
-      title="Stock adjustment"
+      title={t('inventoryAdjustmentsAdjustmentsIndex.stockAdjustment')}
       description={
         adjustment === null ? undefined : (
           <span className="adj-sub">
@@ -270,7 +286,9 @@ function AdjustmentReview({
               label={pretty(adjustment.status)}
             />
             <span className="stk-faint">
-              raised {new Date(adjustment.initiatedAt).toLocaleString()}
+              {t('inventoryAdjustmentsAdjustmentsIndex.raised2', {
+                value: new Date(adjustment.initiatedAt).toLocaleString(),
+              })}
             </span>
           </span>
         )
@@ -278,7 +296,7 @@ function AdjustmentReview({
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={close}>
-            Close
+            {t('inventoryAdjustmentsAdjustmentsIndex.close')}
           </Button>
           {adjustment !== null && !decided && !rejecting && (
             <>
@@ -288,13 +306,16 @@ function AdjustmentReview({
                 icon={<X size={16} />}
                 onClick={() => setRejecting(true)}
               >
-                Reject
+                {t('inventoryAdjustmentsAdjustmentsIndex.reject')}
               </Button>
               <AsyncButton
                 size="md"
                 icon={<Check size={16} />}
                 state={mutationPhase(approve)}
-                labels={{ idle: 'Approve — this moves stock', busy: 'Approving…' }}
+                labels={{
+                  idle: t('inventoryAdjustmentsAdjustmentsIndex.approveThisMovesStock'),
+                  busy: t('inventoryAdjustmentsAdjustmentsIndex.approving'),
+                }}
                 disabled={approve.isPending}
                 onClick={() => approve.mutate({ id: adjustment.id }, { onSuccess: close })}
               />
@@ -305,7 +326,10 @@ function AdjustmentReview({
               variant="destructive"
               size="md"
               state={mutationPhase(reject)}
-              labels={{ idle: 'Confirm reject', busy: 'Rejecting…' }}
+              labels={{
+                idle: t('inventoryAdjustmentsAdjustmentsIndex.confirmReject'),
+                busy: t('inventoryAdjustmentsAdjustmentsIndex.rejecting'),
+              }}
               disabled={reason.trim().length === 0 || reject.isPending}
               onClick={() =>
                 reject.mutate({ id: adjustment.id, reason: reason.trim() }, { onSuccess: close })
@@ -320,10 +344,13 @@ function AdjustmentReview({
           <Facts
             columns={3}
             items={[
-              { label: 'Type', value: adjustment.type },
-              { label: 'Reason code', value: adjustment.reasonCode ?? '—' },
+              { label: t('inventoryAdjustmentsAdjustmentsIndex.type'), value: adjustment.type },
               {
-                label: 'Value impact',
+                label: t('inventoryAdjustmentsAdjustmentsIndex.reasonCode'),
+                value: adjustment.reasonCode ?? '—',
+              },
+              {
+                label: t('inventoryAdjustmentsAdjustmentsIndex.valueImpact'),
                 value: (
                   <Money
                     amount={adjustment.totalValueImpactInr ?? 0}
@@ -332,7 +359,7 @@ function AdjustmentReview({
                 ),
               },
               {
-                label: 'Approval threshold',
+                label: t('inventoryAdjustmentsAdjustmentsIndex.approvalThreshold'),
                 value:
                   adjustment.approverThresholdInr === null ? (
                     '—'
@@ -340,33 +367,43 @@ function AdjustmentReview({
                     <Money amount={adjustment.approverThresholdInr} />
                   ),
               },
-              { label: 'Warehouse', value: <Ident value={adjustment.warehouseId} /> },
-              { label: 'Client', value: <Ident value={adjustment.sellerId} /> },
+              {
+                label: t('inventoryAdjustmentsAdjustmentsIndex.warehouse'),
+                value: <Ident value={adjustment.warehouseId} />,
+              },
+              {
+                label: t('inventoryAdjustmentsAdjustmentsIndex.client'),
+                value: <Ident value={adjustment.sellerId} />,
+              },
             ]}
           />
 
           {adjustment.description !== null && adjustment.description !== '' && (
-            <AreaSection title="Description">
+            <AreaSection title={t('inventoryAdjustmentsAdjustmentsIndex.description')}>
               <Note>{adjustment.description}</Note>
             </AreaSection>
           )}
 
           {adjustment.rejectedReason !== null && (
-            <AreaSection title="Rejected because">
+            <AreaSection title={t('inventoryAdjustmentsAdjustmentsIndex.rejectedBecause')}>
               <Note>{adjustment.rejectedReason}</Note>
             </AreaSection>
           )}
 
-          <AreaSection title={`Lines (${adjustment.lines.length})`}>
+          <AreaSection
+            title={t('inventoryAdjustmentsAdjustmentsIndex.lines2', {
+              linesLength: adjustment.lines.length,
+            })}
+          >
             <Panel flush>
               <Table>
                 <THead>
                   <Tr>
-                    <Th>Variant</Th>
-                    <Th>Bin</Th>
-                    <Th>Batch</Th>
-                    <Th align="right">Qty change</Th>
-                    <Th align="right">Unit cost</Th>
+                    <Th>{t('inventoryAdjustmentsAdjustmentsIndex.variant')}</Th>
+                    <Th>{t('inventoryAdjustmentsAdjustmentsIndex.bin')}</Th>
+                    <Th>{t('inventoryAdjustmentsAdjustmentsIndex.batch')}</Th>
+                    <Th align="right">{t('inventoryAdjustmentsAdjustmentsIndex.qtyChange')}</Th>
+                    <Th align="right">{t('inventoryAdjustmentsAdjustmentsIndex.unitCost')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -392,11 +429,11 @@ function AdjustmentReview({
 
           {rejecting && (
             <TextArea
-              label="Reason for rejecting"
-              hint="Stored on the adjustment permanently."
+              label={t('inventoryAdjustmentsAdjustmentsIndex.reasonForRejecting')}
+              hint={t('inventoryAdjustmentsAdjustmentsIndex.storedOnTheAdjustmentPermanently')}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="What did you check, and what was actually on the shelf?"
+              placeholder={t('inventoryAdjustmentsAdjustmentsIndex.whatDidYouCheckAnd')}
             />
           )}
 

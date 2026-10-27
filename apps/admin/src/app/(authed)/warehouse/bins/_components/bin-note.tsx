@@ -1,28 +1,38 @@
+'use client';
+
 import Link from 'next/link';
 import type { ReactElement } from 'react';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import { richMessage, useT } from '@/i18n/client';
+import { tEn, type MessageKey } from '@/i18n/catalog';
 
-/** A bin type in words an operator uses. */
-export function binTypeLabel(type: string): string {
+/** A bin type in words an operator uses, in the given language. */
+export function binTypeLabelIn(tr: Translate<MessageKey>, type: string): string {
   switch (type) {
     case 'STORAGE':
-      return 'Storage';
+      return tr('warehouseBinsBinNote.storage');
     case 'PICKING':
-      return 'Picking';
+      return tr('warehouseBinsBinNote.picking');
     case 'RECEIVING':
-      return 'Receiving';
+      return tr('warehouseBinsBinNote.receiving');
     case 'PACKING':
-      return 'Packing';
+      return tr('warehouseBinsBinNote.packing');
     case 'RTO_HOLD':
-      return 'Returns hold';
+      return tr('warehouseBinsBinNote.returnsHold');
     case 'DAMAGED':
-      return 'Damaged';
+      return tr('warehouseBinsBinNote.damaged');
     case 'QUARANTINE':
-      return 'Quarantine';
+      return tr('warehouseBinsBinNote.quarantine');
     case 'TRANSIT':
-      return 'In transit';
+      return tr('warehouseBinsBinNote.inTransit');
     default:
       return type;
   }
+}
+
+/** A bin type in words an operator uses (English — for specs and non-React callers). */
+export function binTypeLabel(type: string): string {
+  return binTypeLabelIn(tEn, type);
 }
 
 /**
@@ -31,38 +41,34 @@ export function binTypeLabel(type: string): string {
  * Nothing for an ordinary shelf.
  */
 export function BinNote({ type }: { readonly type: string }): ReactElement | null {
+  const t = useT();
   switch (type) {
     case 'RTO_HOLD':
       return (
         <p className="stk-note bin-note" data-tone="bad">
-          Returns received but not yet decided — waiting to be inspected, or marked &ldquo;decide
-          later&rdquo;. Not sellable. Finalising each return moves it on (back into stock, to the
-          damaged bin, or written off) —{' '}
-          <Link href="/warehouse/rto?tab=bench" className="stk-link">
-            decide them at the RTO station (On the bench)
-          </Link>
-          .
+          {richMessage(t('warehouseBinsBinNote.rtoHoldNote'), {
+            link: (
+              <Link href="/warehouse/rto?tab=bench" className="stk-link">
+                {t('warehouseBinsBinNote.rtoHoldLink')}
+              </Link>
+            ),
+          })}
         </p>
       );
     case 'DAMAGED':
       return (
         <p className="stk-note bin-note" data-tone="bad">
-          Held back from sale. Nothing is picked from a damaged bin.
+          {t('warehouseBinsBinNote.damagedNote')}
         </p>
       );
     case 'QUARANTINE':
       return (
         <p className="stk-note bin-note" data-tone="bad">
-          Held back from sale until somebody decides what happens to it.
+          {t('warehouseBinsBinNote.quarantineNote')}
         </p>
       );
     case 'TRANSIT':
-      return (
-        <p className="stk-note bin-note">
-          On its way from another warehouse. Counted here so neither building&rsquo;s count finds it
-          missing; sellable once it arrives and is received.
-        </p>
-      );
+      return <p className="stk-note bin-note">{t('warehouseBinsBinNote.transitNote')}</p>;
     default:
       return null;
   }

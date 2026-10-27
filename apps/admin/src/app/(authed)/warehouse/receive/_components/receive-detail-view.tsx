@@ -28,6 +28,8 @@ import { SerialScanner, scanCountMet } from '@/components/ui/serial-scanner';
 import { SkuLabelSheetView } from '@/components/sku-label-sheet';
 import { buildReceiptLines } from './receive-lines';
 import '../../_components/benches.css';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Admin receive-station — full goods-receipt lifecycle in one page:
@@ -49,6 +51,8 @@ import '../../_components/benches.css';
  * receipt stays ARRIVING and the operator can retry.
  */
 export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement {
+  const t = useT();
+
   const skuLabels = useSkuLabelsForReceipt();
   const [labelSheet, setLabelSheet] = useState<SkuLabelSheet | null>(null);
   const toast = useToast();
@@ -79,18 +83,19 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
     return (
       <div className="wh-page">
         <section className="wh-card">
-          <SkeletonRows rows={6} cols={3} label="Loading…" />
+          <SkeletonRows rows={6} cols={3} label={t('warehouseReceiveReceiveDetailView.loading')} />
         </section>
       </div>
     );
   if (detail.isError)
     return (
       <ErrorState
-        message={serverVerdict(detail.error, 'Failed to load.')}
+        message={serverVerdict(detail.error, t('warehouseReceiveReceiveDetailView.failedToLoad'))}
         retry={() => void detail.refetch()}
       />
     );
-  if (!detail.data) return <ErrorState message="Goods receipt not found." />;
+  if (!detail.data)
+    return <ErrorState message={t('warehouseReceiveReceiveDetailView.goodsReceiptNotFound')} />;
 
   const r = detail.data;
   // The sheet takes over the page while it is open: printing is a
@@ -128,7 +133,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
     setBusy('start');
     try {
       await start.mutateAsync({ id });
-      toast.success('Started receiving — record each product below.');
+      toast.success(t('warehouseReceiveReceiveDetailView.startedReceivingRecordEachProduct'));
     } catch (e) {
       setError(serverVerdict(e));
     } finally {
@@ -156,7 +161,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
     const lines = built.lines;
     try {
       await record.mutateAsync({ id, lines });
-      toast.success(`Recorded ${lines.length} line(s).`);
+      toast.success(t('warehouseReceiveReceiveDetailView.recordedLineS', { length: lines.length }));
       setReceived({});
       setDamaged({});
       setBinByLine({});
@@ -206,12 +211,12 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
         // not an error — it is a fact about the count, and the goods are
         // already on the shelf either way.
         if (result.hasDiscrepancies) {
-          toast.info('Completed — stock written for what arrived, and the difference recorded.');
+          toast.info(t('warehouseReceiveReceiveDetailView.completedStockWrittenForWhat'));
         } else {
-          toast.success('Receipt completed — stock written.');
+          toast.success(t('warehouseReceiveReceiveDetailView.receiptCompletedStockWritten'));
         }
       } else {
-        toast.info(`Status now ${result.status}.`);
+        toast.info(t('warehouseReceiveReceiveDetailView.statusNow', { status: result.status }));
       }
       return true;
     } catch (e) {
@@ -229,7 +234,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       await cancelReceipt.mutateAsync({ id, reason: cancelReason.trim() });
       setCancelOpen(false);
       setCancelReason('');
-      toast.info('Receipt cancelled. Nothing was written to stock.');
+      toast.info(t('warehouseReceiveReceiveDetailView.receiptCancelledNothingWasWritten'));
     } catch (e) {
       setError(serverVerdict(e));
     } finally {
@@ -243,8 +248,11 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
     <div className="wh-page">
       <PageHeader
         breadcrumbs={[
-          { label: 'Warehouse', href: '/warehouse' },
-          { label: 'Receive queue', href: '/warehouse/receive' },
+          { label: t('warehouseReceiveReceiveDetailView.warehouse'), href: '/warehouse' },
+          {
+            label: t('warehouseReceiveReceiveDetailView.receiveQueue'),
+            href: '/warehouse/receive',
+          },
           { label: r.receiptNumber },
         ]}
         Link={Link}
@@ -256,7 +264,10 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
         }
         subtitle={
           <span>
-            {r.seller.companyName} · {r.lines.length} product(s)
+            {t('warehouseReceiveReceiveDetailView.productS', {
+              companyName: r.seller.companyName,
+              linesLength: r.lines.length,
+            })}
             {/*
               Says which consignment this is a leg of, and links back.
               This page is the BENCH — counting happens here; the
@@ -264,7 +275,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
             */}
             {r.consignment !== null && (
               <>
-                {' · leg of '}
+                {t('warehouseReceiveReceiveDetailView.legOf')}
                 <Link
                   href={`/warehouse/consignments/${r.consignment.id}`}
                   className="sk-ident wh-link"
@@ -284,7 +295,9 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                 disabled={busy !== null}
                 onClick={() => void onStart()}
               >
-                {busy === 'start' ? 'Starting…' : 'Start receiving'}
+                {busy === 'start'
+                  ? t('warehouseReceiveReceiveDetailView.starting')
+                  : t('warehouseReceiveReceiveDetailView.startReceiving')}
               </Button>
             )}
             {(isPending || isArriving) && mayManage && (
@@ -294,7 +307,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                 disabled={busy !== null}
                 onClick={() => setCancelOpen(true)}
               >
-                Cancel receipt
+                {t('warehouseReceiveReceiveDetailView.cancelReceipt')}
               </Button>
             )}
             {/* Labelling happens where the goods are, so the button
@@ -310,7 +323,9 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                   skuLabels.mutate(id, { onSuccess: (sheet) => setLabelSheet(sheet) });
                 }}
               >
-                {skuLabels.isPending ? 'Building…' : 'Print product labels'}
+                {skuLabels.isPending
+                  ? t('warehouseReceiveReceiveDetailView.building')
+                  : t('warehouseReceiveReceiveDetailView.printProductLabels')}
               </Button>
             )}
             {isArriving && (
@@ -321,7 +336,9 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                   disabled={busy !== null}
                   onClick={() => void onRecordAll()}
                 >
-                  {busy === 'record' ? 'Recording…' : 'Record all products'}
+                  {busy === 'record'
+                    ? t('warehouseReceiveReceiveDetailView.recording')
+                    : t('warehouseReceiveReceiveDetailView.recordAllProducts')}
                 </Button>
                 <Button
                   variant="primary"
@@ -332,7 +349,9 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                     setCompleteOpen(true);
                   }}
                 >
-                  {busy === 'complete' ? 'Completing…' : 'Complete'}
+                  {busy === 'complete'
+                    ? t('warehouseReceiveReceiveDetailView.completing')
+                    : t('warehouseReceiveReceiveDetailView.complete')}
                 </Button>
               </>
             )}
@@ -351,28 +370,47 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
             whether a carton matches its paperwork should not have to
             open another screen for a field the API already sent. */}
         <dl className="wh-facts">
-          <Field label="Client" value={r.seller.companyName} />
-          <Field label="Client email" value={r.seller.email} />
-          <Field label="Client ref" value={r.sellerReference ?? '—'} ident />
-          <Field label="Status" value={r.status} />
           <Field
-            label="Expected arrival"
+            label={t('warehouseReceiveReceiveDetailView.client')}
+            value={r.seller.companyName}
+          />
+          <Field
+            label={t('warehouseReceiveReceiveDetailView.clientEmail')}
+            value={r.seller.email}
+          />
+          <Field
+            label={t('warehouseReceiveReceiveDetailView.clientRef')}
+            value={r.sellerReference ?? '—'}
+            ident
+          />
+          <Field label={t('warehouseReceiveReceiveDetailView.status')} value={r.status} />
+          <Field
+            label={t('warehouseReceiveReceiveDetailView.expectedArrival')}
             value={r.expectedArrivalAt ? new Date(r.expectedArrivalAt).toLocaleDateString() : '—'}
           />
-          <Field label="Warehouse" value={`${r.warehouse.code} — ${r.warehouse.name}`} />
-          <Field label="Declared" value={new Date(r.createdAt).toLocaleString()} />
+          <Field
+            label={t('warehouseReceiveReceiveDetailView.warehouse')}
+            value={`${r.warehouse.code} — ${r.warehouse.name}`}
+          />
+          <Field
+            label={t('warehouseReceiveReceiveDetailView.declared')}
+            value={new Date(r.createdAt).toLocaleString()}
+          />
           {/* `receivedAt` is stamped at completion; the receipt moving
               to ARRIVING is what "started" means, and the staff id
               recorded then is who took it on. */}
           <Field
-            label="Received by"
+            label={t('warehouseReceiveReceiveDetailView.receivedBy')}
             value={r.receivedBy?.emailDisplay ?? r.receivedBy?.email ?? '—'}
           />
           <Field
-            label="Received at"
+            label={t('warehouseReceiveReceiveDetailView.receivedAt')}
             value={r.receivedAt ? new Date(r.receivedAt).toLocaleString() : '—'}
           />
-          <Field label="Discrepancy" value={r.hasDiscrepancies ? 'YES' : 'no'} />
+          <Field
+            label={t('warehouseReceiveReceiveDetailView.discrepancy')}
+            value={r.hasDiscrepancies ? 'YES' : 'no'}
+          />
           {/*
             Computed from the LINES, which carry the sku. The stored
             `discrepancyNotes` is still shown beneath when it holds
@@ -382,18 +420,29 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
           */}
           {variance.length > 0 && (
             <Field
-              label="Counted differently"
+              label={t('warehouseReceiveReceiveDetailView.countedDifferently')}
               value={variance
-                .map((v) => `${v.sku}: counted ${v.got} against ${v.want} expected`)
+                .map((v) =>
+                  t('warehouseReceiveReceiveDetailView.countedAgainstExpected', {
+                    sku: v.sku,
+                    got: v.got,
+                    want: v.want,
+                  }),
+                )
                 .join('; ')}
             />
           )}
-          {r.discrepancyNotes && <Field label="Notes" value={r.discrepancyNotes} />}
+          {r.discrepancyNotes && (
+            <Field
+              label={t('warehouseReceiveReceiveDetailView.notes')}
+              value={r.discrepancyNotes}
+            />
+          )}
         </dl>
       </section>
 
       <div className="wh-stack">
-        <SectionHeading title="Products" />
+        <SectionHeading title={t('warehouseReceiveReceiveDetailView.products')} />
         {r.lines.map((line) => (
           <div
             key={line.id}
@@ -419,29 +468,50 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                   </div>
                   <div className="wh-item__sub">
                     <span className="sk-ident">{line.variant.skuCode}</span> ·{' '}
-                    <span className="sk-figure">expected {line.expectedQty}</span>
-                    {line.inventoryMode === 'STRICT' ? ' · per-unit tracked' : ''}
+                    <span className="sk-figure">
+                      {t('warehouseReceiveReceiveDetailView.expected', {
+                        expectedQty: line.expectedQty,
+                      })}
+                    </span>
+                    {line.inventoryMode === 'STRICT'
+                      ? t('warehouseReceiveReceiveDetailView.perUnitTracked')
+                      : ''}
                   </div>
                   <div className="wh-item__facts">
-                    <span className="sk-figure">Unit cost {line.unitCostInr ?? '—'}</span>
-                    <span className="sk-figure">Damaged {line.damagedQty ?? 0}</span>
                     <span className="sk-figure">
-                      Mfg{' '}
-                      {line.manufacturedAt
-                        ? new Date(line.manufacturedAt).toLocaleDateString()
-                        : '—'}
+                      {t('warehouseReceiveReceiveDetailView.unitCost', {
+                        value: line.unitCostInr ?? '—',
+                      })}
                     </span>
                     <span className="sk-figure">
-                      Exp {line.expiresAt ? new Date(line.expiresAt).toLocaleDateString() : '—'}
+                      {t('warehouseReceiveReceiveDetailView.damaged', {
+                        value: line.damagedQty ?? 0,
+                      })}
+                    </span>
+                    <span className="sk-figure">
+                      {t('warehouseReceiveReceiveDetailView.mfg', {
+                        value: line.manufacturedAt
+                          ? new Date(line.manufacturedAt).toLocaleDateString()
+                          : '—',
+                      })}
+                    </span>
+                    <span className="sk-figure">
+                      {t('warehouseReceiveReceiveDetailView.exp', {
+                        value: line.expiresAt ? new Date(line.expiresAt).toLocaleDateString() : '—',
+                      })}
                     </span>
                     {line.batch !== null && (
                       <span>
-                        batch <span className="sk-ident">{line.batch.batchCode}</span>
+                        {richMessage(t('warehouseReceiveReceiveDetailView.batch'), {
+                          span: <span className="sk-ident">{line.batch.batchCode}</span>,
+                        })}
                       </span>
                     )}
                     {line.putawayBin !== null && (
                       <span>
-                        bin <span className="sk-ident">{line.putawayBin.code}</span>
+                        {richMessage(t('warehouseReceiveReceiveDetailView.bin'), {
+                          span: <span className="sk-ident">{line.putawayBin.code}</span>,
+                        })}
                       </span>
                     )}
                   </div>
@@ -449,9 +519,13 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
               </div>
               {line.receivedQty !== null && (
                 <span className="wh-tag" data-tone="good">
-                  <Check size={12} aria-hidden /> recorded:{' '}
-                  <span className="sk-figure">{line.receivedQty}</span>
-                  {line.damagedQty ? ` (${line.damagedQty} dmg)` : ''}
+                  {richMessage(t('warehouseReceiveReceiveDetailView.recorded'), {
+                    check: <Check size={12} aria-hidden />,
+                    span: <span className="sk-figure">{line.receivedQty}</span>,
+                  })}
+                  {line.damagedQty
+                    ? t('warehouseReceiveReceiveDetailView.dmg', { damagedQty: line.damagedQty })
+                    : ''}
                 </span>
               )}
             </div>
@@ -459,7 +533,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
             {isArriving && (
               <div className="wh-fields" data-cols="receive">
                 <TextField
-                  label="Received qty"
+                  label={t('warehouseReceiveReceiveDetailView.receivedQty')}
                   type="number"
                   min={0}
                   max={1_000_000}
@@ -469,7 +543,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                   onChange={(e) => setReceived({ ...received, [line.id]: e.target.value })}
                 />
                 <TextField
-                  label="Damaged"
+                  label={t('warehouseReceiveReceiveDetailView.damaged2')}
                   type="number"
                   min={0}
                   inputMode="numeric"
@@ -479,14 +553,14 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                 />
                 <div className="wh-stack wh-stack--tight">
                   <Select
-                    label="Putaway bin"
+                    label={t('warehouseReceiveReceiveDetailView.putawayBin')}
                     value={binByLine[line.id] ?? line.putawayBinId ?? ''}
                     onChange={(e) => setBinByLine({ ...binByLine, [line.id]: e.target.value })}
                   >
                     <option value="">
                       {putawayBins.length === 0
-                        ? '— this warehouse has no bin to put stock in —'
-                        : '— select bin —'}
+                        ? t('warehouseReceiveReceiveDetailView.thisWarehouseHasNoBin')
+                        : t('warehouseReceiveReceiveDetailView.selectBin')}
                     </option>
                     {putawayBins.map((b) => (
                       <option key={b.id} value={b.id}>
@@ -502,11 +576,13 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                     // do. Shown in either mode — knowing the building has
                     // nowhere to shelve stock is worth saying regardless.
                     <p className="wh-note">
-                      Its only locations are ones stock cannot be shelved in.{' '}
-                      <Link href="/warehouse/bins" className="wh-link">
-                        Add a storage bin
-                      </Link>{' '}
-                      and reload.
+                      {richMessage(t('warehouseReceiveReceiveDetailView.itsOnlyLocationsAreOnes'), {
+                        link: (
+                          <Link href="/warehouse/bins" className="wh-link">
+                            {t('warehouseReceiveReceiveDetailView.addAStorageBin')}
+                          </Link>
+                        ),
+                      })}
                     </p>
                   )}
                 </div>
@@ -520,11 +596,13 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
             {isArriving && line.inventoryMode === 'STRICT' && (
               <SerialScanner
                 id={`receipt-serials-${line.id}`}
-                label={`Supplier serials for ${line.variant.skuCode}`}
+                label={t('warehouseReceiveReceiveDetailView.supplierSerialsFor', {
+                  skuCode: line.variant.skuCode,
+                })}
                 required={lineQty(line.id, line.receivedQty)}
                 serials={serialsByLine[line.id] ?? []}
                 onChange={(next) => setSerialsByLine({ ...serialsByLine, [line.id]: next })}
-                hint="Scan what the supplier printed. Skip any they did not serialize — Skydrop prints a serial for each of those at completion."
+                hint={t('warehouseReceiveReceiveDetailView.scanWhatTheSupplierPrinted')}
               />
             )}
           </div>
@@ -533,18 +611,21 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
 
       {isCompleted && (
         <div className="wh-done-line">
-          <Check size={16} aria-hidden /> Stock written. This receipt is now history.
+          <Check size={16} aria-hidden />{' '}
+          {t('warehouseReceiveReceiveDetailView.stockWrittenThisReceiptIs')}
         </div>
       )}
 
       <ConfirmDialog
         open={completeOpen}
         onOpenChange={setCompleteOpen}
-        title="Complete this receipt and write stock?"
+        title={t('warehouseReceiveReceiveDetailView.completeThisReceiptAndWrite')}
         entity={r.receiptNumber}
         entityIsIdentifier
-        consequence={`Stock is written for what was counted on each of ${r.seller.companyName}'s products and the receipt closes. It cannot be cancelled afterwards — a mistake is corrected with a stock adjustment.`}
-        confirmLabel="Complete and write stock"
+        consequence={t('warehouseReceiveReceiveDetailView.stockIsWrittenForWhat', {
+          companyName: r.seller.companyName,
+        })}
+        confirmLabel={t('warehouseReceiveReceiveDetailView.completeAndWriteStock')}
         error={error}
         onConfirm={async () => {
           const ok = await onComplete();
@@ -552,10 +633,12 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
         }}
       >
         <p className="wh-note">
-          <ClipboardCheck size={14} aria-hidden className="wh-inline-icon" />{' '}
-          <span className="sk-figure">{recordedCount}</span> of{' '}
-          <span className="sk-figure">{r.lines.length}</span> product(s) have a recorded count at{' '}
-          {r.warehouse.code}. A variance does not block — it is recorded on the receipt.
+          {richMessage(t('warehouseReceiveReceiveDetailView.ofProductSHaveA'), {
+            clipboardCheck: <ClipboardCheck size={14} aria-hidden className="wh-inline-icon" />,
+            span: <span className="sk-figure">{recordedCount}</span>,
+            span2: <span className="sk-figure">{r.lines.length}</span>,
+            code: r.warehouse.code,
+          })}
         </p>
       </ConfirmDialog>
 
@@ -564,11 +647,11 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
         onOpenChange={setCancelOpen}
         tone="critical"
         icon={<PackageX size={18} />}
-        title={`Cancel ${r.receiptNumber}?`}
+        title={t('warehouseReceiveReceiveDetailView.cancel', { receiptNumber: r.receiptNumber })}
         footer={
           <DialogFooter>
             <Button variant="secondary" size="md" onClick={() => setCancelOpen(false)}>
-              Keep it
+              {t('warehouseReceiveReceiveDetailView.keepIt')}
             </Button>
             <Button
               variant="destructive"
@@ -576,23 +659,23 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
               disabled={busy !== null || cancelReason.trim().length < 10}
               onClick={() => void onCancel()}
             >
-              {busy === 'cancel' ? 'Cancelling…' : 'Cancel receipt'}
+              {busy === 'cancel'
+                ? t('warehouseReceiveReceiveDetailView.cancelling')
+                : t('warehouseReceiveReceiveDetailView.cancelReceipt')}
             </Button>
           </DialogFooter>
         }
       >
         <div className="wh-stack">
           <p className="wh-note">
-            Nothing has been written to stock yet, so nothing is removed — the receipt simply leaves
-            the queue. A receipt that has already been completed cannot be cancelled; correct that
-            with a stock adjustment, where the movement is visible.
+            {t('warehouseReceiveReceiveDetailView.nothingHasBeenWrittenTo')}
           </p>
           <TextField
-            label="Why"
+            label={t('warehouseReceiveReceiveDetailView.why')}
             requiredMark
             value={cancelReason}
             onChange={(e) => setCancelReason(e.target.value)}
-            placeholder="At least 10 characters — recorded on the receipt"
+            placeholder={t('warehouseReceiveReceiveDetailView.atLeast10CharactersRecorded')}
           />
         </div>
       </Dialog>

@@ -3,6 +3,7 @@
 import type { ReactElement } from 'react';
 import { useOrderCustomerReputation } from '@/lib/api-hooks';
 import './call-center.css';
+import { richMessage, useT } from '@/i18n/client';
 
 /**
  * Who the agent is about to phone.
@@ -29,6 +30,7 @@ const HIGH_RETURN_RATE = 30;
 const ELEVATED_RETURN_RATE = 15;
 
 export function CustomerRiskStrip({ orderId }: { readonly orderId: string }): ReactElement | null {
+  const t = useT();
   const q = useOrderCustomerReputation(orderId);
 
   // A failed lookup is silent. The agent has a call to make and this is
@@ -51,31 +53,47 @@ export function CustomerRiskStrip({ orderId }: { readonly orderId: string }): Re
       <div className="cc-risk__line">
         {pct !== null ? (
           <span className="cc-risk__lead">
-            <span className="sk-figure oo-strong">{platform.returnRatePercent}%</span> of this
-            customer&apos;s parcels came back
+            {richMessage(t('callCenterCustomerRiskStrip.returnRate'), {
+              pct: <span className="sk-figure oo-strong">{platform.returnRatePercent}%</span>,
+            })}
           </span>
         ) : (
           <span className="cc-risk__lead">
-            <span className="sk-figure">{platform.totalOrders}</span> previous order
-            {platform.totalOrders === 1 ? '' : 's'}
+            {richMessage(t('callCenterCustomerRiskStrip.previousOrders'), {
+              total: <span className="sk-figure">{platform.totalOrders}</span>,
+              plural: platform.totalOrders === 1 ? '' : t('common.pluralS'),
+            })}
           </span>
         )}
         <span className="cc-risk__note sk-figure">
-          {platform.delivered} delivered · {platform.returned} returned
-          {platform.refusedOnCall > 0 && ` · declined on a call ${platform.refusedOnCall}×`}
+          {t('callCenterCustomerRiskStrip.deliveredReturned', {
+            delivered: platform.delivered,
+            returned: platform.returned,
+            value:
+              platform.refusedOnCall > 0
+                ? t('callCenterCustomerRiskStrip.declinedOnACall', { n: platform.refusedOnCall })
+                : '',
+          })}
         </span>
         {yours.totalOrders > 0 && (
-          <span className="oo-faint">({yours.totalOrders} with this client)</span>
+          <span className="oo-faint">
+            {t('callCenterCustomerRiskStrip.withThisClient', { totalOrders: yours.totalOrders })}
+          </span>
         )}
-        {flagged && <span className="cc-risk__flag">Flagged {riskLevel.toLowerCase()}</span>}
+        {flagged && (
+          <span className="cc-risk__flag">
+            {t('callCenterCustomerRiskStrip.flagged', { value: riskLevel.toLowerCase() })}
+          </span>
+        )}
       </div>
       {riskNotes !== null && riskNotes.trim().length > 0 && (
         <div className="cc-risk__note cc-risk__note--quote">{riskNotes}</div>
       )}
       {yours.openOrders.length > 1 && (
         <div className="cc-risk__note">
-          {yours.openOrders.length} orders from this client are open at once — worth asking whether
-          they meant to place them all.
+          {t('callCenterCustomerRiskStrip.ordersFromThisClientAre', {
+            openOrdersLength: yours.openOrders.length,
+          })}
         </div>
       )}
     </div>

@@ -19,6 +19,7 @@ import {
   Stack,
   mutationPhase,
 } from '../../../inventory/_components/stock-kit';
+import { useT } from '@/i18n/client';
 
 /**
  * WMS-7 — reassign a packed parcel from one DRAFT manifest to another.
@@ -59,6 +60,7 @@ export function MoveShipmentPanel({
   readonly originWarehouseId: string;
   readonly shipments: ManifestDetail['shipments'];
 }): ReactElement | null {
+  const t = useT();
   // COSMETIC (FE-2). The page is gated on `warehouse.view`, but moving a
   // parcel between manifests carries the same permission as closing one
   // (`warehouse.manifest.close`) — a picker who can read the manifest
@@ -89,8 +91,13 @@ export function MoveShipmentPanel({
       // as a real move is how someone concludes the wrong parcel moved.
       toast.success(
         result.alreadyOnTarget
-          ? `${moved?.shipmentNumber ?? 'Shipment'} was already on that manifest — nothing changed.`
-          : `${moved?.shipmentNumber ?? 'Shipment'} moved off ${manifestNumber}.`,
+          ? t('warehouseManifestsMoveShipmentPanel.wasAlreadyOnThatManifest', {
+              value: moved?.shipmentNumber ?? t('warehouseManifestsMoveShipmentPanel.shipment'),
+            })
+          : t('warehouseManifestsMoveShipmentPanel.movedOff', {
+              value: moved?.shipmentNumber ?? t('warehouseManifestsMoveShipmentPanel.shipment'),
+              manifestNumber,
+            }),
       );
     } catch (err) {
       setError(serverVerdict(err));
@@ -111,7 +118,7 @@ export function MoveShipmentPanel({
         icon={<ArrowRightLeft size={14} />}
         onClick={() => setOpen(true)}
       >
-        Move a shipment to another manifest
+        {t('warehouseManifestsMoveShipmentPanel.moveAShipmentToAnother')}
       </Button>
 
       <Dialog
@@ -122,8 +129,8 @@ export function MoveShipmentPanel({
             reset();
           }
         }}
-        title={`Move a shipment off ${manifestNumber}`}
-        description="Only possible while both manifests are still DRAFT."
+        title={t('warehouseManifestsMoveShipmentPanel.moveAShipmentOff', { manifestNumber })}
+        description={t('warehouseManifestsMoveShipmentPanel.onlyPossibleWhileBothManifests')}
         footer={
           <DialogFooter>
             <Button
@@ -134,13 +141,16 @@ export function MoveShipmentPanel({
                 reset();
               }}
             >
-              Cancel
+              {t('warehouseManifestsMoveShipmentPanel.cancel')}
             </Button>
             <AsyncButton
               variant="primary"
               size="md"
               state={mutationPhase(move)}
-              labels={{ idle: 'Move shipment', busy: 'Moving…' }}
+              labels={{
+                idle: t('warehouseManifestsMoveShipmentPanel.moveShipment'),
+                busy: t('warehouseManifestsMoveShipmentPanel.moving'),
+              }}
               disabled={shipmentId === '' || targetManifestId === '' || move.isPending}
               onClick={() => void onMove()}
             />
@@ -148,22 +158,18 @@ export function MoveShipmentPanel({
         }
       >
         <Stack>
-          <Note>
-            The parcel leaves this manifest and joins the one you pick. Do it before either is
-            closed — a closed manifest has already been sealed and its AWBs queued, and the driver
-            signs for what is on the sheet.
-          </Note>
+          <Note>{t('warehouseManifestsMoveShipmentPanel.theParcelLeavesThisManifest')}</Note>
 
           {error !== null && <InlineError message={error} />}
 
           <Select
-            label="Shipment"
+            label={t('warehouseManifestsMoveShipmentPanel.shipment')}
             requiredMark
-            hint="Parcels currently attached to this manifest."
+            hint={t('warehouseManifestsMoveShipmentPanel.parcelsCurrentlyAttachedToThis')}
             value={shipmentId}
             onChange={(e) => setShipmentId(e.target.value)}
           >
-            <option value="">Select a shipment…</option>
+            <option value="">{t('warehouseManifestsMoveShipmentPanel.selectAShipment')}</option>
             {shipments.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.shipmentNumber} · {s.status}
@@ -209,6 +215,7 @@ function TargetManifestPicker({
   readonly value: string;
   readonly onChange: (id: string) => void;
 }): ReactElement {
+  const t = useT();
   const list = useManifestsList({
     status: ManifestStatus.DRAFT,
     courierCode,
@@ -219,8 +226,8 @@ function TargetManifestPicker({
 
   if (list.isLoading) {
     return (
-      <Select label="Target manifest" requiredMark disabled>
-        <option>Loading manifests…</option>
+      <Select label={t('warehouseManifestsMoveShipmentPanel.targetManifest')} requiredMark disabled>
+        <option>{t('warehouseManifestsMoveShipmentPanel.loadingManifests')}</option>
       </Select>
     );
   }
@@ -228,9 +235,14 @@ function TargetManifestPicker({
   if (list.isError) {
     return (
       <div>
-        <span className="stk-field-label">Target manifest</span>
+        <span className="stk-field-label">
+          {t('warehouseManifestsMoveShipmentPanel.targetManifest')}
+        </span>
         <InlineError
-          message={serverVerdict(list.error, 'Could not load manifests.')}
+          message={serverVerdict(
+            list.error,
+            t('warehouseManifestsMoveShipmentPanel.couldNotLoadManifests'),
+          )}
           retry={() => void list.refetch()}
         />
       </div>
@@ -242,11 +254,11 @@ function TargetManifestPicker({
   if (targets.length === 0) {
     return (
       <div>
-        <span className="stk-field-label">Target manifest</span>
+        <span className="stk-field-label">
+          {t('warehouseManifestsMoveShipmentPanel.targetManifest')}
+        </span>
         <Note tone="faint">
-          No other DRAFT manifest for {courierCode} at this warehouse. A second one appears once
-          another manifest is open for the same courier and building — until then there is nowhere
-          to move this parcel.
+          {t('warehouseManifestsMoveShipmentPanel.noOtherDraftManifestFor', { courierCode })}
         </Note>
       </div>
     );
@@ -254,16 +266,19 @@ function TargetManifestPicker({
 
   return (
     <Select
-      label="Target manifest"
+      label={t('warehouseManifestsMoveShipmentPanel.targetManifest')}
       requiredMark
-      hint="DRAFT manifests for the same courier and warehouse. The server refuses anything else."
+      hint={t('warehouseManifestsMoveShipmentPanel.draftManifestsForTheSame')}
       value={value}
       onChange={(e) => onChange(e.target.value)}
     >
-      <option value="">Select a manifest…</option>
+      <option value="">{t('warehouseManifestsMoveShipmentPanel.selectAManifest')}</option>
       {targets.map((m) => (
         <option key={m.id} value={m.id}>
-          {m.manifestNumber} · {m.shipmentCount} shipment(s)
+          {t('warehouseManifestsMoveShipmentPanel.shipmentS', {
+            manifestNumber: m.manifestNumber,
+            shipmentCount: m.shipmentCount,
+          })}
         </option>
       ))}
     </Select>

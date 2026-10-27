@@ -23,6 +23,9 @@ import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { AfCard, MetaFact, Notice } from '@/app/(authed)/system/_components/af-parts';
 import './system-issues.css';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /** The order an issue is about, when its metadata names one. */
 /** The `source` every `auto-pickup:<courier>:<warehouse>` issue carries
@@ -44,12 +47,12 @@ function severityOf(sev: SystemIssueView['severity']): 'critical' | 'high' | 'me
 }
 
 /** How long it has been going on, said the way a person would. */
-function since(iso: string): string {
+function since(t: Translate<MessageKey>, iso: string): string {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) return t('systemIssuesSystemIssuesIndex.mAgo', { mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 48) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)} days ago`;
+  if (hours < 48) return t('systemIssuesSystemIssuesIndex.hAgo', { hours });
+  return t('systemIssuesSystemIssuesIndex.daysAgo', { value: Math.floor(hours / 24) });
 }
 
 /**
@@ -77,6 +80,8 @@ function since(iso: string): string {
  * Several of these close themselves the moment the job works again.
  */
 export function SystemIssuesIndex(): ReactElement {
+  const t = useT();
+
   const mayResolve = usePermission('system.settings.manage');
   const canManagePickups = usePermission('courier.pickups.manage');
   const [includeResolved, setIncludeResolved] = useState(false);
@@ -102,7 +107,7 @@ export function SystemIssuesIndex(): ReactElement {
     setError(null);
     try {
       await resolve.mutateAsync({ id: resolving.id, note: note.trim() });
-      toast.success('Closed.');
+      toast.success(t('systemIssuesSystemIssuesIndex.closed'));
       setResolving(null);
       setNote('');
     } catch (err) {
@@ -113,10 +118,13 @@ export function SystemIssuesIndex(): ReactElement {
   return (
     <div className="af-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Operations' }, { label: 'Needs a person' }]}
+        breadcrumbs={[
+          { label: t('systemIssuesSystemIssuesIndex.operations') },
+          { label: t('systemIssuesSystemIssuesIndex.needsAPerson') },
+        ]}
         Link={Link}
-        title="Needs a person"
-        subtitle="Everything the system could not fix by itself. These do not break a screen — they stop figures moving — so they are collected here rather than left in a log."
+        title={t('systemIssuesSystemIssuesIndex.needsAPerson')}
+        subtitle={t('systemIssuesSystemIssuesIndex.everythingTheSystemCouldNot')}
         action={
           <div className="af-row">
             {mayResolve && (
@@ -125,13 +133,15 @@ export function SystemIssuesIndex(): ReactElement {
                 size="md"
                 loading={announce.isPending}
                 onClick={() => setConfirmAnnounce(true)}
-                title="Only an issue nobody has been told about is announced. Pressing this twice sends nothing the second time."
+                title={t('systemIssuesSystemIssuesIndex.onlyAnIssueNobodyHas')}
               >
-                Notify unannounced
+                {t('systemIssuesSystemIssuesIndex.notifyUnannounced')}
               </Button>
             )}
             <Button variant="ghost" size="md" onClick={() => setIncludeResolved((v) => !v)}>
-              {includeResolved ? 'Open only' : 'Show closed too'}
+              {includeResolved
+                ? t('systemIssuesSystemIssuesIndex.openOnly')
+                : t('systemIssuesSystemIssuesIndex.showClosedToo')}
             </Button>
           </div>
         }
@@ -141,8 +151,14 @@ export function SystemIssuesIndex(): ReactElement {
         <Notice tone="good">
           <p>
             {announce.data.announced === 0
-              ? `Nothing to send — all ${announce.data.open} open issue(s) had already been announced.`
-              : `Told people about ${announce.data.announced} of ${announce.data.open} open issue(s); ${announce.data.alreadyAnnounced} had already been announced.`}
+              ? t('systemIssuesSystemIssuesIndex.nothingToSendAllOpen', {
+                  open: announce.data.open,
+                })
+              : t('systemIssuesSystemIssuesIndex.toldPeopleAboutOfOpen', {
+                  announced: announce.data.announced,
+                  open: announce.data.open,
+                  alreadyAnnounced: announce.data.alreadyAnnounced,
+                })}
           </p>
         </Notice>
       )}
@@ -155,27 +171,39 @@ export function SystemIssuesIndex(): ReactElement {
 
       {open.length > 0 && (
         <div className="af-kpis">
-          <KpiCard label="Open" value={open.length} tone="info" />
           <KpiCard
-            label="Nobody on it"
+            label={t('systemIssuesSystemIssuesIndex.open')}
+            value={open.length}
+            tone="info"
+          />
+          <KpiCard
+            label={t('systemIssuesSystemIssuesIndex.nobodyOnIt')}
             value={unclaimed}
             tone={unclaimed > 0 ? 'pending' : 'neutral'}
           />
-          <KpiCard label="Urgent" value={urgent} tone={urgent > 0 ? 'debit' : 'neutral'} />
+          <KpiCard
+            label={t('systemIssuesSystemIssuesIndex.urgent')}
+            value={urgent}
+            tone={urgent > 0 ? 'debit' : 'neutral'}
+          />
         </div>
       )}
 
       {list.isLoading ? (
         <AfCard flush>
-          <SkeletonRows rows={3} cols={3} label="Loading issues" />
+          <SkeletonRows
+            rows={3}
+            cols={3}
+            label={t('systemIssuesSystemIssuesIndex.loadingIssues')}
+          />
         </AfCard>
       ) : list.isError ? (
         <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : rows.length === 0 ? (
         <EmptyState
           tone="positive"
-          title="Nothing needs you"
-          description="No integration is stuck and no scheduled job is failing. This page fills itself when something breaks quietly — an empty one is the good outcome, not a missing feature."
+          title={t('systemIssuesSystemIssuesIndex.nothingNeedsYou')}
+          description={t('systemIssuesSystemIssuesIndex.noIntegrationIsStuckAnd')}
         />
       ) : (
         <ul className="af-queue">
@@ -206,7 +234,7 @@ export function SystemIssuesIndex(): ReactElement {
                         href={`/orders/${orderIdOf(r.metadata) ?? ''}`}
                         className="af-link af-small af-inline-link"
                       >
-                        Open the order
+                        {t('systemIssuesSystemIssuesIndex.openTheOrder')}
                       </Link>
                     )}
                     {/* A box that asked for no van (CUR-10 amendment #3).
@@ -214,19 +242,30 @@ export function SystemIssuesIndex(): ReactElement {
                         screen is where it is released and raised again. */}
                     {r.source === AUTO_PICKUP_SOURCE && canManagePickups && (
                       <Link href="/warehouse/pickups" className="af-link af-small af-inline-link">
-                        Open pickups
+                        {t('systemIssuesSystemIssuesIndex.openPickups')}
                       </Link>
                     )}
                     <div className="si-meta">
                       <span className="af-faint sk-ident">{r.source}</span>
                       <MetaFact>
-                        <Clock size={11} aria-hidden /> first seen {since(r.firstSeenAt)}
+                        <Clock size={11} aria-hidden />{' '}
+                        {t('systemIssuesSystemIssuesIndex.firstSeen', {
+                          value: since(t, r.firstSeenAt),
+                        })}
                       </MetaFact>
-                      <span className="af-faint">last {since(r.lastSeenAt)}</span>
+                      <span className="af-faint">
+                        {t('systemIssuesSystemIssuesIndex.last', {
+                          value: since(t, r.lastSeenAt),
+                        })}
+                      </span>
                       {/* Seen many times is a different problem from seen
                           once: it means it is not a blip. */}
                       {r.occurrenceCount > 1 && (
-                        <MetaFact tone="warn">{r.occurrenceCount} times</MetaFact>
+                        <MetaFact tone="warn">
+                          {t('systemIssuesSystemIssuesIndex.times', {
+                            occurrenceCount: r.occurrenceCount,
+                          })}
+                        </MetaFact>
                       )}
                     </div>
                   </div>
@@ -234,7 +273,9 @@ export function SystemIssuesIndex(): ReactElement {
                   <div className="af-qcard__actions si-actions">
                     {r.resolvedAt !== null ? (
                       <span className="af-faint">
-                        closed {since(r.resolvedAt)}
+                        {t('systemIssuesSystemIssuesIndex.closedAgo', {
+                          ago: since(t, r.resolvedAt),
+                        })}
                         {r.resolutionNote !== null && ` · ${r.resolutionNote}`}
                       </span>
                     ) : (
@@ -243,12 +284,18 @@ export function SystemIssuesIndex(): ReactElement {
                           <AsyncButton
                             variant="secondary"
                             size="sm"
-                            labels={{ idle: 'I’m on it', busy: 'Noting…', done: 'Noted' }}
+                            labels={{
+                              idle: t('systemIssuesSystemIssuesIndex.iMOnIt'),
+                              busy: t('systemIssuesSystemIssuesIndex.noting'),
+                              done: t('systemIssuesSystemIssuesIndex.noted'),
+                            }}
                             disabled={ack.isPending}
                             onAction={async () => {
                               try {
                                 await ack.mutateAsync(r.id);
-                                toast.success('Noted as being looked at.');
+                                toast.success(
+                                  t('systemIssuesSystemIssuesIndex.notedAsBeingLookedAt'),
+                                );
                               } catch (e) {
                                 toast.error(serverVerdict(e));
                                 throw e;
@@ -257,7 +304,9 @@ export function SystemIssuesIndex(): ReactElement {
                           />
                         ) : (
                           <MetaFact tone="accent" dot>
-                            being looked at · {since(r.acknowledgedAt)}
+                            {t('systemIssuesSystemIssuesIndex.beingLookedAt', {
+                              value: since(t, r.acknowledgedAt),
+                            })}
                           </MetaFact>
                         )}
                         {mayResolve && (
@@ -270,7 +319,7 @@ export function SystemIssuesIndex(): ReactElement {
                               setError(null);
                             }}
                           >
-                            Close
+                            {t('systemIssuesSystemIssuesIndex.close')}
                           </Button>
                         )}
                       </>
@@ -288,12 +337,12 @@ export function SystemIssuesIndex(): ReactElement {
         onOpenChange={(o) => {
           if (!o) setResolving(null);
         }}
-        title="Close this issue"
-        description="Say what was done. Several of these close themselves when the job next works — closing by hand is for the ones that needed you."
+        title={t('systemIssuesSystemIssuesIndex.closeThisIssue')}
+        description={t('systemIssuesSystemIssuesIndex.sayWhatWasDoneSeveral')}
         footer={
           <DialogFooter>
             <Button variant="secondary" size="sm" onClick={() => setResolving(null)}>
-              Cancel
+              {t('systemIssuesSystemIssuesIndex.cancel')}
             </Button>
             <Button
               variant="primary"
@@ -302,7 +351,7 @@ export function SystemIssuesIndex(): ReactElement {
               disabled={note.trim().length < 5 || resolve.isPending}
               onClick={() => void submitResolve()}
             >
-              Close
+              {t('systemIssuesSystemIssuesIndex.close')}
             </Button>
           </DialogFooter>
         }
@@ -310,24 +359,26 @@ export function SystemIssuesIndex(): ReactElement {
         <div className="af-form">
           {resolving !== null && <p className="af-title">{resolving.title}</p>}
           <TextArea
-            label="What was done"
+            label={t('systemIssuesSystemIssuesIndex.whatWasDone')}
             requiredMark
-            hint="At least a few words — it is the record."
+            hint={t('systemIssuesSystemIssuesIndex.atLeastAFewWords')}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={3}
           />
-          {error !== null && <ErrorState title="Not closed" message={error} />}
+          {error !== null && (
+            <ErrorState title={t('systemIssuesSystemIssuesIndex.notClosed')} message={error} />
+          )}
         </div>
       </Dialog>
 
       <ConfirmDialog
         open={confirmAnnounce}
         onOpenChange={setConfirmAnnounce}
-        title="Notify people about unannounced issues?"
-        entity={`${open.length} open issue(s)`}
-        consequence="Everyone the issue's audience names is sent a notification for each open issue nobody has been told about yet; issues already announced are skipped."
-        confirmLabel="Notify unannounced"
+        title={t('systemIssuesSystemIssuesIndex.notifyPeopleAboutUnannouncedIssues')}
+        entity={t('systemIssuesSystemIssuesIndex.openIssueS', { length: open.length })}
+        consequence={t('systemIssuesSystemIssuesIndex.everyoneTheIssueSAudience')}
+        confirmLabel={t('systemIssuesSystemIssuesIndex.notifyUnannounced')}
         onConfirm={() => {
           // The same fire-and-report request as before: the result or the
           // server's verdict appears under the header.

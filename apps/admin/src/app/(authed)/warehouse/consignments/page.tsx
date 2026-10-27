@@ -1,14 +1,19 @@
 import type { ReactElement } from 'react';
 import { AreaPage, StockPageHeader } from '../../inventory/_components/stock-kit';
 import { ConsignmentsIndex } from './_components/consignments-index';
+import { getT } from '@/i18n/server';
 
-export default function ConsignmentsPage(): ReactElement {
+export default async function ConsignmentsPage(): Promise<ReactElement> {
+  const { t } = await getT();
   return (
     <AreaPage>
       <StockPageHeader
-        breadcrumbs={[{ label: 'Warehouse', href: '/warehouse' }, { label: 'Consignments' }]}
-        title="Consignments"
-        subtitle="The whole journey in one place: where each consignment is, what each stop counted, and the steps the receive station has no opinion about — labelling, dispatch to India, and cancelling. Counting itself happens on the receive station."
+        breadcrumbs={[
+          { label: t('warehouseConsignmentsPage.warehouse'), href: '/warehouse' },
+          { label: t('warehouseConsignmentsPage.consignments') },
+        ]}
+        title={t('warehouseConsignmentsPage.consignments')}
+        subtitle={t('warehouseConsignmentsPage.theWholeJourneyInOne')}
       />
       <ConsignmentsIndex />
     </AreaPage>

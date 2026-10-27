@@ -31,6 +31,10 @@ import {
   PanelPad,
   mutationPhase,
 } from '../../../inventory/_components/stock-kit';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Re-shelving.
@@ -104,8 +108,10 @@ function emptyLine(key: number): DraftLine {
   };
 }
 
-function binLabel(b: WarehouseBin): string {
-  return NON_PICKABLE.has(b.type) ? `${b.code} — ${b.type}, not pickable` : b.code;
+function binLabel(t: Translate<MessageKey>, b: WarehouseBin): string {
+  return NON_PICKABLE.has(b.type)
+    ? t('warehouseBinsBinOpsPanel.notPickable', { code: b.code, type: b.type })
+    : b.code;
 }
 
 export function BinOpsPanel({
@@ -116,6 +122,9 @@ export function BinOpsPanel({
    *  already chosen one. */
   readonly warehouseId?: string;
 }): ReactElement | null {
+  const tr = useT();
+  const t = useT();
+
   // COSMETIC (FE-2). The page is gated on warehouse.view; both endpoints
   // demand warehouse.manage. Without this, anyone who can read the floor
   // plan is offered two buttons the server will refuse.
@@ -206,9 +215,11 @@ export function BinOpsPanel({
       // we never knew what was in there, and guessing would report a
       // number nobody moved.
       toast.success(
-        `Moved ${r.unitsMoved} unit(s) across ${r.linesMoved} line(s) into ${
-          byId.get(destBinId)?.code ?? 'the destination bin'
-        }.`,
+        tr('warehouseBinsBinOpsPanel.movedUnitSAcrossLine', {
+          unitsMoved: r.unitsMoved,
+          linesMoved: r.linesMoved,
+          value: byId.get(destBinId)?.code ?? tr('warehouseBinsBinOpsPanel.theDestinationBin'),
+        }),
       );
     } catch (err) {
       setConfirmMove(false);
@@ -234,7 +245,12 @@ export function BinOpsPanel({
       );
       setLines([emptyLine(nextKey)]);
       setNextKey((k) => k + 1);
-      toast.success(`Re-shelved ${r.unitsMoved} unit(s) across ${r.linesMoved} line(s).`);
+      toast.success(
+        t('warehouseBinsBinOpsPanel.reShelvedUnitSAcross', {
+          unitsMoved: r.unitsMoved,
+          linesMoved: r.linesMoved,
+        }),
+      );
     } catch (err) {
       // Nothing was applied — the whole submission is one transaction, so
       // the list on screen is still exactly what needs to happen.
@@ -249,14 +265,14 @@ export function BinOpsPanel({
 
   return (
     <AreaSection
-      title="Move stock between bins"
-      note="Re-shelving. The batch never changes — a move answers where something is, not what it is."
+      title={t('warehouseBinsBinOpsPanel.moveStockBetweenBins')}
+      note={t('warehouseBinsBinOpsPanel.reShelvingTheBatchNever')}
     >
       {warehouseId === undefined && (warehouses.data?.length ?? 0) > 1 && (
         <FieldGrid columns={2}>
           <Select
             id="binops-wh"
-            label="Warehouse"
+            label={t('warehouseBinsBinOpsPanel.warehouse')}
             value={resolvedId}
             onChange={(e) => {
               setPickedWarehouse(e.target.value);
@@ -278,39 +294,39 @@ export function BinOpsPanel({
 
       {/* ── Whole bin ─────────────────────────────────────────────── */}
       <Panel
-        title="Empty one bin into another"
-        subtitle="Everything currently standing in the source bin, in one transaction. You do not list the contents — the server reads them."
+        title={t('warehouseBinsBinOpsPanel.emptyOneBinIntoAnother')}
+        subtitle={t('warehouseBinsBinOpsPanel.everythingCurrentlyStandingInThe')}
       >
         <FieldGrid columns={2}>
           <Select
             id="binops-src"
-            label="From"
+            label={t('warehouseBinsBinOpsPanel.from')}
             value={sourceBinId}
             onChange={(e) => {
               setSourceBinId(e.target.value);
               setError(null);
             }}
           >
-            <option value="">Choose…</option>
+            <option value="">{t('warehouseBinsBinOpsPanel.choose')}</option>
             {binOptions.map((b) => (
               <option key={b.id} value={b.id}>
-                {binLabel(b)}
+                {binLabel(t, b)}
               </option>
             ))}
           </Select>
           <Select
             id="binops-dst"
-            label="To"
+            label={t('warehouseBinsBinOpsPanel.to')}
             value={destBinId}
             onChange={(e) => {
               setDestBinId(e.target.value);
               setError(null);
             }}
           >
-            <option value="">Choose…</option>
+            <option value="">{t('warehouseBinsBinOpsPanel.choose')}</option>
             {binOptions.map((b) => (
               <option key={b.id} value={b.id}>
-                {binLabel(b)}
+                {binLabel(t, b)}
               </option>
             ))}
           </Select>
@@ -318,17 +334,15 @@ export function BinOpsPanel({
 
         <div aria-live="polite">
           {sameBin ? (
-            <Note tone="warn">Source and destination are the same bin — nothing to move.</Note>
+            <Note tone="warn">{t('warehouseBinsBinOpsPanel.sourceAndDestinationAreThe')}</Note>
           ) : destBinId !== '' && NON_PICKABLE.has(byId.get(destBinId)?.type ?? '') ? (
             <Note tone="bad">
-              {byId.get(destBinId)?.code} is not pickable. Stock moved there stays counted but stops
-              being sellable, and orders will not allocate against it.
+              {t('warehouseBinsBinOpsPanel.isNotPickableStockMoved', {
+                code: byId.get(destBinId)?.code ?? '',
+              })}
             </Note>
           ) : (
-            <Note tone="faint">
-              The source bin&rsquo;s FLOOR pile counts too — this is how you shelve stock that was
-              received before tracking was switched on.
-            </Note>
+            <Note tone="faint">{t('warehouseBinsBinOpsPanel.theSourceBinSFloor')}</Note>
           )}
         </div>
 
@@ -338,7 +352,10 @@ export function BinOpsPanel({
             size="md"
             icon={<ArrowRightLeft size={16} />}
             state={mutationPhase(moveBin)}
-            labels={{ idle: 'Move the whole bin', busy: 'Moving…' }}
+            labels={{
+              idle: t('warehouseBinsBinOpsPanel.moveTheWholeBin'),
+              busy: t('warehouseBinsBinOpsPanel.moving'),
+            }}
             disabled={!canMove || moveBin.isPending}
             onClick={() => setConfirmMove(true)}
           />
@@ -348,8 +365,8 @@ export function BinOpsPanel({
       {/* ── Line list ─────────────────────────────────────────────── */}
       <Panel
         flush
-        title="Apply a list of moves"
-        subtitle="All of it commits or none of it does. A half-applied re-shelving is worse than none, because nobody can tell which half went through."
+        title={t('warehouseBinsBinOpsPanel.applyAListOfMoves')}
+        subtitle={t('warehouseBinsBinOpsPanel.allOfItCommitsOr')}
       >
         {/* CARDS ON A PHONE, like the other 98 tables. `responsive={false}`
             crammed four columns of form controls into a 314px table at
@@ -360,10 +377,10 @@ export function BinOpsPanel({
         <Table>
           <THead>
             <Tr>
-              <Th>From</Th>
-              <Th>Product</Th>
-              <Th>Qty</Th>
-              <Th>To</Th>
+              <Th>{t('warehouseBinsBinOpsPanel.from')}</Th>
+              <Th>{t('warehouseBinsBinOpsPanel.product')}</Th>
+              <Th>{t('warehouseBinsBinOpsPanel.qty')}</Th>
+              <Th>{t('warehouseBinsBinOpsPanel.to')}</Th>
               <Th> </Th>
             </Tr>
           </THead>
@@ -373,10 +390,10 @@ export function BinOpsPanel({
                 <Td>
                   <Select
                     value={l.sourceBinId}
-                    aria-label="From bin"
+                    aria-label={t('warehouseBinsBinOpsPanel.fromBin')}
                     onChange={(e) => pickSource(l.key, e.target.value)}
                   >
-                    <option value="">Choose…</option>
+                    <option value="">{t('warehouseBinsBinOpsPanel.choose')}</option>
                     {binOptions.map((b) => (
                       <option key={b.id} value={b.id}>
                         {b.code}
@@ -406,17 +423,17 @@ export function BinOpsPanel({
                     min={1}
                     step={1}
                     inputMode="numeric"
-                    aria-label="Quantity"
+                    aria-label={t('warehouseBinsBinOpsPanel.quantity')}
                     onChange={(e) => editLine(l.key, { qty: e.target.value })}
                   />
                 </Td>
                 <Td>
                   <Select
                     value={l.destBinId}
-                    aria-label="To bin"
+                    aria-label={t('warehouseBinsBinOpsPanel.toBin')}
                     onChange={(e) => editLine(l.key, { destBinId: e.target.value })}
                   >
-                    <option value="">Choose…</option>
+                    <option value="">{t('warehouseBinsBinOpsPanel.choose')}</option>
                     {binOptions.map((b) => (
                       <option key={b.id} value={b.id}>
                         {b.code}
@@ -431,7 +448,7 @@ export function BinOpsPanel({
                     disabled={lines.length === 1}
                     onClick={() => removeLine(l.key)}
                   >
-                    Remove
+                    {t('warehouseBinsBinOpsPanel.remove')}
                   </Button>
                 </Td>
               </Tr>
@@ -442,26 +459,29 @@ export function BinOpsPanel({
         <PanelPad>
           {bulk.isPending && (
             <ParachuteProgress
-              label={`Applying ${lines.length} line(s)`}
-              detail={`${bulkUnits} unit(s) are moving in one transaction.`}
+              label={t('warehouseBinsBinOpsPanel.applyingLineS', { length: lines.length })}
+              detail={t('warehouseBinsBinOpsPanel.unitSAreMovingIn', { bulkUnits })}
             />
           )}
           <Actions>
             <Button variant="ghost" size="md" icon={<Plus size={16} />} onClick={addLine}>
-              Add a line
+              {t('warehouseBinsBinOpsPanel.addALine')}
             </Button>
             <AsyncButton
               variant="primary"
               size="md"
               state={mutationPhase(bulk)}
-              labels={{ idle: `Apply ${lines.length} line(s)`, busy: 'Applying…' }}
+              labels={{
+                idle: t('warehouseBinsBinOpsPanel.applyLineS', { length: lines.length }),
+                busy: t('warehouseBinsBinOpsPanel.applying'),
+              }}
               disabled={!bulkReady || bulk.isPending}
               onClick={() => void onBulkTransfer()}
             />
             <span className="stk-faint stk-note">
               {bulkReady
-                ? `${bulkUnits} unit(s) will move.`
-                : 'Every line needs a client, variant, batch, a whole quantity of at least one, and two different bins.'}
+                ? t('warehouseBinsBinOpsPanel.unitSWillMove', { bulkUnits })
+                : t('warehouseBinsBinOpsPanel.everyLineNeedsAClient')}
             </span>
           </Actions>
         </PanelPad>
@@ -472,17 +492,16 @@ export function BinOpsPanel({
         onOpenChange={(next) => {
           if (!next) setConfirmMove(false);
         }}
-        title={`Move everything in ${byId.get(sourceBinId)?.code ?? 'this bin'}?`}
+        title={tr('warehouseBinsBinOpsPanel.moveEverythingIn', {
+          value: byId.get(sourceBinId)?.code ?? tr('warehouseBinsBinOpsPanel.thisBin'),
+        })}
         entity={`${sourceCode} → ${destCode}`}
         entityIsIdentifier
-        consequence="Every unit standing in the source bin is recorded as moved to the destination. Batches, quantities and expiry are untouched, and moving it back is the same action in reverse."
-        confirmLabel="Move it"
+        consequence={t('warehouseBinsBinOpsPanel.everyUnitStandingInThe')}
+        confirmLabel={t('warehouseBinsBinOpsPanel.moveIt')}
         onConfirm={onMoveWholeBin}
       >
-        <Note>
-          Do this once the goods have physically been carried across — the record follows the shelf,
-          and a picker sent to the new bin needs to find them there.
-        </Note>
+        <Note>{t('warehouseBinsBinOpsPanel.doThisOnceTheGoods')}</Note>
       </ConfirmDialog>
 
       {/* The way in to the destructive one. A LINK and not a button, at
@@ -491,11 +510,13 @@ export function BinOpsPanel({
           being a thing a hand lands on while re-shelving. */}
       {mayCollapse && (
         <Note>
-          Abandoning this warehouse&rsquo;s shelving altogether?{' '}
-          <Link href="/warehouse/collapse" className="stk-link">
-            Collapse its bins into FLOOR
-          </Link>{' '}
-          — destructive, two-step, and backed up first.
+          {richMessage(t('warehouseBinsBinOpsPanel.abandoningThisWarehouseSShelving'), {
+            link: (
+              <Link href="/warehouse/collapse" className="stk-link">
+                {t('warehouseBinsBinOpsPanel.collapseItsBinsIntoFloor')}
+              </Link>
+            ),
+          })}
         </Note>
       )}
     </AreaSection>

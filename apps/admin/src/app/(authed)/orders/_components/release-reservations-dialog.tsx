@@ -6,6 +6,7 @@ import { useReleaseReservations } from '@/lib/api-hooks';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { TextArea } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * God-mode cleanup companion. When forceMutate() moves an order
@@ -30,6 +31,7 @@ export function ReleaseReservationsDialog({
   readonly orderNumber?: string | undefined;
   readonly onSuccess: (result: ReleaseReservationsResult) => void;
 }): ReactElement {
+  const t = useT();
   const [reason, setReason] = useState('');
   const [serverError, setServerError] = useState<string | null>(null);
   const release = useReleaseReservations(orderId);
@@ -49,7 +51,9 @@ export function ReleaseReservationsDialog({
       onSuccess(result);
       setReason('');
     } catch (err) {
-      setServerError(serverVerdict(err, 'Failed to release reservations.'));
+      setServerError(
+        serverVerdict(err, t('ordersReleaseReservationsDialog.failedToReleaseReservations')),
+      );
       throw err;
     }
   }
@@ -60,22 +64,22 @@ export function ReleaseReservationsDialog({
       onOpenChange={(o) => {
         if (!o) close();
       }}
-      title="Release order reservations"
+      title={t('ordersReleaseReservationsDialog.releaseOrderReservations')}
       entity={orderNumber ?? orderId}
       entityIsIdentifier
-      consequence="God-mode cleanup: every ACTIVE reservation tied to this order is released. Idempotent — safe to retry."
-      confirmLabel="Release reservations"
+      consequence={t('ordersReleaseReservationsDialog.godModeCleanupEveryActive')}
+      confirmLabel={t('ordersReleaseReservationsDialog.releaseReservations')}
       destructive={true}
       onConfirm={confirm}
       error={serverError}
     >
       <TextArea
         id="release-reason"
-        label="Reason (optional)"
-        hint="Recorded in the audit log + order event. Audited HIGH."
+        label={t('ordersReleaseReservationsDialog.reasonOptional')}
+        hint={t('ordersReleaseReservationsDialog.recordedInTheAuditLog')}
         value={reason}
         onChange={(e) => setReason(e.target.value)}
-        placeholder="e.g., Cleanup after force-mutation away from CONFIRMED."
+        placeholder={t('ordersReleaseReservationsDialog.eGCleanupAfterForce')}
         disabled={release.isPending}
       />
     </ConfirmDialog>

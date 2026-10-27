@@ -15,6 +15,9 @@ import { useToast } from '@skydrop/ui/app/toast';
 import { Notice } from '../../../orders/_components/order-ops-parts';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * A supervisor overruling one stuck call (decision 11, force-outcome).
@@ -56,6 +59,7 @@ export function ForceOutcomePanel({
   /** Order number if the join resolved it, else the raw id — display only. */
   readonly orderLabel: string;
 }): ReactElement | null {
+  const t = useT();
   // COSMETIC (FE-2). The queue page opens on `callcenter.queue.view`,
   // which is a strictly weaker permission — without this gate every
   // supervisor who can READ the queue would be offered a button the
@@ -113,13 +117,19 @@ export function ForceOutcomePanel({
       });
       const landed =
         r.finalOrderStatus !== null
-          ? `order → ${r.finalOrderStatus}`
+          ? t('callCenterQueueForceOutcomePanel.order', { finalOrderStatus: r.finalOrderStatus })
           : r.targetStatus !== null
-            ? `targeted ${r.targetStatus} — transition did not land, check the order`
-            : 'no order transition';
-      const cap = r.hitCap ? ' · attempt cap reached' : '';
-      const requeue = r.requeued ? ' · re-queued for another call' : '';
-      toast.success(`Forced ${r.outcome} · ${landed}${cap}${requeue}`);
+            ? t('callCenterQueueForceOutcomePanel.targetedTransitionDidNotLand', {
+                targetStatus: r.targetStatus,
+              })
+            : t('callCenterQueueForceOutcomePanel.noOrderTransition');
+      const cap = r.hitCap ? t('callCenterQueueForceOutcomePanel.attemptCapReached') : '';
+      const requeue = r.requeued
+        ? t('callCenterQueueForceOutcomePanel.reQueuedForAnotherCall')
+        : '';
+      toast.success(
+        t('callCenterQueueForceOutcomePanel.forced', { outcome: r.outcome, landed, cap, requeue }),
+      );
       close();
     } catch (err) {
       setError(serverVerdict(err));
@@ -136,7 +146,7 @@ export function ForceOutcomePanel({
   return (
     <>
       <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
-        Force outcome
+        {t('callCenterQueueForceOutcomePanel.forceOutcome')}
       </Button>
 
       <Dialog
@@ -144,21 +154,24 @@ export function ForceOutcomePanel({
         onOpenChange={(next) => {
           if (!next) close();
         }}
-        title={`Overrule this call — ${orderLabel}`}
-        description="Recorded as a real attempt against your own name, with the same effect on the order as if an agent had made the call."
+        title={t('callCenterQueueForceOutcomePanel.overruleThisCall', { orderLabel })}
+        description={t('callCenterQueueForceOutcomePanel.recordedAsARealAttempt')}
         tone="critical"
         icon={<Gavel size={18} />}
         size="md"
         footer={
           <DialogFooter>
             <Button variant="secondary" size="md" onClick={close}>
-              Leave it in the queue
+              {t('callCenterQueueForceOutcomePanel.leaveItInTheQueue')}
             </Button>
             <AsyncButton
               variant="destructive"
               size="md"
               state={force.isPending ? 'busy' : 'idle'}
-              labels={{ idle: 'Record this outcome', busy: 'Recording…' }}
+              labels={{
+                idle: t('callCenterQueueForceOutcomePanel.recordThisOutcome'),
+                busy: t('callCenterQueueForceOutcomePanel.recording'),
+              }}
               disabled={outcome === '' || startedMissing || callbackMissing || force.isPending}
               onClick={() => void submit()}
             />
@@ -166,11 +179,7 @@ export function ForceOutcomePanel({
         }
       >
         <div className="oo-stack">
-          <p className="oo-p">
-            Use this when you already know how the call ended and nobody needs to dial. The attempt
-            is permanent, counts toward the customer&apos;s attempt cap where the outcome counts,
-            and moves the order — confirming here reserves stock.
-          </p>
+          <p className="oo-p">{t('callCenterQueueForceOutcomePanel.useThisWhenYouAlready')}</p>
 
           {error !== null && (
             <Notice tone="bad" role="alert">
@@ -180,13 +189,13 @@ export function ForceOutcomePanel({
 
           <Select
             id="fo-outcome"
-            label="Outcome"
+            label={t('callCenterQueueForceOutcomePanel.outcome')}
             requiredMark
             value={outcome}
             onChange={(e) => setOutcome(e.target.value as CallOutcome | '')}
           >
-            <option value="">Select an outcome…</option>
-            {OUTCOME_OPTIONS.map((o) => (
+            <option value="">{t('callCenterQueueForceOutcomePanel.selectAnOutcome')}</option>
+            {OUTCOME_OPTIONS(t).map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -194,15 +203,17 @@ export function ForceOutcomePanel({
           </Select>
 
           {outcome !== '' && (
-            <p className="oo-faint">{OUTCOME_OPTIONS.find((o) => o.value === outcome)?.helper}</p>
+            <p className="oo-faint">
+              {OUTCOME_OPTIONS(t).find((o) => o.value === outcome)?.helper}
+            </p>
           )}
 
           <DateField
             id="fo-started"
             type="datetime-local"
-            label="Call started"
+            label={t('callCenterQueueForceOutcomePanel.callStarted')}
             requiredMark
-            hint="When the conversation you are recording actually happened. Defaults to now."
+            hint={t('callCenterQueueForceOutcomePanel.whenTheConversationYouAre')}
             value={startedAt}
             onChange={(e) => setStartedAt(e.target.value)}
           />
@@ -210,8 +221,8 @@ export function ForceOutcomePanel({
           <DateField
             id="fo-ended"
             type="datetime-local"
-            label="Call ended"
-            hint="Optional — only used to record how long the call ran."
+            label={t('callCenterQueueForceOutcomePanel.callEnded')}
+            hint={t('callCenterQueueForceOutcomePanel.optionalOnlyUsedToRecord')}
             value={endedAt}
             onChange={(e) => setEndedAt(e.target.value)}
           />
@@ -220,9 +231,9 @@ export function ForceOutcomePanel({
             <DateField
               id="fo-callback"
               type="datetime-local"
-              label="Callback scheduled for"
+              label={t('callCenterQueueForceOutcomePanel.callbackScheduledFor')}
               requiredMark
-              hint="The order returns to the queue at this time. The server enforces how near and how far it may be."
+              hint={t('callCenterQueueForceOutcomePanel.theOrderReturnsToThe')}
               value={scheduledFor}
               onChange={(e) => setScheduledFor(e.target.value)}
             />
@@ -230,14 +241,14 @@ export function ForceOutcomePanel({
 
           <TextArea
             id="fo-notes"
-            label="Notes"
-            hint="Say why you overruled this — the attempt ledger is append-only and this is the only place the reason lives."
+            label={t('callCenterQueueForceOutcomePanel.notes')}
+            hint={t('callCenterQueueForceOutcomePanel.sayWhyYouOverruledThis')}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             maxLength={2000}
             showCount
             rows={3}
-            placeholder="e.g. Customer confirmed on WhatsApp; agent unavailable to log it."
+            placeholder={t('callCenterQueueForceOutcomePanel.eGCustomerConfirmedOn')}
           />
         </div>
       </Dialog>
@@ -298,55 +309,57 @@ function useForceCallOutcome(): UseMutationResult<
   });
 }
 
-const OUTCOME_OPTIONS: ReadonlyArray<{
+const OUTCOME_OPTIONS = (
+  t: Translate<MessageKey>,
+): ReadonlyArray<{
   value: CallOutcome;
   label: string;
   helper: string;
-}> = [
+}> => [
   {
     value: CallOutcome.CONFIRMED,
-    label: 'Confirmed',
-    helper: 'Customer agreed → reserves stock and advances the order.',
+    label: t('callCenterQueueForceOutcomePanel.confirmed'),
+    helper: t('callCenterQueueForceOutcomePanel.customerAgreedReservesStockAnd'),
   },
   {
     value: CallOutcome.CUSTOMER_DECLINED,
-    label: 'Declined',
-    helper: 'Customer no longer wants it → the order is rejected. Terminal.',
+    label: t('callCenterQueueForceOutcomePanel.declined'),
+    helper: t('callCenterQueueForceOutcomePanel.customerNoLongerWantsIt'),
   },
   {
     value: CallOutcome.WRONG_NUMBER,
-    label: 'Wrong number',
-    helper: 'Reached someone else. Counts toward the attempt cap.',
+    label: t('callCenterQueueForceOutcomePanel.wrongNumber'),
+    helper: t('callCenterQueueForceOutcomePanel.reachedSomeoneElseCountsToward'),
   },
   {
     value: CallOutcome.NO_ANSWER,
-    label: 'No answer',
-    helper: 'Did not pick up. Counts toward the attempt cap.',
+    label: t('callCenterQueueForceOutcomePanel.noAnswer'),
+    helper: t('callCenterQueueForceOutcomePanel.didNotPickUpCounts'),
   },
   {
     value: CallOutcome.BUSY,
-    label: 'Busy',
-    helper: 'Line was busy. Counts toward the attempt cap.',
+    label: t('callCenterQueueForceOutcomePanel.busy'),
+    helper: t('callCenterQueueForceOutcomePanel.lineWasBusyCountsToward'),
   },
   {
     value: CallOutcome.VOICEMAIL_LEFT,
-    label: 'Voicemail left',
-    helper: 'Left a message. Counts toward the attempt cap.',
+    label: t('callCenterQueueForceOutcomePanel.voicemailLeft'),
+    helper: t('callCenterQueueForceOutcomePanel.leftAMessageCountsToward'),
   },
   {
     value: CallOutcome.CALLBACK_REQUESTED,
-    label: 'Callback requested',
-    helper: 'Returns to the queue at a time you set. Does not count toward the cap.',
+    label: t('callCenterQueueForceOutcomePanel.callbackRequested'),
+    helper: t('callCenterQueueForceOutcomePanel.returnsToTheQueueAt'),
   },
   {
     value: CallOutcome.TECHNICAL_FAILURE,
-    label: 'Technical failure',
-    helper: 'Line dropped or system fault — no order transition, no cap.',
+    label: t('callCenterQueueForceOutcomePanel.technicalFailure'),
+    helper: t('callCenterQueueForceOutcomePanel.lineDroppedOrSystemFault'),
   },
   {
     value: CallOutcome.LANGUAGE_BARRIER,
-    label: 'Language barrier',
-    helper: 'Could not communicate — no order transition, no cap.',
+    label: t('callCenterQueueForceOutcomePanel.languageBarrier'),
+    helper: t('callCenterQueueForceOutcomePanel.couldNotCommunicateNoOrder'),
   },
 ];
 

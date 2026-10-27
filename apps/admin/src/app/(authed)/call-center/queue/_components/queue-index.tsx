@@ -35,6 +35,7 @@ import {
 import { serverVerdict } from '@/lib/server-verdict';
 import { ForceOutcomePanel } from './force-outcome-panel';
 import { useRouter } from 'next/navigation';
+import { useT } from '@/i18n/client';
 
 const PAGE_SIZE = 25;
 
@@ -56,6 +57,7 @@ const MIN_RESCHEDULE_REASON = 5;
  * end of it.
  */
 export function QueueIndex(): ReactElement {
+  const t = useT();
   const router = useRouter();
   // Defaults to OPEN, matching this page's own subtitle: "what is
   // waiting to be confirmed, and who is holding it". A COMPLETED row is
@@ -90,11 +92,11 @@ export function QueueIndex(): ReactElement {
   return (
     <div className="oo-page">
       <PageHeader
-        title="Call queue"
-        subtitle="What is waiting to be confirmed, and who is holding it."
+        title={t('callCenterQueueQueueIndex.callQueue')}
+        subtitle={t('callCenterQueueQueueIndex.whatIsWaitingToBe')}
         action={
           <LinkButton href="/call-center" variant="ghost" icon={<Headset size={15} />}>
-            Agent station
+            {t('callCenterQueueQueueIndex.agentStation')}
           </LinkButton>
         }
       />
@@ -104,8 +106,8 @@ export function QueueIndex(): ReactElement {
           between. The count-up runs once, when the figure first lands. */}
       <div className="oo-kpis">
         <KpiCard
-          label="Open"
-          hint="Waiting or assigned — not yet resolved"
+          label={t('callCenterQueueQueueIndex.open')}
+          hint={t('callCenterQueueQueueIndex.waitingOrAssignedNotYet')}
           icon={<PhoneCall size={14} />}
           tone={(stats.data?.openTotal ?? 0) > 0 ? 'pending' : 'neutral'}
           {...(stats.data === undefined
@@ -113,21 +115,21 @@ export function QueueIndex(): ReactElement {
             : { value: stats.data.openTotal })}
         />
         <KpiCard
-          label="Pending"
+          label={t('callCenterQueueQueueIndex.pending')}
           icon={<Clock3 size={14} />}
           {...(stats.data === undefined
             ? { figure: <span className="oo-faint">—</span> }
             : { value: byStatus.PENDING ?? 0 })}
         />
         <KpiCard
-          label="Assigned"
+          label={t('callCenterQueueQueueIndex.assigned')}
           icon={<ArrowLeftRight size={14} />}
           {...(stats.data === undefined
             ? { figure: <span className="oo-faint">—</span> }
             : { value: byStatus.ASSIGNED ?? 0 })}
         />
         <KpiCard
-          label="Agents holding work"
+          label={t('callCenterQueueQueueIndex.agentsHoldingWork')}
           icon={<Users size={14} />}
           {...(stats.data === undefined
             ? { figure: <span className="oo-faint">—</span> }
@@ -138,12 +140,12 @@ export function QueueIndex(): ReactElement {
       <div className="cc-filters">
         <Select
           id="q-status"
-          label="Status"
+          label={t('callCenterQueueQueueIndex.status')}
           value={status}
           onChange={(e) => change(() => setStatus(e.target.value))}
         >
-          <option value="OPEN">Open — waiting or assigned</option>
-          <option value="">All, including finished attempts</option>
+          <option value="OPEN">{t('callCenterQueueQueueIndex.openWaitingOrAssigned')}</option>
+          <option value="">{t('callCenterQueueQueueIndex.allIncludingFinishedAttempts')}</option>
           {['PENDING', 'ASSIGNED', 'COMPLETED', 'EXPIRED'].map((s) => (
             <option key={s} value={s}>
               {s.toLowerCase()}
@@ -152,11 +154,11 @@ export function QueueIndex(): ReactElement {
         </Select>
         <Select
           id="q-agent"
-          label="Agent"
+          label={t('callCenterQueueQueueIndex.agent')}
           value={agentId}
           onChange={(e) => change(() => setAgentId(e.target.value))}
         >
-          <option value="">All agents</option>
+          <option value="">{t('callCenterQueueQueueIndex.allAgents')}</option>
           {(agents.data ?? []).map((a) => (
             <option key={a.agentId} value={a.agentId}>
               {a.email}
@@ -166,27 +168,31 @@ export function QueueIndex(): ReactElement {
       </div>
 
       {list.isLoading ? (
-        <SkeletonRows rows={6} cols={8} label="Loading the call queue…" />
+        <SkeletonRows
+          rows={6}
+          cols={8}
+          label={t('callCenterQueueQueueIndex.loadingTheCallQueue')}
+        />
       ) : list.isError ? (
         <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : items.length === 0 ? (
         <EmptyState
           tone="positive"
-          title="Queue is empty"
-          description="Orders enter the queue when they reach pending confirmation, and leave when an agent records an outcome."
+          title={t('callCenterQueueQueueIndex.queueIsEmpty')}
+          description={t('callCenterQueueQueueIndex.ordersEnterTheQueueWhen')}
         />
       ) : (
         <OoCard flush>
-          <Table caption="Call queue">
+          <Table caption={t('callCenterQueueQueueIndex.callQueue')}>
             <THead>
               <Tr>
-                <Th>Order</Th>
-                <Th>Waiting since</Th>
-                <Th>Available</Th>
-                <Th align="right">Calls</Th>
-                <Th align="right">Pulls</Th>
-                <Th>Assigned to</Th>
-                <Th>Status</Th>
+                <Th>{t('callCenterQueueQueueIndex.order')}</Th>
+                <Th>{t('callCenterQueueQueueIndex.waitingSince')}</Th>
+                <Th>{t('callCenterQueueQueueIndex.available')}</Th>
+                <Th align="right">{t('callCenterQueueQueueIndex.calls')}</Th>
+                <Th align="right">{t('callCenterQueueQueueIndex.pulls')}</Th>
+                <Th>{t('callCenterQueueQueueIndex.assignedTo')}</Th>
+                <Th>{t('callCenterQueueQueueIndex.status')}</Th>
                 <Th align="right" />
               </Tr>
             </THead>
@@ -220,7 +226,12 @@ export function QueueIndex(): ReactElement {
                       {e.attemptsCounting}
                       <span className="oo-faint">/{e.maxAttempts}</span>
                       {e.attemptsLogged > e.attemptsCounting && (
-                        <span className="oo-faint"> ({e.attemptsLogged} logged)</span>
+                        <span className="oo-faint">
+                          {' '}
+                          {t('callCenterQueueQueueIndex.logged', {
+                            attemptsLogged: e.attemptsLogged,
+                          })}
+                        </span>
                       )}
                     </span>
                   </Td>
@@ -247,7 +258,7 @@ export function QueueIndex(): ReactElement {
                     <div className="cc-row-actions">
                       {e.status === 'ASSIGNED' && (
                         <Button variant="ghost" size="sm" onClick={() => setReassigning(e)}>
-                          Reassign
+                          {t('callCenterQueueQueueIndex.reassign')}
                         </Button>
                       )}
                       {/* Timing, not outcome. Force-outcome was the
@@ -255,7 +266,7 @@ export function QueueIndex(): ReactElement {
                           works by RECORDING a conversation that did
                           not happen. */}
                       <Button variant="ghost" size="sm" onClick={() => setRescheduling(e)}>
-                        Reschedule
+                        {t('callCenterQueueQueueIndex.reschedule')}
                       </Button>
                       <ForceOutcomePanel
                         entryId={e.id}
@@ -270,7 +281,7 @@ export function QueueIndex(): ReactElement {
           </Table>
           <Pagination
             className="cc-pager"
-            label="Call queue pages"
+            label={t('callCenterQueueQueueIndex.callQueuePages')}
             page={page}
             pageSize={PAGE_SIZE}
             total={total}
@@ -321,6 +332,7 @@ function Reschedule({
   entry: CallQueueRow | null;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const reschedule = useRescheduleQueueEntry();
   const [when, setWhen] = useState('');
   const [reason, setReason] = useState('');
@@ -347,17 +359,20 @@ function Reschedule({
       onOpenChange={(next) => {
         if (!next) close();
       }}
-      title="When should this call become callable?"
-      description="Timing only — the attempt count and the order are untouched. A time in the past means it can be picked up straight away."
+      title={t('callCenterQueueQueueIndex.whenShouldThisCallBecome')}
+      description={t('callCenterQueueQueueIndex.timingOnlyTheAttemptCount')}
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={close}>
-            Cancel
+            {t('callCenterQueueQueueIndex.cancel')}
           </Button>
           <AsyncButton
             size="md"
             state={reschedule.isPending ? 'busy' : 'idle'}
-            labels={{ idle: 'Reschedule', busy: 'Rescheduling…' }}
+            labels={{
+              idle: t('callCenterQueueQueueIndex.reschedule'),
+              busy: t('callCenterQueueQueueIndex.rescheduling'),
+            }}
             disabled={when === '' || reasonShort > 0 || reschedule.isPending}
             onClick={() => {
               if (entry !== null) {
@@ -381,11 +396,13 @@ function Reschedule({
         <DateField
           id="q-when"
           type="datetime-local"
-          label="Callable from"
+          label={t('callCenterQueueQueueIndex.callableFrom')}
           hint={
             entry === null
               ? undefined
-              : `Currently ${new Date(entry.availableAt).toLocaleString('en-IN')}`
+              : t('callCenterQueueQueueIndex.currently', {
+                  value: new Date(entry.availableAt).toLocaleString('en-IN'),
+                })
           }
           value={when}
           onChange={(e) => setWhen(e.target.value)}
@@ -400,14 +417,14 @@ function Reschedule({
             size="sm"
             onClick={() => setWhen(toLocalInput(new Date().toISOString()))}
           >
-            Now
+            {t('callCenterQueueQueueIndex.now')}
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setWhen(toLocalInput(new Date(Date.now() + 60 * 60_000).toISOString()))}
           >
-            In 1 hour
+            {t('callCenterQueueQueueIndex.in1Hour')}
           </Button>
           <Button
             variant="ghost"
@@ -416,30 +433,35 @@ function Reschedule({
               setWhen(toLocalInput(new Date(Date.now() + 24 * 60 * 60_000).toISOString()))
             }
           >
-            Tomorrow
+            {t('callCenterQueueQueueIndex.tomorrow')}
           </Button>
         </div>
 
         <TextField
           id="q-why"
-          label="Why"
+          label={t('callCenterQueueQueueIndex.why')}
           // Same reasoning as the seller's re-attempt dialog: a disabled
           // button with no stated minimum leaves someone typing and
           // guessing.
           hint={
             <>
-              Moving when a customer gets called is a decision someone should be able to account for
-              later.{' '}
+              {t('callCenterQueueQueueIndex.movingWhenACustomerGets')}{' '}
               {reasonShort > 0 && (
                 <span className="oo-warn">
-                  {reasonShort} more {reasonShort === 1 ? 'character' : 'characters'} needed.
+                  {t('callCenterQueueQueueIndex.moreNeeded', {
+                    reasonShort,
+                    value:
+                      reasonShort === 1
+                        ? t('callCenterQueueQueueIndex.character')
+                        : t('callCenterQueueQueueIndex.characters'),
+                  })}
                 </span>
               )}
             </>
           }
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Customer rang back and asked to be called now"
+          placeholder={t('callCenterQueueQueueIndex.customerRangBackAndAsked')}
         />
 
         {reschedule.error !== null && (
@@ -459,6 +481,7 @@ function Reassign({
   entry: CallQueueRow | null;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const agents = useAgents();
   const reassign = useReassignQueueEntry();
   const [toAgentId, setToAgentId] = useState('');
@@ -479,17 +502,20 @@ function Reassign({
       onOpenChange={(next) => {
         if (!next) close();
       }}
-      title="Move this call to another agent"
-      description="The order keeps its place and its attempt history — only who is holding it changes."
+      title={t('callCenterQueueQueueIndex.moveThisCallToAnother')}
+      description={t('callCenterQueueQueueIndex.theOrderKeepsItsPlace')}
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={close}>
-            Cancel
+            {t('callCenterQueueQueueIndex.cancel')}
           </Button>
           <AsyncButton
             size="md"
             state={reassign.isPending ? 'busy' : 'idle'}
-            labels={{ idle: 'Reassign', busy: 'Moving…' }}
+            labels={{
+              idle: t('callCenterQueueQueueIndex.reassign'),
+              busy: t('callCenterQueueQueueIndex.moving'),
+            }}
             disabled={toAgentId === '' || reassign.isPending}
             onClick={() => {
               if (entry !== null) {
@@ -503,22 +529,26 @@ function Reassign({
       <div className="oo-stack">
         <Select
           id="q-to"
-          label="Give it to"
-          hint="Only agents currently marked available are listed."
+          label={t('callCenterQueueQueueIndex.giveItTo')}
+          hint={t('callCenterQueueQueueIndex.onlyAgentsCurrentlyMarkedAvailable')}
           value={toAgentId}
           onChange={(e) => setToAgentId(e.target.value)}
         >
-          <option value="">Select an agent…</option>
+          <option value="">{t('callCenterQueueQueueIndex.selectAnAgent')}</option>
           {available.map((a) => (
             <option key={a.agentId} value={a.agentId}>
-              {a.email} — holding {a.activeAssigned} of {a.settings.maxActiveCalls}
+              {t('callCenterQueueQueueIndex.holdingOf', {
+                email: a.email,
+                activeAssigned: a.activeAssigned,
+                maxActiveCalls: a.settings.maxActiveCalls,
+              })}
             </option>
           ))}
         </Select>
 
         {available.length === 0 && (
           <p className="oo-error" role="alert">
-            No other agent is marked available. Set someone available on the Agents screen first.
+            {t('callCenterQueueQueueIndex.noOtherAgentIsMarked')}
           </p>
         )}
         {reassign.error !== null && (

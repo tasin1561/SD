@@ -1,8 +1,12 @@
 import type { Metadata } from 'next';
 import type { ReactElement } from 'react';
 import { LiabilitiesIndex } from './_components/liabilities-index';
+import { getT } from '@/i18n/server';
 
-export const metadata: Metadata = { title: 'What we owe · Skydrop Admin' };
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return { title: t('liabilitiesPage.whatWeOweSkydropAdmin') };
+}
 
 export default function LiabilitiesPage(): ReactElement {
   return <LiabilitiesIndex />;

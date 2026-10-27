@@ -18,6 +18,7 @@ import {
   useMarkNotificationUnread,
   useNotificationFeed,
 } from '@/lib/notification-hooks';
+import { useT } from '@/i18n/client';
 
 /**
  * Everything that has been sent to this person, and what they have
@@ -28,6 +29,7 @@ import {
  * they have just read and would rather not have.
  */
 export function NotificationsView(): ReactElement {
+  const t = useT();
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const feed = useNotificationFeed(cursor);
   const markRead = useMarkNotificationRead();
@@ -64,8 +66,8 @@ export function NotificationsView(): ReactElement {
   return (
     <AcPage width="narrow">
       <AcHeader
-        title="Notifications"
-        subtitle="Everything sent to you, and what you have chosen to silence."
+        title={t('notificationsNotificationsView.notifications')}
+        subtitle={t('notificationsNotificationsView.everythingSentToYouAnd')}
         action={
           <div className="ac-buttons">
             {canBroadcast && (
@@ -73,7 +75,9 @@ export function NotificationsView(): ReactElement {
                 <span className="sk-btn__icon" aria-hidden>
                   <Megaphone size={15} />
                 </span>
-                <span className="sk-btn__label">Send a broadcast</span>
+                <span className="sk-btn__label">
+                  {t('notificationsNotificationsView.sendABroadcast')}
+                </span>
               </Link>
             )}
             {(feed.data?.unreadCount ?? 0) > 0 && (
@@ -82,7 +86,7 @@ export function NotificationsView(): ReactElement {
                 icon={<CheckCheck size={15} />}
                 onClick={() => markAll.mutate()}
               >
-                Mark all read
+                {t('notificationsNotificationsView.markAllRead')}
               </Button>
             )}
             {items.length > 0 && (
@@ -91,7 +95,7 @@ export function NotificationsView(): ReactElement {
                 icon={<Trash2 size={15} />}
                 onClick={() => setConfirmClear(true)}
               >
-                Clear all
+                {t('notificationsNotificationsView.clearAll')}
               </Button>
             )}
           </div>
@@ -105,8 +109,8 @@ export function NotificationsView(): ReactElement {
           <EmptyState
             bare
             tone="positive"
-            title="Nothing yet"
-            description="Anything needing you will appear here."
+            title={t('notificationsNotificationsView.nothingYet')}
+            description={t('notificationsNotificationsView.anythingNeedingYouWillAppear')}
           />
         ) : (
           <ul className="ac-rows">
@@ -148,7 +152,7 @@ export function NotificationsView(): ReactElement {
                     <span className="ac-notif__meta">
                       <span className="sk-figure">{new Date(n.createdAt).toLocaleString()}</span> ·{' '}
                       {n.topic}
-                      {!open && ' · click to read'}
+                      {!open && t('notificationsNotificationsView.clickToRead')}
                     </span>
                   </button>
 
@@ -160,7 +164,7 @@ export function NotificationsView(): ReactElement {
                         icon={<MailOpen size={14} />}
                         onClick={() => markRead.mutate(n.id)}
                       >
-                        Mark read
+                        {t('notificationsNotificationsView.markRead')}
                       </Button>
                     ) : (
                       <Button
@@ -169,17 +173,17 @@ export function NotificationsView(): ReactElement {
                         icon={<Mail size={14} />}
                         onClick={() => markUnread.mutate(n.id)}
                       >
-                        Mark unread
+                        {t('notificationsNotificationsView.markUnread')}
                       </Button>
                     )}
                     <Button
                       size="sm"
                       variant="ghost"
                       icon={<Trash2 size={14} />}
-                      aria-label="Delete this notification"
+                      aria-label={t('notificationsNotificationsView.deleteThisNotification')}
                       onClick={() => dismiss.mutate(n.id)}
                     >
-                      Delete
+                      {t('notificationsNotificationsView.delete')}
                     </Button>
                   </div>
                 </li>
@@ -191,7 +195,7 @@ export function NotificationsView(): ReactElement {
         {feed.data?.nextCursor != null && (
           <div className="ac-pad">
             <Button variant="ghost" onClick={() => setCursor(feed.data?.nextCursor ?? undefined)}>
-              Older
+              {t('notificationsNotificationsView.older')}
             </Button>
           </div>
         )}
@@ -206,18 +210,18 @@ export function NotificationsView(): ReactElement {
       <p className="ac-text">
         <Link className="ac-link ac-inline" href="/notifications/settings">
           <Settings2 size={14} aria-hidden />
-          Choose what reaches you
+          {t('notificationsNotificationsView.chooseWhatReachesYou')}
         </Link>{' '}
-        — switch off anything you would rather not see here.
+        {t('notificationsNotificationsView.switchOffAnythingYouWould')}
       </p>
 
       <ConfirmDialog
         open={confirmClear}
         onOpenChange={setConfirmClear}
-        title="Clear every notification?"
-        entity="Your inbox"
-        consequence="Every notification is removed from your inbox, including ones not loaded on this page."
-        confirmLabel="Clear all"
+        title={t('notificationsNotificationsView.clearEveryNotification')}
+        entity={t('notificationsNotificationsView.yourInbox')}
+        consequence={t('notificationsNotificationsView.everyNotificationIsRemovedFrom')}
+        confirmLabel={t('notificationsNotificationsView.clearAll')}
         destructive
         error={clearError}
         onConfirm={async () => {

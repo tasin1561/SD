@@ -39,6 +39,7 @@ import {
   Toolbar,
   mutationPhase,
 } from '../../_components/stock-kit';
+import { useT } from '@/i18n/client';
 
 const PAGE_SIZE = 25;
 const COUNT_TYPES = ['FULL', 'ZONE', 'SAMPLE', 'SKU_TARGETED', 'ABC_CLASSIFICATION'] as const;
@@ -54,6 +55,7 @@ const COUNT_TYPES = ['FULL', 'ZONE', 'SAMPLE', 'SKU_TARGETED', 'ABC_CLASSIFICATI
  * you press it.
  */
 export function CycleCountsIndex(): ReactElement {
+  const tr = useT();
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -71,27 +73,34 @@ export function CycleCountsIndex(): ReactElement {
   return (
     <AreaPage>
       <PageHeader
-        breadcrumbs={[{ label: 'Inventory' }, { label: 'Cycle counts' }]}
-        title="Cycle counts"
-        subtitle="Physical verification against what the system believes. Completing a count raises an adjustment for every difference."
+        breadcrumbs={[
+          { label: tr('inventoryCycleCountsCycleCountsIndex.inventory') },
+          { label: tr('inventoryCycleCountsCycleCountsIndex.cycleCounts') },
+        ]}
+        title={tr('inventoryCycleCountsCycleCountsIndex.cycleCounts')}
+        subtitle={tr('inventoryCycleCountsCycleCountsIndex.physicalVerificationAgainstWhatThe')}
         action={
           <Button icon={<CalendarPlus size={16} />} onClick={() => setCreating(true)}>
-            Schedule a count
+            {tr('inventoryCycleCountsCycleCountsIndex.scheduleACount')}
           </Button>
         }
       />
 
       <KpiGrid>
-        <KpiCard label="Counts shown" icon={<ListChecks size={14} />} value={items.length} />
         <KpiCard
-          label="In progress"
+          label={tr('inventoryCycleCountsCycleCountsIndex.countsShown')}
+          icon={<ListChecks size={14} />}
+          value={items.length}
+        />
+        <KpiCard
+          label={tr('inventoryCycleCountsCycleCountsIndex.inProgress')}
           icon={<ClipboardCheck size={14} />}
           value={items.filter((c) => c.status === 'IN_PROGRESS').length}
         />
         <KpiCard
-          label="Discrepancies found"
+          label={tr('inventoryCycleCountsCycleCountsIndex.discrepanciesFound')}
           icon={<TriangleAlert size={14} />}
-          hint="Across the counts on this page"
+          hint={tr('inventoryCycleCountsCycleCountsIndex.acrossTheCountsOnThis')}
           value={items.reduce((n, c) => n + (c.discrepancyCount ?? 0), 0)}
         />
       </KpiGrid>
@@ -100,14 +109,14 @@ export function CycleCountsIndex(): ReactElement {
         <Toolbar>
           <Select
             id="cc-status"
-            label="Status"
+            label={tr('inventoryCycleCountsCycleCountsIndex.status')}
             value={status}
             onChange={(e) => {
               setStatus(e.target.value);
               setPage(1);
             }}
           >
-            <option value="">All statuses</option>
+            <option value="">{tr('inventoryCycleCountsCycleCountsIndex.allStatuses')}</option>
             {['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map((s) => (
               <option key={s} value={s}>
                 {s.replace(/_/g, ' ').toLowerCase()}
@@ -122,22 +131,26 @@ export function CycleCountsIndex(): ReactElement {
           <InlineError message={serverVerdict(list.error)} retry={() => void list.refetch()} />
         ) : items.length === 0 ? (
           <EmptyState
-            title="No cycle counts"
-            description="Schedule one to reconcile a warehouse, a zone, or a handful of SKUs against the system."
-            action={<Button onClick={() => setCreating(true)}>Schedule a count</Button>}
+            title={tr('inventoryCycleCountsCycleCountsIndex.noCycleCounts')}
+            description={tr('inventoryCycleCountsCycleCountsIndex.scheduleOneToReconcileA')}
+            action={
+              <Button onClick={() => setCreating(true)}>
+                {tr('inventoryCycleCountsCycleCountsIndex.scheduleACount')}
+              </Button>
+            }
           />
         ) : (
           <>
             <Table>
               <THead>
                 <Tr>
-                  <Th>Date</Th>
-                  <Th>Type</Th>
-                  <Th>Warehouse</Th>
-                  <Th align="right">Items</Th>
-                  <Th align="right">Discrepancies</Th>
-                  <Th align="right">Value</Th>
-                  <Th>Status</Th>
+                  <Th>{tr('inventoryCycleCountsCycleCountsIndex.date')}</Th>
+                  <Th>{tr('inventoryCycleCountsCycleCountsIndex.type')}</Th>
+                  <Th>{tr('inventoryCycleCountsCycleCountsIndex.warehouse')}</Th>
+                  <Th align="right">{tr('inventoryCycleCountsCycleCountsIndex.items')}</Th>
+                  <Th align="right">{tr('inventoryCycleCountsCycleCountsIndex.discrepancies')}</Th>
+                  <Th align="right">{tr('inventoryCycleCountsCycleCountsIndex.value')}</Th>
+                  <Th>{tr('inventoryCycleCountsCycleCountsIndex.status')}</Th>
                   <Th align="right" />
                 </Tr>
               </THead>
@@ -165,7 +178,7 @@ export function CycleCountsIndex(): ReactElement {
                     </Td>
                     <Td align="right">
                       <Button variant="ghost" size="sm" onClick={() => setOpenId(c.id)}>
-                        Open
+                        {tr('inventoryCycleCountsCycleCountsIndex.open')}
                       </Button>
                     </Td>
                   </Tr>
@@ -203,6 +216,7 @@ function countKind(status: string): 'draft' | 'pending' | 'delivered' | 'cancell
 }
 
 function ScheduleCount({ open, onClose }: { open: boolean; onClose: () => void }): ReactElement {
+  const tr = useT();
   const warehouses = useWarehouseOptions();
   const [warehouseId, setWarehouseId] = useState('');
   const [countType, setCountType] = useState<string>('FULL');
@@ -220,17 +234,20 @@ function ScheduleCount({ open, onClose }: { open: boolean; onClose: () => void }
       onOpenChange={(next) => {
         if (!next) close();
       }}
-      title="Schedule a cycle count"
-      description="Creates it as SCHEDULED. Nothing is counted or changed until someone starts it."
+      title={tr('inventoryCycleCountsCycleCountsIndex.scheduleACycleCount')}
+      description={tr('inventoryCycleCountsCycleCountsIndex.createsItAsScheduledNothing')}
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={close}>
-            Cancel
+            {tr('inventoryCycleCountsCycleCountsIndex.cancel')}
           </Button>
           <AsyncButton
             size="md"
             state={mutationPhase(create)}
-            labels={{ idle: 'Schedule', busy: 'Scheduling…' }}
+            labels={{
+              idle: tr('inventoryCycleCountsCycleCountsIndex.schedule'),
+              busy: tr('inventoryCycleCountsCycleCountsIndex.scheduling'),
+            }}
             disabled={warehouseId === '' || create.isPending}
             onClick={() =>
               create.mutate(
@@ -245,11 +262,11 @@ function ScheduleCount({ open, onClose }: { open: boolean; onClose: () => void }
       <Stack>
         <Select
           id="cc-wh"
-          label="Warehouse"
+          label={tr('inventoryCycleCountsCycleCountsIndex.warehouse')}
           value={warehouseId}
           onChange={(e) => setWarehouseId(e.target.value)}
         >
-          <option value="">Select a warehouse…</option>
+          <option value="">{tr('inventoryCycleCountsCycleCountsIndex.selectAWarehouse')}</option>
           {(warehouses.data ?? []).map((w) => (
             <option key={w.id} value={w.id}>
               {w.name} ({w.code})
@@ -259,8 +276,8 @@ function ScheduleCount({ open, onClose }: { open: boolean; onClose: () => void }
 
         <Select
           id="cc-type"
-          label="Scope"
-          hint="What the counters are being asked to walk."
+          label={tr('inventoryCycleCountsCycleCountsIndex.scope')}
+          hint={tr('inventoryCycleCountsCycleCountsIndex.whatTheCountersAreBeing')}
           value={countType}
           onChange={(e) => setCountType(e.target.value)}
         >
@@ -273,7 +290,7 @@ function ScheduleCount({ open, onClose }: { open: boolean; onClose: () => void }
 
         <TextField
           id="cc-date"
-          label="Count date"
+          label={tr('inventoryCycleCountsCycleCountsIndex.countDate')}
           type="date"
           floatLabel
           value={countDate}
@@ -300,6 +317,7 @@ function CountDetail({
   count: CycleCountView | null;
   onClose: () => void;
 }): ReactElement {
+  const tr = useT();
   const start = useStartCycleCount();
   const record = useRecordCycleCountItems();
   const complete = useCompleteCycleCount();
@@ -339,7 +357,7 @@ function CountDetail({
         if (!next) close();
       }}
       size="lg"
-      title="Cycle count"
+      title={tr('inventoryCycleCountsCycleCountsIndex.cycleCount')}
       description={
         count === null ? undefined : (
           <span className="adj-sub">
@@ -354,13 +372,16 @@ function CountDetail({
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={close}>
-            Close
+            {tr('inventoryCycleCountsCycleCountsIndex.close')}
           </Button>
           {count !== null && scheduled && (
             <AsyncButton
               size="md"
               state={mutationPhase(start)}
-              labels={{ idle: 'Start counting', busy: 'Starting…' }}
+              labels={{
+                idle: tr('inventoryCycleCountsCycleCountsIndex.startCounting'),
+                busy: tr('inventoryCycleCountsCycleCountsIndex.starting'),
+              }}
               disabled={start.isPending}
               onClick={() => start.mutate({ id: count.id })}
             />
@@ -372,9 +393,12 @@ function CountDetail({
               labels={{
                 idle:
                   discrepancies.length === 0
-                    ? 'Complete — no adjustments'
-                    : `Complete — raises ${discrepancies.length} adjustment${discrepancies.length === 1 ? '' : 's'}`,
-                busy: 'Completing…',
+                    ? tr('inventoryCycleCountsCycleCountsIndex.completeNoAdjustments')
+                    : tr('inventoryCycleCountsCycleCountsIndex.completeRaisesAdjustment', {
+                        length: discrepancies.length,
+                        value: discrepancies.length === 1 ? '' : tr('common.pluralS'),
+                      }),
+                busy: tr('inventoryCycleCountsCycleCountsIndex.completing'),
               }}
               disabled={complete.isPending}
               onClick={() => complete.mutate({ id: count.id }, { onSuccess: close })}
@@ -388,17 +412,25 @@ function CountDetail({
           <Facts
             columns={4}
             items={[
-              { label: 'Warehouse', value: <Ident value={count.warehouseId} /> },
               {
-                label: 'Zone',
-                value: count.zoneId === null ? 'Whole warehouse' : <Ident value={count.zoneId} />,
+                label: tr('inventoryCycleCountsCycleCountsIndex.warehouse'),
+                value: <Ident value={count.warehouseId} />,
               },
               {
-                label: 'Started',
+                label: tr('inventoryCycleCountsCycleCountsIndex.zone'),
+                value:
+                  count.zoneId === null ? (
+                    tr('inventoryCycleCountsCycleCountsIndex.wholeWarehouse')
+                  ) : (
+                    <Ident value={count.zoneId} />
+                  ),
+              },
+              {
+                label: tr('inventoryCycleCountsCycleCountsIndex.started'),
                 value: count.startedAt === null ? '—' : new Date(count.startedAt).toLocaleString(),
               },
               {
-                label: 'Completed',
+                label: tr('inventoryCycleCountsCycleCountsIndex.completed'),
                 value:
                   count.completedAt === null ? '—' : new Date(count.completedAt).toLocaleString(),
               },
@@ -407,14 +439,14 @@ function CountDetail({
 
           {inProgress && (
             <AreaSection
-              title="Record a counted line"
-              note="System quantity is snapshotted when you record, not when the count was scheduled."
+              title={tr('inventoryCycleCountsCycleCountsIndex.recordACountedLine')}
+              note={tr('inventoryCycleCountsCycleCountsIndex.systemQuantityIsSnapshottedWhen')}
             >
               <Panel>
                 <FieldGrid columns={2}>
                   <TextField
                     id="cc-variant"
-                    label="Variant id"
+                    label={tr('inventoryCycleCountsCycleCountsIndex.variantId')}
                     inputClassName="sk-ident"
                     value={variantId}
                     onChange={(e) => setVariantId(e.target.value)}
@@ -422,7 +454,7 @@ function CountDetail({
                   />
                   <TextField
                     id="cc-qty"
-                    label="Counted quantity"
+                    label={tr('inventoryCycleCountsCycleCountsIndex.countedQuantity')}
                     type="number"
                     min={0}
                     inputClassName="sk-figure"
@@ -431,16 +463,16 @@ function CountDetail({
                   />
                   <TextField
                     id="cc-bin"
-                    label="Bin id"
-                    hint="Required — a count is per bin and batch"
+                    label={tr('inventoryCycleCountsCycleCountsIndex.binId')}
+                    hint={tr('inventoryCycleCountsCycleCountsIndex.requiredACountIsPer')}
                     inputClassName="sk-ident"
                     value={binId}
                     onChange={(e) => setBinId(e.target.value)}
                   />
                   <TextField
                     id="cc-batch"
-                    label="Batch id"
-                    hint="Required — a count is per bin and batch"
+                    label={tr('inventoryCycleCountsCycleCountsIndex.batchId')}
+                    hint={tr('inventoryCycleCountsCycleCountsIndex.requiredACountIsPer')}
                     inputClassName="sk-ident"
                     value={batchId}
                     onChange={(e) => setBatchId(e.target.value)}
@@ -457,18 +489,23 @@ function CountDetail({
                 */}
                 <TextArea
                   id="cc-notes"
-                  label="Notes"
-                  hint="Optional. Kept on the line, and read by whoever has to explain the difference."
+                  label={tr('inventoryCycleCountsCycleCountsIndex.notes')}
+                  hint={tr('inventoryCycleCountsCycleCountsIndex.optionalKeptOnTheLine')}
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Anything the number alone will not explain."
+                  placeholder={tr(
+                    'inventoryCycleCountsCycleCountsIndex.anythingTheNumberAloneWill',
+                  )}
                 />
                 <div className="stk-actions">
                   <AsyncButton
                     size="md"
                     state={mutationPhase(record)}
-                    labels={{ idle: 'Record line', busy: 'Recording…' }}
+                    labels={{
+                      idle: tr('inventoryCycleCountsCycleCountsIndex.recordLine'),
+                      busy: tr('inventoryCycleCountsCycleCountsIndex.recording'),
+                    }}
                     disabled={
                       variantId.trim() === '' ||
                       countedQty === '' ||
@@ -506,21 +543,25 @@ function CountDetail({
           )}
 
           <AreaSection
-            title={`Counted lines (${count.items.length})`}
+            title={tr('inventoryCycleCountsCycleCountsIndex.countedLines', {
+              itemsLength: count.items.length,
+            })}
             note={
               discrepancies.length === 0
-                ? 'Every line matches the system.'
-                : `${discrepancies.length} differ from the system — completing will raise an adjustment for each.`
+                ? tr('inventoryCycleCountsCycleCountsIndex.everyLineMatchesTheSystem')
+                : tr('inventoryCycleCountsCycleCountsIndex.differFromTheSystemCompleting', {
+                    length: discrepancies.length,
+                  })
             }
           >
             {count.items.length === 0 ? (
               <EmptyState
                 bare
-                title="Nothing counted yet"
+                title={tr('inventoryCycleCountsCycleCountsIndex.nothingCountedYet')}
                 description={
                   scheduled
-                    ? 'Start the count before recording lines.'
-                    : 'Record the first line above.'
+                    ? tr('inventoryCycleCountsCycleCountsIndex.startTheCountBeforeRecording')
+                    : tr('inventoryCycleCountsCycleCountsIndex.recordTheFirstLineAbove')
                 }
               />
             ) : (
@@ -528,12 +569,12 @@ function CountDetail({
                 <Table>
                   <THead>
                     <Tr>
-                      <Th>Variant</Th>
-                      <Th>Bin</Th>
-                      <Th align="right">System</Th>
-                      <Th align="right">Counted</Th>
-                      <Th align="right">Difference</Th>
-                      <Th>Notes</Th>
+                      <Th>{tr('inventoryCycleCountsCycleCountsIndex.variant')}</Th>
+                      <Th>{tr('inventoryCycleCountsCycleCountsIndex.bin')}</Th>
+                      <Th align="right">{tr('inventoryCycleCountsCycleCountsIndex.system')}</Th>
+                      <Th align="right">{tr('inventoryCycleCountsCycleCountsIndex.counted')}</Th>
+                      <Th align="right">{tr('inventoryCycleCountsCycleCountsIndex.difference')}</Th>
+                      <Th>{tr('inventoryCycleCountsCycleCountsIndex.notes')}</Th>
                     </Tr>
                   </THead>
                   <TBody>

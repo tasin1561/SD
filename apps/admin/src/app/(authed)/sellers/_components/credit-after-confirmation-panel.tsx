@@ -18,6 +18,7 @@ import {
   useCreditAfterConfirmation,
   useSetCreditAfterConfirmation,
 } from '@/lib/reseller-terms-hooks';
+import { useT } from '@/i18n/client';
 
 /**
  * RS-4 / decision 10 — whether this seller's reseller-store terms may
@@ -35,6 +36,7 @@ export function CreditAfterConfirmationPanel({
 }: {
   sellerId: string;
 }): ReactElement | null {
+  const t = useT();
   const canView = usePermission(
     'reseller.stores.view',
     'reseller.credit_after_confirmation.enable',
@@ -57,10 +59,12 @@ export function CreditAfterConfirmationPanel({
       const after = await set.mutateAsync({ enabled: target, reason: reason.trim() });
       toast.success(
         after.enabled
-          ? 'Credit after confirmation is on for this client.'
+          ? t('sellersCreditAfterConfirmationPanel.creditAfterConfirmationIsOn')
           : after.flaggedStores.length > 0
-            ? `Switched off. ${after.flaggedStores.length} store(s) need new terms before they can order.`
-            : 'Credit after confirmation is off for this client.',
+            ? t('sellersCreditAfterConfirmationPanel.switchedOffStoreSNeed', {
+                flaggedStoresLength: after.flaggedStores.length,
+              })
+            : t('sellersCreditAfterConfirmationPanel.creditAfterConfirmationIsOff'),
       );
       setTarget(null);
       setReason('');
@@ -71,18 +75,22 @@ export function CreditAfterConfirmationPanel({
 
   return (
     <AcSection
-      title="Member stores — credit after confirmation"
-      note="Lets this client's store terms credit a party days after the order is confirmed — before the customer has paid. Off by default."
+      title={t('sellersCreditAfterConfirmationPanel.memberStoresCreditAfterConfirmation')}
+      note={t('sellersCreditAfterConfirmationPanel.letsThisClientSStore')}
     >
       {status.isPending ? (
-        <SkeletonRows rows={1} cols={2} label="Loading" />
+        <SkeletonRows rows={1} cols={2} label={t('sellersCreditAfterConfirmationPanel.loading')} />
       ) : status.isError ? (
         <ErrorState message={serverVerdict(status.error)} retry={() => void status.refetch()} />
       ) : (
         <div className="ac-card__body">
           <Switch
             checked={status.data.enabled}
-            label={status.data.enabled ? 'On for this client' : 'Off for this client'}
+            label={
+              status.data.enabled
+                ? t('sellersCreditAfterConfirmationPanel.onForThisClient')
+                : t('sellersCreditAfterConfirmationPanel.offForThisClient')
+            }
             disabled={!canSet || set.isPending}
             onCheckedChange={(next) => {
               setError(null);
@@ -91,14 +99,13 @@ export function CreditAfterConfirmationPanel({
           />
           {status.data.source === 'UNREADABLE' ? (
             <p className="ac-danger-text">
-              The setting could not be read, so it is treated as off.
+              {t('sellersCreditAfterConfirmationPanel.theSettingCouldNotBe')}
             </p>
           ) : null}
           {status.data.flaggedStores.length > 0 ? (
             <AcCallout tone="critical" icon={<TriangleAlert size={15} />}>
               <p className="ac-text">
-                These stores’ current terms still use it, so they cannot place new orders until the
-                client publishes new terms:
+                {t('sellersCreditAfterConfirmationPanel.theseStoresCurrentTermsStill')}
               </p>
               <ul className="ac-list">
                 {status.data.flaggedStores.map((s) => (
@@ -106,7 +113,7 @@ export function CreditAfterConfirmationPanel({
                     <Link href={`/reseller-stores/${s.storeId}`} className="ac-link">
                       {s.storeName}
                     </Link>{' '}
-                    (version {s.version})
+                    {t('sellersCreditAfterConfirmationPanel.version', { version: s.version })}
                   </li>
                 ))}
               </ul>
@@ -121,13 +128,13 @@ export function CreditAfterConfirmationPanel({
         }}
         title={
           target === true
-            ? 'Allow credit after confirmation?'
-            : 'Switch credit after confirmation off?'
+            ? t('sellersCreditAfterConfirmationPanel.allowCreditAfterConfirmation')
+            : t('sellersCreditAfterConfirmationPanel.switchCreditAfterConfirmationOff')
         }
         description={
           target === true
-            ? 'Skydrop will front money for this client’s stores before customers pay. Say why.'
-            : 'No terms are rewritten: stores whose current terms use it are flagged and cannot order until the client publishes new terms. Say why.'
+            ? t('sellersCreditAfterConfirmationPanel.skydropWillFrontMoneyFor')
+            : t('sellersCreditAfterConfirmationPanel.noTermsAreRewrittenStores')
         }
         tone="critical"
         icon={<TriangleAlert size={18} />}
@@ -135,9 +142,9 @@ export function CreditAfterConfirmationPanel({
       >
         <form onSubmit={submit} className="ac-form">
           <TextArea
-            label="Why"
+            label={t('sellersCreditAfterConfirmationPanel.why')}
             id="cac-reason"
-            hint="At least 20 characters. Audited."
+            hint={t('sellersCreditAfterConfirmationPanel.atLeast20CharactersAudited')}
             required
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -145,7 +152,7 @@ export function CreditAfterConfirmationPanel({
           {error !== null ? <AcAlert message={error} /> : null}
           <DialogFooter>
             <Button type="button" variant="secondary" size="md" onClick={() => setTarget(null)}>
-              Cancel
+              {t('sellersCreditAfterConfirmationPanel.cancel')}
             </Button>
             <AsyncButton
               type="submit"
@@ -153,9 +160,12 @@ export function CreditAfterConfirmationPanel({
               size="md"
               state={phaseOf(set.isPending, error)}
               labels={{
-                idle: target === true ? 'Switch on' : 'Switch off',
-                busy: 'Saving…',
-                error: 'Not saved',
+                idle:
+                  target === true
+                    ? t('sellersCreditAfterConfirmationPanel.switchOn')
+                    : t('sellersCreditAfterConfirmationPanel.switchOff'),
+                busy: t('sellersCreditAfterConfirmationPanel.saving'),
+                error: t('sellersCreditAfterConfirmationPanel.notSaved'),
               }}
             />
           </DialogFooter>

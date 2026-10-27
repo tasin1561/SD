@@ -16,6 +16,9 @@ import { useEndImpersonation, useImpersonationSessions } from '@/lib/impersonati
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { AcAlert, AcHeader, AcPage, AcSection } from '../../settings/_components/ac-parts';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /** The server caps this at 200. A review screen, not an export. */
 const LIMIT = 200;
@@ -55,6 +58,7 @@ type Filter = 'ALL' | 'LIVE' | 'ENDED';
  * session.
  */
 export function ImpersonationReview(): ReactElement {
+  const tr = useT();
   const canReview = usePermission('support.impersonate.review');
   // Ending one is gated on `support.impersonate` at the route, and on
   // `.review` in the service for somebody ELSE's session. So the button
@@ -93,12 +97,20 @@ export function ImpersonationReview(): ReactElement {
   async function onEnd(session: ImpersonationSessionSummary): Promise<boolean> {
     setError(null);
     try {
-      await end.mutateAsync({ sessionId: session.id, reason: 'Ended from the review screen.' });
-      toast.success(`Session ended — ${session.staffEmail} is out of ${session.subjectLabel}.`);
+      await end.mutateAsync({
+        sessionId: session.id,
+        reason: tr('impersonationImpersonationReview.endedFromTheReviewScreen'),
+      });
+      toast.success(
+        tr('impersonationImpersonationReview.sessionEndedIsOutOf', {
+          staffEmail: session.staffEmail,
+          subjectLabel: session.subjectLabel,
+        }),
+      );
       setPendingEnd(null);
       return true;
     } catch (e) {
-      setError(serverVerdict(e, 'The session was not ended.'));
+      setError(serverVerdict(e, tr('impersonationImpersonationReview.theSessionWasNotEnded')));
       return false;
     }
   }
@@ -106,67 +118,82 @@ export function ImpersonationReview(): ReactElement {
   return (
     <AcPage>
       <AcHeader
-        title="Support sessions"
-        subtitle="Every time a staff member has gone inside a client’s or a member store’s account: who, as whom, for how long, and why. Newest first."
+        title={tr('impersonationImpersonationReview.supportSessions')}
+        subtitle={tr('impersonationImpersonationReview.everyTimeAStaffMember')}
       />
 
       {!canReview && (
         <AcAlert
           tone="warn"
-          message="Reading other people’s support sessions needs the “Review support sessions” permission. Nothing below will load without it."
+          message={tr('impersonationImpersonationReview.readingOtherPeopleSSupport')}
         />
       )}
 
       {error !== null && <AcAlert message={error} />}
 
       <Tabs
-        label="Which sessions"
+        label={tr('impersonationImpersonationReview.whichSessions')}
         size="sm"
         value={filter}
         onChange={(id) => setFilter(id === 'LIVE' ? 'LIVE' : id === 'ENDED' ? 'ENDED' : 'ALL')}
         items={[
-          { id: 'ALL', label: 'All' },
-          { id: 'LIVE', label: 'In there now', ...(liveCount > 0 ? { count: liveCount } : {}) },
-          { id: 'ENDED', label: 'Finished' },
+          { id: 'ALL', label: tr('impersonationImpersonationReview.all') },
+          {
+            id: 'LIVE',
+            label: tr('impersonationImpersonationReview.inThereNow'),
+            ...(liveCount > 0 ? { count: liveCount } : {}),
+          },
+          { id: 'ENDED', label: tr('impersonationImpersonationReview.finished') },
         ]}
       />
 
       <AcSection
-        title="Sessions"
+        title={tr('impersonationImpersonationReview.sessions')}
         {...(all.length === LIMIT
           ? {
-              note: `The newest ${LIMIT} sessions — the server does not serve a screen more than that. Narrow by client or staff member to look further back.`,
+              note: tr('impersonationImpersonationReview.theNewestSessionsTheServer', {
+                limit: LIMIT,
+              }),
             }
           : {})}
         flush
       >
         {sessions.isLoading ? (
-          <SkeletonRows rows={5} cols={6} label="Loading support sessions…" />
+          <SkeletonRows
+            rows={5}
+            cols={6}
+            label={tr('impersonationImpersonationReview.loadingSupportSessions')}
+          />
         ) : sessions.isError ? (
           <ErrorState
-            message={serverVerdict(sessions.error, 'The session list did not load.')}
+            message={serverVerdict(
+              sessions.error,
+              tr('impersonationImpersonationReview.theSessionListDidNot'),
+            )}
             retry={() => void sessions.refetch()}
           />
         ) : rows.length === 0 ? (
           <EmptyState
             bare
-            title="No support sessions."
+            title={tr('impersonationImpersonationReview.noSupportSessions')}
             description={
               filter === 'LIVE'
-                ? 'Nobody is inside a client’s or a store’s account right now.'
-                : 'Nobody has opened one yet.'
+                ? tr('impersonationImpersonationReview.nobodyIsInsideAClient')
+                : tr('impersonationImpersonationReview.nobodyHasOpenedOneYet')
             }
           />
         ) : (
-          <Table caption="Support impersonation sessions, newest first">
+          <Table
+            caption={tr('impersonationImpersonationReview.supportImpersonationSessionsNewestFirst')}
+          >
             <THead>
               <Tr>
-                <Th>Who</Th>
-                <Th>Inside whose account</Th>
-                <Th>Why</Th>
-                <Th>When, and for how long</Th>
-                <Th align="right">Requests</Th>
-                <Th align="right">Actions</Th>
+                <Th>{tr('impersonationImpersonationReview.who')}</Th>
+                <Th>{tr('impersonationImpersonationReview.insideWhoseAccount')}</Th>
+                <Th>{tr('impersonationImpersonationReview.why')}</Th>
+                <Th>{tr('impersonationImpersonationReview.whenAndForHowLong')}</Th>
+                <Th align="right">{tr('impersonationImpersonationReview.requests')}</Th>
+                <Th align="right">{tr('impersonationImpersonationReview.actions')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -178,7 +205,8 @@ export function ImpersonationReview(): ReactElement {
                       <span className="ac-cell-main">{s.staffEmail}</span>
                       {live && (
                         <span className="ac-cell-sub ac-danger-text">
-                          <TriangleAlert size={12} aria-hidden /> In there now
+                          <TriangleAlert size={12} aria-hidden />{' '}
+                          {tr('impersonationImpersonationReview.inThereNow')}
                         </span>
                       )}
                       {s.otpVerifiedAt === null && (
@@ -186,10 +214,14 @@ export function ImpersonationReview(): ReactElement {
                         // session five wrong codes closed. It did
                         // nothing, but a reviewer asking "who tried"
                         // wants to see it, so it is not hidden.
-                        <span className="ac-cell-sub">Never entered — no code was accepted</span>
+                        <span className="ac-cell-sub">
+                          {tr('impersonationImpersonationReview.neverEnteredNoCodeWas')}
+                        </span>
                       )}
                       {s.ipAddress !== null && (
-                        <span className="ac-cell-sub sk-figure">from {s.ipAddress}</span>
+                        <span className="ac-cell-sub sk-figure">
+                          {tr('impersonationImpersonationReview.from', { ipAddress: s.ipAddress })}
+                        </span>
                       )}
                     </Td>
                     <Td>
@@ -219,29 +251,35 @@ export function ImpersonationReview(): ReactElement {
                       <span className="ac-cell-sub">
                         {s.mayWrite ? (
                           <span className="ac-danger-text">
-                            <PenLine size={12} aria-hidden /> Acting as them
+                            <PenLine size={12} aria-hidden />{' '}
+                            {tr('impersonationImpersonationReview.actingAsThem')}
                           </span>
                         ) : (
                           <>
-                            <Eye size={12} aria-hidden /> Read-only
+                            <Eye size={12} aria-hidden />{' '}
+                            {tr('impersonationImpersonationReview.readOnly')}
                           </>
                         )}
                       </span>
                       {s.endedReason !== null && (
-                        <span className="ac-cell-sub">On closing: {s.endedReason}</span>
+                        <span className="ac-cell-sub">
+                          {tr('impersonationImpersonationReview.onClosing', {
+                            endedReason: s.endedReason,
+                          })}
+                        </span>
                       )}
                     </Td>
                     <Td>
                       <span className="sk-figure ac-faint">
                         {new Date(s.createdAt).toLocaleString()}
                       </span>
-                      <span className="ac-cell-sub">{describeWindow(s, now)}</span>
+                      <span className="ac-cell-sub">{describeWindow(tr, s, now)}</span>
                     </Td>
                     <Td align="right">
                       <span className="sk-figure">{s.requestCount}</span>
                       <span className="ac-cell-sub">
                         {s.writeCount === 0 ? (
-                          'nothing changed'
+                          tr('impersonationImpersonationReview.nothingChanged')
                         ) : (
                           <span className="ac-danger-text">
                             {s.writeCount} {s.writeCount === 1 ? 'write' : 'writes'}
@@ -260,7 +298,7 @@ export function ImpersonationReview(): ReactElement {
                             setPendingEnd(s);
                           }}
                         >
-                          End now
+                          {tr('impersonationImpersonationReview.endNow')}
                         </Button>
                       ) : (
                         <span className="ac-faint">—</span>
@@ -279,10 +317,10 @@ export function ImpersonationReview(): ReactElement {
         onOpenChange={(o) => {
           if (!o) setPendingEnd(null);
         }}
-        title="End this support session now?"
+        title={tr('impersonationImpersonationReview.endThisSupportSessionNow')}
         entity={pendingEnd === null ? '' : `${pendingEnd.staffEmail} in ${pendingEnd.subjectLabel}`}
-        consequence="It stops on their very next request, and the account refuses them from then on. They can open a new session if they still need one."
-        confirmLabel="End the session"
+        consequence={tr('impersonationImpersonationReview.itStopsOnTheirVery')}
+        confirmLabel={tr('impersonationImpersonationReview.endTheSession')}
         destructive
         error={error}
         onConfirm={async () => {
@@ -309,21 +347,30 @@ function isLive(s: ImpersonationSessionSummary, now: number): boolean {
 }
 
 /** "running 4m 12s — ends in 5m 48s", or how long a finished one lasted. */
-function describeWindow(s: ImpersonationSessionSummary, now: number): string {
+function describeWindow(
+  tr: Translate<MessageKey>,
+  s: ImpersonationSessionSummary,
+  now: number,
+): string {
   const opened = Date.parse(s.createdAt);
   if (isLive(s, now)) {
-    return `running ${describeSpan(now - opened)} — ends in ${describeSpan(
-      Date.parse(s.expiresAt) - now,
-    )}`;
+    return tr('impersonationImpersonationReview.runningEndsIn', {
+      value: describeSpan(now - opened),
+      value2: describeSpan(Date.parse(s.expiresAt) - now),
+    });
   }
   if (s.endedAt !== null)
-    return `lasted ${describeSpan(Date.parse(s.endedAt) - opened)}, then ended`;
+    return tr('impersonationImpersonationReview.lastedThenEnded', {
+      value: describeSpan(Date.parse(s.endedAt) - opened),
+    });
   // Never entered: how long it "ran" is not a fact about anything.
-  if (s.otpVerifiedAt === null) return 'never started';
+  if (s.otpVerifiedAt === null) return tr('impersonationImpersonationReview.neverStarted');
   // No end row and the window is past: it ran out rather than being
   // closed by anybody. Said that way round, because "ended" would imply
   // somebody decided.
-  return `ran its full ${describeSpan(Date.parse(s.expiresAt) - opened)} and expired`;
+  return tr('impersonationImpersonationReview.ranItsFullAndExpired', {
+    value: describeSpan(Date.parse(s.expiresAt) - opened),
+  });
 }
 
 /**

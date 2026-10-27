@@ -17,6 +17,8 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 const MIN_WAIVE_REASON = 10;
 const MIN_VOID_REASON = 10;
@@ -43,6 +45,8 @@ const MIN_VOID_REASON = 10;
  * two operators cannot double-debit) and its verdict is shown as-is.
  */
 export function FreightActions({ row }: { readonly row: FreightChargeView }): ReactElement {
+  const t = useT();
+
   const toast = useToast();
   const canWrite = usePermission('money.freight.manage');
   const settle = useSettleFreight();
@@ -65,10 +69,10 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
     return (
       <span className="mk-faint">
         {row.voidedAt !== null
-          ? 'Withdrawn'
+          ? t('freightFreightActions.withdrawn')
           : row.status === InboundFreightStatus.WAIVED
-            ? 'Waived'
-            : 'Closed'}
+            ? t('freightFreightActions.waived')
+            : t('freightFreightActions.closed')}
       </span>
     );
   }
@@ -78,7 +82,7 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
     setSettleError(null);
     try {
       await settle.mutateAsync({ freightChargeId: row.id });
-      toast.success('Freight bill settled against the wallet.');
+      toast.success(t('freightFreightActions.freightBillSettledAgainstThe'));
       setConfirmSettle(false);
     } catch (err) {
       setSettleError(serverVerdict(err));
@@ -90,7 +94,7 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
     setError(null);
     try {
       await waive.mutateAsync({ freightChargeId: row.id, reason: reason.trim() });
-      toast.success('Freight bill waived.');
+      toast.success(t('freightFreightActions.freightBillWaived'));
       setWaiving(false);
       setReason('');
     } catch (err) {
@@ -103,7 +107,7 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
     setError(null);
     try {
       await voidBill.mutateAsync({ freightChargeId: row.id, reason: voidReason.trim() });
-      toast.success('Freight bill withdrawn. Raise the corrected one when you have it.');
+      toast.success(t('freightFreightActions.freightBillWithdrawnRaiseThe'));
       setVoiding(false);
       setVoidReason('');
     } catch (err) {
@@ -129,23 +133,26 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
         }}
         disabled={settle.isPending}
       >
-        Settle
+        {t('freightFreightActions.settle')}
       </Button>
       <Button variant="ghost" size="sm" onClick={() => setWaiving(true)}>
-        Waive
+        {t('freightFreightActions.waive')}
       </Button>
       <Button variant="ghost" size="sm" onClick={() => setVoiding(true)}>
-        Void
+        {t('freightFreightActions.void')}
       </Button>
 
       <ConfirmDialog
         open={confirmSettle}
         onOpenChange={setConfirmSettle}
-        title="Settle this freight bill?"
-        entity={`Arrival ${arrival}${row.sellerCompanyName !== null ? ` · ${row.sellerCompanyName}` : ''}`}
+        title={t('freightFreightActions.settleThisFreightBill')}
+        entity={t('freightFreightActions.arrival', {
+          arrival,
+          value: row.sellerCompanyName !== null ? ` · ${row.sellerCompanyName}` : '',
+        })}
         amount={<Money amount={row.outstandingInr} />}
-        consequence={`Debits the client's wallet by the outstanding amount for arrival ${arrival}. The ledger entry is permanent.`}
-        confirmLabel="Settle"
+        consequence={t('freightFreightActions.debitsTheClientSWallet', { arrival })}
+        confirmLabel={t('freightFreightActions.settle')}
         onConfirm={doSettle}
         error={settleError}
       />
@@ -159,11 +166,12 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
         size="md"
         tone="critical"
         locked={waive.isPending}
-        title="Waive this freight bill"
+        title={t('freightFreightActions.waiveThisFreightBill')}
         description={
           <>
-            Forgives <Money amount={row.outstandingInr} /> — no wallet movement, and the bill stays
-            countable as a waiver rather than disappearing. Audited at HIGH severity.
+            {richMessage(t('freightFreightActions.forgivesNoWalletMovementAnd'), {
+              money: <Money amount={row.outstandingInr} />,
+            })}
           </>
         }
         footer={
@@ -174,13 +182,18 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
               onClick={() => setWaiving(false)}
               disabled={waive.isPending}
             >
-              Cancel
+              {t('freightFreightActions.cancel')}
             </Button>
             <AsyncButton
               variant="destructive"
               size="md"
               disabled={reason.trim().length < MIN_WAIVE_REASON}
-              labels={{ idle: 'Waive bill', busy: 'Waiving…', done: 'Waived', error: 'Refused' }}
+              labels={{
+                idle: t('freightFreightActions.waiveBill'),
+                busy: t('freightFreightActions.waiving'),
+                done: t('freightFreightActions.waived'),
+                error: t('freightFreightActions.refused'),
+              }}
               onAction={doWaive}
             />
           </DialogFooter>
@@ -189,13 +202,15 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
         <div className="mk-stack">
           <TextArea
             id="waive-reason"
-            label="Reason"
-            hint={`At least ${MIN_WAIVE_REASON} characters. This is what explains the write-off at audit time.`}
+            label={t('freightFreightActions.reason')}
+            hint={t('freightFreightActions.atLeastCharactersThisIs', {
+              minWaiveReason: MIN_WAIVE_REASON,
+            })}
             requiredMark
             rows={3}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="Consignment mis-handled at our warehouse; goodwill on the freight."
+            placeholder={t('freightFreightActions.consignmentMisHandledAtOur')}
           />
           {error !== null && <MkAlert>{error}</MkAlert>}
         </div>
@@ -210,14 +225,12 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
         size="md"
         tone="critical"
         locked={voidBill.isPending}
-        title="Withdraw this freight bill"
+        title={t('freightFreightActions.withdrawThisFreightBill')}
         description={
           <>
-            For a bill that was WRONG — a mistyped rate, a recount. It is withdrawn and whatever it
-            charged (<Money amount={row.amountSettledInr} />) goes back to the client&apos;s wallet.
-            Raise the corrected bill for this stop afterwards; until you do, this arrival has no
-            freight against it. Audited at HIGH severity. Not the same as a waiver: waive is for a
-            bill that was right and we chose to forgive.
+            {richMessage(t('freightFreightActions.forABillThatWas'), {
+              money: <Money amount={row.amountSettledInr} />,
+            })}
           </>
         }
         footer={
@@ -228,17 +241,17 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
               onClick={() => setVoiding(false)}
               disabled={voidBill.isPending}
             >
-              Cancel
+              {t('freightFreightActions.cancel')}
             </Button>
             <AsyncButton
               variant="destructive"
               size="md"
               disabled={voidReason.trim().length < MIN_VOID_REASON}
               labels={{
-                idle: 'Withdraw bill',
-                busy: 'Withdrawing…',
-                done: 'Withdrawn',
-                error: 'Refused',
+                idle: t('freightFreightActions.withdrawBill'),
+                busy: t('freightFreightActions.withdrawing'),
+                done: t('freightFreightActions.withdrawn'),
+                error: t('freightFreightActions.refused'),
               }}
               onAction={doVoid}
             />
@@ -247,7 +260,7 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
       >
         <div className="mk-stack">
           <div className="mk-subject">
-            <span className="mk-subject__label">Bill for arrival</span>
+            <span className="mk-subject__label">{t('freightFreightActions.billForArrival')}</span>
             <span className="mk-subject__main sk-ident">{arrival}</span>
             {row.sellerCompanyName !== null && (
               <span className="mk-small">{row.sellerCompanyName}</span>
@@ -255,13 +268,15 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
           </div>
           <TextArea
             id="void-reason"
-            label="What was wrong with it"
-            hint={`At least ${MIN_VOID_REASON} characters. The client sees this on their consignment, so write what actually happened.`}
+            label={t('freightFreightActions.whatWasWrongWithIt')}
+            hint={t('freightFreightActions.atLeastCharactersTheClient', {
+              minVoidReason: MIN_VOID_REASON,
+            })}
             requiredMark
             rows={3}
             value={voidReason}
             onChange={(e) => setVoidReason(e.target.value)}
-            placeholder="Rate typed as 300/kg; the forwarder's invoice says 30/kg."
+            placeholder={t('freightFreightActions.rateTypedAs300Kg')}
           />
           {error !== null && <MkAlert>{error}</MkAlert>}
         </div>

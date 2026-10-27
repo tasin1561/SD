@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { ButtonLink } from '@skydrop/ui/app/button';
 import { SignInCard } from '@skydrop/ui/app/sign-in';
 import { ResetPasswordForm } from './_components/reset-form';
+import { getT } from '@/i18n/server';
 
 /**
  * Step 2 of the staff password-reset flow, linked from the reset email
@@ -20,25 +21,26 @@ export default async function StaffResetPasswordPage({
 }: {
   searchParams: Promise<{ readonly token?: string | string[] }>;
 }): Promise<ReactElement> {
+  const { t } = await getT();
   const params = await searchParams;
   const rawToken = Array.isArray(params.token) ? params.token[0] : params.token;
   const token = (rawToken ?? '').trim();
 
   return token === '' ? (
     <SignInCard
-      title="Invalid reset link"
-      note="The link is missing its reset token. Open the email again and use the button there rather than copying the address by hand."
-      footer={<a href="/login">Back to sign in</a>}
+      title={t('authResetPasswordPage.invalidResetLink')}
+      note={t('authResetPasswordPage.theLinkIsMissingIts')}
+      footer={<a href="/login">{t('authResetPasswordPage.backToSignIn')}</a>}
     >
       <ButtonLink href="/login" variant="primary" fullWidth>
-        Back to sign in
+        {t('authResetPasswordPage.backToSignIn')}
       </ButtonLink>
     </SignInCard>
   ) : (
     <SignInCard
-      title="Choose a new password"
-      note="At least 10 characters. Saving signs out every existing session on this account."
-      footer={<a href="/login">Back to sign in</a>}
+      title={t('authResetPasswordPage.chooseANewPassword')}
+      note={t('authResetPasswordPage.atLeast10CharactersSaving')}
+      footer={<a href="/login">{t('authResetPasswordPage.backToSignIn')}</a>}
     >
       <ResetPasswordForm token={token} />
     </SignInCard>

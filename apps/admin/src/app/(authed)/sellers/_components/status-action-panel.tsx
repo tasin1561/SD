@@ -8,6 +8,7 @@ import { Button } from '@skydrop/ui/app/button';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { TextArea } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * The well-built "action" of the seller list→detail→action→audit
@@ -50,6 +51,7 @@ export function StatusActionPanel({
   readonly currentStatus: SellerStatusValue;
   readonly canChangeStatus: boolean;
 }): ReactElement {
+  const t = useT();
   const [intent, setIntent] = useState<SellerStatusValue | null>(null);
   const [reason, setReason] = useState('');
   const [serverError, setServerError] = useState<string | null>(null);
@@ -81,7 +83,7 @@ export function StatusActionPanel({
       // client-side. If the server rejected (e.g., a future RBAC
       // gate, or an invariant we don't know about), display its
       // message verbatim. UI is reading material; server is law.
-      setServerError(serverVerdict(err, 'Failed to change status.'));
+      setServerError(serverVerdict(err, t('sellersStatusActionPanel.failedToChangeStatus')));
       // Rethrown so the confirm step stays open with the verdict on it.
       throw err;
     }
@@ -95,9 +97,17 @@ export function StatusActionPanel({
     variant: 'primary' | 'destructive';
   }> = [];
   if (currentStatus === 'APPROVED') {
-    actions.push({ target: 'SUSPENDED', label: 'Suspend account', variant: 'destructive' });
+    actions.push({
+      target: 'SUSPENDED',
+      label: t('sellersStatusActionPanel.suspendAccount'),
+      variant: 'destructive',
+    });
   } else if (currentStatus === 'SUSPENDED') {
-    actions.push({ target: 'APPROVED', label: 'Reapprove account', variant: 'primary' });
+    actions.push({
+      target: 'APPROVED',
+      label: t('sellersStatusActionPanel.reapproveAccount'),
+      variant: 'primary',
+    });
   }
   // PENDING / REJECTED have no admin transition exposed via this
   // surface today (a future onboarding-approval workflow would add
@@ -106,7 +116,9 @@ export function StatusActionPanel({
   if (actions.length === 0) {
     return (
       <p className="ac-muted">
-        No status changes available from the current state ({currentStatus.toLowerCase()}).
+        {t('sellersStatusActionPanel.noStatusChangesAvailableFrom', {
+          value: currentStatus.toLowerCase(),
+        })}
       </p>
     );
   }
@@ -123,7 +135,9 @@ export function StatusActionPanel({
             disabled={!canChangeStatus || mutate.isPending}
             onClick={() => open(a.target)}
             title={
-              !canChangeStatus ? 'Requires SUPER_ADMIN or SELLER_APPROVAL_ADMIN role' : undefined
+              !canChangeStatus
+                ? t('sellersStatusActionPanel.requiresSuperAdminOrSeller')
+                : undefined
             }
           >
             {a.label}
@@ -131,9 +145,7 @@ export function StatusActionPanel({
         ))}
       </div>
       {!canChangeStatus && (
-        <p className="ac-faint">
-          Your role can&apos;t change client status. Contact a super-admin if you need this changed.
-        </p>
+        <p className="ac-faint">{t('sellersStatusActionPanel.yourRoleCanTChange')}</p>
       )}
 
       <ConfirmDialog
@@ -141,25 +153,33 @@ export function StatusActionPanel({
         onOpenChange={(o) => {
           if (!o) close();
         }}
-        title={intent === 'SUSPENDED' ? 'Suspend this client?' : 'Reapprove this client?'}
-        entity={sellerName ?? 'This client'}
+        title={
+          intent === 'SUSPENDED'
+            ? t('sellersStatusActionPanel.suspendThisClient')
+            : t('sellersStatusActionPanel.reapproveThisClient')
+        }
+        entity={sellerName ?? t('sellersStatusActionPanel.thisClient')}
         consequence={
           intent === 'SUSPENDED'
-            ? 'The client will immediately lose portal access. Existing orders + shipments continue under our operations. A read-only profile view remains for ops.'
-            : 'The client regains full portal access. Their open invitations and existing orders are unaffected by the status change itself.'
+            ? t('sellersStatusActionPanel.theClientWillImmediatelyLose')
+            : t('sellersStatusActionPanel.theClientRegainsFullPortal')
         }
-        confirmLabel={intent === 'SUSPENDED' ? 'Suspend' : 'Reapprove'}
+        confirmLabel={
+          intent === 'SUSPENDED'
+            ? t('sellersStatusActionPanel.suspend')
+            : t('sellersStatusActionPanel.reapprove')
+        }
         destructive={intent === 'SUSPENDED'}
         error={serverError}
         onConfirm={confirm}
       >
         <TextArea
-          label="Reason (optional, recorded in the audit trail)"
+          label={t('sellersStatusActionPanel.reasonOptionalRecordedInThe')}
           id="status-reason"
-          hint="Surfaced on the client's audit timeline + the global audit log."
+          hint={t('sellersStatusActionPanel.surfacedOnTheClientS')}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="e.g., Customer complaints about fulfillment quality."
+          placeholder={t('sellersStatusActionPanel.eGCustomerComplaintsAbout')}
           disabled={mutate.isPending}
         />
       </ConfirmDialog>

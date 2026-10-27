@@ -7,6 +7,9 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Table, TBody, TableEmpty, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
 import '../../_components/benches.css';
 import type { AwaitingRtoRow } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Returns that have not reached this bench yet — in two stages.
@@ -50,14 +53,14 @@ function waitTone(hours: number, stage: AwaitingRtoRow['stage']): 'draft' | 'pen
 }
 
 /** Their vocabulary, in ours — the bench reads this, not an enum. */
-function courierStage(status: string): string {
+function courierStage(t: Translate<MessageKey>, status: string): string {
   switch (status) {
     case 'RTO_INITIATED':
-      return 'turning around';
+      return t('warehouseRtoAwaitingReturns.turningAround');
     case 'RTO_IN_TRANSIT':
-      return 'on its way back';
+      return t('warehouseRtoAwaitingReturns.onItsWayBack');
     case 'RTO_DELIVERED':
-      return 'handed back';
+      return t('warehouseRtoAwaitingReturns.handedBack');
     default:
       return status.toLowerCase().replaceAll('_', ' ');
   }
@@ -70,6 +73,8 @@ function Row({
   readonly row: AwaitingRtoRow;
   readonly onPick?: (awb: string) => void;
 }): ReactElement {
+  const t = useT();
+
   return (
     <Tr>
       <Td>
@@ -81,7 +86,7 @@ function Row({
           title={
             onPick === undefined || row.awbNumber === null
               ? undefined
-              : 'Load this AWB into the receive box'
+              : t('warehouseRtoAwaitingReturns.loadThisAwbIntoThe')
           }
         >
           {row.awbNumber ?? row.shipmentNumber}
@@ -101,11 +106,13 @@ function Row({
       <Td align="right" className="sk-figure">
         {row.itemCount}
       </Td>
-      <Td className="wh-note">{courierStage(row.shipmentStatus)}</Td>
+      <Td className="wh-note">{courierStage(t, row.shipmentStatus)}</Td>
       <Td>
         <StatusChip
           kind={waitTone(row.waitingHours, row.stage)}
-          label={row.waitingHours < 1 ? 'just now' : `${row.waitingHours}h`}
+          label={
+            row.waitingHours < 1 ? t('warehouseRtoAwaitingReturns.justNow') : `${row.waitingHours}h`
+          }
           size="sm"
         />
       </Td>
@@ -124,13 +131,14 @@ export function AtOurDoorList({
    *  happened. */
   readonly onPick: (awb: string) => void;
 }): ReactElement {
+  const t = useT();
   return (
     <ReturnsTable
       rows={rows}
       onPick={onPick}
       emptyIcon={<PackageCheck size={22} className="wh-empty-cell__icon" />}
-      emptyTitle="Nothing waiting to be received"
-      emptyHint="Every parcel a courier has marked returned has been received here."
+      emptyTitle={t('warehouseRtoAwaitingReturns.nothingWaitingToBeReceived')}
+      emptyHint={t('warehouseRtoAwaitingReturns.everyParcelACourierHas')}
     />
   );
 }
@@ -140,6 +148,7 @@ export function StillWithCourierList({
 }: {
   readonly rows: readonly AwaitingRtoRow[];
 }): ReactElement {
+  const t = useT();
   return (
     <ReturnsTable
       rows={rows}
@@ -147,8 +156,8 @@ export function StillWithCourierList({
       // parcel to receive and a clickable AWB would promise an action
       // that cannot be taken yet.
       emptyIcon={<Truck size={22} className="wh-empty-cell__icon" />}
-      emptyTitle="No returns in transit"
-      emptyHint="Nothing is currently on its way back to the warehouse."
+      emptyTitle={t('warehouseRtoAwaitingReturns.noReturnsInTransit')}
+      emptyHint={t('warehouseRtoAwaitingReturns.nothingIsCurrentlyOnIts')}
     />
   );
 }
@@ -166,15 +175,16 @@ function ReturnsTable({
   readonly emptyTitle: string;
   readonly emptyHint: string;
 }): ReactElement {
+  const t = useT();
   return (
-    <Table caption="Returns">
+    <Table caption={t('warehouseRtoAwaitingReturns.returns')}>
       <THead>
         <Tr>
-          <Th>Parcel</Th>
-          <Th>Order</Th>
-          <Th align="right">Items</Th>
-          <Th>Courier says</Th>
-          <Th>Waiting</Th>
+          <Th>{t('warehouseRtoAwaitingReturns.parcel')}</Th>
+          <Th>{t('warehouseRtoAwaitingReturns.order')}</Th>
+          <Th align="right">{t('warehouseRtoAwaitingReturns.items')}</Th>
+          <Th>{t('warehouseRtoAwaitingReturns.courierSays')}</Th>
+          <Th>{t('warehouseRtoAwaitingReturns.waiting')}</Th>
         </Tr>
       </THead>
       <TBody>

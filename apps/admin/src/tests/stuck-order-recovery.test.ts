@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withCatalogEnglish } from './i18n-source';
 
 /**
  * Getting an order out of the two states it could enter and never leave.
@@ -91,7 +92,7 @@ describe('the panel is reachable and appears only when stuck', () => {
     // Claiming success would be a lie the operator acts on.
     const src = R(PANEL);
     expect(src).toContain("r.status === 'OUT_OF_STOCK'");
-    expect(src).toContain('Still nothing to reserve');
+    expect(withCatalogEnglish(src)).toContain('Still nothing to reserve');
   });
 
   it('surfaces a refusal verbatim (FE-2)', () => {

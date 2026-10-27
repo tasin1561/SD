@@ -5,10 +5,17 @@ import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
 import { Button, ButtonLink } from '@skydrop/ui/app/button';
 import { PasswordField, type PasswordCriterion } from '@skydrop/ui/app/password-field';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /** Display only — the submit handler enforces the length. */
-const PASSWORD_CRITERIA: readonly PasswordCriterion[] = [
-  { id: 'length', label: 'At least 10 characters', test: (v) => v.length >= 10 },
+const PASSWORD_CRITERIA = (t: Translate<MessageKey>): readonly PasswordCriterion[] => [
+  {
+    id: 'length',
+    label: t('authResetPasswordResetForm.atLeast10Characters'),
+    test: (v) => v.length >= 10,
+  },
 ];
 
 /**
@@ -25,6 +32,7 @@ const PASSWORD_CRITERIA: readonly PasswordCriterion[] = [
  * only authority on why a token was refused.
  */
 export function ResetPasswordForm({ token }: { readonly token: string }): ReactElement {
+  const t = useT();
   const [pw, setPw] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -36,11 +44,11 @@ export function ResetPasswordForm({ token }: { readonly token: string }): ReactE
     if (submitting) return;
     setError(null);
     if (pw.length < 10) {
-      setError('Password must be at least 10 characters.');
+      setError(t('authResetPasswordResetForm.passwordMustBeAtLeast'));
       return;
     }
     if (pw !== confirm) {
-      setError('Passwords do not match.');
+      setError(t('authResetPasswordResetForm.passwordsDoNotMatch'));
       return;
     }
     setSubmitting(true);
@@ -55,7 +63,7 @@ export function ResetPasswordForm({ token }: { readonly token: string }): ReactE
       });
       setDone(true);
     } catch (err) {
-      setError(serverVerdict(err, 'Could not set the new password.'));
+      setError(serverVerdict(err, t('authResetPasswordResetForm.couldNotSetTheNew')));
       setSubmitting(false);
     }
   }
@@ -64,18 +72,21 @@ export function ResetPasswordForm({ token }: { readonly token: string }): ReactE
     return (
       <div className="space-y-3">
         <div className="rounded-[var(--radius-2)] bg-[var(--color-accent-tint)] border border-[var(--color-accent-ring)] px-3 py-2.5 text-xs text-text-bright">
-          Password updated. Every existing session was signed out — sign in with the new password to
-          continue.
+          {t('authResetPasswordResetForm.passwordUpdatedEveryExistingSession')}
         </div>
         <ButtonLink href="/login" variant="primary" fullWidth>
-          Sign in
+          {t('authResetPasswordResetForm.signIn')}
         </ButtonLink>
       </div>
     );
   }
 
   const confirmCriteria: readonly PasswordCriterion[] = [
-    { id: 'match', label: 'Matches the password', test: (v) => v !== '' && v === pw },
+    {
+      id: 'match',
+      label: t('authResetPasswordResetForm.matchesThePassword'),
+      test: (v) => v !== '' && v === pw,
+    },
   ];
 
   return (
@@ -88,7 +99,7 @@ export function ResetPasswordForm({ token }: { readonly token: string }): ReactE
     >
       <PasswordField
         id="pw"
-        label="New password"
+        label={t('authResetPasswordResetForm.newPassword')}
         autoComplete="new-password"
         required
         minLength={10}
@@ -96,12 +107,12 @@ export function ResetPasswordForm({ token }: { readonly token: string }): ReactE
         value={pw}
         onChange={(e) => setPw(e.target.value)}
         disabled={submitting}
-        criteria={PASSWORD_CRITERIA}
+        criteria={PASSWORD_CRITERIA(t)}
       />
       <PasswordField
         id="confirm"
-        toggleLabel="Show confirm password"
-        label="Confirm password"
+        toggleLabel={t('authResetPasswordResetForm.showConfirmPassword')}
+        label={t('authResetPasswordResetForm.confirmPassword')}
         autoComplete="new-password"
         required
         minLength={10}
@@ -118,7 +129,9 @@ export function ResetPasswordForm({ token }: { readonly token: string }): ReactE
         </div>
       )}
       <Button type="submit" fullWidth loading={submitting}>
-        {submitting ? 'Saving…' : 'Save new password'}
+        {submitting
+          ? t('authResetPasswordResetForm.saving')
+          : t('authResetPasswordResetForm.saveNewPassword')}
       </Button>
     </form>
   );

@@ -17,11 +17,13 @@ import { AcCard, AcHeader, AcPage, SellerStatusChip } from '../../settings/_comp
 import { InvitationsPanel } from './invitations-panel';
 import { CreateInvitationDialog } from './create-invitation-dialog';
 import { usePermission } from '@/lib/use-permission';
+import { useT } from '@/i18n/client';
 
 const PAGE_SIZE = 20;
 const STATUSES: readonly SellerStatusValue[] = ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'];
 
 export function SellersIndex(): ReactElement {
+  const t = useT();
   const router = useRouter();
   const canWrite = usePermission('sellers.invite');
   const [status, setStatus] = useState<SellerStatusValue | ''>('');
@@ -39,8 +41,8 @@ export function SellersIndex(): ReactElement {
   return (
     <AcPage>
       <AcHeader
-        title="Clients"
-        subtitle="Invitation lifecycle + client status management."
+        title={t('sellersSellersIndex.clients')}
+        subtitle={t('sellersSellersIndex.invitationLifecycleClientStatusManagement')}
         action={
           canWrite ? (
             <Button
@@ -49,7 +51,7 @@ export function SellersIndex(): ReactElement {
               icon={<Plus size={15} />}
               onClick={() => setInviteOpen(true)}
             >
-              Invite client
+              {t('sellersSellersIndex.inviteClient')}
             </Button>
           ) : null
         }
@@ -59,9 +61,9 @@ export function SellersIndex(): ReactElement {
 
       <div className="ac-toolbar">
         <TextField
-          label="Search"
+          label={t('sellersSellersIndex.search')}
           icon={<Search size={15} />}
-          placeholder="Search by name, email, phone…"
+          placeholder={t('sellersSellersIndex.searchByNameEmailPhone')}
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
@@ -69,14 +71,14 @@ export function SellersIndex(): ReactElement {
           }}
         />
         <Select
-          label="Status"
+          label={t('sellersSellersIndex.status')}
           value={status}
           onChange={(e) => {
             setStatus(e.target.value as SellerStatusValue | '');
             setPage(1);
           }}
         >
-          <option value="">All statuses</option>
+          <option value="">{t('sellersSellersIndex.allStatuses')}</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
               {s}
@@ -86,29 +88,29 @@ export function SellersIndex(): ReactElement {
       </div>
 
       {list.isLoading ? (
-        <SkeletonRows rows={6} cols={7} label="Loading clients…" />
+        <SkeletonRows rows={6} cols={7} label={t('sellersSellersIndex.loadingClients')} />
       ) : list.isError ? (
         <ErrorState
-          message={list.error?.message ?? 'Failed to load clients.'}
+          message={list.error?.message ?? t('sellersSellersIndex.failedToLoadClients')}
           retry={() => void list.refetch()}
         />
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
-          title="No clients match these filters"
-          description="Try clearing the filters or invite a new client."
+          title={t('sellersSellersIndex.noClientsMatchTheseFilters')}
+          description={t('sellersSellersIndex.tryClearingTheFiltersOr')}
         />
       ) : (
         <AcCard flush>
-          <Table caption="Clients">
+          <Table caption={t('sellersSellersIndex.clients')}>
             <THead>
               <Tr>
-                <Th>Company</Th>
-                <Th>Code</Th>
-                <Th>Contact</Th>
-                <Th>Email</Th>
-                <Th>Status</Th>
-                <Th>Approved</Th>
-                <Th>Created</Th>
+                <Th>{t('sellersSellersIndex.company')}</Th>
+                <Th>{t('sellersSellersIndex.code')}</Th>
+                <Th>{t('sellersSellersIndex.contact')}</Th>
+                <Th>{t('sellersSellersIndex.email')}</Th>
+                <Th>{t('sellersSellersIndex.status')}</Th>
+                <Th>{t('sellersSellersIndex.approved')}</Th>
+                <Th>{t('sellersSellersIndex.created')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -145,7 +147,7 @@ export function SellersIndex(): ReactElement {
             {list.data.total === 0 && (
               <TBody>
                 <TableEmpty colSpan={6}>
-                  No clients match this filter. Clients appear here once they accept an invitation.
+                  {t('sellersSellersIndex.noClientsMatchThisFilter')}
                 </TableEmpty>
               </TBody>
             )}
@@ -156,7 +158,7 @@ export function SellersIndex(): ReactElement {
               pageSize={PAGE_SIZE}
               total={list.data.total}
               onPageChange={setPage}
-              label="Clients pages"
+              label={t('sellersSellersIndex.clientsPages')}
             />
           </div>
         </AcCard>

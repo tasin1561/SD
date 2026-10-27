@@ -33,6 +33,8 @@ import {
   compareByGuide,
   hasMultiChoice,
 } from '@/components/setting-guide-ui';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Per-seller setting overrides (SET-1).
@@ -107,6 +109,7 @@ function useClearOverride(sellerId: string): UseMutationResult<unknown, Error, {
 }
 
 export function SellerSettingsSection({ sellerId }: { readonly sellerId: string }): ReactElement {
+  const t = useT();
   const list = useSellerSettings(sellerId);
   const clear = useClearOverride(sellerId);
   const [editing, setEditing] = useState<ResolvedSetting | null>(null);
@@ -116,11 +119,14 @@ export function SellerSettingsSection({ sellerId }: { readonly sellerId: string 
 
   return (
     <AcSection
-      title="Settings for this client"
+      title={t('sellersSellerSettingsSection.settingsForThisClient')}
       note={
         overridden.length === 0
-          ? 'Everything is on the system default.'
-          : `${overridden.length} of ${items.length} keys are overridden for this client.`
+          ? t('sellersSellerSettingsSection.everythingIsOnTheSystem')
+          : t('sellersSellerSettingsSection.ofKeysAreOverriddenFor', {
+              length: overridden.length,
+              length2: items.length,
+            })
       }
       flush
     >
@@ -131,18 +137,18 @@ export function SellerSettingsSection({ sellerId }: { readonly sellerId: string 
       ) : items.length === 0 ? (
         <EmptyState
           bare
-          title="Nothing overridable"
-          description="A key becomes settable per client when it is marked seller-overridable in system settings."
+          title={t('sellersSellerSettingsSection.nothingOverridable')}
+          description={t('sellersSellerSettingsSection.aKeyBecomesSettablePer')}
         />
       ) : (
-        <Table caption="Settings for this client">
+        <Table caption={t('sellersSellerSettingsSection.settingsForThisClient')}>
           <THead>
             <Tr>
-              <Th>Setting</Th>
-              <Th>In effect</Th>
-              <Th>System default</Th>
-              <Th>Source</Th>
-              <Th align="right">Actions</Th>
+              <Th>{t('sellersSellerSettingsSection.setting')}</Th>
+              <Th>{t('sellersSellerSettingsSection.inEffect')}</Th>
+              <Th>{t('sellersSellerSettingsSection.systemDefault')}</Th>
+              <Th>{t('sellersSellerSettingsSection.source')}</Th>
+              <Th align="right">{t('sellersSellerSettingsSection.actions')}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -172,7 +178,9 @@ export function SellerSettingsSection({ sellerId }: { readonly sellerId: string 
                       icon={<SlidersHorizontal size={14} />}
                       onClick={() => setEditing(s)}
                     >
-                      {s.source === 'SELLER_OVERRIDE' ? 'Change' : 'Override'}
+                      {s.source === 'SELLER_OVERRIDE'
+                        ? t('sellersSellerSettingsSection.change')
+                        : t('sellersSellerSettingsSection.override')}
                     </Button>
                     {s.source === 'SELLER_OVERRIDE' && (
                       <Button
@@ -182,7 +190,7 @@ export function SellerSettingsSection({ sellerId }: { readonly sellerId: string 
                         disabled={clear.isPending}
                         onClick={() => clear.mutate({ key: s.key })}
                       >
-                        Reset
+                        {t('sellersSellerSettingsSection.reset')}
                       </Button>
                     )}
                   </div>
@@ -218,6 +226,8 @@ function OverrideDialog({
   setting: ResolvedSetting | null;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
+
   const save = useSetOverride(sellerId);
   const [raw, setRaw] = useState('');
   const [note, setNote] = useState('');
@@ -263,29 +273,40 @@ function OverrideDialog({
       }}
       title={
         setting === null
-          ? 'Override for this client'
-          : `${guide?.name ?? fallbackSettingName(setting.key)} — this client`
+          ? t('sellersSellerSettingsSection.overrideForThisClient')
+          : t('sellersSellerSettingsSection.thisClient', {
+              value: guide?.name ?? fallbackSettingName(setting.key),
+            })
       }
       icon={<SlidersHorizontal size={18} />}
       locked={save.isPending}
       description={
         setting === null ? undefined : (
           <span>
-            Currently <strong>{current}</strong> (
-            {setting.source === 'SELLER_OVERRIDE' ? 'set for this client' : 'the system default'}).{' '}
-            <code className="sk-ident">{setting.key}</code>
+            {richMessage(t('sellersSellerSettingsSection.currently'), {
+              strong: <strong>{current}</strong>,
+              value:
+                setting.source === 'SELLER_OVERRIDE'
+                  ? t('sellersSellerSettingsSection.setForThisClient')
+                  : t('sellersSellerSettingsSection.theSystemDefault'),
+              code: <code className="sk-ident">{setting.key}</code>,
+            })}
           </span>
         )
       }
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={close}>
-            Cancel
+            {t('sellersSellerSettingsSection.cancel')}
           </Button>
           <AsyncButton
             size="md"
             state={save.isPending ? 'busy' : save.error !== null ? 'error' : 'idle'}
-            labels={{ idle: 'Set override', busy: 'Saving…', error: 'Not saved' }}
+            labels={{
+              idle: t('sellersSellerSettingsSection.setOverride'),
+              busy: t('sellersSellerSettingsSection.saving'),
+              error: t('sellersSellerSettingsSection.notSaved'),
+            }}
             disabled={raw === '' || save.isPending}
             onClick={() => {
               if (setting === null) return;
@@ -294,11 +315,11 @@ function OverrideDialog({
               try {
                 value = parsed();
               } catch {
-                setParseError('That is not valid JSON.');
+                setParseError(t('sellersSellerSettingsSection.thatIsNotValidJson'));
                 return;
               }
               if (typeof value === 'number' && Number.isNaN(value)) {
-                setParseError('That is not a number.');
+                setParseError(t('sellersSellerSettingsSection.thatIsNotANumber'));
                 return;
               }
               save.mutate(
@@ -327,15 +348,15 @@ function OverrideDialog({
                 : raw
             }
             onChange={setRaw}
-            placeholder="Choose…"
+            placeholder={t('sellersSellerSettingsSection.choose')}
             keepValues={[currentCode]}
-            numberHint="Allowed range is enforced when you save — the server has the authoritative bounds."
+            numberHint={t('sellersSellerSettingsSection.allowedRangeIsEnforcedWhen')}
           />
 
           <TextField
-            label="Note"
+            label={t('sellersSellerSettingsSection.note')}
             id="ov-note"
-            hint="Optional. Why this client is different."
+            hint={t('sellersSellerSettingsSection.optionalWhyThisClientIs')}
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />

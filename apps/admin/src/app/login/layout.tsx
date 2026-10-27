@@ -1,6 +1,7 @@
 import type { ReactNode, ReactElement } from 'react';
 import { SignInFrame } from '@skydrop/ui/app/sign-in';
-import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
+import { PrefsControl } from '@/components/prefs-control';
+import { getT } from '@/i18n/server';
 
 /**
  * Login layout — bare, no AuthProvider. If a SSR-authenticated user
@@ -9,9 +10,14 @@ import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
  *
  * The skin is the ONE shared SignInFrame (apps restyle), shared with /auth/*.
  */
-export default function LoginLayout({ children }: { children: ReactNode }): ReactElement {
+export default async function LoginLayout({
+  children,
+}: {
+  children: ReactNode;
+}): Promise<ReactElement> {
+  const { t } = await getT();
   return (
-    <SignInFrame portal="operations console" themeControl={<ThemeSwitch />}>
+    <SignInFrame portal={t('shell.portal')} themeControl={<PrefsControl />}>
       {children}
     </SignInFrame>
   );

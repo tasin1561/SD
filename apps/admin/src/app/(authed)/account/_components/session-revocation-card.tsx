@@ -7,6 +7,8 @@ import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { AcAlert, AcCard } from '../../settings/_components/ac-parts';
 import { useLogoutAllSessions } from '@/lib/account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Sign out of every device.
@@ -36,6 +38,8 @@ import { serverVerdict } from '@/lib/server-verdict';
  * back in the server's own words via `serverVerdict`.
  */
 export function SessionRevocationCard(): ReactElement {
+  const t = useT();
+
   const logoutAll = useLogoutAllSessions();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +53,7 @@ export function SessionRevocationCard(): ReactElement {
       setRevokedCount(result.revokedCount);
     } catch (err) {
       setConfirming(false);
-      setError(serverVerdict(err, 'Could not end your sessions.'));
+      setError(serverVerdict(err, t('accountSessionRevocationCard.couldNotEndYourSessions')));
     }
   }
 
@@ -60,18 +64,17 @@ export function SessionRevocationCard(): ReactElement {
   if (revokedCount !== null) {
     return (
       <AcCard
-        title="Signed out everywhere"
-        note="This browser included — the refresh cookie has been cleared."
+        title={t('accountSessionRevocationCard.signedOutEverywhere')}
+        note={t('accountSessionRevocationCard.thisBrowserIncludedTheRefresh')}
       >
         <p className="ac-strong">
           {revokedCount === 1
-            ? '1 session ended.'
-            : `${String(revokedCount)} sessions ended, this one among them.`}
+            ? t('accountSessionRevocationCard.1SessionEnded')
+            : t('accountSessionRevocationCard.sessionsEndedThisOneAmong', {
+                value: String(revokedCount),
+              })}
         </p>
-        <p className="ac-muted">
-          Any other browser still showing the console will be sent to the sign-in page the moment it
-          asks the server for anything.
-        </p>
+        <p className="ac-muted">{t('accountSessionRevocationCard.anyOtherBrowserStillShowing')}</p>
         <div className="ac-buttons" data-align="start">
           <Button
             variant="primary"
@@ -84,7 +87,7 @@ export function SessionRevocationCard(): ReactElement {
               window.location.assign('/login');
             }}
           >
-            Sign in again
+            {t('accountSessionRevocationCard.signInAgain')}
           </Button>
         </div>
       </AcCard>
@@ -94,8 +97,8 @@ export function SessionRevocationCard(): ReactElement {
   return (
     <AcCard
       tone="critical"
-      title="Sessions"
-      note="Every browser you have signed in from holds its own session."
+      title={t('accountSessionRevocationCard.sessions')}
+      note={t('accountSessionRevocationCard.everyBrowserYouHaveSigned')}
       action={
         <Button
           variant="destructive"
@@ -104,25 +107,26 @@ export function SessionRevocationCard(): ReactElement {
           disabled={logoutAll.isPending}
           onClick={() => setConfirming(true)}
         >
-          {logoutAll.isPending ? 'Signing out…' : 'Sign out everywhere'}
+          {logoutAll.isPending
+            ? t('accountSessionRevocationCard.signingOut')
+            : t('accountSessionRevocationCard.signOutEverywhere')}
         </Button>
       }
     >
       <p className="ac-text">
-        Ends every session for your account at once — a lost laptop, a shared machine, a browser you
-        cannot get back to. <span className="ac-strong">Including this one:</span> you will be
-        returned to the sign-in page and will need your password again.
+        {richMessage(t('accountSessionRevocationCard.endsEverySessionForYour'), {
+          span: (
+            <span className="ac-strong">{t('accountSessionRevocationCard.includingThisOne')}</span>
+          ),
+        })}
       </p>
-      <p className="ac-muted">
-        Do this the moment a device goes missing. It does not change your password, so if you also
-        think someone knows it, change that too.
-      </p>
+      <p className="ac-muted">{t('accountSessionRevocationCard.doThisTheMomentA')}</p>
       {error !== null && (
         <AcAlert
           message={error}
           action={
             <Button variant="secondary" size="sm" onClick={() => void run()}>
-              Retry
+              {t('accountSessionRevocationCard.retry')}
             </Button>
           }
         />
@@ -131,10 +135,10 @@ export function SessionRevocationCard(): ReactElement {
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Sign out of every device?"
-        entity="Your account, on every device"
-        consequence="This ends every session for your account, including the one you are using right now. You will be signed out here and will need your password to get back in. Sessions on other devices stop working immediately."
-        confirmLabel="Sign out everywhere"
+        title={t('accountSessionRevocationCard.signOutOfEveryDevice')}
+        entity={t('accountSessionRevocationCard.yourAccountOnEveryDevice')}
+        consequence={t('accountSessionRevocationCard.thisEndsEverySessionFor')}
+        confirmLabel={t('accountSessionRevocationCard.signOutEverywhere')}
         destructive
         onConfirm={run}
       />

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withCatalogEnglish } from './i18n-source';
 
 /**
  * Two more capabilities the server had and nothing could reach.
@@ -55,7 +56,7 @@ describe('a stock adjustment can be raised', () => {
 
   it('reports whether it applied or queued, which is INV-8’s whole point', () => {
     expect(src).toContain("result.status === 'PENDING'");
-    expect(src).toContain('waiting for approval');
+    expect(withCatalogEnglish(src)).toContain('waiting for approval');
   });
 
   it('is gated on the create permission', () => {

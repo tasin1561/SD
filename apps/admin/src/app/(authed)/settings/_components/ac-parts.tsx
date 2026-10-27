@@ -9,6 +9,7 @@ import { StatusChip, type StatusChipKind } from '@skydrop/ui/app/status-chip';
 import { TextField } from '@skydrop/ui/app/text-field';
 import type { AsyncPhase } from '@skydrop/ui/app/async-button';
 import './ac.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Display-only pieces shared by the people-and-configuration area of the
@@ -283,6 +284,7 @@ export function AcRevealValue({
   readonly value: string;
   readonly label: string;
 }): ReactElement {
+  const t = useT();
   const [copied, setCopied] = useState(false);
 
   async function copy(): Promise<void> {
@@ -311,7 +313,7 @@ export function AcRevealValue({
         icon={<Copy size={14} />}
         onClick={() => void copy()}
       >
-        {copied ? 'Copied!' : 'Copy'}
+        {copied ? t('settingsAcParts.copied') : t('settingsAcParts.copy')}
       </Button>
     </div>
   );

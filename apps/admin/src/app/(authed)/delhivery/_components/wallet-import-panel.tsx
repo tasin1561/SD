@@ -10,6 +10,7 @@ import './delhivery.css';
 import { useImportWalletLedger, type WalletImportResult } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * What Delhivery actually charged, read off their wallet export.
@@ -29,6 +30,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  * moving is the thing worth noticing.
  */
 export function WalletImportPanel(): ReactElement | null {
+  const t = useT();
   const mayImport = usePermission('money.treasury.manage');
   const run = useImportWalletLedger();
   const [fileName, setFileName] = useState<string | null>(null);
@@ -64,15 +66,15 @@ export function WalletImportPanel(): ReactElement | null {
 
   return (
     <AfSection
-      title="What Delhivery charged"
-      note="Finances → Download Ledger, then drop the .xlsx here. Export a month at a time."
+      title={t('delhiveryWalletImportPanel.whatDelhiveryCharged')}
+      note={t('delhiveryWalletImportPanel.financesDownloadLedgerThenDrop')}
     >
       <AfCard>
         <DropZone
           accept=".xlsx"
-          label="Drop the ledger export here"
-          buttonText="Choose the .xlsx"
-          hint="The wallet ledger, as Delhivery exports it."
+          label={t('delhiveryWalletImportPanel.dropTheLedgerExportHere')}
+          buttonText={t('delhiveryWalletImportPanel.chooseTheXlsx')}
+          hint={t('delhiveryWalletImportPanel.theWalletLedgerAsDelhivery')}
           onFiles={(files) => {
             const f = files[0];
             if (f) void pick(f);
@@ -88,7 +90,7 @@ export function WalletImportPanel(): ReactElement | null {
               loading={run.isPending}
               onClick={() => go(true)}
             >
-              Check first
+              {t('delhiveryWalletImportPanel.checkFirst')}
             </Button>
             <Button
               variant="primary"
@@ -96,52 +98,68 @@ export function WalletImportPanel(): ReactElement | null {
               disabled={base64 === null || run.isPending}
               onClick={() => go(false)}
             >
-              Import
+              {t('delhiveryWalletImportPanel.import')}
             </Button>
           </div>
         )}
 
-        {error !== null && <ErrorState title="Not imported" message={error} />}
+        {error !== null && (
+          <ErrorState title={t('delhiveryWalletImportPanel.notImported')} message={error} />
+        )}
 
         {result !== null && (
           <div className="af-inner">
             <p className="af-title">
-              {result.dryRun ? 'Nothing was written — this is what would change.' : 'Imported.'}
+              {result.dryRun
+                ? t('delhiveryWalletImportPanel.nothingWasWrittenThisIs')
+                : t('delhiveryWalletImportPanel.imported')}
             </p>
             <dl className="dl-result">
-              <dt>Rows</dt>
+              <dt>{t('delhiveryWalletImportPanel.rows')}</dt>
               <dd>
-                {result.rowsRead} read
-                {result.rowsSkipped > 0 && `, ${result.rowsSkipped} skipped`}
+                {t('delhiveryWalletImportPanel.read', {
+                  rowsRead: result.rowsRead,
+                  value:
+                    result.rowsSkipped > 0
+                      ? t('delhiveryWalletImportPanel.skippedN', { n: result.rowsSkipped })
+                      : '',
+                })}
               </dd>
-              <dt>Costs set</dt>
+              <dt>{t('delhiveryWalletImportPanel.costsSet')}</dt>
               <dd>
-                {result.forwardWritten} delivery, {result.rtoWritten} return
+                {t('delhiveryWalletImportPanel.deliveryReturn', {
+                  forwardWritten: result.forwardWritten,
+                  rtoWritten: result.rtoWritten,
+                })}
               </dd>
               {/* The number that deserves a second look: a figure that
                   was already recorded has MOVED. */}
-              <dt>Revised</dt>
+              <dt>{t('delhiveryWalletImportPanel.revised')}</dt>
               <dd className={result.revised > 0 ? 'af-warn af-strong' : undefined}>
                 {result.revised}
               </dd>
-              <dt>Unchanged</dt>
+              <dt>{t('delhiveryWalletImportPanel.unchanged')}</dt>
               <dd>{result.unchanged}</dd>
-              <dt>Not ours</dt>
-              <dd>{result.unknownAwbs} AWBs in the file we have no shipment for</dd>
-              <dt>Total</dt>
+              <dt>{t('delhiveryWalletImportPanel.notOurs')}</dt>
+              <dd>
+                {t('delhiveryWalletImportPanel.awbsInTheFileWe', {
+                  unknownAwbs: result.unknownAwbs,
+                })}
+              </dd>
+              <dt>{t('delhiveryWalletImportPanel.total')}</dt>
               <dd>
                 <Money amount={result.sumInr} currency="INR" convert={false} />
                 {result.totalsAgree === true && (
-                  <span className="af-faint"> · matches the file&rsquo;s own total</span>
+                  <span className="af-faint">
+                    {' '}
+                    {t('delhiveryWalletImportPanel.matchesTheFileSOwn')}
+                  </span>
                 )}
               </dd>
             </dl>
             {result.totalsAgree === false && (
               <Notice tone="warn">
-                <p>
-                  The rows do not add up to the total the file states. Something was mis-read —
-                  re-download the export rather than trusting these figures.
-                </p>
+                <p>{t('delhiveryWalletImportPanel.theRowsDoNotAdd')}</p>
               </Notice>
             )}
           </div>

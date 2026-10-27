@@ -29,6 +29,9 @@ import {
 } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * One lead, opened from the queue.
@@ -40,20 +43,22 @@ import { usePermission } from '@/lib/use-permission';
  * not be read at all.
  */
 
-const STATUS_COPY: Readonly<Record<string, string>> = {
-  NEW: 'Nobody has looked at this yet.',
-  CONTACTED: 'Someone has reached out and is waiting to hear back.',
-  QUALIFIED: 'A real prospect. Worth onboarding.',
-  CONVERTED: 'They became a client.',
-  DECLINED: 'Not a fit, or never replied. Say why in the notes.',
-  SPAM: 'Junk. Kept rather than deleted, so the same address is recognised next time.',
-};
+const STATUS_COPY = (t: Translate<MessageKey>): Readonly<Record<string, string>> => ({
+  NEW: t('leadsLeadDrawer.nobodyHasLookedAtThis'),
+  CONTACTED: t('leadsLeadDrawer.someoneHasReachedOutAnd'),
+  QUALIFIED: t('leadsLeadDrawer.aRealProspectWorthOnboarding'),
+  CONVERTED: t('leadsLeadDrawer.theyBecameAClient'),
+  DECLINED: t('leadsLeadDrawer.notAFitOrNever'),
+  SPAM: t('leadsLeadDrawer.junkKeptRatherThanDeleted'),
+});
 
-const DIRECTION: Record<string, { label: string; unserved: boolean }> = {
-  BD_TO_IN: { label: 'Bangladesh → India', unserved: false },
-  IN_TO_BD: { label: 'India → Bangladesh', unserved: true },
-  BOTH: { label: 'Both directions', unserved: true },
-};
+const DIRECTION = (
+  t: Translate<MessageKey>,
+): Record<string, { label: string; unserved: boolean }> => ({
+  BD_TO_IN: { label: t('leadsLeadDrawer.bangladeshIndia'), unserved: false },
+  IN_TO_BD: { label: t('leadsLeadDrawer.indiaBangladesh'), unserved: true },
+  BOTH: { label: t('leadsLeadDrawer.bothDirections'), unserved: true },
+});
 
 export function LeadDrawer({
   lead,
@@ -62,6 +67,7 @@ export function LeadDrawer({
   readonly lead: InviteLead | null;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const canWrite = usePermission('leads.manage');
   const canInvite = usePermission('sellers.invite');
   const toast = useToast();
@@ -88,7 +94,7 @@ export function LeadDrawer({
   if (lead === null) return <></>;
 
   const dirty = status !== lead.status || notes !== (lead.notes ?? '');
-  const direction = lead.shippingDirection === null ? null : DIRECTION[lead.shippingDirection];
+  const direction = lead.shippingDirection === null ? null : DIRECTION(t)[lead.shippingDirection];
 
   /**
    * Invite this lead to register, from the same place you read their
@@ -110,7 +116,7 @@ export function LeadDrawer({
       const created = await invite.mutateAsync({ email: lead.email });
       setInviteUrl(created.inviteUrl);
       if (status === 'NEW' || status === 'CONTACTED') setStatus('QUALIFIED');
-      toast.success(`Invitation sent to ${lead.email}`);
+      toast.success(t('leadsLeadDrawer.invitationSentTo', { email: lead.email }));
     } catch (e) {
       // The server's refusal is the useful part here — "that email
       // already has a Skydrop login" tells you exactly what happened.
@@ -133,7 +139,7 @@ export function LeadDrawer({
     try {
       const fresh = await resend.mutateAsync({ id: existing.data.id });
       setInviteUrl(fresh.inviteUrl);
-      toast.success(`New invitation sent to ${fresh.email}`);
+      toast.success(t('leadsLeadDrawer.newInvitationSentTo', { email: fresh.email }));
     } catch (e) {
       setError(serverVerdict(e));
     }
@@ -163,13 +169,17 @@ export function LeadDrawer({
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={onClose}>
-            Close
+            {t('leadsLeadDrawer.close')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
             state={phaseOf(update.isPending, error)}
-            labels={{ idle: 'Save', busy: 'Saving…', error: 'Not saved' }}
+            labels={{
+              idle: t('leadsLeadDrawer.save'),
+              busy: t('leadsLeadDrawer.saving'),
+              error: t('leadsLeadDrawer.notSaved'),
+            }}
             disabled={!dirty || update.isPending || !canWrite}
             onClick={() => void save()}
           />
@@ -183,9 +193,15 @@ export function LeadDrawer({
             label={lead.status.toLowerCase()}
             size="sm"
           />
-          {lead.submissionCount > 1 && <AcFact tone="warn">asked {lead.submissionCount}×</AcFact>}
+          {lead.submissionCount > 1 && (
+            <AcFact tone="warn">
+              {t('leadsLeadDrawer.asked', { submissionCount: lead.submissionCount })}
+            </AcFact>
+          )}
           {direction?.unserved === true && (
-            <AcFact tone="bad">{direction.label} — we do not run this corridor</AcFact>
+            <AcFact tone="bad">
+              {t('leadsLeadDrawer.weDoNotRunThis', { label: direction.label })}
+            </AcFact>
           )}
         </div>
 
@@ -208,34 +224,39 @@ export function LeadDrawer({
 
         <AcDl
           items={[
-            { label: 'Contact', value: lead.fullName },
-            { label: 'Delivering to', value: direction?.label ?? '—' },
-            { label: 'Sells', value: lead.productTypes ?? '—' },
-            { label: 'Orders a month', value: lead.monthlyOrders ?? '—' },
-            { label: 'Requested', value: new Date(lead.createdAt).toLocaleString() },
+            { label: t('leadsLeadDrawer.contact'), value: lead.fullName },
+            { label: t('leadsLeadDrawer.deliveringTo'), value: direction?.label ?? '—' },
+            { label: t('leadsLeadDrawer.sells'), value: lead.productTypes ?? '—' },
+            { label: t('leadsLeadDrawer.ordersAMonth'), value: lead.monthlyOrders ?? '—' },
             {
-              label: 'First contacted',
+              label: t('leadsLeadDrawer.requested'),
+              value: new Date(lead.createdAt).toLocaleString(),
+            },
+            {
+              label: t('leadsLeadDrawer.firstContacted'),
               value:
-                lead.contactedAt === null ? 'not yet' : new Date(lead.contactedAt).toLocaleString(),
+                lead.contactedAt === null
+                  ? t('leadsLeadDrawer.notYet')
+                  : new Date(lead.contactedAt).toLocaleString(),
             },
           ]}
         />
 
         {lead.message !== null && lead.message !== '' && (
           <div className="ac-card__body">
-            <span className="ac-label">What they wrote</span>
+            <span className="ac-label">{t('leadsLeadDrawer.whatTheyWrote')}</span>
             <p className="ac-quote">{lead.message}</p>
           </div>
         )}
 
         <Select
-          label="Status"
+          label={t('leadsLeadDrawer.status')}
           id="lead-status"
-          hint={STATUS_COPY[status]}
+          hint={STATUS_COPY(t)[status]}
           value={status}
           onChange={(e) => setStatus(e.target.value as LeadStatus)}
         >
-          {Object.keys(STATUS_COPY).map((s) => (
+          {Object.keys(STATUS_COPY(t)).map((s) => (
             <option key={s} value={s}>
               {s.toLowerCase()}
             </option>
@@ -243,9 +264,9 @@ export function LeadDrawer({
         </Select>
 
         <TextArea
-          label="Internal notes"
+          label={t('leadsLeadDrawer.internalNotes')}
           id="lead-notes"
-          hint="Never shown to the lead. What was said, what they need, when to call back."
+          hint={t('leadsLeadDrawer.neverShownToTheLead')}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={4}
@@ -254,20 +275,25 @@ export function LeadDrawer({
         {canInvite && (
           <div className="ac-card">
             {existing.data === undefined ? (
-              <p className="ac-muted">Checking for an invitation…</p>
+              <p className="ac-muted">{t('leadsLeadDrawer.checkingForAnInvitation')}</p>
             ) : existing.data === null ? (
               // Nobody has invited them yet.
               <div className="ac-card__head">
                 <div className="ac-card__titles">
-                  <span className="ac-strong">Invite them to register</span>
-                  <span className="ac-muted">Sends a registration link to {lead.email}.</span>
+                  <span className="ac-strong">{t('leadsLeadDrawer.inviteThemToRegister')}</span>
+                  <span className="ac-muted">
+                    {t('leadsLeadDrawer.sendsARegistrationLinkTo', { email: lead.email })}
+                  </span>
                 </div>
                 <AsyncButton
                   variant="secondary"
                   size="sm"
                   icon={<Send size={14} />}
                   state={invite.isPending ? 'busy' : 'idle'}
-                  labels={{ idle: 'Send invite', busy: 'Sending…' }}
+                  labels={{
+                    idle: t('leadsLeadDrawer.sendInvite'),
+                    busy: t('leadsLeadDrawer.sending'),
+                  }}
                   onClick={() => void sendInvite()}
                 />
               </div>
@@ -275,13 +301,18 @@ export function LeadDrawer({
               // They accepted it. There is nothing to resend, and the
               // account exists — offering a button here would be an
               // invitation to break something.
-              <AcCallout tone="good" icon={<Check size={15} />} title="They registered">
+              <AcCallout
+                tone="good"
+                icon={<Check size={15} />}
+                title={t('leadsLeadDrawer.theyRegistered')}
+              >
                 <span className="ac-muted">
-                  Invitation accepted{' '}
-                  {existing.data.usedAt === null
-                    ? ''
-                    : new Date(existing.data.usedAt).toLocaleString()}
-                  . Their account is under Clients.
+                  {t('leadsLeadDrawer.invitationAcceptedTheirAccountIs', {
+                    value:
+                      existing.data.usedAt === null
+                        ? ''
+                        : new Date(existing.data.usedAt).toLocaleString(),
+                  })}
                 </span>
               </AcCallout>
             ) : (
@@ -289,7 +320,7 @@ export function LeadDrawer({
               <div className="ac-card__head">
                 <div className="ac-card__titles">
                   <span className="ac-inline ac-strong">
-                    Invitation sent
+                    {t('leadsLeadDrawer.invitationSent')}
                     <StatusChip
                       kind={existing.data.status === 'expired' ? 'failed' : 'pending'}
                       label={existing.data.status}
@@ -307,7 +338,7 @@ export function LeadDrawer({
                   size="sm"
                   icon={<Send size={14} />}
                   state={resend.isPending ? 'busy' : 'idle'}
-                  labels={{ idle: 'Resend', busy: 'Sending…' }}
+                  labels={{ idle: t('leadsLeadDrawer.resend'), busy: t('leadsLeadDrawer.sending') }}
                   onClick={() => void resendInvite()}
                 />
               </div>
@@ -315,11 +346,8 @@ export function LeadDrawer({
 
             {inviteUrl !== null && (
               <div className="ac-card__body">
-                <p className="ac-muted">
-                  The email is on its way. This link is shown once — only a hash of it is stored, so
-                  it cannot be looked up later. Resending issues a new one and retires this.
-                </p>
-                <AcRevealValue value={inviteUrl} label="Invitation link" />
+                <p className="ac-muted">{t('leadsLeadDrawer.theEmailIsOnIts')}</p>
+                <AcRevealValue value={inviteUrl} label={t('leadsLeadDrawer.invitationLink')} />
               </div>
             )}
           </div>

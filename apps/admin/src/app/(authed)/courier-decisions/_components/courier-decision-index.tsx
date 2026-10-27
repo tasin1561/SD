@@ -17,6 +17,7 @@ import {
   type WaitingCourierChoice,
 } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * CUR-17 — parcels held between call confirmation and printing because
@@ -62,16 +63,17 @@ function OptionButton({
   onPick: () => void;
   busy: boolean;
 }): ReactElement {
+  const t = useT();
   return (
     <button type="button" onClick={onPick} disabled={busy} className="oq-option">
       <span className="oq-option__main">
         <span className="oq-option__name">{option.courierName}</span>
         <span className="oo-faint">
           {option.estimatedDays === null
-            ? 'no estimate given'
+            ? t('courierDecisionsCourierDecisionIndex.noEstimateGiven')
             : `${option.estimatedDays} day${option.estimatedDays === 1 ? '' : 's'}`}
-          {best && ' · cheapest'}
-          {fastest && ' · fastest'}
+          {best && t('courierDecisionsCourierDecisionIndex.cheapest')}
+          {fastest && t('courierDecisionsCourierDecisionIndex.fastest')}
         </span>
       </span>
       <span className="oq-option__rate sk-figure">
@@ -82,6 +84,7 @@ function OptionButton({
 }
 
 function Row({ row }: { row: WaitingCourierChoice }): ReactElement {
+  const t = useT();
   const choose = useChooseCourier();
   const [error, setError] = useState<string | null>(null);
   const waited = hoursSince(row.waitingSince);
@@ -113,7 +116,11 @@ function Row({ row }: { row: WaitingCourierChoice }): ReactElement {
         <span className="oo-sub sk-figure">{row.destPostalCode}</span>
       </Td>
       <Td>
-        <span className="sk-figure">{(row.totalWeightGrams / 1000).toFixed(2)} kg</span>
+        <span className="sk-figure">
+          {t('courierDecisionsCourierDecisionIndex.kg', {
+            value: (row.totalWeightGrams / 1000).toFixed(2),
+          })}
+        </span>
         {row.codAmountInr !== null && (
           <span className="oo-sub">
             COD <Money amount={row.codAmountInr} />
@@ -121,12 +128,14 @@ function Row({ row }: { row: WaitingCourierChoice }): ReactElement {
         )}
       </Td>
       <Td>
-        <AgeChip tone={waitTone(waited)}>{waited < 1 ? 'just now' : `${waited}h`}</AgeChip>
+        <AgeChip tone={waitTone(waited)}>
+          {waited < 1 ? t('courierDecisionsCourierDecisionIndex.justNow') : `${waited}h`}
+        </AgeChip>
       </Td>
       <Td>
         {row.options.length === 0 ? (
           <p className="oo-faint">
-            No carriers were recorded for this parcel. Booking it will let the aggregator choose.
+            {t('courierDecisionsCourierDecisionIndex.noCarriersWereRecordedFor')}
           </p>
         ) : (
           <div className="oq-options">
@@ -164,29 +173,37 @@ function Row({ row }: { row: WaitingCourierChoice }): ReactElement {
 }
 
 export function CourierDecisionIndex(): ReactElement {
+  const t = useT();
   const queue = useCourierDecisionQueue();
   const rows = queue.data ?? [];
 
   return (
     <div className="oo-page">
       <PageHeader
-        title="Courier decisions"
-        subtitle="Confirmed parcels waiting for somebody to pick which carrier ships them. Their stock is already reserved and their customers have been told they are coming, so the wait is real — if nobody chooses, the cheapest option is booked automatically and an issue is raised saying so."
+        title={t('courierDecisionsCourierDecisionIndex.courierDecisions')}
+        subtitle={t('courierDecisionsCourierDecisionIndex.confirmedParcelsWaitingForSomebody')}
       />
 
       <OoSection
-        title="Waiting for a carrier"
+        title={t('courierDecisionsCourierDecisionIndex.waitingForACarrier')}
         note={queue.data === undefined ? undefined : `${rows.length} waiting`}
         flush
       >
         {queue.isLoading ? (
           <div className="oo-card__pad">
-            <SkeletonRows rows={4} cols={5} label="Loading the queue…" />
+            <SkeletonRows
+              rows={4}
+              cols={5}
+              label={t('courierDecisionsCourierDecisionIndex.loadingTheQueue')}
+            />
           </div>
         ) : queue.isError ? (
           <div className="oo-card__pad">
             <ErrorState
-              message={queue.error?.message ?? 'Could not load the queue.'}
+              message={
+                queue.error?.message ??
+                t('courierDecisionsCourierDecisionIndex.couldNotLoadTheQueue')
+              }
               retry={() => void queue.refetch()}
             />
           </div>
@@ -195,18 +212,18 @@ export function CourierDecisionIndex(): ReactElement {
             bare
             tone="positive"
             icon={<Truck size={20} />}
-            title="Nothing waiting on a decision"
-            description="Orders appear here only for clients whose courier policy is set to Manual, and only when the aggregator offered more than one carrier."
+            title={t('courierDecisionsCourierDecisionIndex.nothingWaitingOnADecision')}
+            description={t('courierDecisionsCourierDecisionIndex.ordersAppearHereOnlyFor')}
           />
         ) : (
-          <Table caption="Parcels waiting for a carrier">
+          <Table caption={t('courierDecisionsCourierDecisionIndex.parcelsWaitingForACarrier')}>
             <THead>
               <Tr>
-                <Th>Order</Th>
-                <Th>Destination</Th>
-                <Th>Parcel</Th>
-                <Th>Waiting</Th>
-                <Th>Pick a carrier</Th>
+                <Th>{t('courierDecisionsCourierDecisionIndex.order')}</Th>
+                <Th>{t('courierDecisionsCourierDecisionIndex.destination')}</Th>
+                <Th>{t('courierDecisionsCourierDecisionIndex.parcel')}</Th>
+                <Th>{t('courierDecisionsCourierDecisionIndex.waiting')}</Th>
+                <Th>{t('courierDecisionsCourierDecisionIndex.pickACarrier')}</Th>
               </Tr>
             </THead>
             <TBody>

@@ -29,6 +29,10 @@ import {
   useOpenRtoShipments,
 } from '@/lib/api-hooks';
 import '../../_components/benches.css';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
+import { tEn, type MessageKey } from '@/i18n/catalog';
+import type { Translate } from '@skydrop/ui/app/i18n';
 
 /**
  * RTO workspace — three phases:
@@ -108,33 +112,68 @@ function finalizeSummary(items: ReadonlyArray<RtoShipmentItem>): {
  * already says so; this says it in the headline rather than leaving the
  * consequence empty.
  */
+export function finalizeConsequenceIn(
+  tr: Translate<MessageKey>,
+  t: {
+    readonly restock: number;
+    readonly hold: number;
+    readonly writeOff: number;
+  },
+): string {
+  const unit = (n: number): string =>
+    tr(n === 1 ? 'warehouseRtoRtoStation.unitOne' : 'warehouseRtoRtoStation.unitOther', { n });
+  const clauses: string[] = [];
+  if (t.restock > 0) {
+    clauses.push(
+      tr(
+        t.restock === 1
+          ? 'warehouseRtoRtoStation.restockOne'
+          : 'warehouseRtoRtoStation.restockOther',
+        { units: unit(t.restock) },
+      ),
+    );
+  }
+  if (t.hold > 0) {
+    clauses.push(
+      tr(t.hold === 1 ? 'warehouseRtoRtoStation.holdOne' : 'warehouseRtoRtoStation.holdOther', {
+        units: unit(t.hold),
+      }),
+    );
+  }
+  if (t.writeOff > 0) {
+    clauses.push(
+      tr(
+        t.writeOff === 1
+          ? 'warehouseRtoRtoStation.writeOffOne'
+          : 'warehouseRtoRtoStation.writeOffOther',
+        { units: unit(t.writeOff) },
+      ),
+    );
+  }
+  if (clauses.length === 0) {
+    return tr('warehouseRtoRtoStation.nothingReady');
+  }
+  const listed =
+    clauses.length === 1
+      ? (clauses[0] ?? '')
+      : tr('warehouseRtoRtoStation.listJoin', {
+          head: clauses.slice(0, -1).join(tr('warehouseRtoRtoStation.listSeparator')),
+          last: clauses[clauses.length - 1] ?? '',
+        });
+  return tr('warehouseRtoRtoStation.consequenceTail', { listed });
+}
+
 export function finalizeConsequence(t: {
   readonly restock: number;
   readonly hold: number;
   readonly writeOff: number;
 }): string {
-  const unit = (n: number): string => `${n} unit${n === 1 ? '' : 's'}`;
-  const clauses: string[] = [];
-  if (t.restock > 0) {
-    clauses.push(`${unit(t.restock)} ${t.restock === 1 ? 'goes' : 'go'} back in stock`);
-  }
-  if (t.hold > 0) {
-    clauses.push(`${unit(t.hold)} ${t.hold === 1 ? 'is' : 'are'} kept aside damaged`);
-  }
-  if (t.writeOff > 0) {
-    clauses.push(`${unit(t.writeOff)} ${t.writeOff === 1 ? 'is' : 'are'} written off`);
-  }
-  if (clauses.length === 0) {
-    return 'Nothing is ready to move — every unit is still waiting on a decision.';
-  }
-  const listed =
-    clauses.length === 1
-      ? clauses[0]
-      : `${clauses.slice(0, -1).join(', ')} and ${clauses[clauses.length - 1]}`;
-  return `${listed} — stock moves now and this cannot be undone.`;
+  return finalizeConsequenceIn(tEn, t);
 }
 
 export function RtoStation(): ReactElement {
+  const locale = useLocale();
+  const tr = useT();
   const toast = useToast();
   const router = useRouter();
   const params = useSearchParams();
@@ -199,7 +238,7 @@ export function RtoStation(): ReactElement {
   const finalize = useFinalizeRto();
 
   function fmtError(err: unknown): string {
-    return serverVerdict(err, 'Operation failed');
+    return serverVerdict(err, tr('warehouseRtoRtoStation.operationFailed'));
   }
 
   /** The row's payload in the API's vocabulary (the values ARE the enum). */
@@ -225,7 +264,7 @@ export function RtoStation(): ReactElement {
     setError(null);
     const a = awb.trim();
     if (!a) {
-      setError('AWB is required.');
+      setError(tr('warehouseRtoRtoStation.awbIsRequired'));
       return;
     }
     try {
@@ -233,12 +272,17 @@ export function RtoStation(): ReactElement {
       setShipmentId(r.shipmentId);
       toast.success(
         r.alreadyReceived
-          ? `Already received earlier — opening shipment ${r.shipmentId.slice(0, 8)}.`
-          : `Received — order ${r.orderId.slice(0, 8)} → ${r.orderStatus}.` +
+          ? tr('warehouseRtoRtoStation.alreadyReceivedEarlierOpeningShipment', {
+              value: r.shipmentId.slice(0, 8),
+            })
+          : tr('warehouseRtoRtoStation.receivedOrderArrow', {
+              orderId: r.orderId.slice(0, 8),
+              orderStatus: r.orderStatus,
+            }) +
               // WMS-8e: said plainly, because the stock ledger will not
               // show this return until it is finalised.
               (r.holdBooking?.outcome === 'NO_HOLD_BIN'
-                ? ' This warehouse has no returns hold bin, so the units are not on the stock ledger until you finalise — create one under Warehouse → Bins.'
+                ? tr('warehouseRtoRtoStation.thisWarehouseHasNoReturns')
                 : ''),
       );
     } catch (err) {
@@ -253,8 +297,12 @@ export function RtoStation(): ReactElement {
       const r = await finalize.mutateAsync({ shipmentId });
       // Units, not lines: a split line is one line and two outcomes.
       toast.success(
-        `Finalized — ${r.restockedUnits} unit(s) put back in stock, ${r.heldDamagedUnits} kept aside damaged, ` +
-          `${r.writtenOffUnits} written off. Order ${r.status}.`,
+        tr('warehouseRtoRtoStation.finalizedSummary', {
+          restocked: r.restockedUnits,
+          held: r.heldDamagedUnits,
+          writtenOff: r.writtenOffUnits,
+          status: r.status,
+        }),
       );
       setShipmentId(null);
       setAwb('');
@@ -278,29 +326,29 @@ export function RtoStation(): ReactElement {
       />
 
       {tab === 'door' && (
-        <RtoTabPanel subtitle="The courier has handed these back and nobody has received them here yet. Receiving one is what starts its inspection — nothing does it automatically, on purpose. Click a parcel to load it into the station.">
+        <RtoTabPanel subtitle={tr('warehouseRtoRtoStation.theCourierHasHandedThese')}>
           <AtOurDoorList rows={atDoor} onPick={pickAwb} />
         </RtoTabPanel>
       )}
 
       {tab === 'transit' && (
-        <RtoTabPanel subtitle="On their way back. Nothing to do yet — this is here so the bench knows what is coming, and so a return that has been travelling for weeks is visible somewhere.">
+        <RtoTabPanel subtitle={tr('warehouseRtoRtoStation.onTheirWayBackNothing')}>
           <StillWithCourierList rows={inTransit} />
         </RtoTabPanel>
       )}
 
       {tab === 'bench' && (
-        <RtoTabPanel subtitle="Received here and not yet finalised. Two things hold a return up and they need different answers: items nobody has inspected, and items somebody looked at and could not decide about.">
+        <RtoTabPanel subtitle={tr('warehouseRtoRtoStation.receivedHereAndNotYet')}>
           <OpenReturns onPick={pickShipment} />
         </RtoTabPanel>
       )}
 
       <div className={tab === 'receive' ? 'wh-stack' : 'wh-hidden'}>
         <section className="wh-card wh-stack">
-          <h2 className="wh-title">Receive</h2>
+          <h2 className="wh-title">{tr('warehouseRtoRtoStation.receive')}</h2>
           <div className="wh-fields wh-receive-awb">
             <TextField
-              label="AWB number"
+              label={tr('warehouseRtoRtoStation.awbNumber')}
               inputClassName="sk-ident"
               value={awb}
               onChange={(e) => setAwb(e.target.value)}
@@ -318,7 +366,9 @@ export function RtoStation(): ReactElement {
                 disabled={receive.isPending || !awb.trim()}
                 onClick={() => void onReceive()}
               >
-                {receive.isPending ? 'Receiving…' : 'Receive'}
+                {receive.isPending
+                  ? tr('warehouseRtoRtoStation.receiving')
+                  : tr('warehouseRtoRtoStation.receive')}
               </Button>
             </div>
           </div>
@@ -333,32 +383,36 @@ export function RtoStation(): ReactElement {
         {!shipmentId ? (
           <EmptyState
             icon={<PackageOpen size={26} />}
-            title="No shipment selected"
-            description="Receive an inbound RTO by AWB to begin inspection."
+            title={tr('warehouseRtoRtoStation.noShipmentSelected')}
+            description={tr('warehouseRtoRtoStation.receiveAnInboundRtoBy')}
           />
         ) : detail.isLoading ? (
           <section className="wh-card">
-            <SkeletonRows rows={3} cols={3} label="Loading shipment…" />
+            <SkeletonRows rows={3} cols={3} label={tr('warehouseRtoRtoStation.loadingShipment')} />
           </section>
         ) : detail.isError || !detail.data ? (
           <div role="alert" className="wh-alert">
-            Failed to load shipment.
+            {tr('warehouseRtoRtoStation.failedToLoadShipment')}
           </div>
         ) : (
           <section className="wh-card wh-stack">
             <div className="wh-row wh-row--between">
               <div>
                 <div className="wh-title">
-                  Shipment <span className="sk-ident">{detail.data.shipmentNumber}</span>
+                  {richMessage(tr('warehouseRtoRtoStation.shipment'), {
+                    span: <span className="sk-ident">{detail.data.shipmentNumber}</span>,
+                  })}
                 </div>
                 <div className="wh-faint">
-                  <span className="sk-figure">{detail.data.items.length}</span> line(s)
+                  {richMessage(tr('warehouseRtoRtoStation.lineS'), {
+                    span: <span className="sk-figure">{detail.data.items.length}</span>,
+                  })}
                 </div>
               </div>
               {detail.data.orderStatus !== null && (
                 <StatusChip
                   kind={orderStatusKind(detail.data.orderStatus)}
-                  label={statusLabel(detail.data.orderStatus)}
+                  label={statusLabel(detail.data.orderStatus, locale)}
                 />
               )}
             </div>
@@ -374,7 +428,7 @@ export function RtoStation(): ReactElement {
                         shipmentItemId: it.shipmentItemId,
                         ...toRequest(payload),
                       });
-                      toast.success(`Line inspected.`);
+                      toast.success(tr('warehouseRtoRtoStation.lineInspected'));
                       await detail.refetch();
                     } catch (err) {
                       setError(fmtError(err));
@@ -394,7 +448,9 @@ export function RtoStation(): ReactElement {
                   setFinalizeOpen(true);
                 }}
               >
-                {finalize.isPending ? 'Finalizing…' : 'Finalize disposition'}
+                {finalize.isPending
+                  ? tr('warehouseRtoRtoStation.finalizing')
+                  : tr('warehouseRtoRtoStation.finalizeDisposition')}
               </Button>
             </div>
             <FinalizeConfirm
@@ -433,7 +489,7 @@ export function RtoStation(): ReactElement {
           // worse trade than one extra press.
           setAwb(scanned);
         }}
-        title="Scan the return label"
+        title={tr('warehouseRtoRtoStation.scanTheReturnLabel')}
       />
     </div>
   );
@@ -454,26 +510,37 @@ function FinalizeConfirm({
   readonly error: string | null;
   readonly onConfirm: () => Promise<void>;
 }): ReactElement {
+  const tr = useT();
   const t = finalizeSummary(items);
-  const unit = (n: number): string => `${n} unit${n === 1 ? '' : 's'}`;
+  const unit = (n: number): string =>
+    tr(n === 1 ? 'warehouseRtoRtoStation.unitOne' : 'warehouseRtoRtoStation.unitOther', { n });
   return (
     <ConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Finalize this return?"
+      title={tr('warehouseRtoRtoStation.finalizeThisReturn')}
       entity={shipmentNumber}
       entityIsIdentifier
-      consequence={finalizeConsequence(t)}
-      confirmLabel="Finalize disposition"
+      consequence={finalizeConsequenceIn(tr, t)}
+      confirmLabel={tr('warehouseRtoRtoStation.finalizeDisposition')}
       destructive={t.writeOff > 0}
       error={error}
       onConfirm={onConfirm}
     >
       {t.later > 0 || t.uninspectedLines > 0 ? (
         <p className="wh-note">
-          {t.later > 0 ? `${unit(t.later)} marked Decide later. ` : ''}
-          {t.uninspectedLines > 0 ? `${t.uninspectedLines} line(s) not inspected yet. ` : ''}A
-          return cannot be finalised until every line has a decision — the server will say so.
+          {tr('warehouseRtoRtoStation.aReturnCannotBeFinalised', {
+            value:
+              t.later > 0
+                ? tr('warehouseRtoRtoStation.markedDecideLater', { value: unit(t.later) })
+                : '',
+            value2:
+              t.uninspectedLines > 0
+                ? tr('warehouseRtoRtoStation.lineSNotInspectedYet', {
+                    uninspectedLines: t.uninspectedLines,
+                  })
+                : '',
+          })}
         </p>
       ) : null}
     </ConfirmDialog>

@@ -19,6 +19,7 @@ import { useAcknowledgeNsa, useNsaList, useRunNsaSweep, type NsaOrderView } from
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { AgeChip, Notice, OoSection } from '../../orders/_components/order-ops-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * OUR side of the NSA worklist.
@@ -45,6 +46,7 @@ import { AgeChip, Notice, OoSection } from '../../orders/_components/order-ops-p
  * sentence.
  */
 export function NsaIndex(): ReactElement {
+  const t = useT();
   const mayAct = usePermission('orders.tracking.manual_scan');
   const list = useNsaList(usePermission('orders.view'));
   const ack = useAcknowledgeNsa();
@@ -69,7 +71,7 @@ export function NsaIndex(): ReactElement {
         orderId: acking.orderId,
         ...(note.trim() === '' ? {} : { note: note.trim() }),
       });
-      toast.success(`${acking.orderNumber} — noted as being chased`);
+      toast.success(t('nsaNsaIndex.notedAsBeingChased', { orderNumber: acking.orderNumber }));
       setAcking(null);
       setNote('');
       return true;
@@ -82,8 +84,8 @@ export function NsaIndex(): ReactElement {
   return (
     <div className="oo-page">
       <PageHeader
-        title="Needs attention"
-        subtitle="Parcels that went out for delivery and were still out at the evening cutoff. The courier has not said why — somebody has to ask them."
+        title={t('nsaNsaIndex.needsAttention')}
+        subtitle={t('nsaNsaIndex.parcelsThatWentOutFor')}
         action={
           mayAct ? (
             <Button
@@ -96,7 +98,7 @@ export function NsaIndex(): ReactElement {
                 setSweepOpen(true);
               }}
             >
-              {sweep.isPending ? 'Checking…' : 'Check now'}
+              {sweep.isPending ? t('nsaNsaIndex.checking') : t('nsaNsaIndex.checkNow')}
             </Button>
           ) : null
         }
@@ -105,20 +107,20 @@ export function NsaIndex(): ReactElement {
       {rows.length > 0 && (
         <div className="oo-kpis">
           <KpiCard
-            label="Stuck parcels"
+            label={t('nsaNsaIndex.stuckParcels')}
             icon={<AlertTriangle size={14} />}
             tone="neutral"
             value={rows.length}
           />
           {/* Nobody has picked these up yet — the ones to start on. */}
           <KpiCard
-            label="Nobody chasing"
+            label={t('nsaNsaIndex.nobodyChasing')}
             icon={<UserX size={14} />}
             tone={unclaimed > 0 ? 'pending' : 'neutral'}
             value={unclaimed}
           />
           <KpiCard
-            label="Third night or worse"
+            label={t('nsaNsaIndex.thirdNightOrWorse')}
             icon={<PhoneOutgoing size={14} />}
             tone={worst > 0 ? 'debit' : 'neutral'}
             value={worst}
@@ -127,28 +129,32 @@ export function NsaIndex(): ReactElement {
       )}
 
       {list.isLoading ? (
-        <SkeletonRows rows={5} cols={8} label="Loading stuck parcels…" />
+        <SkeletonRows rows={5} cols={8} label={t('nsaNsaIndex.loadingStuckParcels')} />
       ) : list.isError ? (
         <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : rows.length === 0 ? (
         <EmptyState
           tone="positive"
           icon={<CircleCheck size={20} />}
-          title="Nothing is stuck"
-          description="Every parcel that went out for delivery has either arrived or been scanned as failed. This list fills after the evening cutoff, so it is normally empty during the day."
+          title={t('nsaNsaIndex.nothingIsStuck')}
+          description={t('nsaNsaIndex.everyParcelThatWentOut')}
         />
       ) : (
-        <OoSection title="Stuck parcels" note={`${rows.length} to chase`} flush>
-          <Table caption="Parcels still out for delivery after the evening cutoff">
+        <OoSection
+          title={t('nsaNsaIndex.stuckParcels')}
+          note={t('nsaNsaIndex.toChase', { length: rows.length })}
+          flush
+        >
+          <Table caption={t('nsaNsaIndex.parcelsStillOutForDelivery')}>
             <THead>
               <Tr>
-                <Th>Night</Th>
-                <Th>Order</Th>
-                <Th>Client</Th>
-                <Th>Recipient</Th>
+                <Th>{t('nsaNsaIndex.night')}</Th>
+                <Th>{t('nsaNsaIndex.order')}</Th>
+                <Th>{t('nsaNsaIndex.client')}</Th>
+                <Th>{t('nsaNsaIndex.recipient')}</Th>
                 <Th>AWB</Th>
                 <Th align="right">COD</Th>
-                <Th>Being chased</Th>
+                <Th>{t('nsaNsaIndex.beingChased')}</Th>
                 <Th align="right" />
               </Tr>
             </THead>
@@ -199,7 +205,7 @@ export function NsaIndex(): ReactElement {
                   </Td>
                   <Td>
                     {r.acknowledgedAt === null ? (
-                      <StatusChip size="sm" kind="pending" label="nobody yet" />
+                      <StatusChip size="sm" kind="pending" label={t('nsaNsaIndex.nobodyYet')} />
                     ) : (
                       <div>
                         <span className="oo-muted">
@@ -220,7 +226,9 @@ export function NsaIndex(): ReactElement {
                           setError(null);
                         }}
                       >
-                        {r.acknowledgedAt === null ? "I'm on it" : 'Update note'}
+                        {r.acknowledgedAt === null
+                          ? t('nsaNsaIndex.iMOnIt')
+                          : t('nsaNsaIndex.updateNote')}
                       </Button>
                     )}
                   </Td>
@@ -237,17 +245,22 @@ export function NsaIndex(): ReactElement {
           setSweepOpen(o);
           if (!o) setSweepError(null);
         }}
-        title="Check for stuck parcels now?"
-        entity="Every parcel still out for delivery"
-        consequence="Runs the evening check straight away: parcels still out for delivery are flagged or escalated here, and any that have moved on come off the list."
-        confirmLabel="Check now"
+        title={t('nsaNsaIndex.checkForStuckParcelsNow')}
+        entity={t('nsaNsaIndex.everyParcelStillOutFor')}
+        consequence={t('nsaNsaIndex.runsTheEveningCheckStraight')}
+        confirmLabel={t('nsaNsaIndex.checkNow')}
         error={sweepError ?? undefined}
         onConfirm={async () => {
           setSweepError(null);
           try {
             const s = await sweep.mutateAsync(undefined);
             toast.success(
-              `Checked ${s.examined} — ${s.raised} newly flagged, ${s.escalated} escalated, ${s.cleared} moved on`,
+              t('nsaNsaIndex.checkedNewlyFlaggedEscalatedMoved', {
+                examined: s.examined,
+                raised: s.raised,
+                escalated: s.escalated,
+                cleared: s.cleared,
+              }),
             );
           } catch (e) {
             const verdict = serverVerdict(e);
@@ -263,17 +276,17 @@ export function NsaIndex(): ReactElement {
         onOpenChange={(o) => {
           if (!o) setAcking(null);
         }}
-        title={`Chasing ${acking?.orderNumber ?? ''}`}
-        description="Recorded so nobody else rings the same courier about the same parcel. It does not clear the flag — only the parcel moving does that."
+        title={t('nsaNsaIndex.chasing', { value: acking?.orderNumber ?? '' })}
+        description={t('nsaNsaIndex.recordedSoNobodyElseRings')}
         footer={
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setAcking(null)}>
-              Cancel
+              {t('nsaNsaIndex.cancel')}
             </Button>
             <AsyncButton
               variant="primary"
               size="sm"
-              labels={{ idle: 'Save', busy: 'Saving…' }}
+              labels={{ idle: t('nsaNsaIndex.save'), busy: t('nsaNsaIndex.saving') }}
               onAction={async () => {
                 const ok = await submitAck();
                 if (!ok) throw new Error('refused');
@@ -284,13 +297,11 @@ export function NsaIndex(): ReactElement {
       >
         <div className="oo-stack">
           <Notice icon={<AlertTriangle size={16} />}>
-            <p>
-              The parcel stays on this list until it is delivered, scanned as failed, or returned.
-            </p>
+            <p>{t('nsaNsaIndex.theParcelStaysOnThis')}</p>
           </Notice>
           <TextArea
-            label="What you found"
-            hint="Optional — what the courier said, or what you are waiting on."
+            label={t('nsaNsaIndex.whatYouFound')}
+            hint={t('nsaNsaIndex.optionalWhatTheCourierSaid')}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={3}

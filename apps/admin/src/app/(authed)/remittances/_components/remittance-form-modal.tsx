@@ -15,6 +15,8 @@ import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 import { PayoutInstructionPanel } from './payout-instruction-panel';
 import { serverVerdict } from '@/lib/server-verdict';
 import { MkAlert, MkCallout, MkDl } from '../../seller-wallets/_components/money-parts';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Record a remittance. Two-currency model:
@@ -50,6 +52,8 @@ export function RemittanceFormModal({
    */
   readonly onSuccess: (created: { id: string }) => void;
 }): ReactElement {
+  const t = useT();
+
   // 100 is the endpoint's MAXIMUM (@Max(100) on the query DTO); asking
   // for 200 is a 400 and this select renders empty, which reads as "there
   // are no approved sellers".
@@ -194,38 +198,38 @@ export function RemittanceFormModal({
   }, [destAmount, bankFee]);
 
   function fmtError(e: unknown): string {
-    return serverVerdict(e, 'Action failed');
+    return serverVerdict(e, t('remittancesRemittanceFormModal.actionFailed'));
   }
 
   async function onSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
     setError(null);
     if (!sellerId) {
-      setError('Pick a client');
+      setError(t('remittancesRemittanceFormModal.pickAClient'));
       return;
     }
     const src = Number(sourceAmount);
     const dst = Number(destAmount);
     const fx = Number(fxRate);
     if (!Number.isFinite(src) || src <= 0) {
-      setError('Source amount must be a positive number');
+      setError(t('remittancesRemittanceFormModal.sourceAmountMustBeA'));
       return;
     }
     if (!Number.isFinite(fx) || fx <= 0) {
-      setError('FX rate must be a positive number');
+      setError(t('remittancesRemittanceFormModal.fxRateMustBeA'));
       return;
     }
     if (!bankReference.trim()) {
-      setError('Bank reference required');
+      setError(t('remittancesRemittanceFormModal.bankReferenceRequired'));
       return;
     }
     if (!paidFromAccountId) {
-      setError('Say which of our accounts the money left');
+      setError(t('remittancesRemittanceFormModal.sayWhichOfOurAccounts'));
       return;
     }
     const fee = bankFee.trim() === '' ? null : Number(bankFee);
     if (fee !== null && !Number.isFinite(fee)) {
-      setError('Bank fee must be a number');
+      setError(t('remittancesRemittanceFormModal.bankFeeMustBeA'));
       return;
     }
     const body: CreateRemittanceRequest = {
@@ -278,29 +282,35 @@ export function RemittanceFormModal({
           if (!o) onClose();
         }}
         locked={busy}
-        title="Record remittance"
-        description="Debits the client's wallet by the source amount and records the cash leaving the account you paid from. A bank fee is booked as our expense."
+        title={t('remittancesRemittanceFormModal.recordRemittance')}
+        description={t('remittancesRemittanceFormModal.debitsTheClientSWallet')}
         size="lg"
         footer={
           <DialogFooter>
             <Button type="button" variant="secondary" size="md" disabled={busy} onClick={onClose}>
-              Cancel
+              {t('remittancesRemittanceFormModal.cancel')}
             </Button>
             <Button type="submit" form={formId} variant="primary" size="md" disabled={busy}>
-              {busy ? 'Recording…' : 'Record remittance'}
+              {busy
+                ? t('remittancesRemittanceFormModal.recording')
+                : t('remittancesRemittanceFormModal.recordRemittance')}
             </Button>
           </DialogFooter>
         }
       >
         <form id={formId} onSubmit={(e) => void onSubmit(e)} className="mk-stack">
           <Select
-            label="Client"
+            label={t('remittancesRemittanceFormModal.client')}
             value={sellerId}
             onChange={(e) => setSellerId(e.target.value)}
             required
             disabled={sellers.isLoading || Boolean(initialSellerId)}
           >
-            <option value="">{sellers.isLoading ? 'Loading clients…' : 'Select a client'}</option>
+            <option value="">
+              {sellers.isLoading
+                ? t('remittancesRemittanceFormModal.loadingClients')
+                : t('remittancesRemittanceFormModal.selectAClient')}
+            </option>
             {sellers.data?.items.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.companyName} · {s.email}
@@ -311,12 +321,17 @@ export function RemittanceFormModal({
           {sellerId && (
             <div className="mk-panel">
               <div className="mk-panel__part">
-                <p className="mk-panel__title">Current wallet balance</p>
+                <p className="mk-panel__title">
+                  {t('remittancesRemittanceFormModal.currentWalletBalance')}
+                </p>
                 {balance.isLoading ? (
                   <Skeleton height={16} width="50%" />
                 ) : balance.isError ? (
                   <div className="mk-text" data-tone="critical">
-                    {serverVerdict(balance.error, 'Failed to load balance')}
+                    {serverVerdict(
+                      balance.error,
+                      t('remittancesRemittanceFormModal.failedToLoadBalance'),
+                    )}
                   </div>
                 ) : (
                   <div className="mk-balances">
@@ -341,7 +356,13 @@ export function RemittanceFormModal({
                           {b.isConverted ? (
                             <span
                               className="mk-small"
-                              title={b.fxRate === null ? '' : `Converted at ₹1 = ৳${b.fxRate}`}
+                              title={
+                                b.fxRate === null
+                                  ? ''
+                                  : t('remittancesRemittanceFormModal.convertedAt1', {
+                                      fxRate: b.fxRate,
+                                    })
+                              }
                             >
                               {money}
                             </span>
@@ -351,7 +372,11 @@ export function RemittanceFormModal({
                               onClick={() => setSourceAmount(b.balance)}
                               disabled={amt <= 0}
                               className="mk-inline-link"
-                              title={amt > 0 ? 'Click to fill source amount' : ''}
+                              title={
+                                amt > 0
+                                  ? t('remittancesRemittanceFormModal.clickToFillSourceAmount')
+                                  : ''
+                              }
                             >
                               {money}
                             </button>
@@ -367,14 +392,14 @@ export function RemittanceFormModal({
 
           <div className="mk-form mk-form--2">
             <TextField
-              label="Wallet currency (debit)"
-              hint="The wallet is kept in rupees; taka is a conversion of it, not a second pot."
+              label={t('remittancesRemittanceFormModal.walletCurrencyDebit')}
+              hint={t('remittancesRemittanceFormModal.theWalletIsKeptIn')}
               value="INR"
               disabled
               readOnly
             />
             <Select
-              label="Bank currency (credit hit account)"
+              label={t('remittancesRemittanceFormModal.bankCurrencyCreditHitAccount')}
               requiredMark
               value={currency}
               onChange={(e) => setCurrency(e.target.value as 'INR' | 'BDT')}
@@ -386,7 +411,7 @@ export function RemittanceFormModal({
 
           <div className="mk-form mk-form--2">
             <TextField
-              label={`Source amount (${sourceCurrency})`}
+              label={t('remittancesRemittanceFormModal.sourceAmount', { sourceCurrency })}
               type="number"
               min={0.01}
               step="0.01"
@@ -395,15 +420,26 @@ export function RemittanceFormModal({
               required
             />
             <TextField
-              label="FX rate"
+              label={t('remittancesRemittanceFormModal.fxRate')}
               hint={
                 sourceCurrency === currency
-                  ? 'Same currency — locked at 1'
+                  ? t('remittancesRemittanceFormModal.sameCurrencyLockedAt1')
                   : systemFxRate === null
-                    ? `1 ${sourceCurrency} = X ${currency} — no system rate is set for this pair, so type the one the bank gave you`
+                    ? t('remittancesRemittanceFormModal.1XNoSystemRate', {
+                        sourceCurrency,
+                        currency,
+                      })
                     : fxTouched && fxRate !== String(systemFxRate)
-                      ? `1 ${sourceCurrency} = X ${currency} · system rate is ${systemFxRate} — recorded as an FX spread`
-                      : `1 ${sourceCurrency} = X ${currency} · from the system rate (${systemFxRate})`
+                      ? t('remittancesRemittanceFormModal.1XSystemRateIs', {
+                          sourceCurrency,
+                          currency,
+                          systemFxRate,
+                        })
+                      : t('remittancesRemittanceFormModal.1XFromTheSystem', {
+                          sourceCurrency,
+                          currency,
+                          systemFxRate,
+                        })
               }
               type="number"
               min={0.000001}
@@ -419,8 +455,8 @@ export function RemittanceFormModal({
           </div>
 
           <TextField
-            label={`Destination amount (${currency})`}
-            hint="Derived = source × FX"
+            label={t('remittancesRemittanceFormModal.destinationAmount', { currency })}
+            hint={t('remittancesRemittanceFormModal.derivedSourceFx')}
             value={destAmount}
             readOnly
             disabled
@@ -436,17 +472,17 @@ export function RemittanceFormModal({
           )}
 
           <Select
-            label="Paid from"
+            label={t('remittancesRemittanceFormModal.paidFrom')}
             required
             hint={
               matchingAccounts.length === 0
-                ? `No ${currency} account is set up yet — add one under Bank accounts.`
-                : 'Which of our accounts the money physically left'
+                ? t('remittancesRemittanceFormModal.noAccountIsSetUp', { currency })
+                : t('remittancesRemittanceFormModal.whichOfOurAccountsThe')
             }
             value={paidFromAccountId}
             onChange={(e) => setPaidFromAccountId(e.target.value)}
           >
-            <option value="">Select an account…</option>
+            <option value="">{t('remittancesRemittanceFormModal.selectAnAccount')}</option>
             {matchingAccounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.label} · {a.bankName} · {a.currency}
@@ -455,8 +491,8 @@ export function RemittanceFormModal({
           </Select>
 
           <TextField
-            label={`Bank fee (optional, ${currency})`}
-            hint="What the bank charged to send it. Booked as our bank charge — the client still receives the full amount."
+            label={t('remittancesRemittanceFormModal.bankFeeOptional', { currency })}
+            hint={t('remittancesRemittanceFormModal.whatTheBankChargedTo')}
             type="number"
             min={0}
             step="0.01"
@@ -466,25 +502,25 @@ export function RemittanceFormModal({
           />
           {leavesAccount !== null && (
             <div className="mk-small">
-              Leaves our account in all:{' '}
-              <Money amount={leavesAccount} currency={currency} convert={false} /> — the payout plus
-              the fee.
+              {richMessage(t('remittancesRemittanceFormModal.leavesOurAccountInAll'), {
+                money: <Money amount={leavesAccount} currency={currency} convert={false} />,
+              })}
             </div>
           )}
 
           <div className="mk-form mk-form--2">
             <TextField
-              label="Bank reference"
+              label={t('remittancesRemittanceFormModal.bankReference')}
               value={bankReference}
               onChange={(e) => setBankReference(e.target.value)}
               maxLength={120}
               showCount
-              placeholder="e.g. TRF-2026-06-03-12345"
+              placeholder={t('remittancesRemittanceFormModal.eGTrf202606')}
               required
               inputClassName="sk-ident"
             />
             <DateField
-              label="Paid at"
+              label={t('remittancesRemittanceFormModal.paidAt')}
               type="datetime-local"
               value={paidAt}
               onChange={(e) => setPaidAt(e.target.value)}
@@ -493,13 +529,13 @@ export function RemittanceFormModal({
           </div>
 
           <TextArea
-            label="Note"
+            label={t('remittancesRemittanceFormModal.note')}
             rows={2}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={2000}
             showCount
-            placeholder="Anything ops should know about this withdrawal"
+            placeholder={t('remittancesRemittanceFormModal.anythingOpsShouldKnowAbout')}
           />
 
           {/*
@@ -511,23 +547,31 @@ export function RemittanceFormModal({
           */}
           {overBalance !== null && (
             <MkAlert>
-              The wallet holds{' '}
-              <Money amount={overBalance.have} currency={sourceCurrency} convert={false} />, so{' '}
-              <Money amount={overBalance.asked} currency={sourceCurrency} convert={false} /> is more
-              than we owe this client. The server will refuse it (INSUFFICIENT_WALLET_BALANCE). Note
-              this is capped by the WALLET, not by what we hold for them in the paying account —
-              paying beyond that draws on our own capital, which is normal.
+              {richMessage(t('remittancesRemittanceFormModal.theWalletHoldsSoIs'), {
+                money: (
+                  <Money amount={overBalance.have} currency={sourceCurrency} convert={false} />
+                ),
+                money2: (
+                  <Money amount={overBalance.asked} currency={sourceCurrency} convert={false} />
+                ),
+              })}
             </MkAlert>
           )}
 
           {mismatch !== null && (
             <MkCallout tone="warn" icon={<Info size={16} />}>
               <p>
-                This request asked for{' '}
-                <Money amount={settling?.amountInr ?? '0'} currency="INR" convert={false} />. Paying{' '}
-                <Money amount={mismatch} currency="INR" convert={false} /> will{' '}
-                <span className="mk-strong">not close it</span> — it stays in the queue for whoever
-                settles the rest.
+                {richMessage(t('remittancesRemittanceFormModal.thisRequestAskedForPaying'), {
+                  money: (
+                    <Money amount={settling?.amountInr ?? '0'} currency="INR" convert={false} />
+                  ),
+                  money2: <Money amount={mismatch} currency="INR" convert={false} />,
+                  span: (
+                    <span className="mk-strong">
+                      {t('remittancesRemittanceFormModal.notCloseIt')}
+                    </span>
+                  ),
+                })}
               </p>
             </MkCallout>
           )}
@@ -541,7 +585,7 @@ export function RemittanceFormModal({
         onOpenChange={(next) => {
           if (!next) setConfirming(null);
         }}
-        title="Record this remittance?"
+        title={t('remittancesRemittanceFormModal.recordThisRemittance')}
         entity={sellerName ?? confirming?.sellerId ?? ''}
         amount={
           confirming === null ? undefined : (
@@ -552,8 +596,8 @@ export function RemittanceFormModal({
             />
           )
         }
-        consequence="Debits this client's wallet by the amount above and records the cash leaving the account you paid from."
-        confirmLabel="Record remittance"
+        consequence={t('remittancesRemittanceFormModal.debitsThisClientSWallet')}
+        confirmLabel={t('remittancesRemittanceFormModal.recordRemittance')}
         onConfirm={post}
         error={error}
       >
@@ -561,7 +605,7 @@ export function RemittanceFormModal({
           <MkDl
             items={[
               {
-                label: 'They receive',
+                label: t('remittancesRemittanceFormModal.theyReceive'),
                 value: (
                   <Money
                     amount={String(confirming.amount)}
@@ -571,7 +615,7 @@ export function RemittanceFormModal({
                 ),
               },
               {
-                label: 'Rate',
+                label: t('remittancesRemittanceFormModal.rate'),
                 value: (
                   <span className="sk-figure">
                     1 {confirming.sourceCurrency} = {confirming.fxRateSnapshot}{' '}
@@ -579,9 +623,12 @@ export function RemittanceFormModal({
                   </span>
                 ),
               },
-              { label: 'Bank reference', value: <Ident value={confirming.bankReference} /> },
               {
-                label: 'Paid from',
+                label: t('remittancesRemittanceFormModal.bankReference'),
+                value: <Ident value={confirming.bankReference} />,
+              },
+              {
+                label: t('remittancesRemittanceFormModal.paidFrom'),
                 value:
                   paidFrom === undefined
                     ? confirming.paidFromAccountId
@@ -590,7 +637,7 @@ export function RemittanceFormModal({
               ...(confirming.bankFee !== undefined
                 ? [
                     {
-                      label: 'Bank fee',
+                      label: t('remittancesRemittanceFormModal.bankFee'),
                       value: (
                         <Money
                           amount={String(confirming.bankFee)}
