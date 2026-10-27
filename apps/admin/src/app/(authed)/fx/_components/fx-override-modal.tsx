@@ -8,6 +8,7 @@ import { MkAlert } from '../../seller-wallets/_components/money-parts';
 import type { FxRateView } from '@skydrop/api-client';
 import { useSetFxRate } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 export function FxOverrideModal({
   rate,
@@ -18,6 +19,7 @@ export function FxOverrideModal({
   readonly onClose: () => void;
   readonly onSuccess: () => void;
 }): ReactElement {
+  const t = useT();
   const [newRate, setNewRate] = useState(rate.rate);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -29,7 +31,7 @@ export function FxOverrideModal({
     e.preventDefault();
     setError(null);
     if (reason.trim().length < 10) {
-      setError('Reason must be at least 10 characters');
+      setError(t('fxFxOverrideModal.reasonMustBeAtLeast'));
       return;
     }
     setBusy(true);
@@ -42,7 +44,7 @@ export function FxOverrideModal({
       });
       onSuccess();
     } catch (e) {
-      setError(serverVerdict(e, 'Action failed'));
+      setError(serverVerdict(e, t('fxFxOverrideModal.actionFailed')));
     } finally {
       setBusy(false);
     }
@@ -55,30 +57,33 @@ export function FxOverrideModal({
         if (!o) onClose();
       }}
       locked={busy}
-      title={`Override ${rate.fromCurrency} → ${rate.toCurrency}`}
-      description="Sets source=MANUAL + isManualOverride=true; recorded in history with the reason."
+      title={t('fxFxOverrideModal.override', {
+        fromCurrency: rate.fromCurrency,
+        toCurrency: rate.toCurrency,
+      })}
+      description={t('fxFxOverrideModal.setsSourceManualIsmanualoverrideTrue')}
       size="md"
       footer={
         <DialogFooter>
           <Button type="button" variant="secondary" size="md" disabled={busy} onClick={onClose}>
-            Cancel
+            {t('fxFxOverrideModal.cancel')}
           </Button>
           <Button type="submit" form={formId} variant="primary" size="md" loading={busy}>
-            {busy ? 'Saving…' : 'Save override'}
+            {busy ? t('fxFxOverrideModal.saving') : t('fxFxOverrideModal.saveOverride')}
           </Button>
         </DialogFooter>
       }
     >
       <form id={formId} onSubmit={(e) => void onSubmit(e)} className="mk-stack">
         <TextField
-          label="Current rate"
+          label={t('fxFxOverrideModal.currentRate')}
           value={Number(rate.rate).toFixed(6)}
           readOnly
           disabled
           inputClassName="sk-figure"
         />
         <TextField
-          label="New rate"
+          label={t('fxFxOverrideModal.newRate')}
           type="number"
           step="0.000001"
           min="0.000001"
@@ -88,8 +93,8 @@ export function FxOverrideModal({
           inputClassName="sk-figure"
         />
         <TextArea
-          label="Reason (≥ 10 chars)"
-          hint="Goes into audit log + history row"
+          label={t('fxFxOverrideModal.reason10Chars')}
+          hint={t('fxFxOverrideModal.goesIntoAuditLogHistory')}
           rows={3}
           value={reason}
           onChange={(e) => setReason(e.target.value)}

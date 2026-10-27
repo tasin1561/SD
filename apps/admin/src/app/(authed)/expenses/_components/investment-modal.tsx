@@ -16,6 +16,7 @@ import { usePermission } from '@/lib/use-permission';
 import { localNow } from '@/lib/datetime-local';
 import '../../treasury/_components/money.css';
 import './expenses.css';
+import { useT } from '@/i18n/client';
 
 export function InvestmentModal({
   open,
@@ -24,6 +25,7 @@ export function InvestmentModal({
   readonly open: boolean;
   readonly onOpenChange: (next: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const accounts = usePlatformBankAccounts(usePermission('money.view'));
   const place = usePlaceInvestment();
 
@@ -50,12 +52,12 @@ export function InvestmentModal({
   function review(): void {
     setError(null);
     if (label.trim() === '' || counterparty.trim() === '' || fromAccountId === '') {
-      setError('What it is, who holds it, and which account it left');
+      setError(t('expensesInvestmentModal.whatItIsWhoHolds'));
       return;
     }
     const n = Number(amount);
     if (!Number.isFinite(n) || n <= 0) {
-      setError('Enter the principal');
+      setError(t('expensesInvestmentModal.enterThePrincipal'));
       return;
     }
     setConfirming(true);
@@ -79,7 +81,7 @@ export function InvestmentModal({
       setAmount('');
       setNote('');
       onOpenChange(false);
-      toast.success('Capital placed');
+      toast.success(t('expensesInvestmentModal.capitalPlaced'));
     } catch (err) {
       setError(serverVerdict(err));
       // Keeps the confirm open with the verdict on it, to read and retry.
@@ -96,44 +98,46 @@ export function InvestmentModal({
           if (!next) setError(null);
         }}
         icon={<PiggyBank size={18} />}
-        title="Place capital"
-        description="Ours only. Client money is not ours to place, and the server refuses it."
+        title={t('expensesInvestmentModal.placeCapital')}
+        description={t('expensesInvestmentModal.oursOnlyClientMoneyIs')}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('expensesInvestmentModal.cancel')}
             </Button>
             <Button variant="primary" onClick={review} disabled={place.isPending}>
-              {place.isPending ? 'Placing…' : 'Place'}
+              {place.isPending
+                ? t('expensesInvestmentModal.placing')
+                : t('expensesInvestmentModal.place')}
             </Button>
           </DialogFooter>
         }
       >
         <div className="mo-fields">
           <TextField
-            label="What"
+            label={t('expensesInvestmentModal.what')}
             requiredMark
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            placeholder="e.g. 6-month fixed deposit"
+            placeholder={t('expensesInvestmentModal.eG6MonthFixed')}
             maxLength={120}
             showCount
           />
           <TextField
-            label="With whom"
+            label={t('expensesInvestmentModal.withWhom')}
             requiredMark
             value={counterparty}
             onChange={(e) => setCounterparty(e.target.value)}
-            placeholder="e.g. HDFC Bank"
+            placeholder={t('expensesInvestmentModal.eGHdfcBank')}
             maxLength={200}
           />
           <Select
-            label="From account"
+            label={t('expensesInvestmentModal.fromAccount')}
             requiredMark
             value={fromAccountId}
             onChange={(e) => setFromAccountId(e.target.value)}
           >
-            <option value="">Select an account…</option>
+            <option value="">{t('expensesInvestmentModal.selectAnAccount')}</option>
             {(accounts.data ?? [])
               .filter((a) => a.isActive)
               .map((a) => (
@@ -144,7 +148,9 @@ export function InvestmentModal({
           </Select>
           <div className="mo-fields" data-cols="2">
             <TextField
-              label={`Principal${account ? ` (${account.currency})` : ''}`}
+              label={t('expensesInvestmentModal.principal', {
+                value: account ? ` (${account.currency})` : '',
+              })}
               requiredMark
               type="number"
               inputMode="decimal"
@@ -155,14 +161,19 @@ export function InvestmentModal({
               placeholder="0.00"
             />
             <DateField
-              label="Placed on"
+              label={t('expensesInvestmentModal.placedOn2')}
               requiredMark
               type="datetime-local"
               value={placedAt}
               onChange={(e) => setPlacedAt(e.target.value)}
             />
           </div>
-          <TextArea label="Note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
+          <TextArea
+            label={t('expensesInvestmentModal.note')}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+          />
           {error !== null && !confirming && (
             <p className="mo-error" role="alert">
               {error}
@@ -177,7 +188,7 @@ export function InvestmentModal({
           setConfirming(next);
           if (!next) setError(null);
         }}
-        title="Place this capital?"
+        title={t('expensesInvestmentModal.placeThisCapital')}
         entity={`${label.trim()} · ${counterparty.trim()}`}
         amount={
           <Money
@@ -186,17 +197,21 @@ export function InvestmentModal({
             convert={false}
           />
         }
-        consequence="The principal leaves our account and is held as an investment until a return is recorded against it."
-        confirmLabel="Place"
+        consequence={t('expensesInvestmentModal.thePrincipalLeavesOurAccount')}
+        confirmLabel={t('expensesInvestmentModal.place')}
         onConfirm={save}
         error={confirming ? (error ?? undefined) : undefined}
       >
         <div className="ex-confirm-lines">
           <span>
-            From: {account === undefined ? '—' : `${account.label} · ${account.bankName}`}
+            {t('expensesInvestmentModal.from', {
+              value: account === undefined ? '—' : `${account.label} · ${account.bankName}`,
+            })}
           </span>
           <span>
-            Placed on: {placedAt === '' ? '—' : new Date(placedAt).toLocaleString('en-IN')}
+            {t('expensesInvestmentModal.placedOn', {
+              value: placedAt === '' ? '—' : new Date(placedAt).toLocaleString('en-IN'),
+            })}
           </span>
         </div>
       </ConfirmDialog>

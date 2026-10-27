@@ -28,6 +28,7 @@ import {
   MkDl,
   WithdrawalChip,
 } from '../../seller-wallets/_components/money-parts';
+import { useT } from '@/i18n/client';
 
 const PAGE_SIZE = 25;
 
@@ -41,6 +42,7 @@ const PAGE_SIZE = 25;
  * so rather than leaving an operator to assume.
  */
 export function WithdrawalsIndex(): ReactElement {
+  const t = useT();
   const [status, setStatus] = useState<string>(WithdrawalRequestStatus.PENDING);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<WithdrawalRequestView | null>(null);
@@ -74,7 +76,7 @@ export function WithdrawalsIndex(): ReactElement {
     setApproveError(null);
     try {
       await approve.mutateAsync({ requestId: approving.id });
-      toast.success('Approved — now pay and link it.');
+      toast.success(t('withdrawalsWithdrawalsIndex.approvedNowPayAndLink'));
     } catch (err) {
       // FE-2: the server owns the rules, including "the balance no
       // longer covers this". Shown verbatim inside the confirm.
@@ -86,26 +88,26 @@ export function WithdrawalsIndex(): ReactElement {
   return (
     <div className="mk-page">
       <PageHeader
-        title="Withdrawals"
-        subtitle="Client withdrawal requests, and the ones the auto-withdraw cycle raised. Nothing here moves money — pay the client, record the remittance, then link it to close the request."
+        title={t('withdrawalsWithdrawalsIndex.withdrawals')}
+        subtitle={t('withdrawalsWithdrawalsIndex.clientWithdrawalRequestsAndThe')}
       />
 
       <div className="mk-kpis">
         <KpiCard
-          label="Requested on this page"
+          label={t('withdrawalsWithdrawalsIndex.requestedOnThisPage')}
           figure={<Money amount={pendingValue} decimals={false} />}
           tone={pendingValue > 0 ? 'pending' : 'neutral'}
-          hint="Still pending a decision"
+          hint={t('withdrawalsWithdrawalsIndex.stillPendingADecision')}
         />
         <KpiCard
-          label="Matching this filter"
+          label={t('withdrawalsWithdrawalsIndex.matchingThisFilter')}
           figure={list.isLoading ? '—' : total}
-          hint="Across all pages"
+          hint={t('withdrawalsWithdrawalsIndex.acrossAllPages')}
         />
         <KpiCard
-          label="Auto-raised"
+          label={t('withdrawalsWithdrawalsIndex.autoRaised')}
           figure={list.isLoading ? '—' : autoRaised}
-          hint="Created by the auto-withdraw cycle, not by a client"
+          hint={t('withdrawalsWithdrawalsIndex.createdByTheAutoWithdraw')}
         />
       </div>
 
@@ -123,11 +125,13 @@ export function WithdrawalsIndex(): ReactElement {
         <MkCallout
           tone="critical"
           icon={<AlertTriangle size={16} />}
-          title={`${breachedCount} past the ${slaHours}h we promised`}
+          title={t('withdrawalsWithdrawalsIndex.pastTheHWePromised', { breachedCount, slaHours })}
         >
           <p>
             <Money amount={breachedInr} decimals={false} /> waiting
-            {oldestPendingHours !== null && <> · longest {oldestPendingHours}h</>}
+            {oldestPendingHours !== null && (
+              <> {t('withdrawalsWithdrawalsIndex.longestH', { oldestPendingHours })}</>
+            )}
           </p>
         </MkCallout>
       )}
@@ -135,14 +139,14 @@ export function WithdrawalsIndex(): ReactElement {
       <div className="mk-filters">
         <Select
           id="wd-status"
-          label="Status"
+          label={t('withdrawalsWithdrawalsIndex.status')}
           value={status}
           onChange={(e) => {
             setStatus(e.target.value);
             setPage(1);
           }}
         >
-          <option value="">All statuses</option>
+          <option value="">{t('withdrawalsWithdrawalsIndex.allStatuses')}</option>
           {Object.values(WithdrawalRequestStatus).map((s) => (
             <option key={s} value={s}>
               {humanise(s)}
@@ -153,38 +157,44 @@ export function WithdrawalsIndex(): ReactElement {
 
       {list.isError ? (
         <ErrorState
-          message={list.error?.message ?? 'Failed to load withdrawal requests.'}
+          message={
+            list.error?.message ?? t('withdrawalsWithdrawalsIndex.failedToLoadWithdrawalRequests')
+          }
           retry={() => void list.refetch()}
         />
       ) : list.isLoading ? (
-        <SkeletonRows rows={5} cols={8} label="Loading withdrawal requests…" />
+        <SkeletonRows
+          rows={5}
+          cols={8}
+          label={t('withdrawalsWithdrawalsIndex.loadingWithdrawalRequests')}
+        />
       ) : items.length === 0 ? (
         <EmptyState
           tone={status === WithdrawalRequestStatus.PENDING ? 'positive' : 'neutral'}
           title={
             status === WithdrawalRequestStatus.PENDING
-              ? 'No pending requests'
-              : 'No requests match this filter'
+              ? t('withdrawalsWithdrawalsIndex.noPendingRequests')
+              : t('withdrawalsWithdrawalsIndex.noRequestsMatchThisFilter')
           }
           description={
             status === WithdrawalRequestStatus.PENDING
-              ? 'Nothing is waiting on a withdrawal decision.'
-              : 'Try widening the status filter.'
+              ? t('withdrawalsWithdrawalsIndex.nothingIsWaitingOnA')
+              : t('withdrawalsWithdrawalsIndex.tryWideningTheStatusFilter')
           }
         />
       ) : (
         <MkCard flush>
-          <Table caption="Withdrawal requests">
+          <Table caption={t('withdrawalsWithdrawalsIndex.withdrawalRequests')}>
             <THead>
               <Tr>
-                <Th>Requested</Th>
-                <Th>Client</Th>
-                <Th align="right">Amount</Th>
-                <Th align="right">They receive</Th>
-                <Th align="right">Wallet balance</Th>
-                <Th>Source</Th>
-                <Th>Status</Th>
-                <Th align="right">Actions</Th>
+                <Th>{t('withdrawalsWithdrawalsIndex.requested')}</Th>
+                <Th>{t('withdrawalsWithdrawalsIndex.client')}</Th>
+                <Th align="right">{t('withdrawalsWithdrawalsIndex.amount')}</Th>
+                <Th align="right">{t('withdrawalsWithdrawalsIndex.theyReceive')}</Th>
+                <Th align="right">{t('withdrawalsWithdrawalsIndex.walletBalance')}</Th>
+                <Th>{t('withdrawalsWithdrawalsIndex.source')}</Th>
+                <Th>{t('withdrawalsWithdrawalsIndex.status')}</Th>
+                <Th align="right">{t('withdrawalsWithdrawalsIndex.actions')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -203,7 +213,9 @@ export function WithdrawalsIndex(): ReactElement {
                           className="mk-text mk-small sk-figure"
                           data-tone={w.slaBreached ? 'critical' : undefined}
                         >
-                          waiting {w.waitingHours}h
+                          {t('withdrawalsWithdrawalsIndex.waitingH', {
+                            waitingHours: w.waitingHours,
+                          })}
                         </span>
                       )}
                     </div>
@@ -234,7 +246,11 @@ export function WithdrawalsIndex(): ReactElement {
                       <span className="mk-faint">—</span>
                     ) : (
                       <span
-                        title={`At the rate when requested: 1 ${w.currency} = ${w.fxRateSnapshot ?? '?'} ${w.homeCurrency}`}
+                        title={t('withdrawalsWithdrawalsIndex.atTheRateWhenRequested', {
+                          currency: w.currency,
+                          value: w.fxRateSnapshot ?? '?',
+                          homeCurrency: w.homeCurrency,
+                        })}
                       >
                         <Money
                           amount={w.amountInHomeCurrency}
@@ -262,7 +278,7 @@ export function WithdrawalsIndex(): ReactElement {
                         }
                         title={
                           Number(w.sellerBalanceInr) < Number(w.amountRequested)
-                            ? 'Less than the amount requested'
+                            ? t('withdrawalsWithdrawalsIndex.lessThanTheAmountRequested')
                             : undefined
                         }
                       >
@@ -271,7 +287,9 @@ export function WithdrawalsIndex(): ReactElement {
                     )}
                   </Td>
                   <Td className="mk-small">
-                    {w.requestedBy === 'SYSTEM' ? 'Auto-withdraw' : 'Client'}
+                    {w.requestedBy === 'SYSTEM'
+                      ? t('withdrawalsWithdrawalsIndex.autoWithdraw')
+                      : t('withdrawalsWithdrawalsIndex.client')}
                   </Td>
                   <Td>
                     <div className="mk-cell">
@@ -303,7 +321,7 @@ export function WithdrawalsIndex(): ReactElement {
                               setApproving(w);
                             }}
                           >
-                            Approve
+                            {t('withdrawalsWithdrawalsIndex.approve')}
                           </Button>
                         )}
                         {/* Reject stayed reachable only through Resolve,
@@ -318,7 +336,7 @@ export function WithdrawalsIndex(): ReactElement {
                             icon={<X size={14} />}
                             onClick={() => setSelected(w)}
                           >
-                            Reject
+                            {t('withdrawalsWithdrawalsIndex.reject')}
                           </Button>
                         )}
                         {/* An approved request can still be rejected —
@@ -332,7 +350,7 @@ export function WithdrawalsIndex(): ReactElement {
                               icon={<X size={14} />}
                               onClick={() => setSelected(w)}
                             >
-                              Reject
+                              {t('withdrawalsWithdrawalsIndex.reject')}
                             </Button>
                             {/* Straight to where the payment happens.
                                 "Resolve" used to open a form asking for a
@@ -345,7 +363,9 @@ export function WithdrawalsIndex(): ReactElement {
                               href="/remittances"
                               className={buttonClassName('secondary', 'sm')}
                             >
-                              <span className="sk-btn__label">Pay on Remittances</span>
+                              <span className="sk-btn__label">
+                                {t('withdrawalsWithdrawalsIndex.payOnRemittances')}
+                              </span>
                               <span className="sk-btn__icon sk-btn__icon--right" aria-hidden>
                                 <ArrowRight size={14} />
                               </span>
@@ -355,7 +375,8 @@ export function WithdrawalsIndex(): ReactElement {
                       </div>
                     ) : w.linkedRemittanceId !== null ? (
                       <span className="mk-faint">
-                        Remittance <Ident value={w.linkedRemittanceId.slice(0, 8)} />
+                        {t('withdrawalsWithdrawalsIndex.remittance')}{' '}
+                        <Ident value={w.linkedRemittanceId.slice(0, 8)} />
                       </span>
                     ) : (
                       <span className="mk-faint">—</span>
@@ -370,7 +391,7 @@ export function WithdrawalsIndex(): ReactElement {
             pageSize={list.data?.pageSize ?? PAGE_SIZE}
             total={total}
             onPageChange={setPage}
-            label="Withdrawal pages"
+            label={t('withdrawalsWithdrawalsIndex.withdrawalPages')}
           />
         </MkCard>
       )}
@@ -380,19 +401,20 @@ export function WithdrawalsIndex(): ReactElement {
         onOpenChange={(next) => {
           if (!next) setApproving(null);
         }}
-        title="Approve this withdrawal?"
+        title={t('withdrawalsWithdrawalsIndex.approveThisWithdrawal')}
         entity={
           approving === null
             ? ''
-            : (approving.sellerName ?? `Client ${approving.sellerId.slice(0, 8)}…`)
+            : (approving.sellerName ??
+              t('withdrawalsWithdrawalsIndex.client2', { value: approving.sellerId.slice(0, 8) }))
         }
         amount={
           approving === null ? undefined : (
             <Money amount={approving.amountRequested} currency={approving.currency} />
           )
         }
-        consequence="Approving re-checks their wallet against this amount. Nothing is paid yet — pay the bank account on the client's profile, record the remittance, and it closes this request."
-        confirmLabel="Approve"
+        consequence={t('withdrawalsWithdrawalsIndex.approvingReChecksTheirWallet')}
+        confirmLabel={t('withdrawalsWithdrawalsIndex.approve')}
         onConfirm={confirmApprove}
         error={approveError}
       >
@@ -400,10 +422,12 @@ export function WithdrawalsIndex(): ReactElement {
           <MkDl
             items={[
               {
-                label: 'They receive',
+                label: t('withdrawalsWithdrawalsIndex.theyReceive'),
                 value:
                   approving.amountInHomeCurrency === null || approving.homeCurrency === null ? (
-                    <span className="mk-faint">No rate quoted</span>
+                    <span className="mk-faint">
+                      {t('withdrawalsWithdrawalsIndex.noRateQuoted')}
+                    </span>
                   ) : (
                     <Money
                       amount={approving.amountInHomeCurrency}
@@ -413,7 +437,7 @@ export function WithdrawalsIndex(): ReactElement {
                   ),
               },
               {
-                label: 'Wallet balance now',
+                label: t('withdrawalsWithdrawalsIndex.walletBalanceNow'),
                 value:
                   approving.sellerBalanceInr === null ? (
                     <span className="mk-faint">—</span>
@@ -422,8 +446,11 @@ export function WithdrawalsIndex(): ReactElement {
                   ),
               },
               {
-                label: 'Raised by',
-                value: approving.requestedBy === 'SYSTEM' ? 'Auto-withdraw cycle' : 'The client',
+                label: t('withdrawalsWithdrawalsIndex.raisedBy'),
+                value:
+                  approving.requestedBy === 'SYSTEM'
+                    ? t('withdrawalsWithdrawalsIndex.autoWithdrawCycle')
+                    : t('withdrawalsWithdrawalsIndex.theClient'),
               },
             ]}
           />

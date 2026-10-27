@@ -13,6 +13,7 @@ import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { useLiabilities, type LedgerLineView } from '@/lib/ops-hooks';
 import { MoSection, Notice } from '../../treasury/_components/money-parts';
 import './liabilities.css';
+import { useT } from '@/i18n/client';
 
 /**
  * What we owe, and what is owed to us.
@@ -33,13 +34,14 @@ function LineTable({
   readonly lines: readonly LedgerLineView[];
   readonly emptyText: string;
 }): ReactElement {
+  const t = useT();
   return (
     <Table>
       <THead>
         <Tr>
-          <Th>What</Th>
-          <Th align="right">Amount</Th>
-          <Th align="right">Items</Th>
+          <Th>{t('liabilitiesLiabilitiesIndex.what')}</Th>
+          <Th align="right">{t('liabilitiesLiabilitiesIndex.amount')}</Th>
+          <Th align="right">{t('liabilitiesLiabilitiesIndex.items')}</Th>
         </Tr>
       </THead>
       <TBody>
@@ -120,6 +122,7 @@ function humanCause(direction: string): string {
 }
 
 export function LiabilitiesIndex(): ReactElement {
+  const t = useT();
   const q = useLiabilities();
 
   if (q.isLoading) {
@@ -137,7 +140,7 @@ export function LiabilitiesIndex(): ReactElement {
   if (q.isError || q.data === undefined) {
     return (
       <ErrorState
-        message={q.error?.message ?? 'Could not read the position.'}
+        message={q.error?.message ?? t('liabilitiesLiabilitiesIndex.couldNotReadThePosition')}
         retry={() => void q.refetch()}
       />
     );
@@ -149,73 +152,70 @@ export function LiabilitiesIndex(): ReactElement {
   return (
     <div className="mo-page">
       <PageHeader
-        title="What we owe"
-        subtitle="Our position right now — against what is owed to us, and what stands behind it."
+        title={t('liabilitiesLiabilitiesIndex.whatWeOwe')}
+        subtitle={t('liabilitiesLiabilitiesIndex.ourPositionRightNowAgainst')}
       />
 
       <div className="mo-kpis">
         <KpiCard
-          label="We owe"
+          label={t('liabilitiesLiabilitiesIndex.weOwe')}
           tone="pending"
           figure={<Money amount={d.owedTotalInr} currency="INR" convert={false} />}
-          hint="Clients and the tax authority"
+          hint={t('liabilitiesLiabilitiesIndex.clientsAndTheTaxAuthority')}
         />
         <KpiCard
-          label="Owed to us"
+          label={t('liabilitiesLiabilitiesIndex.owedToUs')}
           figure={<Money amount={d.dueTotalInr} currency="INR" convert={false} />}
-          hint="Couriers, clients, freight not yet recovered"
+          hint={t('liabilitiesLiabilitiesIndex.couriersClientsFreightNotYet')}
         />
         <KpiCard
-          label="Net position"
+          label={t('liabilitiesLiabilitiesIndex.netPosition')}
           tone={Number(d.netInr) >= 0 ? 'credit' : 'debit'}
           figure={<Money amount={d.netInr} currency="INR" convert={false} />}
-          hint="A number to read alongside the lines, not instead of them"
+          hint={t('liabilitiesLiabilitiesIndex.aNumberToReadAlongside')}
         />
       </div>
 
       <Notice tone="info">
-        <p>
-          The two sides do not cancel. What we owe is largely callable on request; what is owed to
-          us arrives on somebody else&apos;s cycle. A healthy net can still be a month that cannot
-          pay.
-        </p>
+        <p>{t('liabilitiesLiabilitiesIndex.theTwoSidesDoNot')}</p>
       </Notice>
 
-      <MoSection title="We owe" flush>
-        <LineTable lines={d.owed} emptyText="Nothing owed." />
+      <MoSection title={t('liabilitiesLiabilitiesIndex.weOwe')} flush>
+        <LineTable lines={d.owed} emptyText={t('liabilitiesLiabilitiesIndex.nothingOwed')} />
       </MoSection>
 
-      <MoSection title="Owed to us" flush>
-        <LineTable lines={d.due} emptyText="Nothing outstanding." />
+      <MoSection title={t('liabilitiesLiabilitiesIndex.owedToUs')} flush>
+        <LineTable lines={d.due} emptyText={t('liabilitiesLiabilitiesIndex.nothingOutstanding')} />
       </MoSection>
 
       <section className="mo-section">
-        <SectionHeading title="Clients in the red" />
+        <SectionHeading title={t('liabilitiesLiabilitiesIndex.clientsInTheRed')} />
         {d.sellerDebts.length === 0 ? (
           <Notice tone="good" icon={<ShieldCheck size={16} />}>
-            <p>No client is carrying a negative balance.</p>
+            <p>{t('liabilitiesLiabilitiesIndex.noClientIsCarryingA')}</p>
           </Notice>
         ) : (
           <>
             {uncovered.length > 0 && (
               <Notice tone="warn" icon={<AlertTriangle size={16} />}>
                 <p>
-                  {uncovered.length === 1
-                    ? 'One client owes more than their stock is worth'
-                    : `${uncovered.length} clients owe more than their stock is worth`}
-                  . A debt covered by goods in our building clears as they sell; an uncovered one is
-                  money we may not see again.
+                  {t('liabilitiesLiabilitiesIndex.aDebtCoveredByGoods', {
+                    value:
+                      uncovered.length === 1
+                        ? t('liabilitiesLiabilitiesIndex.oneClientOwesMoreThan')
+                        : `${uncovered.length} clients owe more than their stock is worth`,
+                  })}
                 </p>
               </Notice>
             )}
-            <Table caption="Clients in the red">
+            <Table caption={t('liabilitiesLiabilitiesIndex.clientsInTheRed')}>
               <THead>
                 <Tr>
-                  <Th>Client</Th>
-                  <Th align="right">Owes</Th>
-                  <Th>What for</Th>
-                  <Th align="right">Stock held (at cost)</Th>
-                  <Th>Cover</Th>
+                  <Th>{t('liabilitiesLiabilitiesIndex.client')}</Th>
+                  <Th align="right">{t('liabilitiesLiabilitiesIndex.owes')}</Th>
+                  <Th>{t('liabilitiesLiabilitiesIndex.whatFor')}</Th>
+                  <Th align="right">{t('liabilitiesLiabilitiesIndex.stockHeldAtCost')}</Th>
+                  <Th>{t('liabilitiesLiabilitiesIndex.cover')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -254,7 +254,7 @@ export function LiabilitiesIndex(): ReactElement {
                             <li className="li-causes__paid">
                               {Number(s.openingBalanceInr) > 0 && (
                                 <div>
-                                  started with{' '}
+                                  {t('liabilitiesLiabilitiesIndex.startedWith')}{' '}
                                   <Money
                                     amount={s.openingBalanceInr}
                                     currency="INR"
@@ -264,7 +264,7 @@ export function LiabilitiesIndex(): ReactElement {
                               )}
                               {Number(s.paidSinceInr) > 0 && (
                                 <div>
-                                  paid since{' '}
+                                  {t('liabilitiesLiabilitiesIndex.paidSince')}{' '}
                                   <Money amount={s.paidSinceInr} currency="INR" convert={false} />
                                 </div>
                               )}
@@ -279,7 +279,11 @@ export function LiabilitiesIndex(): ReactElement {
                     <Td>
                       <StatusChip
                         kind={s.covered ? 'confirmed' : 'failed'}
-                        label={s.covered ? 'Covered by stock' : 'Uncovered'}
+                        label={
+                          s.covered
+                            ? t('liabilitiesLiabilitiesIndex.coveredByStock')
+                            : t('liabilitiesLiabilitiesIndex.uncovered')
+                        }
                       />
                     </Td>
                   </Tr>

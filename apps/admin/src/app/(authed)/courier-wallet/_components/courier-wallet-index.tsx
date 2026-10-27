@@ -30,6 +30,7 @@ import {
 } from '@/lib/ops-hooks';
 import { MoSection } from '../../treasury/_components/money-parts';
 import './courier-wallet.css';
+import { useT } from '@/i18n/client';
 
 /**
  * The courier's prepaid wallet, against our own bank.
@@ -65,6 +66,7 @@ function matchTone(state: CourierRechargeView['matchState']): {
 }
 
 export function CourierWalletIndex(): ReactElement {
+  const tr = useT();
   const [filter, setFilter] = useState<string>('UNRECORDED');
   const accounts = useCourierWalletAccounts();
   const recharges = useCourierRecharges(filter === 'ALL' ? undefined : filter);
@@ -99,7 +101,9 @@ export function CourierWalletIndex(): ReactElement {
   if (accounts.isError || accounts.data === undefined) {
     return (
       <ErrorState
-        message={accounts.error?.message ?? 'Could not read the courier wallets.'}
+        message={
+          accounts.error?.message ?? tr('courierWalletCourierWalletIndex.couldNotReadTheCourier')
+        }
         retry={() => void accounts.refetch()}
       />
     );
@@ -112,8 +116,8 @@ export function CourierWalletIndex(): ReactElement {
   return (
     <div className="mo-page">
       <PageHeader
-        title="Courier wallets"
-        subtitle="Their prepaid balance is our money on somebody else's system. Every rupee in it should have left one of our accounts, and every rupee that left should be in it."
+        title={tr('courierWalletCourierWalletIndex.courierWallets')}
+        subtitle={tr('courierWalletCourierWalletIndex.theirPrepaidBalanceIsOur')}
         action={
           mayRecord ? (
             <Button
@@ -121,7 +125,7 @@ export function CourierWalletIndex(): ReactElement {
               icon={<ArrowDownRight size={16} />}
               onClick={() => setPaying(true)}
             >
-              Record a top-up
+              {tr('courierWalletCourierWalletIndex.recordATopUp')}
             </Button>
           ) : undefined
         }
@@ -129,7 +133,7 @@ export function CourierWalletIndex(): ReactElement {
 
       <div className="mo-kpis">
         <KpiCard
-          label="Held at couriers"
+          label={tr('courierWalletCourierWalletIndex.heldAtCouriers')}
           figure={
             <Money
               amount={rows.reduce((t, a) => t + Number(a.balanceInr ?? 0), 0).toFixed(2)}
@@ -140,38 +144,38 @@ export function CourierWalletIndex(): ReactElement {
           tone={rows.some((a) => a.balanceInr === null) ? 'pending' : 'neutral'}
           hint={
             rows.some((a) => a.balanceInr === null)
-              ? 'Excludes wallets we have never read'
-              : 'Prepaid float — an asset, not cash'
+              ? tr('courierWalletCourierWalletIndex.excludesWalletsWeHaveNever')
+              : tr('courierWalletCourierWalletIndex.prepaidFloatAnAssetNot')
           }
         />
         <KpiCard
-          label="Recharges not in our books"
+          label={tr('courierWalletCourierWalletIndex.rechargesNotInOurBooks')}
           value={unrecorded}
           tone={unrecorded > 0 ? 'debit' : 'neutral'}
-          hint="Money at the courier with no payment of ours behind it"
+          hint={tr('courierWalletCourierWalletIndex.moneyAtTheCourierWith')}
         />
         <KpiCard
-          label="Paid and never arrived"
+          label={tr('courierWalletCourierWalletIndex.paidAndNeverArrived')}
           value={neverArrived.length}
           tone={neverArrived.length > 0 ? 'debit' : 'neutral'}
-          hint="Left our bank, no matching recharge"
+          hint={tr('courierWalletCourierWalletIndex.leftOurBankNoMatching')}
         />
       </div>
 
       {neverArrived.length > 0 ? (
         <MoSection
-          title="Money that left our bank and never arrived"
-          note="Either the reference on our entry is wrong, or the payment did not reach them. Check the bank statement against their recharge list before recording anything else on the account."
+          title={tr('courierWalletCourierWalletIndex.moneyThatLeftOurBank')}
+          note={tr('courierWalletCourierWalletIndex.eitherTheReferenceOnOur')}
           tone="critical"
           flush
         >
-          <Table caption="Money that left our bank and never arrived">
+          <Table caption={tr('courierWalletCourierWalletIndex.moneyThatLeftOurBank')}>
             <THead>
               <Tr>
-                <Th>Paid from</Th>
-                <Th>Reference</Th>
-                <Th>When</Th>
-                <Th align="right">Amount</Th>
+                <Th>{tr('courierWalletCourierWalletIndex.paidFrom')}</Th>
+                <Th>{tr('courierWalletCourierWalletIndex.reference')}</Th>
+                <Th>{tr('courierWalletCourierWalletIndex.when')}</Th>
+                <Th align="right">{tr('courierWalletCourierWalletIndex.amount')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -198,19 +202,21 @@ export function CourierWalletIndex(): ReactElement {
         </MoSection>
       ) : null}
 
-      <MoSection title="Wallets" flush>
-        <Table caption="Courier wallets">
+      <MoSection title={tr('courierWalletCourierWalletIndex.wallets')} flush>
+        <Table caption={tr('courierWalletCourierWalletIndex.courierWallets')}>
           <THead>
             <Tr>
-              <Th>Account</Th>
-              <Th align="right">Balance</Th>
-              <Th>Last read</Th>
-              <Th align="right">Unreconciled</Th>
+              <Th>{tr('courierWalletCourierWalletIndex.account')}</Th>
+              <Th align="right">{tr('courierWalletCourierWalletIndex.balance')}</Th>
+              <Th>{tr('courierWalletCourierWalletIndex.lastRead')}</Th>
+              <Th align="right">{tr('courierWalletCourierWalletIndex.unreconciled')}</Th>
             </Tr>
           </THead>
           <TBody>
             {rows.length === 0 ? (
-              <TableEmpty colSpan={4}>No courier accounts yet.</TableEmpty>
+              <TableEmpty colSpan={4}>
+                {tr('courierWalletCourierWalletIndex.noCourierAccountsYet')}
+              </TableEmpty>
             ) : (
               rows.map((a) => (
                 <Tr key={a.courierAccountId}>
@@ -225,7 +231,9 @@ export function CourierWalletIndex(): ReactElement {
                     {/* Never read is not the same as empty, and only
                         one of the two should worry anybody. */}
                     {a.balanceInr === null ? (
-                      <span className="mo-muted">Never read</span>
+                      <span className="mo-muted">
+                        {tr('courierWalletCourierWalletIndex.neverRead')}
+                      </span>
                     ) : (
                       <Money amount={a.balanceInr} currency="INR" convert={false} />
                     )}
@@ -250,20 +258,24 @@ export function CourierWalletIndex(): ReactElement {
       </MoSection>
 
       <MoSection
-        title="Recharges at the courier"
-        note="Matched on the bank's own reference — never on the amount and date, which would pair two identical top-ups arbitrarily and report both as reconciled."
+        title={tr('courierWalletCourierWalletIndex.rechargesAtTheCourier')}
+        note={tr('courierWalletCourierWalletIndex.matchedOnTheBankS')}
         action={
           <Select
-            label="Match state"
+            label={tr('courierWalletCourierWalletIndex.matchState')}
             className="cw-filter"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           >
-            <option value="UNRECORDED">Not in our books</option>
-            <option value="AMOUNT_MISMATCH">Amounts disagree</option>
-            <option value="MATCHED">Matched</option>
-            <option value="RESOLVED">Explained</option>
-            <option value="ALL">All</option>
+            <option value="UNRECORDED">
+              {tr('courierWalletCourierWalletIndex.notInOurBooks')}
+            </option>
+            <option value="AMOUNT_MISMATCH">
+              {tr('courierWalletCourierWalletIndex.amountsDisagree')}
+            </option>
+            <option value="MATCHED">{tr('courierWalletCourierWalletIndex.matched')}</option>
+            <option value="RESOLVED">{tr('courierWalletCourierWalletIndex.explained')}</option>
+            <option value="ALL">{tr('courierWalletCourierWalletIndex.all')}</option>
           </Select>
         }
         flush
@@ -271,14 +283,14 @@ export function CourierWalletIndex(): ReactElement {
         {recharges.isLoading ? (
           <SkeletonRows rows={4} cols={6} />
         ) : (
-          <Table caption="Recharges at the courier">
+          <Table caption={tr('courierWalletCourierWalletIndex.rechargesAtTheCourier')}>
             <THead>
               <Tr>
-                <Th>Their recharge</Th>
-                <Th>Bank reference</Th>
-                <Th>When</Th>
-                <Th align="right">Amount</Th>
-                <Th>State</Th>
+                <Th>{tr('courierWalletCourierWalletIndex.theirRecharge')}</Th>
+                <Th>{tr('courierWalletCourierWalletIndex.bankReference')}</Th>
+                <Th>{tr('courierWalletCourierWalletIndex.when')}</Th>
+                <Th align="right">{tr('courierWalletCourierWalletIndex.amount')}</Th>
+                <Th>{tr('courierWalletCourierWalletIndex.state')}</Th>
                 <Th />
               </Tr>
             </THead>
@@ -286,8 +298,8 @@ export function CourierWalletIndex(): ReactElement {
               {(recharges.data?.recharges ?? []).length === 0 ? (
                 <TableEmpty colSpan={6}>
                   {filter === 'UNRECORDED'
-                    ? 'Every recharge here is accounted for.'
-                    : 'Nothing in this state.'}
+                    ? tr('courierWalletCourierWalletIndex.everyRechargeHereIsAccounted')
+                    : tr('courierWalletCourierWalletIndex.nothingInThisState')}
                 </TableEmpty>
               ) : (
                 (recharges.data?.recharges ?? []).map((r) => {
@@ -320,10 +332,10 @@ export function CourierWalletIndex(): ReactElement {
                         {r.matchState === 'UNRECORDED' && mayRecord ? (
                           <div className="cw-actions">
                             <Button size="sm" variant="primary" onClick={() => setRecording(r)}>
-                              Record payment
+                              {tr('courierWalletCourierWalletIndex.recordPayment')}
                             </Button>
                             <Button size="sm" variant="secondary" onClick={() => setExplaining(r)}>
-                              Not ours
+                              {tr('courierWalletCourierWalletIndex.notOurs')}
                             </Button>
                           </div>
                         ) : (
@@ -369,6 +381,7 @@ function RecordBankSideModal({
   readonly banks: ReadonlyArray<{ id: string; label: string; currency: string }>;
   readonly onClose: () => void;
 }): ReactElement {
+  const tr = useT();
   const [bankAccountId, setBankAccountId] = useState('');
   const [note, setNote] = useState('');
   const m = useRecordRechargeBankSide();
@@ -383,27 +396,33 @@ function RecordBankSideModal({
       }}
       locked={m.isPending}
       icon={<Wallet size={18} />}
-      title="Which account paid for this?"
-      description={`₹${recharge.amountInr} reached ${recharge.accountLabel} on ${new Date(
-        recharge.occurredAt,
-      ).toLocaleDateString(
-        'en-IN',
-      )}. Recording it writes the bank entry and ties the two together — the amount, date and reference come from their row, so there is nothing to mistype.`}
+      title={tr('courierWalletCourierWalletIndex.whichAccountPaidForThis')}
+      description={tr('courierWalletCourierWalletIndex.reachedOnRecordingItWrites', {
+        amountInr: recharge.amountInr,
+        accountLabel: recharge.accountLabel,
+        value: new Date(recharge.occurredAt).toLocaleDateString('en-IN'),
+      })}
       footer={
         <DialogFooter>
           <Button variant="secondary" onClick={onClose} disabled={m.isPending}>
-            Cancel
+            {tr('courierWalletCourierWalletIndex.cancel')}
           </Button>
           <AsyncButton
             disabled={bankAccountId === ''}
-            labels={{ idle: 'Record the payment', busy: 'Recording…', done: 'Recorded' }}
+            labels={{
+              idle: tr('courierWalletCourierWalletIndex.recordThePayment'),
+              busy: tr('courierWalletCourierWalletIndex.recording'),
+              done: tr('courierWalletCourierWalletIndex.recorded'),
+            }}
             onAction={async () => {
               await m.mutateAsync({
                 rechargeId: recharge.id,
                 bankAccountId,
                 ...(note === '' ? {} : { note }),
               });
-              toast.success('Payment recorded against their recharge.');
+              toast.success(
+                tr('courierWalletCourierWalletIndex.paymentRecordedAgainstTheirRecharge'),
+              );
               onClose();
             }}
           />
@@ -412,12 +431,12 @@ function RecordBankSideModal({
     >
       <div className="mo-fields">
         <Select
-          label="Paid from"
+          label={tr('courierWalletCourierWalletIndex.paidFrom')}
           requiredMark
           value={bankAccountId}
           onChange={(e) => setBankAccountId(e.target.value)}
         >
-          <option value="">Choose an account…</option>
+          <option value="">{tr('courierWalletCourierWalletIndex.chooseAnAccount')}</option>
           {inr.map((b) => (
             <option key={b.id} value={b.id}>
               {b.label}
@@ -425,8 +444,8 @@ function RecordBankSideModal({
           ))}
         </Select>
         <TextField
-          label="Note"
-          hint="Optional — anything worth saying about this payment"
+          label={tr('courierWalletCourierWalletIndex.note')}
+          hint={tr('courierWalletCourierWalletIndex.optionalAnythingWorthSayingAbout')}
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
@@ -443,6 +462,7 @@ function ExplainModal({
   readonly recharge: CourierRechargeView;
   readonly onClose: () => void;
 }): ReactElement {
+  const tr = useT();
   const [reason, setReason] = useState('');
   const m = useResolveRecharge();
   const toast = useToast();
@@ -456,20 +476,24 @@ function ExplainModal({
       locked={m.isPending}
       tone="critical"
       icon={<AlertTriangle size={18} />}
-      title="This recharge was not paid for by us"
-      description="A credit note, a promotional top-up, a correction they made on their own side. No bank entry is written — there is no money of ours behind it, and inventing one would put a figure in the book no statement will ever agree with."
+      title={tr('courierWalletCourierWalletIndex.thisRechargeWasNotPaid')}
+      description={tr('courierWalletCourierWalletIndex.aCreditNoteAPromotional')}
       footer={
         <DialogFooter>
           <Button variant="secondary" onClick={onClose} disabled={m.isPending}>
-            Cancel
+            {tr('courierWalletCourierWalletIndex.cancel')}
           </Button>
           <AsyncButton
             variant="destructive"
             disabled={reason.trim().length < 20}
-            labels={{ idle: 'Record the explanation', busy: 'Saving…', done: 'Saved' }}
+            labels={{
+              idle: tr('courierWalletCourierWalletIndex.recordTheExplanation'),
+              busy: tr('courierWalletCourierWalletIndex.saving'),
+              done: tr('courierWalletCourierWalletIndex.saved'),
+            }}
             onAction={async () => {
               await m.mutateAsync({ rechargeId: recharge.id, reason });
-              toast.success('Explanation recorded.');
+              toast.success(tr('courierWalletCourierWalletIndex.explanationRecorded'));
               onClose();
             }}
           />
@@ -478,9 +502,11 @@ function ExplainModal({
     >
       <div className="mo-fields">
         <TextArea
-          label="What was it?"
+          label={tr('courierWalletCourierWalletIndex.whatWasIt')}
           requiredMark
-          hint={`At least 20 characters. This is the only record of why ₹${recharge.amountInr} at the courier has nothing of ours behind it, and it is kept permanently against your name.`}
+          hint={tr('courierWalletCourierWalletIndex.atLeast20CharactersThis', {
+            amountInr: recharge.amountInr,
+          })}
           rows={3}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
@@ -500,6 +526,7 @@ function RecordPaymentModal({
   readonly accounts: ReadonlyArray<{ courierAccountId: string; label: string }>;
   readonly onClose: () => void;
 }): ReactElement {
+  const tr = useT();
   const [bankAccountId, setBankAccountId] = useState('');
   const [courierAccountId, setCourierAccountId] = useState(accounts[0]?.courierAccountId ?? '');
   const [amountInr, setAmountInr] = useState('');
@@ -517,8 +544,11 @@ function RecordPaymentModal({
     bankAccountId !== '' && courierAccountId !== '' && amountInr !== '' && reference.trim() !== '';
 
   const walletLabel =
-    accounts.find((a) => a.courierAccountId === courierAccountId)?.label ?? 'Courier wallet';
-  const bankLabel = inr.find((b) => b.id === bankAccountId)?.label ?? 'our account';
+    accounts.find((a) => a.courierAccountId === courierAccountId)?.label ??
+    tr('courierWalletCourierWalletIndex.courierWallet');
+  const bankLabel =
+    inr.find((b) => b.id === bankAccountId)?.label ??
+    tr('courierWalletCourierWalletIndex.ourAccount');
 
   // The confirm sends exactly what the form's button used to send, with
   // the same key — a retry after a refusal still books the top-up once.
@@ -533,7 +563,7 @@ function RecordPaymentModal({
         occurredAt: new Date(`${occurredAt}T00:00:00Z`).toISOString(),
         idempotencyKey,
       });
-      toast.success('Top-up recorded.');
+      toast.success(tr('courierWalletCourierWalletIndex.topUpRecorded'));
       onClose();
     } catch (err) {
       setError(serverVerdict(err));
@@ -549,12 +579,12 @@ function RecordPaymentModal({
           if (!o) onClose();
         }}
         icon={<ArrowDownRight size={18} />}
-        title="Record a wallet top-up"
-        description="Record it here at the time you pay it. The nightly check matches this against their own recharge row — if it never appears there, you get told."
+        title={tr('courierWalletCourierWalletIndex.recordAWalletTopUp')}
+        description={tr('courierWalletCourierWalletIndex.recordItHereAtThe')}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={onClose}>
-              Cancel
+              {tr('courierWalletCourierWalletIndex.cancel')}
             </Button>
             <Button
               variant="primary"
@@ -564,14 +594,14 @@ function RecordPaymentModal({
                 setConfirming(true);
               }}
             >
-              Record it
+              {tr('courierWalletCourierWalletIndex.recordIt')}
             </Button>
           </DialogFooter>
         }
       >
         <div className="mo-fields" data-cols="2">
           <Select
-            label="Wallet topped up"
+            label={tr('courierWalletCourierWalletIndex.walletToppedUp')}
             requiredMark
             className="mo-span-2"
             value={courierAccountId}
@@ -584,13 +614,13 @@ function RecordPaymentModal({
             ))}
           </Select>
           <Select
-            label="Paid from"
+            label={tr('courierWalletCourierWalletIndex.paidFrom')}
             requiredMark
             className="mo-span-2"
             value={bankAccountId}
             onChange={(e) => setBankAccountId(e.target.value)}
           >
-            <option value="">Choose an account…</option>
+            <option value="">{tr('courierWalletCourierWalletIndex.chooseAnAccount')}</option>
             {inr.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.label}
@@ -598,7 +628,7 @@ function RecordPaymentModal({
             ))}
           </Select>
           <TextField
-            label="Amount (₹)"
+            label={tr('courierWalletCourierWalletIndex.amount2')}
             requiredMark
             inputMode="decimal"
             value={amountInr}
@@ -606,16 +636,16 @@ function RecordPaymentModal({
             placeholder="20000.00"
           />
           <DateField
-            label="Date paid"
+            label={tr('courierWalletCourierWalletIndex.datePaid')}
             requiredMark
             value={occurredAt}
             onChange={(e) => setOccurredAt(e.target.value)}
           />
           <TextField
-            label="Bank reference"
+            label={tr('courierWalletCourierWalletIndex.bankReference')}
             requiredMark
             className="mo-span-2"
-            hint="What the bank calls this transaction. It is the only thing the two sides are matched on — without it this payment can never be tied to their recharge."
+            hint={tr('courierWalletCourierWalletIndex.whatTheBankCallsThis')}
             value={reference}
             onChange={(e) => setReference(e.target.value)}
           />
@@ -631,11 +661,15 @@ function RecordPaymentModal({
           setConfirming(o);
           if (!o) setError(null);
         }}
-        title="Record this wallet top-up?"
+        title={tr('courierWalletCourierWalletIndex.recordThisWalletTopUp')}
         entity={walletLabel}
         amount={<Money amount={amountInr} currency="INR" convert={false} />}
-        consequence={`Paid from ${bankLabel} on ${occurredAt}, bank reference ${reference.trim()}: a bank entry is written out of that account now, and the nightly check matches it against the courier's own recharge.`}
-        confirmLabel="Record it"
+        consequence={tr('courierWalletCourierWalletIndex.paidFromOnBankReference', {
+          bankLabel,
+          occurredAt,
+          value: reference.trim(),
+        })}
+        confirmLabel={tr('courierWalletCourierWalletIndex.recordIt')}
         onConfirm={send}
         closeOnSuccess={false}
         error={error ?? undefined}

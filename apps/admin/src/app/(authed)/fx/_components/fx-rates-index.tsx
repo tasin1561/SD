@@ -14,8 +14,10 @@ import { FxOverrideModal } from './fx-override-modal';
 import { FxHistoryDrawer } from './fx-history-drawer';
 import { usePermission } from '@/lib/use-permission';
 import { MkCard } from '../../seller-wallets/_components/money-parts';
+import { useT } from '@/i18n/client';
 
 export function FxRatesIndex(): ReactElement {
+  const t = useT();
   const canWrite = usePermission('fx.manage');
   const list = useFxRatesList();
   const [editing, setEditing] = useState<FxRateView | null>(null);
@@ -28,29 +30,32 @@ export function FxRatesIndex(): ReactElement {
   return (
     <div className="mk-page">
       <PageHeader
-        title="FX rates"
-        subtitle="Current rate per (from, to) pair. Override sets isManualOverride=true. Every change is recorded in the append-only history (Timeline)."
+        title={t('fxFxRatesIndex.fxRates')}
+        subtitle={t('fxFxRatesIndex.currentRatePerFromTo')}
       />
 
       {list.isLoading ? (
-        <SkeletonRows rows={3} cols={5} label="Loading rates…" />
+        <SkeletonRows rows={3} cols={5} label={t('fxFxRatesIndex.loadingRates')} />
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed.'} retry={() => void list.refetch()} />
+        <ErrorState
+          message={list.error?.message ?? t('fxFxRatesIndex.failed')}
+          retry={() => void list.refetch()}
+        />
       ) : !list.data || list.data.length === 0 ? (
         <EmptyState
-          title="No rates yet."
-          description="Use Override to set the first rate for a currency pair."
+          title={t('fxFxRatesIndex.noRatesYet')}
+          description={t('fxFxRatesIndex.useOverrideToSetThe')}
         />
       ) : (
         <MkCard flush>
-          <Table caption="Exchange rates">
+          <Table caption={t('fxFxRatesIndex.exchangeRates')}>
             <THead>
               <Tr>
-                <Th>Pair</Th>
-                <Th align="right">Rate</Th>
-                <Th>Source</Th>
-                <Th>Fetched</Th>
-                <Th align="right">Actions</Th>
+                <Th>{t('fxFxRatesIndex.pair')}</Th>
+                <Th align="right">{t('fxFxRatesIndex.rate')}</Th>
+                <Th>{t('fxFxRatesIndex.source')}</Th>
+                <Th>{t('fxFxRatesIndex.fetched')}</Th>
+                <Th align="right">{t('fxFxRatesIndex.actions')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -70,10 +75,12 @@ export function FxRatesIndex(): ReactElement {
                     {r.fromCurrency === 'INR' ? (
                       <>
                         {r.source}
-                        {r.isManualOverride && <span className="mk-tag">Manual</span>}
+                        {r.isManualOverride && (
+                          <span className="mk-tag">{t('fxFxRatesIndex.manual')}</span>
+                        )}
                       </>
                     ) : (
-                      <span className="mk-small">Derived — exact inverse</span>
+                      <span className="mk-small">{t('fxFxRatesIndex.derivedExactInverse')}</span>
                     )}
                   </Td>
                   <Td className="mk-when sk-figure">{new Date(r.fetchedAt).toLocaleString()}</Td>
@@ -90,7 +97,7 @@ export function FxRatesIndex(): ReactElement {
                           })
                         }
                       >
-                        Timeline
+                        {t('fxFxRatesIndex.timeline')}
                       </Button>
                       {canWrite &&
                         (r.fromCurrency === 'INR' ? (
@@ -100,7 +107,7 @@ export function FxRatesIndex(): ReactElement {
                             icon={<PencilLine size={14} />}
                             onClick={() => setEditing(r)}
                           >
-                            Override
+                            {t('fxFxRatesIndex.override')}
                           </Button>
                         ) : (
                           // Not offered, because the server refuses it
@@ -108,7 +115,10 @@ export function FxRatesIndex(): ReactElement {
                           // both directions; a second one typed by hand
                           // is how a round trip starts losing a paisa.
                           <span className="mk-faint">
-                            Set {r.toCurrency} → {r.fromCurrency}
+                            {t('fxFxRatesIndex.set', {
+                              toCurrency: r.toCurrency,
+                              fromCurrency: r.fromCurrency,
+                            })}
                           </span>
                         ))}
                     </div>
@@ -126,7 +136,7 @@ export function FxRatesIndex(): ReactElement {
           onClose={() => setEditing(null)}
           onSuccess={() => {
             setEditing(null);
-            toast.success('Rate overridden.');
+            toast.success(t('fxFxRatesIndex.rateOverridden'));
           }}
         />
       )}

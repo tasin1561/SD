@@ -41,6 +41,7 @@ import {
   TopupChip,
   WithdrawalChip,
 } from '../../seller-wallets/_components/money-parts';
+import { useT } from '@/i18n/client';
 
 function when(iso: string | null): string {
   return iso === null
@@ -72,6 +73,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * that pays it — the cash leaves as the seller's.
  */
 export function ResellerStoreWalletsIndex(): ReactElement {
+  const tr = useT();
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -85,23 +87,25 @@ export function ResellerStoreWalletsIndex(): ReactElement {
   return (
     <div className="mk-page">
       <PageHeader
-        title="Member store wallets"
-        subtitle="Top-up claims and withdrawal requests from stores whose wallet Skydrop manages. The cash is the client’s in our books."
+        title={tr('resellerStoreWalletsResellerStoreWalletsIndex.memberStoreWallets')}
+        subtitle={tr('resellerStoreWalletsResellerStoreWalletsIndex.topUpClaimsAndWithdrawal')}
         action={
           <Link href="/reseller-stores" className="mk-link">
-            Member stores <ArrowRight size={14} aria-hidden />
+            {tr('resellerStoreWalletsResellerStoreWalletsIndex.memberStores')}{' '}
+            <ArrowRight size={14} aria-hidden />
           </Link>
         }
       />
       {storeId !== null ? (
         <p className="mk-muted" role="status">
-          Showing one store only:{' '}
+          {tr('resellerStoreWalletsResellerStoreWalletsIndex.showingOneStoreOnly')}{' '}
           <Link href={`/reseller-stores/${storeId}`} className="mk-inline-link">
-            {scoped.data?.storeName ?? 'this store'}
+            {scoped.data?.storeName ??
+              tr('resellerStoreWalletsResellerStoreWalletsIndex.thisStore')}
           </Link>{' '}
           ·{' '}
           <button type="button" className="mk-inline-link" onClick={() => router.replace(pathname)}>
-            show every store
+            {tr('resellerStoreWalletsResellerStoreWalletsIndex.showEveryStore')}
           </button>
         </p>
       ) : null}
@@ -112,6 +116,7 @@ export function ResellerStoreWalletsIndex(): ReactElement {
 }
 
 function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElement {
+  const tr = useT();
   const toast = useToast();
   const mayReview = usePermission('money.topups.review');
   const [status, setStatus] = useState<string>('PENDING');
@@ -140,10 +145,17 @@ function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElem
           topupId: reviewing.id,
           ...(note.trim() === '' ? {} : { note: note.trim() }),
         });
-        toast.success(`Credited ${formatInr(reviewing.amountInr)} to ${reviewing.storeName}.`);
+        toast.success(
+          tr('resellerStoreWalletsResellerStoreWalletsIndex.creditedTo', {
+            value: formatInr(reviewing.amountInr),
+            storeName: reviewing.storeName,
+          }),
+        );
       } else {
         await reject.mutateAsync({ topupId: reviewing.id, reason: note.trim() });
-        toast.success('Rejected — the store reads your reason.');
+        toast.success(
+          tr('resellerStoreWalletsResellerStoreWalletsIndex.rejectedTheStoreReadsYour'),
+        );
       }
       close();
     } catch (err) {
@@ -163,10 +175,14 @@ function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElem
   return (
     <MkSection>
       <SectionHeading
-        title="Top-up claims"
-        note="A store saying it sent money to our bank. Accepting credits its wallet — check the statement first."
+        title={tr('resellerStoreWalletsResellerStoreWalletsIndex.topUpClaims')}
+        note={tr('resellerStoreWalletsResellerStoreWalletsIndex.aStoreSayingItSent')}
         action={
-          <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <Select
+            label={tr('resellerStoreWalletsResellerStoreWalletsIndex.status')}
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
             {TOPUP_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {topupStatusLabel(s)}
@@ -176,7 +192,11 @@ function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElem
         }
       />
       {list.isPending ? (
-        <SkeletonRows rows={3} cols={7} label="Loading top-up claims" />
+        <SkeletonRows
+          rows={3}
+          cols={7}
+          label={tr('resellerStoreWalletsResellerStoreWalletsIndex.loadingTopUpClaims')}
+        />
       ) : list.isError ? (
         <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : list.data.length === 0 ? (
@@ -184,23 +204,25 @@ function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElem
           tone={status === 'PENDING' ? 'positive' : 'neutral'}
           title={
             status === 'PENDING'
-              ? 'Nothing waiting'
-              : `No claims ${topupStatusLabel(status as TopupRequestStatus).toLowerCase()}`
+              ? tr('resellerStoreWalletsResellerStoreWalletsIndex.nothingWaiting')
+              : tr('resellerStoreWalletsResellerStoreWalletsIndex.noClaims', {
+                  value: topupStatusLabel(status as TopupRequestStatus).toLowerCase(),
+                })
           }
-          description="Claims appear here when a store records a transfer to us."
+          description={tr('resellerStoreWalletsResellerStoreWalletsIndex.claimsAppearHereWhenA')}
         />
       ) : (
         <MkCard flush>
-          <Table caption="Store top-up claims">
+          <Table caption={tr('resellerStoreWalletsResellerStoreWalletsIndex.storeTopUpClaims')}>
             <THead>
               <Tr>
-                <Th>Claimed</Th>
-                <Th>Store · client</Th>
-                <Th>Paid into</Th>
-                <Th align="right">Amount</Th>
-                <Th>Evidence</Th>
-                <Th>Status</Th>
-                <Th align="right">Review</Th>
+                <Th>{tr('resellerStoreWalletsResellerStoreWalletsIndex.claimed')}</Th>
+                <Th>{tr('resellerStoreWalletsResellerStoreWalletsIndex.storeClient')}</Th>
+                <Th>{tr('resellerStoreWalletsResellerStoreWalletsIndex.paidInto')}</Th>
+                <Th align="right">{tr('resellerStoreWalletsResellerStoreWalletsIndex.amount')}</Th>
+                <Th>{tr('resellerStoreWalletsResellerStoreWalletsIndex.evidence')}</Th>
+                <Th>{tr('resellerStoreWalletsResellerStoreWalletsIndex.status')}</Th>
+                <Th align="right">{tr('resellerStoreWalletsResellerStoreWalletsIndex.review')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -237,7 +259,8 @@ function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElem
                           className="mk-inline-link"
                           onClick={() => void onProof(t.id)}
                         >
-                          <ReceiptText size={13} aria-hidden /> View receipt
+                          <ReceiptText size={13} aria-hidden />{' '}
+                          {tr('resellerStoreWalletsResellerStoreWalletsIndex.viewReceipt')}
                         </button>
                       ) : null}
                     </div>
@@ -262,7 +285,7 @@ function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElem
                             setIntent('ACCEPT');
                           }}
                         >
-                          Accept
+                          {tr('resellerStoreWalletsResellerStoreWalletsIndex.accept')}
                         </Button>
                         <Button
                           variant="destructive"
@@ -273,7 +296,7 @@ function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElem
                             setIntent('REJECT');
                           }}
                         >
-                          Reject
+                          {tr('resellerStoreWalletsResellerStoreWalletsIndex.reject')}
                         </Button>
                       </div>
                     ) : (
@@ -292,13 +315,16 @@ function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElem
         locked={accept.isPending || reject.isPending}
         title={
           intent === 'ACCEPT'
-            ? `Credit ${reviewing === null ? '' : formatInr(reviewing.amountInr)} to ${reviewing?.storeName ?? ''}?`
-            : `Reject this claim?`
+            ? tr('resellerStoreWalletsResellerStoreWalletsIndex.creditTo', {
+                value: reviewing === null ? '' : formatInr(reviewing.amountInr),
+                value2: reviewing?.storeName ?? '',
+              })
+            : tr('resellerStoreWalletsResellerStoreWalletsIndex.rejectThisClaim')
         }
         description={
           intent === 'ACCEPT'
-            ? 'Only if the money is on our statement. It is held as the client’s cash.'
-            : 'Say why — the store reads it.'
+            ? tr('resellerStoreWalletsResellerStoreWalletsIndex.onlyIfTheMoneyIs')
+            : tr('resellerStoreWalletsResellerStoreWalletsIndex.sayWhyTheStoreReads')
         }
         tone={intent === 'REJECT' ? 'critical' : 'default'}
         footer={
@@ -310,16 +336,22 @@ function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElem
               onClick={close}
               disabled={accept.isPending || reject.isPending}
             >
-              Cancel
+              {tr('resellerStoreWalletsResellerStoreWalletsIndex.cancel')}
             </Button>
             <AsyncButton
               variant={intent === 'ACCEPT' ? 'primary' : 'destructive'}
               size="md"
               labels={{
-                idle: intent === 'ACCEPT' ? 'Credit the store' : 'Reject',
-                busy: 'Working…',
-                done: intent === 'ACCEPT' ? 'Credited' : 'Rejected',
-                error: 'Refused',
+                idle:
+                  intent === 'ACCEPT'
+                    ? tr('resellerStoreWalletsResellerStoreWalletsIndex.creditTheStore')
+                    : tr('resellerStoreWalletsResellerStoreWalletsIndex.reject'),
+                busy: tr('resellerStoreWalletsResellerStoreWalletsIndex.working'),
+                done:
+                  intent === 'ACCEPT'
+                    ? tr('resellerStoreWalletsResellerStoreWalletsIndex.credited')
+                    : tr('resellerStoreWalletsResellerStoreWalletsIndex.rejected'),
+                error: tr('resellerStoreWalletsResellerStoreWalletsIndex.refused'),
               }}
               onAction={onConfirm}
             />
@@ -329,7 +361,11 @@ function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElem
         <div className="mk-stack">
           <TextArea
             id="st-note"
-            label={intent === 'ACCEPT' ? 'Note (optional)' : 'Why'}
+            label={
+              intent === 'ACCEPT'
+                ? tr('resellerStoreWalletsResellerStoreWalletsIndex.noteOptional')
+                : tr('resellerStoreWalletsResellerStoreWalletsIndex.why')
+            }
             requiredMark={intent === 'REJECT'}
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -342,6 +378,7 @@ function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElem
 }
 
 function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): ReactElement {
+  const tr = useT();
   const toast = useToast();
   const mayReview = usePermission('money.withdrawals.review');
   const mayPay = usePermission('money.remittances.manage');
@@ -360,7 +397,7 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
     if (approving === null) return;
     try {
       await approve.mutateAsync({ requestId: approving.id });
-      toast.success('Approved.');
+      toast.success(tr('resellerStoreWalletsResellerStoreWalletsIndex.approved'));
       setApproving(null);
     } catch (err) {
       setApproveError(serverVerdict(err));
@@ -372,7 +409,7 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
     if (rejecting === null) return;
     try {
       await reject.mutateAsync({ requestId: rejecting.id, reason: reason.trim() });
-      toast.success('Rejected.');
+      toast.success(tr('resellerStoreWalletsResellerStoreWalletsIndex.rejected2'));
       setRejecting(null);
     } catch (err) {
       setError(serverVerdict(err));
@@ -383,10 +420,14 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
   return (
     <MkSection>
       <SectionHeading
-        title="Withdrawal requests"
-        note="A store asking to be paid. Approving re-checks what it may withdraw; recording the payout is what pays it."
+        title={tr('resellerStoreWalletsResellerStoreWalletsIndex.withdrawalRequests')}
+        note={tr('resellerStoreWalletsResellerStoreWalletsIndex.aStoreAskingToBe')}
         action={
-          <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <Select
+            label={tr('resellerStoreWalletsResellerStoreWalletsIndex.status')}
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
             {WITHDRAWAL_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {withdrawalStatusLabel(s)}
@@ -396,7 +437,11 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
         }
       />
       {list.isPending ? (
-        <SkeletonRows rows={3} cols={6} label="Loading withdrawal requests" />
+        <SkeletonRows
+          rows={3}
+          cols={6}
+          label={tr('resellerStoreWalletsResellerStoreWalletsIndex.loadingWithdrawalRequests')}
+        />
       ) : list.isError ? (
         <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : list.data.length === 0 ? (
@@ -404,21 +449,25 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
           tone={status === 'PENDING' ? 'positive' : 'neutral'}
           title={
             status === 'PENDING'
-              ? 'Nothing waiting'
-              : `No ${withdrawalStatusLabel(status as WithdrawalRequestStatus).toLowerCase()} requests`
+              ? tr('resellerStoreWalletsResellerStoreWalletsIndex.nothingWaiting')
+              : tr('resellerStoreWalletsResellerStoreWalletsIndex.noRequests', {
+                  value: withdrawalStatusLabel(status as WithdrawalRequestStatus).toLowerCase(),
+                })
           }
         />
       ) : (
         <MkCard flush>
-          <Table caption="Store withdrawal requests">
+          <Table
+            caption={tr('resellerStoreWalletsResellerStoreWalletsIndex.storeWithdrawalRequests')}
+          >
             <THead>
               <Tr>
-                <Th>Asked</Th>
-                <Th>Store · client</Th>
-                <Th>Pay to</Th>
-                <Th align="right">Amount</Th>
-                <Th>Status</Th>
-                <Th align="right">Act</Th>
+                <Th>{tr('resellerStoreWalletsResellerStoreWalletsIndex.asked')}</Th>
+                <Th>{tr('resellerStoreWalletsResellerStoreWalletsIndex.storeClient')}</Th>
+                <Th>{tr('resellerStoreWalletsResellerStoreWalletsIndex.payTo')}</Th>
+                <Th align="right">{tr('resellerStoreWalletsResellerStoreWalletsIndex.amount')}</Th>
+                <Th>{tr('resellerStoreWalletsResellerStoreWalletsIndex.status')}</Th>
+                <Th align="right">{tr('resellerStoreWalletsResellerStoreWalletsIndex.act')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -470,7 +519,7 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
                             setApproveError(null);
                           }}
                         >
-                          Approve
+                          {tr('resellerStoreWalletsResellerStoreWalletsIndex.approve')}
                         </Button>
                       ) : null}
                       {(w.status === 'PENDING' || w.status === 'APPROVED') && mayPay ? (
@@ -480,7 +529,7 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
                           icon={<Banknote size={14} />}
                           onClick={() => setPaying(w)}
                         >
-                          Record payout
+                          {tr('resellerStoreWalletsResellerStoreWalletsIndex.recordPayout')}
                         </Button>
                       ) : null}
                       {(w.status === 'PENDING' || w.status === 'APPROVED') && mayReview ? (
@@ -494,7 +543,7 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
                             setError(null);
                           }}
                         >
-                          Reject
+                          {tr('resellerStoreWalletsResellerStoreWalletsIndex.reject')}
                         </Button>
                       ) : null}
                     </div>
@@ -511,13 +560,21 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
         locked={approve.isPending}
         title={
           approving === null
-            ? 'Approve this withdrawal?'
-            : `Approve paying ${approving.storeName} ${formatInr(approving.amountInr)}?`
+            ? tr('resellerStoreWalletsResellerStoreWalletsIndex.approveThisWithdrawal')
+            : tr('resellerStoreWalletsResellerStoreWalletsIndex.approvePaying', {
+                storeName: approving.storeName,
+                value: formatInr(approving.amountInr),
+              })
         }
         description={
           approving === null
             ? undefined
-            : `To ${approving.payeeName} · ${approving.payeeBankName} · ${approving.payeeAccountNumber} · ${approving.payeeIfsc}. Approving re-checks what the store may withdraw; nothing is paid until the payout is recorded.`
+            : tr('resellerStoreWalletsResellerStoreWalletsIndex.toApprovingReChecksWhat', {
+                payeeName: approving.payeeName,
+                payeeBankName: approving.payeeBankName,
+                payeeAccountNumber: approving.payeeAccountNumber,
+                payeeIfsc: approving.payeeIfsc,
+              })
         }
         footer={
           <DialogFooter>
@@ -528,16 +585,16 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
               onClick={() => setApproving(null)}
               disabled={approve.isPending}
             >
-              Cancel
+              {tr('resellerStoreWalletsResellerStoreWalletsIndex.cancel')}
             </Button>
             <AsyncButton
               variant="primary"
               size="md"
               labels={{
-                idle: 'Approve the withdrawal',
-                busy: 'Approving…',
-                done: 'Approved',
-                error: 'Refused',
+                idle: tr('resellerStoreWalletsResellerStoreWalletsIndex.approveTheWithdrawal'),
+                busy: tr('resellerStoreWalletsResellerStoreWalletsIndex.approving'),
+                done: tr('resellerStoreWalletsResellerStoreWalletsIndex.approved2'),
+                error: tr('resellerStoreWalletsResellerStoreWalletsIndex.refused'),
               }}
               onAction={confirmApprove}
             />
@@ -550,8 +607,8 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
         open={rejecting !== null}
         onOpenChange={(o) => (o ? undefined : setRejecting(null))}
         locked={reject.isPending}
-        title="Reject this withdrawal?"
-        description="Say why — the store reads it. It can ask again."
+        title={tr('resellerStoreWalletsResellerStoreWalletsIndex.rejectThisWithdrawal')}
+        description={tr('resellerStoreWalletsResellerStoreWalletsIndex.sayWhyTheStoreReads2')}
         tone="critical"
         footer={
           <DialogFooter>
@@ -562,12 +619,17 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
               onClick={() => setRejecting(null)}
               disabled={reject.isPending}
             >
-              Cancel
+              {tr('resellerStoreWalletsResellerStoreWalletsIndex.cancel')}
             </Button>
             <AsyncButton
               variant="destructive"
               size="md"
-              labels={{ idle: 'Reject', busy: 'Rejecting…', done: 'Rejected', error: 'Refused' }}
+              labels={{
+                idle: tr('resellerStoreWalletsResellerStoreWalletsIndex.reject'),
+                busy: tr('resellerStoreWalletsResellerStoreWalletsIndex.rejecting'),
+                done: tr('resellerStoreWalletsResellerStoreWalletsIndex.rejected'),
+                error: tr('resellerStoreWalletsResellerStoreWalletsIndex.refused'),
+              }}
               onAction={confirmReject}
             />
           </DialogFooter>
@@ -576,7 +638,7 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
         <div className="mk-stack">
           <TextArea
             id="sw-reason"
-            label="Why"
+            label={tr('resellerStoreWalletsResellerStoreWalletsIndex.why')}
             requiredMark
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -596,6 +658,7 @@ function PayModal({
   readonly request: AdminStoreWithdrawal;
   readonly onClose: () => void;
 }): ReactElement {
+  const tr = useT();
   const toast = useToast();
   const pay = usePayStoreWithdrawal();
   const accounts = usePlatformBankAccounts();
@@ -618,7 +681,12 @@ function PayModal({
         paidAt: new Date(paidOn).toISOString(),
         idempotencyKey,
       });
-      toast.success(`Recorded paying ${request.storeName} ${formatInr(request.amountInr)}.`);
+      toast.success(
+        tr('resellerStoreWalletsResellerStoreWalletsIndex.recordedPaying', {
+          storeName: request.storeName,
+          value: formatInr(request.amountInr),
+        }),
+      );
       onClose();
     } catch (err) {
       setError(serverVerdict(err));
@@ -631,8 +699,17 @@ function PayModal({
       open
       onOpenChange={(o) => (o ? undefined : onClose())}
       locked={pay.isPending}
-      title={`Record paying ${request.storeName} ${formatInr(request.amountInr)}`}
-      description={`To ${request.payeeName} · ${request.payeeBankName} · ${request.payeeAccountNumber} · ${request.payeeIfsc}. The cash leaves as ${request.sellerCompanyName}’s.`}
+      title={tr('resellerStoreWalletsResellerStoreWalletsIndex.recordPaying', {
+        storeName: request.storeName,
+        value: formatInr(request.amountInr),
+      })}
+      description={tr('resellerStoreWalletsResellerStoreWalletsIndex.toTheCashLeavesAs', {
+        payeeName: request.payeeName,
+        payeeBankName: request.payeeBankName,
+        payeeAccountNumber: request.payeeAccountNumber,
+        payeeIfsc: request.payeeIfsc,
+        sellerCompanyName: request.sellerCompanyName,
+      })}
       footer={
         <DialogFooter>
           <Button
@@ -642,16 +719,16 @@ function PayModal({
             onClick={onClose}
             disabled={pay.isPending}
           >
-            Cancel
+            {tr('resellerStoreWalletsResellerStoreWalletsIndex.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
             labels={{
-              idle: 'Record the payout',
-              busy: 'Recording…',
-              done: 'Recorded',
-              error: 'Refused',
+              idle: tr('resellerStoreWalletsResellerStoreWalletsIndex.recordThePayout'),
+              busy: tr('resellerStoreWalletsResellerStoreWalletsIndex.recording'),
+              done: tr('resellerStoreWalletsResellerStoreWalletsIndex.recorded'),
+              error: tr('resellerStoreWalletsResellerStoreWalletsIndex.refused'),
             }}
             onAction={onConfirm}
           />
@@ -661,12 +738,14 @@ function PayModal({
       <div className="mk-stack">
         <Select
           id="sp-account"
-          label="Paid from"
+          label={tr('resellerStoreWalletsResellerStoreWalletsIndex.paidFrom')}
           requiredMark
           value={accountId}
           onChange={(e) => setAccountId(e.target.value)}
         >
-          <option value="">Choose one of our rupee accounts</option>
+          <option value="">
+            {tr('resellerStoreWalletsResellerStoreWalletsIndex.chooseOneOfOurRupee')}
+          </option>
           {rupeeAccounts.map((a) => (
             <option key={a.id} value={a.id}>
               {a.label} — {a.bankName}
@@ -675,7 +754,7 @@ function PayModal({
         </Select>
         <TextField
           id="sp-ref"
-          label="Bank reference"
+          label={tr('resellerStoreWalletsResellerStoreWalletsIndex.bankReference')}
           requiredMark
           value={reference}
           onChange={(e) => setReference(e.target.value)}
@@ -683,7 +762,7 @@ function PayModal({
         />
         <DateField
           id="sp-when"
-          label="Paid on"
+          label={tr('resellerStoreWalletsResellerStoreWalletsIndex.paidOn')}
           requiredMark
           type="datetime-local"
           value={paidOn}

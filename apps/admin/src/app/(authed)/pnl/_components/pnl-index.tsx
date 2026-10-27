@@ -14,6 +14,7 @@ import { usePnl, usePnlLineItems, type PnlBasisPartView } from '@/lib/ops-hooks'
 import { istDateLabel, istDay, istDayRange } from '@/lib/ist-day';
 import { LinkButton, MoCard, Notice } from '../../treasury/_components/money-parts';
 import './pnl.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Where the money is actually made.
@@ -31,6 +32,7 @@ import './pnl.css';
  * loss-making lane stays invisible for a quarter.
  */
 export function PnlIndex(): ReactElement {
+  const t = useT();
   const [from, setFrom] = useState(() => istDay(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
   const [to, setTo] = useState(() => istDay(new Date()));
   // One line open at a time. Four expanded at once is a wall of numbers
@@ -47,21 +49,29 @@ export function PnlIndex(): ReactElement {
   return (
     <div className="mo-page">
       <PageHeader
-        title="Profit & loss"
-        subtitle="What each part of the business earns, against what it costs — and how much of that we can actually see."
+        title={t('pnlPnlIndex.profitLoss')}
+        subtitle={t('pnlPnlIndex.whatEachPartOfThe')}
         action={
           // The same figures frozen month by month — for a month that must
           // not move after it has been reported (PNL-CF-1).
           <LinkButton href="/pnl/carry-forward" variant="ghost" size="sm">
-            Carry-forward P&amp;L
+            {t('pnlPnlIndex.carryForwardPL')}
           </LinkButton>
         }
       />
 
       <MoCard>
         <div className="pl-dates">
-          <DateField label="From" value={from} onChange={(e) => setFrom(e.target.value)} />
-          <DateField label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DateField
+            label={t('pnlPnlIndex.from')}
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+          />
+          <DateField
+            label={t('pnlPnlIndex.to')}
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+          />
         </div>
       </MoCard>
 
@@ -72,34 +82,38 @@ export function PnlIndex(): ReactElement {
             <Skeleton height={112} rounded="md" />
             <Skeleton height={112} rounded="md" />
           </div>
-          <SkeletonRows rows={5} cols={6} label="Loading the report" />
+          <SkeletonRows rows={5} cols={6} label={t('pnlPnlIndex.loadingTheReport')} />
         </div>
       ) : pnl.isError || pnl.data === undefined ? (
         <ErrorState
-          message={pnl.error?.message ?? 'Could not build the report.'}
+          message={pnl.error?.message ?? t('pnlPnlIndex.couldNotBuildTheReport')}
           retry={() => void pnl.refetch()}
         />
       ) : (
         <>
           <div className="mo-kpis">
             <KpiCard
-              label="Gross margin"
+              label={t('pnlPnlIndex.grossMargin')}
               tone={Number(pnl.data.grossMarginInr) >= 0 ? 'credit' : 'debit'}
               figure={<Money amount={pnl.data.grossMarginInr} currency="INR" convert={false} />}
-              hint="The four sources, before what it costs to exist"
+              hint={t('pnlPnlIndex.theFourSourcesBeforeWhat')}
             />
             <KpiCard
-              label="Operating expenses"
+              label={t('pnlPnlIndex.operatingExpenses')}
               figure={
                 <Money amount={pnl.data.operatingExpensesInr} currency="INR" convert={false} />
               }
-              hint="Rent, salaries, software — everything booked as an expense"
+              hint={t('pnlPnlIndex.rentSalariesSoftwareEverythingBooked')}
             />
             <KpiCard
-              label="Net"
+              label={t('pnlPnlIndex.net')}
               tone={Number(pnl.data.netInr) >= 0 ? 'credit' : 'debit'}
               figure={<Money amount={pnl.data.netInr} currency="INR" convert={false} />}
-              hint={pnl.data.complete ? 'Fully measured' : 'Partly estimated — see coverage'}
+              hint={
+                pnl.data.complete
+                  ? t('pnlPnlIndex.fullyMeasured')
+                  : t('pnlPnlIndex.partlyEstimatedSeeCoverage')
+              }
             />
           </div>
 
@@ -136,17 +150,14 @@ export function PnlIndex(): ReactElement {
 
           {!pnl.data.complete && (
             <Notice tone="warn" icon={<AlertTriangle size={16} />}>
-              <p>
-                Some cost is not recorded yet, so the margins below read higher than they are. What
-                is missing is named on each line — nothing here is guessed to fill the gap.
-              </p>
+              <p>{t('pnlPnlIndex.someCostIsNotRecorded')}</p>
             </Notice>
           )}
 
           <section className="mo-section">
             <SectionHeading
-              title="By source"
-              note="Open a line to see what it is made of and every record behind it."
+              title={t('pnlPnlIndex.bySource')}
+              note={t('pnlPnlIndex.openALineToSee')}
             />
             <Accordion value={expanded} onValueChange={setExpanded}>
               {pnl.data.lines.map((l) => {
@@ -166,13 +177,13 @@ export function PnlIndex(): ReactElement {
                           )}
                         </span>
                         <span className="pl-figs">
-                          <Fig label="Revenue">
+                          <Fig label={t('pnlPnlIndex.revenue')}>
                             <Money amount={l.revenueInr} currency="INR" convert={false} />
                           </Fig>
-                          <Fig label="Cost">
+                          <Fig label={t('pnlPnlIndex.cost')}>
                             <Money amount={l.costInr} currency="INR" convert={false} />
                           </Fig>
-                          <Fig label="Margin">
+                          <Fig label={t('pnlPnlIndex.margin')}>
                             <Money amount={l.marginInr} currency="INR" convert={false} />
                           </Fig>
                           <Fig label="%">
@@ -187,7 +198,7 @@ export function PnlIndex(): ReactElement {
                       <span
                         className="pl-cover sk-figure"
                         data-full={full ? '1' : '0'}
-                        title="Measured: records whose cost is recorded"
+                        title={t('pnlPnlIndex.measuredRecordsWhoseCostIs')}
                       >
                         {full ? (
                           <CheckCircle2 size={13} aria-hidden />
@@ -206,15 +217,15 @@ export function PnlIndex(): ReactElement {
                       <div className="pl-drill">
                         <div className="pl-basis">
                           <BasisColumn
-                            heading="Revenue is made of"
+                            heading={t('pnlPnlIndex.revenueIsMadeOf')}
                             parts={l.basis.revenue}
                             totalInr={l.revenueInr}
                           />
                           <BasisColumn
-                            heading="Cost is made of"
+                            heading={t('pnlPnlIndex.costIsMadeOf')}
                             parts={l.basis.cost}
                             totalInr={l.costInr}
-                            emptyText="Nothing — this line has no cost side."
+                            emptyText={t('pnlPnlIndex.nothingThisLineHasNo')}
                           />
                         </div>
                         <LineItems lineKey={l.key} from={params.from} to={params.to} />
@@ -268,11 +279,12 @@ function BasisColumn({
   readonly totalInr: string;
   readonly emptyText?: string;
 }): ReactElement {
+  const t = useT();
   return (
     <div>
       <p className="pl-basis__head">{heading}</p>
       {parts.length === 0 ? (
-        <p className="mo-faint">{emptyText ?? 'Nothing in this window.'}</p>
+        <p className="mo-faint">{emptyText ?? t('pnlPnlIndex.nothingInThisWindow')}</p>
       ) : (
         <ul className="pl-basis__list">
           {parts.map((p) => (
@@ -293,7 +305,7 @@ function BasisColumn({
               that is the bug this whole panel exists to expose. */}
           {parts.length > 1 && (
             <li className="pl-basis__item pl-basis__total">
-              <span>Total</span>
+              <span>{t('pnlPnlIndex.total')}</span>
               <Money amount={totalInr} currency="INR" convert={false} />
             </li>
           )}
@@ -322,30 +334,33 @@ function LineItems({
   readonly from: string;
   readonly to: string;
 }): ReactElement {
+  const t = useT();
   const q = usePnlLineItems(lineKey, from, to);
 
-  if (q.isLoading) return <SkeletonRows rows={3} cols={4} label="Loading rows…" />;
+  if (q.isLoading) return <SkeletonRows rows={3} cols={4} label={t('pnlPnlIndex.loadingRows')} />;
   if (q.isError || q.data === undefined) {
     return (
       <p className="pl-state" data-tone="bad" role="alert">
-        Could not load the rows behind this line.
+        {t('pnlPnlIndex.couldNotLoadTheRows')}
       </p>
     );
   }
   if (q.data.items.length === 0) {
-    return <p className="pl-state">Nothing in this window.</p>;
+    return <p className="pl-state">{t('pnlPnlIndex.nothingInThisWindow')}</p>;
   }
 
   return (
     <div className="pl-rows">
-      <p className="pl-rows__head">Every row ({q.data.items.length})</p>
+      <p className="pl-rows__head">
+        {t('pnlPnlIndex.everyRow', { itemsLength: q.data.items.length })}
+      </p>
       <Table maxHeight="20rem">
         <THead>
           <Tr>
-            <Th>Reference</Th>
-            <Th>Date</Th>
-            <Th align="right">Revenue</Th>
-            <Th align="right">Cost</Th>
+            <Th>{t('pnlPnlIndex.reference')}</Th>
+            <Th>{t('pnlPnlIndex.date')}</Th>
+            <Th align="right">{t('pnlPnlIndex.revenue')}</Th>
+            <Th align="right">{t('pnlPnlIndex.cost')}</Th>
           </Tr>
         </THead>
         <TBody>
@@ -370,7 +385,7 @@ function LineItems({
                 {it.costInr === null ? (
                   // NOT a zero. "Nobody recorded it" and "it cost
                   // nothing" are opposite facts.
-                  <span className="mo-warn">not recorded</span>
+                  <span className="mo-warn">{t('pnlPnlIndex.notRecorded')}</span>
                 ) : (
                   <Money amount={it.costInr} currency="INR" convert={false} />
                 )}
@@ -381,8 +396,7 @@ function LineItems({
       </Table>
       {q.data.truncated && (
         <p className="pl-state" data-tone="warn">
-          Only the first {q.data.items.length} rows are shown, so these will not add up to the total
-          above. Narrow the date range to see the rest.
+          {t('pnlPnlIndex.onlyTheFirstRowsAre', { itemsLength: q.data.items.length })}
         </p>
       )}
     </div>

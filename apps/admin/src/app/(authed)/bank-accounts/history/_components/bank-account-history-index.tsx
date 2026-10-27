@@ -11,6 +11,7 @@ import { useBankAccountHistory, type BankAccountChangeView } from '@/lib/bank-ac
 import { usePermission } from '@/lib/use-permission';
 import { BackLink, MoCard, Notice } from '../../../treasury/_components/money-parts';
 import './bank-account-history.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Every change to the accounts sellers pay into.
@@ -45,6 +46,7 @@ function actionLabel(action: string): string {
  * changed fields are named rather than left as two blobs to diff by eye.
  */
 function ChangeSummary({ row }: { readonly row: BankAccountChangeView }): ReactElement {
+  const t = useT();
   const changed = row.metadata?.changed ?? [];
   const before = row.metadata?.before ?? null;
   const after = row.metadata?.after ?? null;
@@ -52,9 +54,15 @@ function ChangeSummary({ row }: { readonly row: BankAccountChangeView }): ReactE
   if (row.action.endsWith('.created')) {
     return (
       <span className="mo-muted">
-        {String(after?.['label'] ?? 'Account')} · {String(after?.['currency'] ?? '')}
+        {String(after?.['label'] ?? t('bankAccountsHistoryBankAccountHistoryIndex.account'))} ·{' '}
+        {String(after?.['currency'] ?? '')}
         {row.metadata?.openingBalance != null && row.metadata.openingBalance !== '' && (
-          <> · opening balance {row.metadata.openingBalance}</>
+          <>
+            {' '}
+            {t('bankAccountsHistoryBankAccountHistoryIndex.openingBalance', {
+              openingBalance: row.metadata.openingBalance,
+            })}
+          </>
         )}
       </span>
     );
@@ -62,12 +70,20 @@ function ChangeSummary({ row }: { readonly row: BankAccountChangeView }): ReactE
   if (row.action.endsWith('.retired')) {
     return (
       <span className="mo-muted">
-        {String(before?.['label'] ?? 'Account')} — no longer offered to clients
+        {t('bankAccountsHistoryBankAccountHistoryIndex.noLongerOfferedToClients', {
+          value: String(
+            before?.['label'] ?? t('bankAccountsHistoryBankAccountHistoryIndex.account'),
+          ),
+        })}
       </span>
     );
   }
   if (changed.length === 0) {
-    return <span className="mo-faint">Saved with no field changed</span>;
+    return (
+      <span className="mo-faint">
+        {t('bankAccountsHistoryBankAccountHistoryIndex.savedWithNoFieldChanged')}
+      </span>
+    );
   }
   return (
     <ul className="bh-changes">
@@ -83,43 +99,47 @@ function ChangeSummary({ row }: { readonly row: BankAccountChangeView }): ReactE
 }
 
 export function BankAccountHistoryIndex(): ReactElement {
+  const t = useT();
   const history = useBankAccountHistory(usePermission('money.view'));
 
   return (
     <div className="mo-page">
       <BackLink href="/bank-accounts" icon={<ArrowLeft size={14} aria-hidden />}>
-        Back to bank accounts
+        {t('bankAccountsHistoryBankAccountHistoryIndex.backToBankAccounts')}
       </BackLink>
       <PageHeader
-        title="Bank account history"
-        subtitle="Every account added, edited or retired — who did it, when, and exactly what changed."
+        title={t('bankAccountsHistoryBankAccountHistoryIndex.bankAccountHistory')}
+        subtitle={t('bankAccountsHistoryBankAccountHistoryIndex.everyAccountAddedEditedOr')}
       />
 
       {history.isLoading ? (
-        <SkeletonRows rows={5} cols={4} label="Loading the history" />
+        <SkeletonRows
+          rows={5}
+          cols={4}
+          label={t('bankAccountsHistoryBankAccountHistoryIndex.loadingTheHistory')}
+        />
       ) : history.isError || history.data === undefined ? (
         <ErrorState
-          message={history.error?.message ?? 'Could not read the history.'}
+          message={
+            history.error?.message ??
+            t('bankAccountsHistoryBankAccountHistoryIndex.couldNotReadTheHistory')
+          }
           retry={() => void history.refetch()}
         />
       ) : (
         <>
           <Notice tone="info" icon={<Info size={16} />}>
-            <p>
-              Recording began on 7 September 2026. Changes made before that were never captured —
-              this list is empty for them rather than complete, which is worth knowing before
-              reading it as the whole story.
-            </p>
+            <p>{t('bankAccountsHistoryBankAccountHistoryIndex.recordingBeganOn7September')}</p>
           </Notice>
 
           <MoCard flush>
-            <Table caption="Bank account changes">
+            <Table caption={t('bankAccountsHistoryBankAccountHistoryIndex.bankAccountChanges')}>
               <THead>
                 <Tr>
-                  <Th>When</Th>
-                  <Th>What</Th>
-                  <Th>Changed</Th>
-                  <Th>By</Th>
+                  <Th>{t('bankAccountsHistoryBankAccountHistoryIndex.when')}</Th>
+                  <Th>{t('bankAccountsHistoryBankAccountHistoryIndex.what')}</Th>
+                  <Th>{t('bankAccountsHistoryBankAccountHistoryIndex.changed')}</Th>
+                  <Th>{t('bankAccountsHistoryBankAccountHistoryIndex.by')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -127,8 +147,10 @@ export function BankAccountHistoryIndex(): ReactElement {
                   <TableEmpty colSpan={4}>
                     <EmptyState
                       bare
-                      title="Nothing recorded yet"
-                      description="Every add, edit and retirement from here on appears in this list."
+                      title={t('bankAccountsHistoryBankAccountHistoryIndex.nothingRecordedYet')}
+                      description={t(
+                        'bankAccountsHistoryBankAccountHistoryIndex.everyAddEditAndRetirement',
+                      )}
                     />
                   </TableEmpty>
                 ) : (
@@ -157,7 +179,9 @@ export function BankAccountHistoryIndex(): ReactElement {
                       <Td>
                         <ChangeSummary row={r} />
                       </Td>
-                      <Td className="mo-muted">{r.byName ?? 'System'}</Td>
+                      <Td className="mo-muted">
+                        {r.byName ?? t('bankAccountsHistoryBankAccountHistoryIndex.system')}
+                      </Td>
                     </Tr>
                   ))
                 )}

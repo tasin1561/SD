@@ -32,6 +32,7 @@ import { ExpenseModal } from './expense-modal';
 import { InvestmentModal } from './investment-modal';
 import { InvestmentReturnModal } from './investment-return-modal';
 import './expenses.css';
+import { useT } from '@/i18n/client';
 
 type Tab = 'spending' | 'investments';
 
@@ -63,6 +64,7 @@ const LEG_CATEGORIES = new Set(['freight_forwarder', 'courier_charges']);
  * to see was below it. They now live at /expenses/categories.
  */
 export function ExpensesIndex(): ReactElement {
+  const tr = useT();
   const canWrite = usePermission('money.treasury.manage');
   const [tab, setTab] = useState<Tab>('spending');
   const [showClosed, setShowClosed] = useState(false);
@@ -75,8 +77,8 @@ export function ExpensesIndex(): ReactElement {
   return (
     <div className="mo-page">
       <PageHeader
-        title="Expenses & investments"
-        subtitle="What it costs to exist, and what we have parked somewhere it can earn."
+        title={tr('expensesExpensesIndex.expensesInvestments')}
+        subtitle={tr('expensesExpensesIndex.whatItCostsToExist')}
         action={
           canWrite ? (
             // The two writes this page exists for, at the top and
@@ -88,14 +90,14 @@ export function ExpensesIndex(): ReactElement {
                 icon={<Receipt size={16} />}
                 onClick={() => setSpending(true)}
               >
-                Record an expense
+                {tr('expensesExpensesIndex.recordAnExpense')}
               </Button>
               <Button
                 variant="secondary"
                 icon={<PiggyBank size={16} />}
                 onClick={() => setPlacing(true)}
               >
-                Place capital
+                {tr('expensesExpensesIndex.placeCapital')}
               </Button>
             </div>
           ) : undefined
@@ -103,20 +105,20 @@ export function ExpensesIndex(): ReactElement {
       />
 
       <Tabs
-        label="Expenses and investments"
+        label={tr('expensesExpensesIndex.expensesAndInvestments')}
         value={tab}
         onChange={(id) => setTab(id === 'investments' ? 'investments' : 'spending')}
         items={[
           {
             id: 'spending',
-            label: 'Spending',
+            label: tr('expensesExpensesIndex.spending'),
             panel: (
               <SpendingTab onNewCategory={() => setAddingCategory(true)} canWrite={canWrite} />
             ),
           },
           {
             id: 'investments',
-            label: 'Investments',
+            label: tr('expensesExpensesIndex.investments'),
             panel: (
               <InvestmentsTab
                 showClosed={showClosed}
@@ -154,6 +156,7 @@ function SpendingTab({
   readonly onNewCategory: () => void;
   readonly canWrite: boolean;
 }): ReactElement {
+  const tr = useT();
   const [categoryId, setCategoryId] = useState('');
   const [attributing, setAttributing] = useState<BankEntryView | null>(null);
   const onAttribute = setAttributing;
@@ -169,18 +172,18 @@ function SpendingTab({
 
   return (
     <MoSection
-      title="Spending ledger"
-      note="Every expense recorded, newest first. Filed against a category so a quarter can be broken down rather than read as one number."
+      title={tr('expensesExpensesIndex.spendingLedger')}
+      note={tr('expensesExpensesIndex.everyExpenseRecordedNewestFirst')}
       flush
       action={
         <div className="mo-row">
           <Select
-            label="Category"
+            label={tr('expensesExpensesIndex.category')}
             className="ex-filter"
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
           >
-            <option value="">Every category</option>
+            <option value="">{tr('expensesExpensesIndex.everyCategory')}</option>
             {(categories.data ?? []).map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -193,11 +196,11 @@ function SpendingTab({
             size="sm"
             icon={<Tags size={14} />}
           >
-            Categories
+            {tr('expensesExpensesIndex.categories')}
           </LinkButton>
           {canWrite && (
             <Button variant="ghost" size="sm" onClick={onNewCategory}>
-              New category
+              {tr('expensesExpensesIndex.newCategory')}
             </Button>
           )}
         </div>
@@ -205,12 +208,16 @@ function SpendingTab({
     >
       {entries.isLoading ? (
         <div className="mo-card__pad">
-          <SkeletonRows rows={6} cols={7} label="Loading the spending ledger" />
+          <SkeletonRows
+            rows={6}
+            cols={7}
+            label={tr('expensesExpensesIndex.loadingTheSpendingLedger')}
+          />
         </div>
       ) : entries.isError || entries.data === undefined ? (
         <div className="mo-card__pad">
           <ErrorState
-            message={entries.error?.message ?? 'Could not read the spending ledger.'}
+            message={entries.error?.message ?? tr('expensesExpensesIndex.couldNotReadTheSpending')}
             retry={() => void entries.refetch()}
           />
         </div>
@@ -218,27 +225,34 @@ function SpendingTab({
         <>
           <div className="mo-card__pad ex-summary">
             <span className="ex-summary__count sk-figure">
-              {items.length} {items.length === 1 ? 'entry' : 'entries'} shown
-              {categoryId === '' ? '' : ' in this category'}
+              {tr('expensesExpensesIndex.shown', {
+                length: items.length,
+                value:
+                  items.length === 1
+                    ? tr('expensesExpensesIndex.entry')
+                    : tr('expensesExpensesIndex.entries'),
+                value2: categoryId === '' ? '' : ' in this category',
+              })}
             </span>
             {/* The sum of what is ON SCREEN, said so plainly. A total
                 that silently covered more rows than are listed would
                 be unverifiable by counting. */}
             <span>
-              Total shown <Money amount={total.toFixed(2)} currency="INR" convert={false} />
+              {tr('expensesExpensesIndex.totalShown')}{' '}
+              <Money amount={total.toFixed(2)} currency="INR" convert={false} />
             </span>
           </div>
 
           <Table>
             <THead>
               <Tr>
-                <Th>When it moved</Th>
-                <Th>Category</Th>
-                <Th>Paid from</Th>
-                <Th align="right">Amount</Th>
-                <Th>Reference</Th>
-                <Th>Recorded by</Th>
-                <Th align="right">Consignment</Th>
+                <Th>{tr('expensesExpensesIndex.whenItMoved')}</Th>
+                <Th>{tr('expensesExpensesIndex.category')}</Th>
+                <Th>{tr('expensesExpensesIndex.paidFrom')}</Th>
+                <Th align="right">{tr('expensesExpensesIndex.amount')}</Th>
+                <Th>{tr('expensesExpensesIndex.reference')}</Th>
+                <Th>{tr('expensesExpensesIndex.recordedBy')}</Th>
+                <Th align="right">{tr('expensesExpensesIndex.consignment')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -247,11 +261,14 @@ function SpendingTab({
                   {categoryId === '' ? (
                     <EmptyState
                       bare
-                      title="Nothing recorded yet."
-                      description="Every expense paid from one of our accounts appears here."
+                      title={tr('expensesExpensesIndex.nothingRecordedYet')}
+                      description={tr('expensesExpensesIndex.everyExpensePaidFromOne')}
                     />
                   ) : (
-                    <EmptyState bare title="Nothing filed under this category yet." />
+                    <EmptyState
+                      bare
+                      title={tr('expensesExpensesIndex.nothingFiledUnderThisCategory')}
+                    />
                   )}
                 </TableEmpty>
               ) : (
@@ -265,7 +282,11 @@ function SpendingTab({
                       {e.categoryName === null ? (
                         // Not "—": an uncategorised cost is a real gap in
                         // the breakdown and should look like one.
-                        <StatusChip size="sm" kind="pending" label="Uncategorised" />
+                        <StatusChip
+                          size="sm"
+                          kind="pending"
+                          label={tr('expensesExpensesIndex.uncategorised')}
+                        />
                       ) : (
                         <span>{e.categoryName}</span>
                       )}
@@ -284,20 +305,22 @@ function SpendingTab({
                       {/* "System" rather than blank: a flow writing an
                           entry and nobody recording it are different
                           facts, and only one of them is a gap. */}
-                      {e.recordedByName ?? 'System'}
+                      {e.recordedByName ?? tr('expensesExpensesIndex.system')}
                       <span className="mo-sub sk-figure">
                         {new Date(e.recordedAt).toLocaleDateString('en-IN')}
                       </span>
                     </Td>
                     <Td align="right">
                       {e.inboundFreightChargeId !== null ? (
-                        <span className="ex-attributed">Attributed</span>
+                        <span className="ex-attributed">
+                          {tr('expensesExpensesIndex.attributed')}
+                        </span>
                       ) : LEG_CATEGORIES.has(e.categoryCode ?? '') && canWrite ? (
                         // Offered only on the categories where leaving
                         // it unattached is an actual double count. On
                         // rent or software there is no leg to attach to.
                         <Button variant="ghost" size="sm" onClick={() => onAttribute(e)}>
-                          Attribute
+                          {tr('expensesExpensesIndex.attribute')}
                         </Button>
                       ) : (
                         <span className="mo-faint">—</span>
@@ -332,6 +355,7 @@ function AttributeModal({
   readonly entry: BankEntryView;
   readonly onClose: () => void;
 }): ReactElement {
+  const tr = useT();
   const [term, setTerm] = useState('');
   const [picked, setPicked] = useState<FreightChargeView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -346,7 +370,7 @@ function AttributeModal({
   async function save(): Promise<void> {
     setError(null);
     if (picked === null) {
-      setError('Find the consignment this paid for');
+      setError(tr('expensesExpensesIndex.findTheConsignmentThisPaid'));
       // Nothing was sent; the confirm stays open on the message.
       throw new Error('no consignment picked');
     }
@@ -356,7 +380,7 @@ function AttributeModal({
         bankEntryId: entry.id,
       });
       onClose();
-      toast.success('Expense attached to the consignment');
+      toast.success(tr('expensesExpensesIndex.expenseAttachedToTheConsignment'));
     } catch (err) {
       setError(serverVerdict(err));
       throw err;
@@ -369,31 +393,33 @@ function AttributeModal({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title="Attach this to a consignment"
-      entity={`From ${entry.accountLabel}`}
+      title={tr('expensesExpensesIndex.attachThisToAConsignment')}
+      entity={tr('expensesExpensesIndex.from', { accountLabel: entry.accountLabel })}
       amount={<Money amount={amount} currency={entry.currency} convert={false} direction="debit" />}
-      consequence="Attaching it moves the cost out of operating expenses and into that consignment's leg — where it is currently being counted twice."
-      confirmLabel="Attach"
+      consequence={tr('expensesExpensesIndex.attachingItMovesTheCost')}
+      confirmLabel={tr('expensesExpensesIndex.attach')}
       onConfirm={save}
       error={error ?? undefined}
     >
       <div className="mo-fields">
         {picked === null ? (
           <TextField
-            label="Which consignment"
+            label={tr('expensesExpensesIndex.whichConsignment')}
             requiredMark
-            hint="Search by consignment number, receipt or client."
+            hint={tr('expensesExpensesIndex.searchByConsignmentNumberReceipt')}
             value={term}
             onChange={(e) => setTerm(e.target.value)}
-            placeholder="e.g. CN-2026-08"
+            placeholder={tr('expensesExpensesIndex.eGCn202608')}
             autoFocus
             after={
               term.trim().length >= 2 ? (
                 <div className="ex-results">
                   {results.isLoading ? (
-                    <p className="ex-results__note">Searching…</p>
+                    <p className="ex-results__note">{tr('expensesExpensesIndex.searching')}</p>
                   ) : (results.data ?? []).length === 0 ? (
-                    <p className="ex-results__note">No freight bill matches that.</p>
+                    <p className="ex-results__note">
+                      {tr('expensesExpensesIndex.noFreightBillMatchesThat')}
+                    </p>
                   ) : (
                     (results.data ?? []).map((f) => (
                       <button
@@ -403,13 +429,17 @@ function AttributeModal({
                         onClick={() => setPicked(f)}
                       >
                         <span className="ex-result__title sk-ident">
-                          {f.consignmentNumber ?? 'Consignment'}
+                          {f.consignmentNumber ?? tr('expensesExpensesIndex.consignment')}
                         </span>
                         <span className="ex-result__sub">
-                          {f.sellerCompanyName ?? ''} · billed {f.totalInr}
-                          {f.ourCostInr === null
-                            ? ' · no cost recorded'
-                            : ` · cost ${f.ourCostInr}`}
+                          {tr('expensesExpensesIndex.billed', {
+                            value: f.sellerCompanyName ?? '',
+                            totalInr: f.totalInr,
+                            value2:
+                              f.ourCostInr === null
+                                ? ' · no cost recorded'
+                                : ` · cost ${f.ourCostInr}`,
+                          })}
                         </span>
                       </button>
                     ))
@@ -420,18 +450,21 @@ function AttributeModal({
           />
         ) : (
           <div>
-            <p className="ex-picked__label">Attaching to</p>
+            <p className="ex-picked__label">{tr('expensesExpensesIndex.attachingTo')}</p>
             <div className="ex-picked">
               <div className="mo-wrap">
                 <div className="ex-picked__title sk-ident">
-                  {picked.consignmentNumber ?? 'Consignment'}
+                  {picked.consignmentNumber ?? tr('expensesExpensesIndex.consignment')}
                 </div>
                 <div className="ex-picked__sub">
-                  {picked.sellerCompanyName ?? ''} · billed {picked.totalInr}
+                  {tr('expensesExpensesIndex.billed2', {
+                    value: picked.sellerCompanyName ?? '',
+                    totalInr: picked.totalInr,
+                  })}
                 </div>
               </div>
               <Button variant="ghost" size="sm" onClick={() => setPicked(null)}>
-                Change
+                {tr('expensesExpensesIndex.change')}
               </Button>
             </div>
           </div>
@@ -439,8 +472,7 @@ function AttributeModal({
 
         {needsInr && (
           <p className="mo-faint">
-            Paid in {entry.currency}. It is priced in rupees at the rate recorded for the day it
-            moved, and the consignment&apos;s cost becomes the sum of every payment against it.
+            {tr('expensesExpensesIndex.paidInItIsPriced', { currency: entry.currency })}
           </p>
         )}
       </div>
@@ -459,29 +491,32 @@ function InvestmentsTab({
   readonly canWrite: boolean;
   readonly onRecordReturn: (id: string) => void;
 }): ReactElement {
+  const tr = useT();
   const investments = useInvestments(showClosed);
 
   return (
     <MoSection
-      title="Investments"
-      note="Capital placed where it can earn. It leaves the bank without being spent, so client-money coverage still reads correctly while it is out."
+      title={tr('expensesExpensesIndex.investments')}
+      note={tr('expensesExpensesIndex.capitalPlacedWhereItCan')}
       flush
       action={
         <Checkbox
           checked={showClosed}
           onChange={(e) => setShowClosed(e.target.checked)}
-          label="Show closed"
+          label={tr('expensesExpensesIndex.showClosed')}
         />
       }
     >
       {investments.isLoading ? (
         <div className="mo-card__pad">
-          <SkeletonRows rows={4} cols={7} label="Loading investments" />
+          <SkeletonRows rows={4} cols={7} label={tr('expensesExpensesIndex.loadingInvestments')} />
         </div>
       ) : investments.isError || investments.data === undefined ? (
         <div className="mo-card__pad">
           <ErrorState
-            message={investments.error?.message ?? 'Could not read the investments.'}
+            message={
+              investments.error?.message ?? tr('expensesExpensesIndex.couldNotReadTheInvestments')
+            }
             retry={() => void investments.refetch()}
           />
         </div>
@@ -489,13 +524,13 @@ function InvestmentsTab({
         <Table>
           <THead>
             <Tr>
-              <Th>What</Th>
-              <Th>With</Th>
-              <Th align="right">Placed</Th>
-              <Th align="right">Returned</Th>
-              <Th align="right">Net</Th>
-              <Th>State</Th>
-              <Th align="right">Actions</Th>
+              <Th>{tr('expensesExpensesIndex.what')}</Th>
+              <Th>{tr('expensesExpensesIndex.with')}</Th>
+              <Th align="right">{tr('expensesExpensesIndex.placed')}</Th>
+              <Th align="right">{tr('expensesExpensesIndex.returned')}</Th>
+              <Th align="right">{tr('expensesExpensesIndex.net')}</Th>
+              <Th>{tr('expensesExpensesIndex.state')}</Th>
+              <Th align="right">{tr('expensesExpensesIndex.actions')}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -503,8 +538,8 @@ function InvestmentsTab({
               <TableEmpty colSpan={7}>
                 <EmptyState
                   bare
-                  title="Nothing placed."
-                  description="A fixed deposit or a loan out is recorded here so it stops reading as money that vanished."
+                  title={tr('expensesExpensesIndex.nothingPlaced')}
+                  description={tr('expensesExpensesIndex.aFixedDepositOrA')}
                 />
               </TableEmpty>
             ) : (
@@ -530,13 +565,17 @@ function InvestmentsTab({
                     <StatusChip
                       size="sm"
                       kind={i.closedAt === null ? 'in-transit' : 'delivered'}
-                      label={i.closedAt === null ? 'Out' : 'Closed'}
+                      label={
+                        i.closedAt === null
+                          ? tr('expensesExpensesIndex.out')
+                          : tr('expensesExpensesIndex.closed')
+                      }
                     />
                   </Td>
                   <Td align="right">
                     {canWrite && i.closedAt === null ? (
                       <Button variant="ghost" size="sm" onClick={() => onRecordReturn(i.id)}>
-                        Record return
+                        {tr('expensesExpensesIndex.recordReturn')}
                       </Button>
                     ) : (
                       <span className="mo-faint">—</span>

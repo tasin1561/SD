@@ -41,6 +41,7 @@ import {
 } from '@/lib/pnl-carry-forward-hooks';
 import { LinkButton, MoCard, MoSection, Notice } from '../../../treasury/_components/money-parts';
 import '../../_components/pnl.css';
+import { useT } from '@/i18n/client';
 
 /**
  * The carry-forward P&L (PNL-CF-1).
@@ -54,6 +55,7 @@ import '../../_components/pnl.css';
  * next quarter as it did the day it closed, and nothing is lost.
  */
 export function CarryForwardIndex(): ReactElement {
+  const t = useT();
   const periods = usePnlPeriods();
   const [picked, setPicked] = useState<string | null>(null);
   // Closing is irreversible and has its own permission; the page is
@@ -66,11 +68,11 @@ export function CarryForwardIndex(): ReactElement {
   return (
     <div className="mo-page">
       <PageHeader
-        title="Carry-forward P&L"
-        subtitle="Each month frozen once it closes. A change to a closed month is carried into the month open when it was found, so a reported month never moves."
+        title={t('pnlCarryForwardCarryForwardIndex.carryForwardPL')}
+        subtitle={t('pnlCarryForwardCarryForwardIndex.eachMonthFrozenOnceIt')}
         action={
           <LinkButton href="/pnl" variant="ghost" size="sm">
-            Live P&amp;L
+            {t('pnlCarryForwardCarryForwardIndex.livePL')}
           </LinkButton>
         }
       />
@@ -79,14 +81,20 @@ export function CarryForwardIndex(): ReactElement {
         <PageSkeleton />
       ) : periods.isError || periods.data === undefined ? (
         <ErrorState
-          message={periods.error?.message ?? 'Could not load the months.'}
+          message={
+            periods.error?.message ?? t('pnlCarryForwardCarryForwardIndex.couldNotLoadTheMonths')
+          }
           retry={() => void periods.refetch()}
         />
       ) : (
         <>
           <MoCard>
             <div className="pl-month-pick">
-              <Select label="Month" value={month ?? ''} onChange={(e) => setPicked(e.target.value)}>
+              <Select
+                label={t('pnlCarryForwardCarryForwardIndex.month')}
+                value={month ?? ''}
+                onChange={(e) => setPicked(e.target.value)}
+              >
                 {periods.data.months.map((m) => (
                   <option key={m.month} value={m.month}>
                     {m.name} — {statusWord(m.status)}
@@ -108,6 +116,7 @@ export function CarryForwardIndex(): ReactElement {
 
 /** Loading: the three figures and the lines, as shapes. */
 function PageSkeleton(): ReactElement {
+  const t = useT();
   return (
     <div className="mo-stack">
       <div className="mo-kpis">
@@ -115,7 +124,7 @@ function PageSkeleton(): ReactElement {
         <Skeleton height={112} rounded="md" />
         <Skeleton height={112} rounded="md" />
       </div>
-      <SkeletonRows rows={5} cols={4} label="Loading" />
+      <SkeletonRows rows={5} cols={4} label={t('pnlCarryForwardCarryForwardIndex.loading')} />
     </div>
   );
 }
@@ -188,6 +197,7 @@ function MonthView({
   readonly canClose: boolean;
   readonly canGodMode: boolean;
 }): ReactElement {
+  const t = useT();
   // A locked version other than the current one, opened read-only.
   const [version, setVersion] = useState<number | null>(null);
   const q = usePnlMonth(month, version);
@@ -195,7 +205,7 @@ function MonthView({
   if (q.isError || q.data === undefined) {
     return (
       <ErrorState
-        message={q.error?.message ?? 'Could not load this month.'}
+        message={q.error?.message ?? t('pnlCarryForwardCarryForwardIndex.couldNotLoadThisMonth')}
         retry={() => void q.refetch()}
       />
     );
@@ -215,25 +225,38 @@ function MonthView({
             <StatusChip
               size="sm"
               kind={v.lockState === 'PROVISIONAL' ? 'pending' : 'confirmed'}
-              label={v.lockState === 'PROVISIONAL' ? 'Provisional' : 'Locked permanently'}
+              label={
+                v.lockState === 'PROVISIONAL'
+                  ? t('pnlCarryForwardCarryForwardIndex.provisional')
+                  : t('pnlCarryForwardCarryForwardIndex.lockedPermanently')
+              }
             />
             <span>
-              Closed on {istDateTime(v.closed.at)}{' '}
-              {v.closed.by === null ? 'by the scheduled close' : `by ${v.closed.by}`}
-              {v.closed.kind === 'BACKFILL'
-                ? ', with the months that existed before carry-forward'
-                : ''}
-              .{v.closed.reason !== null && v.closed.reason !== '' ? ` “${v.closed.reason}”` : ''}
+              {t('pnlCarryForwardCarryForwardIndex.closedOn', {
+                value: istDateTime(v.closed.at),
+                value2:
+                  v.closed.by === null
+                    ? t('pnlCarryForwardCarryForwardIndex.byTheScheduledClose')
+                    : `by ${v.closed.by}`,
+                value3:
+                  v.closed.kind === 'BACKFILL'
+                    ? ', with the months that existed before carry-forward'
+                    : '',
+                value4:
+                  v.closed.reason !== null && v.closed.reason !== '' ? ` “${v.closed.reason}”` : '',
+              })}
             </span>
           </p>
           {viewingOld && (
             <Notice tone="warn" icon={<AlertTriangle size={16} />}>
               <div className="mo-row">
                 <span>
-                  You are looking at version {v.shownVersion}, which has been replaced — read only.
+                  {t('pnlCarryForwardCarryForwardIndex.youAreLookingAtVersion', {
+                    shownVersion: v.shownVersion,
+                  })}
                 </span>
                 <Button variant="ghost" size="sm" onClick={() => setVersion(null)}>
-                  Back to the current version
+                  {t('pnlCarryForwardCarryForwardIndex.backToTheCurrentVersion')}
                 </Button>
               </div>
             </Notice>
@@ -245,24 +268,41 @@ function MonthView({
 
       <div className="mo-kpis">
         <KpiCard
-          label={closed ? 'Net, as frozen' : 'This month on its own'}
+          label={
+            closed
+              ? t('pnlCarryForwardCarryForwardIndex.netAsFrozen')
+              : t('pnlCarryForwardCarryForwardIndex.thisMonthOnItsOwn')
+          }
           tone={Number(v.totals.ownNetInr) >= 0 ? 'credit' : 'debit'}
           figure={<Money amount={v.totals.ownNetInr} currency="INR" convert={false} />}
-          hint={closed ? 'Never changes' : 'Live — moves until the month closes'}
+          hint={
+            closed
+              ? t('pnlCarryForwardCarryForwardIndex.neverChanges')
+              : t('pnlCarryForwardCarryForwardIndex.liveMovesUntilTheMonth')
+          }
         />
         <KpiCard
-          label="Carried forward from earlier months"
+          label={t('pnlCarryForwardCarryForwardIndex.carriedForwardFromEarlierMonths')}
           figure={<Delta amount={v.totals.carriedInNetInr} />}
-          hint={`${carriedCount} change${carriedCount === 1 ? '' : 's'} to closed months`}
+          hint={t('pnlCarryForwardCarryForwardIndex.changeToClosedMonths', {
+            carriedCount,
+            value: carriedCount === 1 ? '' : t('common.pluralS'),
+          })}
         />
         <KpiCard
-          label="Net including carry-forwards"
+          label={t('pnlCarryForwardCarryForwardIndex.netIncludingCarryForwards')}
           tone={Number(v.totals.netInr) >= 0 ? 'credit' : 'debit'}
           figure={<Money amount={v.totals.netInr} currency="INR" convert={false} />}
         />
       </div>
 
-      <PlainSection title={closed ? `${v.name}, as frozen` : `${v.name} on its own`}>
+      <PlainSection
+        title={
+          closed
+            ? t('pnlCarryForwardCarryForwardIndex.asFrozen', { name: v.name })
+            : t('pnlCarryForwardCarryForwardIndex.onItsOwn', { name: v.name })
+        }
+      >
         <LinesTable
           report={v.report}
           renderRows={(key) =>
@@ -270,9 +310,9 @@ function MonthView({
               <FrozenRows month={month} lineKey={key} version={v.shownVersion} />
             ) : key === 'operating_expenses' ? (
               <p className="pl-state">
-                Listed on{' '}
+                {t('pnlCarryForwardCarryForwardIndex.listedOn')}{' '}
                 <Link href="/expenses" className="mo-link">
-                  Expenses
+                  {t('pnlCarryForwardCarryForwardIndex.expenses')}
                 </Link>
                 .
               </p>
@@ -283,37 +323,39 @@ function MonthView({
         />
       </PlainSection>
 
-      <PlainSection title={`Carried into ${v.name} from earlier months`}>
+      <PlainSection
+        title={t('pnlCarryForwardCarryForwardIndex.carriedIntoFromEarlierMonths', { name: v.name })}
+      >
         {v.carriedIn.length === 0 ? (
           <EmptyState
-            title="Nothing carried forward"
+            title={t('pnlCarryForwardCarryForwardIndex.nothingCarriedForward')}
             description={
               closed
-                ? 'No change to an earlier month was found while this one was open.'
-                : 'No change to a closed month has been found this month yet. Closed months are re-checked every morning at 06:15 IST.'
+                ? t('pnlCarryForwardCarryForwardIndex.noChangeToAnEarlier')
+                : t('pnlCarryForwardCarryForwardIndex.noChangeToAClosed')
             }
           />
         ) : (
           <CarriedGroups
             groups={v.carriedIn}
-            heading={(g) => `From ${g.name}`}
+            heading={(g) => t('pnlCarryForwardCarryForwardIndex.from', { name: g.name })}
             filterFor={(g, line) => ({ landedIn: month, origin: g.originMonth, line })}
           />
         )}
       </PlainSection>
 
       {closed && (
-        <PlainSection title="Changes found after closing">
+        <PlainSection title={t('pnlCarryForwardCarryForwardIndex.changesFoundAfterClosing')}>
           {v.laterChanges.length === 0 ? (
             <EmptyState
               tone="positive"
-              title="None yet"
-              description="Nothing has changed since it closed."
+              title={t('pnlCarryForwardCarryForwardIndex.noneYet')}
+              description={t('pnlCarryForwardCarryForwardIndex.nothingHasChangedSinceIt')}
             />
           ) : (
             <div className="mo-stack">
               <p className="mo-p">
-                Carried into:{' '}
+                {t('pnlCarryForwardCarryForwardIndex.carriedInto')}{' '}
                 {v.laterChanges.map((g, i) => (
                   <Fragment key={g.landedMonth}>
                     {i > 0 && ' · '}
@@ -325,7 +367,9 @@ function MonthView({
               </p>
               <CarriedGroups
                 groups={v.laterChanges}
-                heading={(g) => `Carried into ${g.name}`}
+                heading={(g) =>
+                  t('pnlCarryForwardCarryForwardIndex.carriedInto2', { name: g.name })
+                }
                 filterFor={(g, line) => ({ origin: month, landedIn: g.landedMonth, line })}
               />
             </div>
@@ -343,16 +387,16 @@ function MonthView({
       )}
 
       {closed && v.versions.length > 0 && (
-        <MoSection title="Locked versions" flush>
+        <MoSection title={t('pnlCarryForwardCarryForwardIndex.lockedVersions')} flush>
           <Table>
             <THead>
               <Tr>
-                <Th>Version</Th>
-                <Th>How</Th>
-                <Th>When</Th>
-                <Th>Who</Th>
-                <Th>Reason</Th>
-                <Th align="right">Net before → after</Th>
+                <Th>{t('pnlCarryForwardCarryForwardIndex.version')}</Th>
+                <Th>{t('pnlCarryForwardCarryForwardIndex.how')}</Th>
+                <Th>{t('pnlCarryForwardCarryForwardIndex.when')}</Th>
+                <Th>{t('pnlCarryForwardCarryForwardIndex.who')}</Th>
+                <Th>{t('pnlCarryForwardCarryForwardIndex.reason')}</Th>
+                <Th align="right">{t('pnlCarryForwardCarryForwardIndex.netBeforeAfter')}</Th>
                 <Th />
               </Tr>
             </THead>
@@ -370,7 +414,7 @@ function MonthView({
                     </div>
                   </Td>
                   <Td className="mo-nowrap">{istDateTime(x.createdAt)}</Td>
-                  <Td>{x.by ?? 'the scheduled close'}</Td>
+                  <Td>{x.by ?? t('pnlCarryForwardCarryForwardIndex.theScheduledClose')}</Td>
                   <Td className="mo-muted">{x.reason ?? '—'}</Td>
                   <Td align="right" className="mo-nowrap">
                     {x.netBeforeInr === null ? (
@@ -389,7 +433,7 @@ function MonthView({
                         size="sm"
                         onClick={() => setVersion(x.current ? null : x.version)}
                       >
-                        Open
+                        {t('pnlCarryForwardCarryForwardIndex.open')}
                       </Button>
                     )}
                   </Td>
@@ -454,19 +498,16 @@ function LockPermanentlyPanel({
   readonly nightlyJobs: unknown;
   readonly canClose: boolean;
 }): ReactElement {
+  const t = useT();
   const lock = useLockPnlPermanently();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const failed = failedJobs(nightlyJobs);
   return (
-    <MoSection title="Provisional lock" tone="warn">
+    <MoSection title={t('pnlCarryForwardCarryForwardIndex.provisionalLock')} tone="warn">
       <Notice tone="warn" icon={<AlertTriangle size={16} />}>
-        <p>
-          {name} was closed on time, but not every nightly job had succeeded, so some of its costs
-          may be missing. Nothing is carried out of it while it is provisional — late data stays in
-          the month. Fix and re-run the job, then lock it permanently.
-        </p>
+        <p>{t('pnlCarryForwardCarryForwardIndex.wasClosedOnTimeBut', { name })}</p>
       </Notice>
       {failed.length > 0 && (
         <ul className="pl-jobs">
@@ -488,7 +529,7 @@ function LockPermanentlyPanel({
             icon={<Lock size={14} />}
             onClick={() => setOpen(true)}
           >
-            Lock {name} permanently
+            {t('pnlCarryForwardCarryForwardIndex.lockPermanently', { name })}
           </Button>
         </div>
       )}
@@ -498,17 +539,20 @@ function LockPermanentlyPanel({
         tone="critical"
         locked={lock.isPending}
         icon={<Lock size={18} />}
-        title={`Lock ${name} permanently`}
-        description="It is re-snapshotted with everything that has arrived and becomes final. The provisional version is kept. Changes after this are carried into the open month."
+        title={t('pnlCarryForwardCarryForwardIndex.lockPermanently', { name })}
+        description={t('pnlCarryForwardCarryForwardIndex.itIsReSnapshottedWith')}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={() => setOpen(false)} disabled={lock.isPending}>
-              Cancel
+              {t('pnlCarryForwardCarryForwardIndex.cancel')}
             </Button>
             <AsyncButton
               variant="destructive"
               state={lock.isPending ? 'busy' : error !== null ? 'error' : 'idle'}
-              labels={{ idle: 'Lock permanently', busy: 'Locking…' }}
+              labels={{
+                idle: t('pnlCarryForwardCarryForwardIndex.lockPermanently2'),
+                busy: t('pnlCarryForwardCarryForwardIndex.locking'),
+              }}
               onClick={() =>
                 lock.mutate(
                   { month, reason },
@@ -527,11 +571,11 @@ function LockPermanentlyPanel({
       >
         <div className="mo-fields">
           <TextArea
-            label="Why it is being locked now"
+            label={t('pnlCarryForwardCarryForwardIndex.whyItIsBeingLocked')}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
-            placeholder="e.g. Shiprocket wallet sync fixed and re-run on 3 Oct"
+            placeholder={t('pnlCarryForwardCarryForwardIndex.eGShiprocketWalletSync')}
           />
           {error !== null && (
             <p className="mo-error" role="alert">
@@ -557,6 +601,7 @@ function GodModePanel({
   readonly month: string;
   readonly name: string;
 }): ReactElement {
+  const t = useT();
   const relock = useGodModeRelockPnl();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
@@ -565,12 +610,12 @@ function GodModePanel({
   const [error, setError] = useState<string | null>(null);
   return (
     <MoCard tone="critical">
-      <Notice tone="bad" icon={<ShieldAlert size={16} />} title="God mode.">
-        <p>
-          Re-lock {name} as the ledgers say today. Everything already carried into later months
-          stays there and is left out of the new version, so nothing is counted twice. Every earlier
-          version is kept.
-        </p>
+      <Notice
+        tone="bad"
+        icon={<ShieldAlert size={16} />}
+        title={t('pnlCarryForwardCarryForwardIndex.godMode')}
+      >
+        <p>{t('pnlCarryForwardCarryForwardIndex.reLockAsTheLedgers', { name })}</p>
       </Notice>
       <div className="mo-row">
         <Button
@@ -579,7 +624,7 @@ function GodModePanel({
           icon={<ShieldAlert size={14} />}
           onClick={() => setOpen(true)}
         >
-          Re-lock {name}
+          {t('pnlCarryForwardCarryForwardIndex.reLock', { name })}
         </Button>
       </div>
       <Dialog
@@ -589,17 +634,20 @@ function GodModePanel({
         size="lg"
         locked={relock.isPending}
         icon={<ShieldAlert size={18} />}
-        title={`God mode: re-lock ${name}`}
-        description="This restates a month that was locked permanently. It is audited as CRITICAL."
+        title={t('pnlCarryForwardCarryForwardIndex.godModeReLock', { name })}
+        description={t('pnlCarryForwardCarryForwardIndex.thisRestatesAMonthThat')}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={() => setOpen(false)} disabled={relock.isPending}>
-              Cancel
+              {t('pnlCarryForwardCarryForwardIndex.cancel')}
             </Button>
             <AsyncButton
               variant="destructive"
               state={relock.isPending ? 'busy' : error !== null ? 'error' : 'idle'}
-              labels={{ idle: `Re-lock ${name}`, busy: 'Re-locking…' }}
+              labels={{
+                idle: t('pnlCarryForwardCarryForwardIndex.reLock', { name }),
+                busy: t('pnlCarryForwardCarryForwardIndex.reLocking'),
+              }}
               onClick={() =>
                 relock.mutate(
                   { month, reason, confirmMonth: typed, acknowledgeRisk: ack },
@@ -618,24 +666,19 @@ function GodModePanel({
       >
         <div className="mo-fields">
           <TextArea
-            label="Justification (at least 30 characters)"
+            label={t('pnlCarryForwardCarryForwardIndex.justificationAtLeast30Characters')}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={4}
-            placeholder="What was wrong with the locked figures, and where the corrected data came from"
+            placeholder={t('pnlCarryForwardCarryForwardIndex.whatWasWrongWithThe')}
           />
           <Checkbox
             checked={ack}
             onChange={(e) => setAck(e.target.checked)}
-            label={
-              <>
-                I understand this replaces {name}&apos;s locked figures. A report already sent for
-                that month will no longer match the page.
-              </>
-            }
+            label={<>{t('pnlCarryForwardCarryForwardIndex.iUnderstandThisReplacesS', { name })}</>}
           />
           <TextField
-            label={`Type ${month} to confirm`}
+            label={t('pnlCarryForwardCarryForwardIndex.typeToConfirm', { month })}
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             className="pl-god-typed"
@@ -663,6 +706,7 @@ function AwaitingClose({
   readonly name: string;
   readonly canClose: boolean;
 }): ReactElement {
+  const t = useT();
   const jobs = usePnlNightlyJobs(month);
   const close = useClosePnlMonth();
   const [open, setOpen] = useState(false);
@@ -672,17 +716,17 @@ function AwaitingClose({
   return (
     <MoCard tone="warn">
       <Notice tone="warn" icon={<AlertTriangle size={16} />}>
-        <p>
-          {name} has ended and is not closed yet. It closes by itself at 06:00 IST on the 1st —
-          permanently when every nightly job has succeeded, provisionally when one has not. Until
-          then its figures below are live.
-        </p>
+        <p>{t('pnlCarryForwardCarryForwardIndex.hasEndedAndIsNot', { name })}</p>
       </Notice>
       {jobs.isLoading ? (
-        <SkeletonRows rows={3} cols={2} label="Checking the nightly jobs…" />
+        <SkeletonRows
+          rows={3}
+          cols={2}
+          label={t('pnlCarryForwardCarryForwardIndex.checkingTheNightlyJobs')}
+        />
       ) : jobs.isError || jobs.data === undefined ? (
         <p className="pl-state" data-tone="bad" role="alert">
-          {jobs.error?.message ?? 'Could not read the nightly jobs.'}
+          {jobs.error?.message ?? t('pnlCarryForwardCarryForwardIndex.couldNotReadTheNightly')}
         </p>
       ) : (
         <ul className="pl-jobs">
@@ -708,7 +752,7 @@ function AwaitingClose({
             icon={<Lock size={14} />}
             onClick={() => setOpen(true)}
           >
-            Close {name}
+            {t('pnlCarryForwardCarryForwardIndex.close', { name })}
           </Button>
         </div>
       )}
@@ -718,17 +762,20 @@ function AwaitingClose({
         tone="critical"
         locked={close.isPending}
         icon={<Lock size={18} />}
-        title={`Close ${name}`}
-        description="Its figures are frozen for good — a closed month is never reopened. Anything that changes it later is carried into the open month."
+        title={t('pnlCarryForwardCarryForwardIndex.close', { name })}
+        description={t('pnlCarryForwardCarryForwardIndex.itsFiguresAreFrozenFor')}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={() => setOpen(false)} disabled={close.isPending}>
-              Cancel
+              {t('pnlCarryForwardCarryForwardIndex.cancel')}
             </Button>
             <AsyncButton
               variant="destructive"
               state={close.isPending ? 'busy' : error !== null ? 'error' : 'idle'}
-              labels={{ idle: `Close ${name}`, busy: 'Closing…' }}
+              labels={{
+                idle: t('pnlCarryForwardCarryForwardIndex.close', { name }),
+                busy: t('pnlCarryForwardCarryForwardIndex.closing'),
+              }}
               onClick={() =>
                 close.mutate(
                   { month, reason },
@@ -747,11 +794,11 @@ function AwaitingClose({
       >
         <div className="mo-fields">
           <TextArea
-            label="Why it is being closed by hand"
+            label={t('pnlCarryForwardCarryForwardIndex.whyItIsBeingClosed')}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
-            placeholder="e.g. Shiprocket wallet sync is switched off; its ledger was imported by hand"
+            placeholder={t('pnlCarryForwardCarryForwardIndex.eGShiprocketWalletSync2')}
           />
           {error !== null && (
             <p className="mo-error" role="alert">
@@ -781,6 +828,7 @@ function LinesTable({
   readonly report: PnlReportView;
   readonly renderRows: (lineKey: string) => ReactElement;
 }): ReactElement {
+  const t = useT();
   const [open, setOpen] = useState<string | null>(null);
   const rows: LineRow[] = [
     ...report.lines.map((l) => ({
@@ -793,7 +841,7 @@ function LinesTable({
     })),
     {
       key: 'operating_expenses',
-      label: 'Operating expenses',
+      label: t('pnlCarryForwardCarryForwardIndex.operatingExpenses'),
       revenueInr: '0.00',
       costInr: report.operatingExpensesInr,
       marginInr: negate(report.operatingExpensesInr),
@@ -807,7 +855,7 @@ function LinesTable({
         <Notice tone="warn" icon={<AlertTriangle size={16} />}>
           <ul className="mo-list">
             {!report.complete && (
-              <li>Some cost was not recorded, so the margins read higher than they are.</li>
+              <li>{t('pnlCarryForwardCarryForwardIndex.someCostWasNotRecorded')}</li>
             )}
             {warnings.map((w) => (
               <li key={w}>{w}</li>
@@ -830,13 +878,13 @@ function LinesTable({
                     {l.note !== null && <span className="pl-line__note">{l.note}</span>}
                   </span>
                   <span className="pl-figs" data-cols="3">
-                    <Fig label="Revenue">
+                    <Fig label={t('pnlCarryForwardCarryForwardIndex.revenue')}>
                       <Money amount={l.revenueInr} currency="INR" convert={false} />
                     </Fig>
-                    <Fig label="Cost">
+                    <Fig label={t('pnlCarryForwardCarryForwardIndex.cost')}>
                       <Money amount={l.costInr} currency="INR" convert={false} />
                     </Fig>
-                    <Fig label="Margin">
+                    <Fig label={t('pnlCarryForwardCarryForwardIndex.margin')}>
                       <Money amount={l.marginInr} currency="INR" convert={false} />
                     </Fig>
                   </span>
@@ -851,7 +899,7 @@ function LinesTable({
         })}
       </Accordion>
       <div className="pl-net">
-        <span>Net</span>
+        <span>{t('pnlCarryForwardCarryForwardIndex.net')}</span>
         <Money amount={report.netInr} currency="INR" convert={false} />
       </div>
     </div>
@@ -882,11 +930,12 @@ function RowsError({
   readonly message: string;
   readonly retry: () => void;
 }): ReactElement {
+  const t = useT();
   return (
     <p className="pl-state" data-tone="bad" role="alert">
       {message}{' '}
       <Button variant="ghost" size="sm" onClick={retry}>
-        Retry
+        {t('pnlCarryForwardCarryForwardIndex.retry')}
       </Button>
     </p>
   );
@@ -906,18 +955,21 @@ function RowsTable({
   }>;
   readonly truncated: boolean;
 }): ReactElement {
+  const t = useT();
   if (rows.length === 0) {
-    return <p className="pl-state">Nothing behind this line.</p>;
+    return (
+      <p className="pl-state">{t('pnlCarryForwardCarryForwardIndex.nothingBehindThisLine')}</p>
+    );
   }
   return (
     <div className="pl-drill">
       <Table maxHeight="20rem">
         <THead>
           <Tr>
-            <Th>Reference</Th>
-            <Th>Date</Th>
-            <Th align="right">Revenue</Th>
-            <Th align="right">Cost</Th>
+            <Th>{t('pnlCarryForwardCarryForwardIndex.reference')}</Th>
+            <Th>{t('pnlCarryForwardCarryForwardIndex.date')}</Th>
+            <Th align="right">{t('pnlCarryForwardCarryForwardIndex.revenue')}</Th>
+            <Th align="right">{t('pnlCarryForwardCarryForwardIndex.cost')}</Th>
           </Tr>
         </THead>
         <TBody>
@@ -937,7 +989,9 @@ function RowsTable({
               </Td>
               <Td align="right">
                 {r.costInr === null ? (
-                  <span className="mo-warn">not recorded</span>
+                  <span className="mo-warn">
+                    {t('pnlCarryForwardCarryForwardIndex.notRecorded')}
+                  </span>
                 ) : (
                   <Money amount={r.costInr} currency="INR" convert={false} />
                 )}
@@ -948,7 +1002,7 @@ function RowsTable({
       </Table>
       {truncated && (
         <p className="pl-state" data-tone="warn">
-          Only the first {rows.length} rows are shown, so they will not add up to the line.
+          {t('pnlCarryForwardCarryForwardIndex.onlyTheFirstRowsAre', { length: rows.length })}
         </p>
       )}
     </div>
@@ -964,12 +1018,16 @@ function FrozenRows({
   readonly lineKey: string;
   readonly version: number | null;
 }): ReactElement {
+  const t = useT();
   const q = usePnlFrozenRows(month, lineKey, version);
-  if (q.isLoading) return <SkeletonRows rows={3} cols={4} label="Loading rows…" />;
+  if (q.isLoading)
+    return (
+      <SkeletonRows rows={3} cols={4} label={t('pnlCarryForwardCarryForwardIndex.loadingRows')} />
+    );
   if (q.isError || q.data === undefined) {
     return (
       <RowsError
-        message={q.error?.message ?? 'Could not load the rows.'}
+        message={q.error?.message ?? t('pnlCarryForwardCarryForwardIndex.couldNotLoadTheRows')}
         retry={() => void q.refetch()}
       />
     );
@@ -991,12 +1049,16 @@ function LiveRows({
   readonly from: string;
   readonly to: string;
 }): ReactElement {
+  const t = useT();
   const q = usePnlLineItems(lineKey, from, to);
-  if (q.isLoading) return <SkeletonRows rows={3} cols={4} label="Loading rows…" />;
+  if (q.isLoading)
+    return (
+      <SkeletonRows rows={3} cols={4} label={t('pnlCarryForwardCarryForwardIndex.loadingRows')} />
+    );
   if (q.isError || q.data === undefined) {
     return (
       <RowsError
-        message={q.error?.message ?? 'Could not load the rows.'}
+        message={q.error?.message ?? t('pnlCarryForwardCarryForwardIndex.couldNotLoadTheRows')}
         retry={() => void q.refetch()}
       />
     );
@@ -1019,6 +1081,7 @@ function CarriedGroups({
   readonly heading: (g: CarriedGroupView) => string;
   readonly filterFor: (g: CarriedGroupView, line: string) => CarryForwardFilter;
 }): ReactElement {
+  const t = useT();
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div className="mo-stack">
@@ -1045,13 +1108,13 @@ function CarriedGroups({
                         {l.name} <span className="pl-count">({l.count})</span>
                       </span>
                       <span className="pl-figs" data-cols="3">
-                        <Fig label="Revenue">
+                        <Fig label={t('pnlCarryForwardCarryForwardIndex.revenue')}>
                           <Money amount={l.revenueInr} currency="INR" convert={false} />
                         </Fig>
-                        <Fig label="Cost">
+                        <Fig label={t('pnlCarryForwardCarryForwardIndex.cost')}>
                           <Money amount={l.costInr} currency="INR" convert={false} />
                         </Fig>
-                        <Fig label="Net">
+                        <Fig label={t('pnlCarryForwardCarryForwardIndex.net')}>
                           <Delta amount={l.netInr} />
                         </Fig>
                       </span>
@@ -1070,30 +1133,38 @@ function CarriedGroups({
 }
 
 function CarriedRows({ filter }: { readonly filter: CarryForwardFilter }): ReactElement {
+  const t = useT();
   const q = usePnlCarryForwardRows(filter);
-  if (q.isLoading) return <SkeletonRows rows={3} cols={6} label="Loading changes…" />;
+  if (q.isLoading)
+    return (
+      <SkeletonRows
+        rows={3}
+        cols={6}
+        label={t('pnlCarryForwardCarryForwardIndex.loadingChanges')}
+      />
+    );
   if (q.isError || q.data === undefined) {
     return (
       <RowsError
-        message={q.error?.message ?? 'Could not load the changes.'}
+        message={q.error?.message ?? t('pnlCarryForwardCarryForwardIndex.couldNotLoadTheChanges')}
         retry={() => void q.refetch()}
       />
     );
   }
   if (q.data.rows.length === 0) {
-    return <p className="pl-state">No changes.</p>;
+    return <p className="pl-state">{t('pnlCarryForwardCarryForwardIndex.noChanges')}</p>;
   }
   return (
     <div className="pl-drill">
       <Table maxHeight="24rem">
         <THead>
           <Tr>
-            <Th>Record</Th>
-            <Th>What changed</Th>
-            <Th>Found</Th>
-            <Th align="right">Revenue</Th>
-            <Th align="right">Cost</Th>
-            <Th align="right">Net</Th>
+            <Th>{t('pnlCarryForwardCarryForwardIndex.record')}</Th>
+            <Th>{t('pnlCarryForwardCarryForwardIndex.whatChanged')}</Th>
+            <Th>{t('pnlCarryForwardCarryForwardIndex.found')}</Th>
+            <Th align="right">{t('pnlCarryForwardCarryForwardIndex.revenue')}</Th>
+            <Th align="right">{t('pnlCarryForwardCarryForwardIndex.cost')}</Th>
+            <Th align="right">{t('pnlCarryForwardCarryForwardIndex.net')}</Th>
           </Tr>
         </THead>
         <TBody>
@@ -1120,7 +1191,9 @@ function CarriedRows({ filter }: { readonly filter: CarryForwardFilter }): React
       </Table>
       {q.data.truncated && (
         <p className="pl-state" data-tone="warn">
-          Only the first {q.data.rows.length} changes are shown.
+          {t('pnlCarryForwardCarryForwardIndex.onlyTheFirstChangesAre', {
+            rowsLength: q.data.rows.length,
+          })}
         </p>
       )}
     </div>
@@ -1132,6 +1205,7 @@ function CarriedRows({ filter }: { readonly filter: CarryForwardFilter }): React
  * deploy. Preview first (a dry run writes nothing); closing is final.
  */
 function BackfillPanel(): ReactElement {
+  const t = useT();
   const backfill = useBackfillPnlClose();
   const [through, setThrough] = useState('');
   const [reason, setReason] = useState('');
@@ -1167,16 +1241,12 @@ function BackfillPanel(): ReactElement {
     result === null ? 0 : result.months.filter((m) => m.action === 'WOULD_CLOSE').length;
 
   return (
-    <MoSection title="Close earlier months">
-      <p className="mo-p">
-        Closes every month with anything on its P&amp;L, oldest first, up to the month you choose
-        (last month if left empty) — as each stands right now. Preview shows what would be closed
-        and writes nothing.
-      </p>
+    <MoSection title={t('pnlCarryForwardCarryForwardIndex.closeEarlierMonths')}>
+      <p className="mo-p">{t('pnlCarryForwardCarryForwardIndex.closesEveryMonthWithAnything')}</p>
       <div className="pl-through">
         <DateField
           type="month"
-          label="Through month"
+          label={t('pnlCarryForwardCarryForwardIndex.throughMonth')}
           value={through}
           onChange={(e) => setThrough(e.target.value)}
         />
@@ -1186,16 +1256,16 @@ function BackfillPanel(): ReactElement {
           loading={backfill.isPending && closing !== 'running'}
           onClick={() => run(true)}
         >
-          Preview
+          {t('pnlCarryForwardCarryForwardIndex.preview')}
         </Button>
       </div>
       {closing !== null && (
         <ParachuteProgress
-          label="Closing the months"
+          label={t('pnlCarryForwardCarryForwardIndex.closingTheMonths')}
           value={null}
           state={closing}
-          doneLabel="Months closed"
-          failedLabel="Closing failed"
+          doneLabel={t('pnlCarryForwardCarryForwardIndex.monthsClosed')}
+          failedLabel={t('pnlCarryForwardCarryForwardIndex.closingFailed')}
           detail={closing === 'failed' ? (error ?? undefined) : undefined}
         />
       )}
@@ -1209,16 +1279,20 @@ function BackfillPanel(): ReactElement {
           <Table>
             <THead>
               <Tr>
-                <Th>Month</Th>
-                <Th>{result.dryRun ? 'Would' : 'Result'}</Th>
-                <Th align="right">Net</Th>
-                <Th>Note</Th>
+                <Th>{t('pnlCarryForwardCarryForwardIndex.month')}</Th>
+                <Th>
+                  {result.dryRun
+                    ? t('pnlCarryForwardCarryForwardIndex.would')
+                    : t('pnlCarryForwardCarryForwardIndex.result')}
+                </Th>
+                <Th align="right">{t('pnlCarryForwardCarryForwardIndex.net')}</Th>
+                <Th>{t('pnlCarryForwardCarryForwardIndex.note')}</Th>
               </Tr>
             </THead>
             <TBody>
               {result.months.length === 0 ? (
                 <TableEmpty colSpan={4}>
-                  No month has anything on its P&amp;L up to then.
+                  {t('pnlCarryForwardCarryForwardIndex.noMonthHasAnythingOn')}
                 </TableEmpty>
               ) : (
                 result.months.map((m) => (
@@ -1241,11 +1315,11 @@ function BackfillPanel(): ReactElement {
           {result.dryRun && result.months.some((m) => m.action === 'WOULD_CLOSE') && (
             <div className="mo-fields">
               <TextArea
-                label="Why these months are being closed"
+                label={t('pnlCarryForwardCarryForwardIndex.whyTheseMonthsAreBeing')}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={2}
-                placeholder="e.g. Starting the carry-forward P&L: closing every month to date"
+                placeholder={t('pnlCarryForwardCarryForwardIndex.eGStartingTheCarry')}
               />
               <div className="mo-row">
                 <Button
@@ -1254,7 +1328,7 @@ function BackfillPanel(): ReactElement {
                   icon={<Lock size={14} />}
                   onClick={() => setConfirming(true)}
                 >
-                  Close these months
+                  {t('pnlCarryForwardCarryForwardIndex.closeTheseMonths')}
                 </Button>
               </div>
             </div>
@@ -1264,13 +1338,15 @@ function BackfillPanel(): ReactElement {
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Close these months for good?"
+        title={t('pnlCarryForwardCarryForwardIndex.closeTheseMonthsForGood')}
         entity={
-          through === '' ? 'Every month through last month' : `Every month through ${through}`
+          through === ''
+            ? t('pnlCarryForwardCarryForwardIndex.everyMonthThroughLastMonth')
+            : t('pnlCarryForwardCarryForwardIndex.everyMonthThrough', { through })
         }
         amount={`${wouldClose} month${wouldClose === 1 ? '' : 's'}`}
-        consequence="Their figures are frozen as they stand now; a closed month is never reopened and later changes are carried into the open month."
-        confirmLabel="Close them"
+        consequence={t('pnlCarryForwardCarryForwardIndex.theirFiguresAreFrozenAs')}
+        confirmLabel={t('pnlCarryForwardCarryForwardIndex.closeThem')}
         destructive
         onConfirm={() => {
           setConfirming(false);

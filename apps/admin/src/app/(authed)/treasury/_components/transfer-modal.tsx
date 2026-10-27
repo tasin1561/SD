@@ -15,6 +15,7 @@ import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { localNow } from '@/lib/datetime-local';
 import { Notice } from './money-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * Money moving between two of our own accounts.
@@ -40,6 +41,7 @@ export function TransferModal({
   readonly open: boolean;
   readonly onOpenChange: (next: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const accounts = usePlatformBankAccounts(usePermission('money.view'));
   // Seeds the quoted rate. Gated: this page is `money.treasury.view` and
   // reading FX is its own permission, so an operator who may move money
@@ -128,17 +130,17 @@ export function TransferModal({
   function review(): void {
     setError(null);
     if (fromAccountId === '' || toAccountId === '') {
-      setError('Pick both accounts');
+      setError(t('treasuryTransferModal.pickBothAccounts'));
       return;
     }
     if (fromAccountId === toAccountId) {
-      setError('An account cannot pay itself');
+      setError(t('treasuryTransferModal.anAccountCannotPayItself'));
       return;
     }
     const o = Number(amountOut);
     const i = Number(amountIn);
     if (!Number.isFinite(o) || o <= 0 || !Number.isFinite(i) || i <= 0) {
-      setError('Enter what left and what arrived');
+      setError(t('treasuryTransferModal.enterWhatLeftAndWhat'));
       return;
     }
     setConfirming(true);
@@ -181,7 +183,8 @@ export function TransferModal({
   const sellerName =
     sellerId === ''
       ? null
-      : ((sellers.data?.items ?? []).find((x) => x.id === sellerId)?.companyName ?? 'a client');
+      : ((sellers.data?.items ?? []).find((x) => x.id === sellerId)?.companyName ??
+        t('treasuryTransferModal.aClient'));
   const whenLabel = movedAt === '' ? '' : new Date(movedAt).toLocaleString('en-IN');
 
   return (
@@ -194,15 +197,15 @@ export function TransferModal({
         }}
         icon={<ArrowLeftRight size={18} />}
         size="lg"
-        title="Move money between accounts"
-        description="Both sides are entered from the two statements — nothing is derived from a rate."
+        title={t('treasuryTransferModal.moveMoneyBetweenAccounts')}
+        description={t('treasuryTransferModal.bothSidesAreEnteredFrom')}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('treasuryTransferModal.cancel')}
             </Button>
             <Button variant="primary" onClick={review} disabled={transfer.isPending}>
-              Review transfer
+              {t('treasuryTransferModal.reviewTransfer')}
             </Button>
           </DialogFooter>
         }
@@ -210,12 +213,12 @@ export function TransferModal({
         <div className="mo-fields">
           <div className="mo-fields" data-cols="2">
             <Select
-              label="From"
+              label={t('treasuryTransferModal.from')}
               requiredMark
               value={fromAccountId}
               onChange={(e) => setFrom(e.target.value)}
             >
-              <option value="">Select…</option>
+              <option value="">{t('treasuryTransferModal.select')}</option>
               {list
                 .filter((a) => a.isActive)
                 .map((a) => (
@@ -225,12 +228,12 @@ export function TransferModal({
                 ))}
             </Select>
             <Select
-              label="To"
+              label={t('treasuryTransferModal.to')}
               requiredMark
               value={toAccountId}
               onChange={(e) => setTo(e.target.value)}
             >
-              <option value="">Select…</option>
+              <option value="">{t('treasuryTransferModal.select')}</option>
               {list
                 .filter((a) => a.isActive && a.id !== fromAccountId)
                 .map((a) => (
@@ -243,7 +246,7 @@ export function TransferModal({
 
           <div className="mo-fields" data-cols="2">
             <TextField
-              label={`Left${from ? ` (${from.currency})` : ''}`}
+              label={t('treasuryTransferModal.left2', { value: from ? ` (${from.currency})` : '' })}
               requiredMark
               type="number"
               inputMode="decimal"
@@ -254,9 +257,13 @@ export function TransferModal({
               onChange={(e) => setOut(e.target.value)}
             />
             <TextField
-              label={`Arrived${to ? ` (${to.currency})` : ''}`}
+              label={t('treasuryTransferModal.arrived2', { value: to ? ` (${to.currency})` : '' })}
               requiredMark
-              hint={achieved !== null && crossCurrency ? `Achieved rate ${achieved}` : undefined}
+              hint={
+                achieved !== null && crossCurrency
+                  ? t('treasuryTransferModal.achievedRate', { achieved })
+                  : undefined
+              }
               type="number"
               inputMode="decimal"
               step="0.01"
@@ -268,8 +275,8 @@ export function TransferModal({
           </div>
 
           <Select
-            label="Whose money"
-            hint="Leave as ours unless this is moving a client's balance between our accounts"
+            label={t('treasuryTransferModal.whoseMoney')}
+            hint={t('treasuryTransferModal.leaveAsOursUnlessThis')}
             /*
               WHAT THEY ACTUALLY HOLD IN THE SENDING ACCOUNT.
 
@@ -289,7 +296,7 @@ export function TransferModal({
             value={sellerId}
             onChange={(e) => setSellerId(e.target.value)}
           >
-            <option value="">Ours</option>
+            <option value="">{t('treasuryTransferModal.ours')}</option>
             {(sellers.data?.items ?? []).map((s) => (
               <option key={s.id} value={s.id}>
                 {s.companyName}
@@ -299,19 +306,22 @@ export function TransferModal({
 
           {intoWalletCurrency && (
             <p className="mo-p">
-              Into rupees there is no quote: the client is credited what this money was worth to
-              their wallet (their average rate in {from?.label ?? 'the sending account'}), and the
-              difference against what arrived is booked as ours.
+              {t('treasuryTransferModal.intoRupeesThereIsNo', {
+                value: from?.label ?? t('treasuryTransferModal.theSendingAccount'),
+              })}
             </p>
           )}
 
           {quoteApplies && (
             <TextField
-              label="Rate quoted to the client"
+              label={t('treasuryTransferModal.rateQuotedToTheClient')}
               hint={
                 systemRate === null
-                  ? 'They are credited at this rate; the gap against what we achieved is booked as ours, either way.'
-                  : `From the system rate (${systemRate}). They are credited at this rate; the gap against the ${achieved ?? '—'} we achieved is booked as ours, either way.`
+                  ? t('treasuryTransferModal.theyAreCreditedAtThis')
+                  : t('treasuryTransferModal.fromTheSystemRateThey', {
+                      systemRate,
+                      value: achieved ?? '—',
+                    })
               }
               type="number"
               inputMode="decimal"
@@ -330,20 +340,25 @@ export function TransferModal({
           <div className="mo-fields" data-cols="2">
             <DateField
               type="datetime-local"
-              label="When"
+              label={t('treasuryTransferModal.when')}
               requiredMark
               value={movedAt}
               onChange={(e) => setMovedAt(e.target.value)}
             />
             <TextField
-              label="Reference"
+              label={t('treasuryTransferModal.reference')}
               value={reference}
               onChange={(e) => setReference(e.target.value)}
               maxLength={200}
               inputClassName="sk-ident"
             />
           </div>
-          <TextArea label="Note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
+          <TextArea
+            label={t('treasuryTransferModal.note')}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+          />
 
           {quoteApplies && quotedRate.trim() !== '' && amountOut !== '' && (
             <Notice tone={Number(quotedRate) > 0 ? 'neutral' : 'warn'}>
@@ -362,11 +377,7 @@ export function TransferModal({
                   /* A zero rate is not a quote, it is an unfilled field. Stated
                      calmly it reads as arithmetic; what it actually does is
                      move the seller's whole balance to us. */
-                  <>
-                    A rate of zero credits the client NOTHING and books the entire amount to us.
-                    That is almost certainly not what you mean — use the system rate, or whatever
-                    you actually quoted them.
-                  </>
+                  <>{t('treasuryTransferModal.aRateOfZeroCredits')}</>
                 )}
               </p>
             </Notice>
@@ -386,12 +397,12 @@ export function TransferModal({
           setConfirming(next);
           if (!next) setError(null);
         }}
-        title="Record this transfer?"
+        title={t('treasuryTransferModal.recordThisTransfer')}
         entity={`${from?.label ?? 'From'} → ${to?.label ?? 'To'}`}
         amount={
           <span className="mo-stack mo-stack--tight">
             <span>
-              Left{' '}
+              {t('treasuryTransferModal.left')}{' '}
               <Money
                 amount={Number(amountOut).toFixed(2)}
                 currency={from?.currency === 'BDT' ? 'BDT' : 'INR'}
@@ -399,7 +410,7 @@ export function TransferModal({
               />
             </span>
             <span>
-              Arrived{' '}
+              {t('treasuryTransferModal.arrived')}{' '}
               <Money
                 amount={Number(amountIn).toFixed(2)}
                 currency={to?.currency === 'BDT' ? 'BDT' : 'INR'}
@@ -409,7 +420,7 @@ export function TransferModal({
           </span>
         }
         consequence={`Records ${from?.currency ?? ''} leaving ${from?.label ?? 'the sending account'} and ${to?.currency ?? ''} arriving in ${to?.label ?? 'the receiving account'} on ${whenLabel}, as ${sellerName === null ? 'our own money' : `money held for ${sellerName}`}; both balances change at once.`}
-        confirmLabel="Record transfer"
+        confirmLabel={t('treasuryTransferModal.recordTransfer')}
         onConfirm={save}
         error={confirming ? (error ?? undefined) : undefined}
       />

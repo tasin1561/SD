@@ -11,6 +11,7 @@ import { Checkbox } from '@skydrop/ui/app/checkbox';
 import { useReconcileAccount } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { Notice } from './money-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * The book disagreed with the bank. Say so, in writing.
@@ -37,6 +38,7 @@ export function ReconcileModal({
   readonly bySeller: ReadonlyArray<{ sellerId: string; companyName: string; amount: string }>;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const reconcile = useReconcileAccount();
   // '' means OUR money. A seller id corrects what we hold for them.
   const [sellerId, setSellerId] = useState('');
@@ -71,11 +73,11 @@ export function ReconcileModal({
   function review(): void {
     setError(null);
     if (statedBalance.trim() === '' || Number.isNaN(Number(statedBalance))) {
-      setError('What does the statement actually say?');
+      setError(t('treasuryReconcileModal.whatDoesTheStatementActually'));
       return;
     }
     if (reason.trim().length < 10) {
-      setError('Say what was wrong — at least a sentence');
+      setError(t('treasuryReconcileModal.sayWhatWasWrongAt'));
       return;
     }
     if (accountId === null) return;
@@ -111,7 +113,7 @@ export function ReconcileModal({
 
   const ownerWords =
     sellerId === ''
-      ? 'our own money'
+      ? t('treasuryReconcileModal.ourOwnMoney')
       : `the holding for ${bySeller.find((b) => b.sellerId === sellerId)?.companyName ?? 'the client'}`;
 
   return (
@@ -125,15 +127,15 @@ export function ReconcileModal({
           }
         }}
         icon={<Scale size={18} />}
-        title={`Reconcile ${accountLabel}`}
-        description="Posts the difference as a visible entry. It does not overwrite anything."
+        title={t('treasuryReconcileModal.reconcile', { accountLabel })}
+        description={t('treasuryReconcileModal.postsTheDifferenceAsA')}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={onClose}>
-              Cancel
+              {t('treasuryReconcileModal.cancel')}
             </Button>
             <Button variant="primary" onClick={review} disabled={reconcile.isPending}>
-              Review adjustment
+              {t('treasuryReconcileModal.reviewAdjustment')}
             </Button>
           </DialogFooter>
         }
@@ -141,12 +143,12 @@ export function ReconcileModal({
         <div className="mo-fields">
           {bySeller.length > 0 && (
             <Select
-              label="Whose balance"
-              hint="Each owner is a separate running sum in this account — correct the one the statement is about."
+              label={t('treasuryReconcileModal.whoseBalance')}
+              hint={t('treasuryReconcileModal.eachOwnerIsASeparate')}
               value={sellerId}
               onChange={(e) => setSellerId(e.target.value)}
             >
-              <option value="">Ours (capital)</option>
+              <option value="">{t('treasuryReconcileModal.oursCapital')}</option>
               {bySeller.map((b) => (
                 <option key={b.sellerId} value={b.sellerId}>
                   {b.companyName}
@@ -162,7 +164,7 @@ export function ReconcileModal({
             in this account.
           </p>
           <TextField
-            label="What the statement says"
+            label={t('treasuryReconcileModal.whatTheStatementSays')}
             requiredMark
             type="number"
             inputMode="decimal"
@@ -183,15 +185,19 @@ export function ReconcileModal({
                   convert={false}
                   direction={delta < 0 ? 'debit' : 'credit'}
                 />{' '}
-                will be posted against {sellerId === '' ? 'our own money' : 'their holding'}.
+                will be posted against{' '}
+                {sellerId === ''
+                  ? t('treasuryReconcileModal.ourOwnMoney')
+                  : t('treasuryReconcileModal.theirHolding')}
+                .
               </p>
             </Notice>
           )}
           {needsInrValue && (
             <TextField
-              label="Worth to their wallet (INR)"
+              label={t('treasuryReconcileModal.worthToTheirWalletInr')}
               requiredMark
-              hint="The rupees this difference is worth to the client's wallet — the book keeps a taka holding at what it was credited for, not at today's rate."
+              hint={t('treasuryReconcileModal.theRupeesThisDifferenceIs')}
               type="number"
               inputMode="decimal"
               step="0.01"
@@ -207,22 +213,23 @@ export function ReconcileModal({
               onChange={(e) => setOpening(e.target.checked)}
               label={
                 <span>
-                  This is the account&apos;s <strong>opening balance</strong>
+                  This is the account&apos;s{' '}
+                  <strong>{t('treasuryReconcileModal.openingBalance')}</strong>
                 </span>
               }
-              description="Money the business already had when the book started. It is left off the P&L instead of reading as income. Once per account."
+              description={t('treasuryReconcileModal.moneyTheBusinessAlreadyHad')}
             />
           )}
           <TextArea
-            label="Why the book was wrong"
+            label={t('treasuryReconcileModal.whyTheBookWasWrong')}
             requiredMark
-            hint="At least a sentence; it is kept"
+            hint={t('treasuryReconcileModal.atLeastASentenceIt')}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
             maxLength={2000}
             showCount
-            placeholder="e.g. Bank charged a wire fee we had not recorded"
+            placeholder={t('treasuryReconcileModal.eGBankChargedA')}
           />
           {error !== null && !confirming && (
             <p className="mo-error" role="alert">
@@ -238,12 +245,12 @@ export function ReconcileModal({
           setConfirming(next);
           if (!next) setError(null);
         }}
-        title="Post this adjustment?"
+        title={t('treasuryReconcileModal.postThisAdjustment')}
         entity={accountLabel}
         amount={
           <span className="mo-stack mo-stack--tight">
             <span>
-              Statement{' '}
+              {t('treasuryReconcileModal.statement')}{' '}
               <Money
                 amount={Number(statedBalance).toFixed(2)}
                 currency={currency}
@@ -252,7 +259,7 @@ export function ReconcileModal({
             </span>
             {delta !== null && (
               <span>
-                Adjustment{' '}
+                {t('treasuryReconcileModal.adjustment')}{' '}
                 <Money
                   amount={delta.toFixed(2)}
                   currency={currency}
@@ -264,7 +271,7 @@ export function ReconcileModal({
           </span>
         }
         consequence={`Posts the ${currency} difference as a new entry against ${ownerWords} in ${accountLabel}${sellerId === '' && opening ? ', marked as the opening balance' : ''}; nothing is overwritten.`}
-        confirmLabel="Post adjustment"
+        confirmLabel={t('treasuryReconcileModal.postAdjustment')}
         destructive={false}
         onConfirm={save}
         error={confirming ? (error ?? undefined) : undefined}

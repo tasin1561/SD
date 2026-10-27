@@ -4,6 +4,7 @@ import { common } from './messages/common';
 import { cour } from './messages/cour';
 import { extra } from './messages/extra';
 import { inv } from './messages/inv';
+import { money } from './messages/money';
 import { orders } from './messages/orders';
 import { ordersOps } from './messages/ordersOps';
 import { sell } from './messages/sell';
@@ -23,6 +24,7 @@ export const NAMESPACES = [
   cc,
   cour,
   inv,
+  money,
   ordersOps,
   sell,
   wh,
@@ -36,6 +38,7 @@ const ALL = {
   ...cc,
   ...cour,
   ...inv,
+  ...money,
   ...ordersOps,
   ...sell,
   ...wh,

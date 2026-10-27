@@ -24,6 +24,7 @@ import {
   type BankDetailsView,
 } from '@/lib/ops-hooks';
 import { MkAlert, MkCard } from '../../seller-wallets/_components/money-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * The review queue for a seller's withdrawal destination.
@@ -79,6 +80,7 @@ function renderValue(value: string, mono: boolean): ReactNode {
 type Intent = 'APPROVE' | 'REJECT';
 
 export function BankChangesIndex(): ReactElement {
+  const t = useT();
   const toast = useToast();
   const mayReview = usePermission('sellers.bank_change.approve');
   // The empty state's way out is the seller records — but reviewing
@@ -115,10 +117,12 @@ export function BankChangesIndex(): ReactElement {
     try {
       if (intent === 'APPROVE') {
         await approve.mutateAsync({ requestId: reviewing.id });
-        toast.success(`${reviewing.companyName} is now paid to the new account.`);
+        toast.success(
+          t('bankChangesBankChangesIndex.isNowPaidToThe', { companyName: reviewing.companyName }),
+        );
       } else {
         await reject.mutateAsync({ requestId: reviewing.id, reason: reason.trim() });
-        toast.success('Rejected — the client reads your reason.');
+        toast.success(t('bankChangesBankChangesIndex.rejectedTheClientReadsYour'));
       }
       close();
     } catch (err) {
@@ -142,26 +146,35 @@ export function BankChangesIndex(): ReactElement {
   return (
     <div className="mk-page">
       <PageHeader
-        title="Bank detail changes"
-        subtitle="Clients asking us to send their withdrawals somewhere new. Their money keeps going to the account already on file until you approve one."
+        title={t('bankChangesBankChangesIndex.bankDetailChanges')}
+        subtitle={t('bankChangesBankChangesIndex.clientsAskingUsToSend')}
       />
 
       {list.isLoading ? (
-        <SkeletonRows rows={3} cols={3} label="Loading bank change requests…" />
+        <SkeletonRows
+          rows={3}
+          cols={3}
+          label={t('bankChangesBankChangesIndex.loadingBankChangeRequests')}
+        />
       ) : list.isError ? (
         <ErrorState
-          message={serverVerdict(list.error, 'Failed to load bank change requests.')}
+          message={serverVerdict(
+            list.error,
+            t('bankChangesBankChangesIndex.failedToLoadBankChange'),
+          )}
           retry={() => void list.refetch()}
         />
       ) : requests.length === 0 ? (
         <EmptyState
           tone="positive"
-          title="Nothing waiting"
-          description="A request appears here when a client edits bank details they already had on file. A client adding theirs for the first time does not need approval — check their profile on the client record instead."
+          title={t('bankChangesBankChangesIndex.nothingWaiting')}
+          description={t('bankChangesBankChangesIndex.aRequestAppearsHereWhen')}
           action={
             maySeeSellers ? (
               <Link href="/sellers" className={buttonClassName('secondary', 'sm')}>
-                <span className="sk-btn__label">Open the client records</span>
+                <span className="sk-btn__label">
+                  {t('bankChangesBankChangesIndex.openTheClientRecords')}
+                </span>
               </Link>
             ) : undefined
           }
@@ -202,7 +215,7 @@ export function BankChangesIndex(): ReactElement {
                         icon={<Check size={14} />}
                         onClick={() => open(req, 'APPROVE')}
                       >
-                        Approve
+                        {t('bankChangesBankChangesIndex.approve')}
                       </Button>
                       <Button
                         variant="destructive"
@@ -210,18 +223,22 @@ export function BankChangesIndex(): ReactElement {
                         icon={<X size={14} />}
                         onClick={() => open(req, 'REJECT')}
                       >
-                        Reject
+                        {t('bankChangesBankChangesIndex.reject')}
                       </Button>
                     </>
                   ) : undefined
                 }
               >
-                <Table caption={`Bank details for ${req.companyName}`}>
+                <Table
+                  caption={t('bankChangesBankChangesIndex.bankDetailsFor', {
+                    companyName: req.companyName,
+                  })}
+                >
                   <THead>
                     <Tr>
-                      <Th>Field</Th>
-                      <Th>On file now</Th>
-                      <Th>Proposed</Th>
+                      <Th>{t('bankChangesBankChangesIndex.field')}</Th>
+                      <Th>{t('bankChangesBankChangesIndex.onFileNow')}</Th>
+                      <Th>{t('bankChangesBankChangesIndex.proposed')}</Th>
                     </Tr>
                   </THead>
                   <TBody>
@@ -244,8 +261,7 @@ export function BankChangesIndex(): ReactElement {
                 </Table>
                 {accountNumberUnchanged && (
                   <div className="mk-card__foot">
-                    The account number is unchanged — this request moves something else. Check what
-                    is marked changed above.
+                    {t('bankChangesBankChangesIndex.theAccountNumberIsUnchanged')}
                   </div>
                 )}
               </MkCard>
@@ -264,22 +280,30 @@ export function BankChangesIndex(): ReactElement {
         title={
           intent === 'APPROVE'
             ? `Pay ${reviewing?.companyName ?? 'this client'} into the new account?`
-            : `Reject ${reviewing?.companyName ?? 'this'} bank change?`
+            : t('bankChangesBankChangesIndex.rejectBankChange', {
+                value: reviewing?.companyName ?? t('bankChangesBankChangesIndex.this'),
+              })
         }
         footer={
           <DialogFooter>
             <Button variant="secondary" size="md" onClick={close} disabled={busy}>
-              Cancel
+              {t('bankChangesBankChangesIndex.cancel')}
             </Button>
             <AsyncButton
               variant={intent === 'REJECT' ? 'destructive' : 'primary'}
               size="md"
               disabled={reasonTooShort}
               labels={{
-                idle: intent === 'APPROVE' ? 'Approve the new account' : 'Reject the change',
-                busy: 'Working…',
-                done: intent === 'APPROVE' ? 'Approved' : 'Rejected',
-                error: 'Refused',
+                idle:
+                  intent === 'APPROVE'
+                    ? t('bankChangesBankChangesIndex.approveTheNewAccount')
+                    : t('bankChangesBankChangesIndex.rejectTheChange'),
+                busy: t('bankChangesBankChangesIndex.working'),
+                done:
+                  intent === 'APPROVE'
+                    ? t('bankChangesBankChangesIndex.approved')
+                    : t('bankChangesBankChangesIndex.rejected'),
+                error: t('bankChangesBankChangesIndex.refused'),
               }}
               onAction={onConfirm}
             />
@@ -290,14 +314,15 @@ export function BankChangesIndex(): ReactElement {
           {intent === 'APPROVE' ? (
             <>
               <p className="mk-muted">
-                From this moment every withdrawal to {reviewing?.companyName ?? 'this client'} goes
-                to the account below, and the one they had before stops receiving money. Undoing it
-                takes another change request and another approval — so approve it because you
-                recognise the account, not because the form was filled in.
+                {t('bankChangesBankChangesIndex.fromThisMomentEveryWithdrawal', {
+                  value: reviewing?.companyName ?? t('bankChangesBankChangesIndex.thisClient'),
+                })}
               </p>
               {reviewing !== null && (
                 <div className="mk-subject">
-                  <span className="mk-subject__label">New destination</span>
+                  <span className="mk-subject__label">
+                    {t('bankChangesBankChangesIndex.newDestination')}
+                  </span>
                   <span className="mk-subject__main">{reviewing.proposed.bankAccountName}</span>
                   <span>
                     <Ident value={reviewing.proposed.bankAccountNumber} />
@@ -314,20 +339,18 @@ export function BankChangesIndex(): ReactElement {
           ) : (
             <>
               <p className="mk-muted">
-                Nothing moves — their withdrawals carry on to the account already on file. The
-                client reads your reason word for word, so write what did not match or what you need
-                from them; “rejected” on its own just sends the same request back.
+                {t('bankChangesBankChangesIndex.nothingMovesTheirWithdrawalsCarry')}
               </p>
               <TextArea
-                label="Reason the client will read"
+                label={t('bankChangesBankChangesIndex.reasonTheClientWillRead')}
                 requiredMark
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={4}
                 maxLength={500}
                 showCount
-                hint="At least 10 characters."
-                placeholder="e.g. The account name does not match the business name we have on file. Send a bank statement header showing the account holder."
+                hint={t('bankChangesBankChangesIndex.atLeast10Characters')}
+                placeholder={t('bankChangesBankChangesIndex.eGTheAccountName')}
               />
             </>
           )}

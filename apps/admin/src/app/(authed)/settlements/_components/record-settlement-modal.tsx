@@ -20,6 +20,7 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { MkAlert, MkCallout } from '../../seller-wallets/_components/money-parts';
+import { useT } from '@/i18n/client';
 
 interface DraftLine {
   readonly key: number;
@@ -58,6 +59,7 @@ export function RecordSettlementModal({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const accounts = useCourierAccounts();
   const record = useRecordSettlement();
@@ -103,7 +105,7 @@ export function RecordSettlementModal({
     setError(null);
     const courier = accounts.data?.find((a) => a.id === courierAccountId)?.courierCode;
     if (courier === undefined) {
-      setError('Choose the courier account first — the file is read in its own format.');
+      setError(t('settlementsRecordSettlementModal.chooseTheCourierAccountFirst'));
       return;
     }
     setFileNotes(null);
@@ -142,7 +144,11 @@ export function RecordSettlementModal({
       // courier's claim, the bank statement is the fact, and they can
       // differ. Pre-filling it would quietly make the claim the truth.
       if (usable.length === 0) {
-        setError(`Nothing in this file could be matched to an order (${out.rows.length} rows).`);
+        setError(
+          t('settlementsRecordSettlementModal.nothingInThisFileCould', {
+            rowsLength: out.rows.length,
+          }),
+        );
       }
     } catch (err) {
       setError(serverVerdict(err));
@@ -223,7 +229,7 @@ export function RecordSettlementModal({
           : {}),
         ...(note.trim() === '' ? {} : { note: note.trim() }),
       });
-      toast.success('Payout recorded.');
+      toast.success(t('settlementsRecordSettlementModal.payoutRecorded'));
       reset();
       onOpenChange(false);
     } catch (err) {
@@ -247,8 +253,8 @@ export function RecordSettlementModal({
       }}
       size="lg"
       locked={record.isPending}
-      title="Record a courier payout"
-      description="The bank credit that landed, and the orders it covers. The reference must be the courier's own UTR — it is what makes recording the same credit twice a refusal."
+      title={t('settlementsRecordSettlementModal.recordACourierPayout')}
+      description={t('settlementsRecordSettlementModal.theBankCreditThatLanded')}
       footer={
         <DialogFooter>
           <Button
@@ -257,7 +263,7 @@ export function RecordSettlementModal({
             onClick={() => onOpenChange(false)}
             disabled={record.isPending}
           >
-            Cancel
+            {t('settlementsRecordSettlementModal.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
@@ -269,10 +275,10 @@ export function RecordSettlementModal({
               filled.length === 0
             }
             labels={{
-              idle: 'Record payout',
-              busy: 'Recording…',
-              done: 'Recorded',
-              error: 'Refused',
+              idle: t('settlementsRecordSettlementModal.recordPayout'),
+              busy: t('settlementsRecordSettlementModal.recording'),
+              done: t('settlementsRecordSettlementModal.recorded'),
+              error: t('settlementsRecordSettlementModal.refused'),
             }}
             onAction={submit}
           />
@@ -283,12 +289,12 @@ export function RecordSettlementModal({
         <div className="mk-form mk-form--2">
           <Select
             id="settle-account"
-            label="Courier account"
+            label={t('settlementsRecordSettlementModal.courierAccount')}
             requiredMark
             value={courierAccountId}
             onChange={(e) => setCourierAccountId(e.target.value)}
           >
-            <option value="">Choose an account…</option>
+            <option value="">{t('settlementsRecordSettlementModal.chooseAnAccount')}</option>
             {accounts.data?.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.label} · {a.courierCode} ({a.environment.toLowerCase()})
@@ -298,7 +304,7 @@ export function RecordSettlementModal({
 
           <DateField
             id="settle-date"
-            label="Received on"
+            label={t('settlementsRecordSettlementModal.receivedOn')}
             requiredMark
             value={receivedAt}
             onChange={(e) => setReceivedAt(e.target.value)}
@@ -306,8 +312,8 @@ export function RecordSettlementModal({
 
           <TextField
             id="settle-ref"
-            label="Payout reference (UTR)"
-            hint="Unique per account."
+            label={t('settlementsRecordSettlementModal.payoutReferenceUtr')}
+            hint={t('settlementsRecordSettlementModal.uniquePerAccount')}
             requiredMark
             value={reference}
             onChange={(e) => setReference(e.target.value)}
@@ -318,8 +324,8 @@ export function RecordSettlementModal({
 
           <TextField
             id="settle-amount"
-            label="Amount received (INR)"
-            hint="Exactly what landed in the bank."
+            label={t('settlementsRecordSettlementModal.amountReceivedInr')}
+            hint={t('settlementsRecordSettlementModal.exactlyWhatLandedInThe')}
             requiredMark
             inputMode="decimal"
             value={amountInr}
@@ -330,8 +336,8 @@ export function RecordSettlementModal({
 
         {/* ── allocation ── */}
         <h3 className="mk-form__heading">
-          Allocation
-          {lineAction('Add order', () =>
+          {t('settlementsRecordSettlementModal.allocation')}
+          {lineAction(t('settlementsRecordSettlementModal.addOrder'), () =>
             setLines((prev) => [
               ...prev,
               { key: (prev.at(-1)?.key ?? 0) + 1, orderId: '', settledInr: '' },
@@ -345,8 +351,8 @@ export function RecordSettlementModal({
           </span>
           <span className="mk-callout__body">
             {preview.isPending
-              ? 'Reading the file…'
-              : 'Upload the courier’s remittance export — matched on waybill'}
+              ? t('settlementsRecordSettlementModal.readingTheFile')
+              : t('settlementsRecordSettlementModal.uploadTheCourierSRemittance')}
           </span>
           <input
             type="file"
@@ -362,8 +368,8 @@ export function RecordSettlementModal({
 
         {preview.isPending && (
           <ParachuteProgress
-            label="Reading the courier’s remittance file"
-            detail="Every row is matched on its waybill; rows that cannot be placed are listed, never dropped."
+            label={t('settlementsRecordSettlementModal.readingTheCourierSRemittance')}
+            detail={t('settlementsRecordSettlementModal.everyRowIsMatchedOn')}
           />
         )}
 
@@ -397,7 +403,7 @@ export function RecordSettlementModal({
           <MkCallout
             tone="warn"
             icon={<TriangleAlert size={16} />}
-            title={`${skipped.length} row(s) in the file were not allocated`}
+            title={t('settlementsRecordSettlementModal.rowSInTheFile', { length: skipped.length })}
           >
             {/* Named, not counted. "8 of 10 matched" tells an operator
                 there is a problem; naming the waybills tells them
@@ -408,7 +414,11 @@ export function RecordSettlementModal({
                   <span className="sk-ident">{r.awbNumber}</span> — {r.problem}
                 </li>
               ))}
-              {skipped.length > 8 && <li>…and {skipped.length - 8} more</li>}
+              {skipped.length > 8 && (
+                <li>
+                  {t('settlementsRecordSettlementModal.andMore', { value: skipped.length - 8 })}
+                </li>
+              )}
             </ul>
           </MkCallout>
         )}
@@ -417,16 +427,16 @@ export function RecordSettlementModal({
           {lines.map((line) => (
             <div key={line.key} className="mk-line">
               <TextField
-                aria-label="Order ID"
-                label="Order ID"
+                aria-label={t('settlementsRecordSettlementModal.orderId')}
+                label={t('settlementsRecordSettlementModal.orderId')}
                 value={line.orderId}
                 onChange={(e) => updateLine(line.key, { orderId: e.target.value })}
                 autoComplete="off"
                 inputClassName="sk-ident"
               />
               <TextField
-                aria-label="Amount attributed to this order"
-                label="Amount"
+                aria-label={t('settlementsRecordSettlementModal.amountAttributedToThisOrder')}
+                label={t('settlementsRecordSettlementModal.amount')}
                 inputMode="decimal"
                 value={line.settledInr}
                 onChange={(e) => updateLine(line.key, { settledInr: e.target.value })}
@@ -434,7 +444,7 @@ export function RecordSettlementModal({
               />
               <button
                 type="button"
-                aria-label="Remove this line"
+                aria-label={t('settlementsRecordSettlementModal.removeThisLine')}
                 onClick={() =>
                   setLines((prev) =>
                     prev.length === 1 ? prev : prev.filter((l) => l.key !== line.key),
@@ -450,12 +460,14 @@ export function RecordSettlementModal({
         </div>
 
         {/* What the courier kept back before paying. */}
-        <h3 className="mk-form__heading">Kept back by the courier</h3>
+        <h3 className="mk-form__heading">
+          {t('settlementsRecordSettlementModal.keptBackByTheCourier')}
+        </h3>
         <div className="mk-form mk-form--3">
           <TextField
             id="settle-kept-fee"
-            label="Early-COD fee"
-            hint="Booked as an expense (Courier COD fees)."
+            label={t('settlementsRecordSettlementModal.earlyCodFee')}
+            hint={t('settlementsRecordSettlementModal.bookedAsAnExpenseCourier')}
             inputMode="decimal"
             value={kept.earlyCodFeeInr}
             onChange={(e) => setKept((k) => ({ ...k, earlyCodFeeInr: e.target.value }))}
@@ -463,8 +475,8 @@ export function RecordSettlementModal({
           />
           <TextField
             id="settle-kept-freight"
-            label="Freight from COD"
-            hint="Booked as a courier wallet top-up."
+            label={t('settlementsRecordSettlementModal.freightFromCod')}
+            hint={t('settlementsRecordSettlementModal.bookedAsACourierWallet')}
             inputMode="decimal"
             value={kept.freightInr}
             onChange={(e) => setKept((k) => ({ ...k, freightInr: e.target.value }))}
@@ -472,8 +484,8 @@ export function RecordSettlementModal({
           />
           <TextField
             id="settle-kept-rto"
-            label="RTO reversal"
-            hint="The file's total — name the orders below."
+            label={t('settlementsRecordSettlementModal.rtoReversal')}
+            hint={t('settlementsRecordSettlementModal.theFileSTotalName')}
             inputMode="decimal"
             value={kept.rtoReversalInr}
             onChange={(e) => setKept((k) => ({ ...k, rtoReversalInr: e.target.value }))}
@@ -485,7 +497,7 @@ export function RecordSettlementModal({
             and our tax and fee on it returned, so it must be exact. */}
         <div className="mk-card__head">
           <span className="mk-small mk-card__titles">
-            Orders whose COD was reversed
+            {t('settlementsRecordSettlementModal.ordersWhoseCodWasReversed')}
             {namedReversals.length > 0 && (
               <>
                 {' '}
@@ -493,7 +505,7 @@ export function RecordSettlementModal({
               </>
             )}
           </span>
-          {lineAction('Add reversed order', () =>
+          {lineAction(t('settlementsRecordSettlementModal.addReversedOrder'), () =>
             setReversals((prev) => [
               ...prev,
               { key: (prev.at(-1)?.key ?? 0) + 1, orderId: '', settledInr: '' },
@@ -505,8 +517,8 @@ export function RecordSettlementModal({
             {reversals.map((r) => (
               <div key={r.key} className="mk-line">
                 <TextField
-                  aria-label="Reversed order ID"
-                  label="Reversed order ID"
+                  aria-label={t('settlementsRecordSettlementModal.reversedOrderId')}
+                  label={t('settlementsRecordSettlementModal.reversedOrderId')}
                   value={r.orderId}
                   onChange={(e) =>
                     setReversals((prev) =>
@@ -517,8 +529,8 @@ export function RecordSettlementModal({
                   inputClassName="sk-ident"
                 />
                 <TextField
-                  aria-label="COD reversed for this order"
-                  label="COD reversed"
+                  aria-label={t('settlementsRecordSettlementModal.codReversedForThisOrder')}
+                  label={t('settlementsRecordSettlementModal.codReversed')}
                   inputMode="decimal"
                   value={r.settledInr}
                   onChange={(e) =>
@@ -530,7 +542,7 @@ export function RecordSettlementModal({
                 />
                 <button
                   type="button"
-                  aria-label="Remove this reversed order"
+                  aria-label={t('settlementsRecordSettlementModal.removeThisReversedOrder')}
                   onClick={() => setReversals((prev) => prev.filter((x) => x.key !== r.key))}
                   className="mk-icon-btn"
                 >
@@ -553,15 +565,17 @@ export function RecordSettlementModal({
             {keptTotal > 0 && (
               <>
                 {' '}
-                + <Money amount={keptTotal} /> kept back
+                + <Money amount={keptTotal} /> {t('settlementsRecordSettlementModal.keptBack')}
               </>
             )}
           </p>
           {Math.abs(remainder) < 0.005 ? (
-            <p className="mk-strong">Fully allocated</p>
+            <p className="mk-strong">{t('settlementsRecordSettlementModal.fullyAllocated')}</p>
           ) : (
             <p className="mk-strong">
-              {remainder > 0 ? 'Unexplained: ' : 'Over-allocated by: '}
+              {remainder > 0
+                ? t('settlementsRecordSettlementModal.unexplained')
+                : t('settlementsRecordSettlementModal.overAllocatedBy')}
               <Money amount={Math.abs(remainder)} />
             </p>
           )}
@@ -569,8 +583,8 @@ export function RecordSettlementModal({
 
         <TextArea
           id="settle-note"
-          label="Note"
-          hint="Optional."
+          label={t('settlementsRecordSettlementModal.note')}
+          hint={t('settlementsRecordSettlementModal.optional')}
           rows={2}
           value={note}
           onChange={(e) => setNote(e.target.value)}

@@ -17,6 +17,7 @@ import { usePermission } from '@/lib/use-permission';
 import { localNow } from '@/lib/datetime-local';
 import '../../treasury/_components/money.css';
 import './expenses.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Money coming back.
@@ -35,6 +36,7 @@ export function InvestmentReturnModal({
   readonly investmentId: string | null;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const accounts = usePlatformBankAccounts(usePermission('money.view'));
   const record = useRecordInvestmentReturn();
 
@@ -59,12 +61,12 @@ export function InvestmentReturnModal({
   function review(): void {
     setError(null);
     if (investmentId === null || toAccountId === '') {
-      setError('Which account did it land in?');
+      setError(t('expensesInvestmentReturnModal.whichAccountDidItLand'));
       return;
     }
     const n = Number(amount);
     if (!Number.isFinite(n) || n <= 0) {
-      setError('Enter what came back');
+      setError(t('expensesInvestmentReturnModal.enterWhatCameBack'));
       return;
     }
     setConfirming(true);
@@ -86,7 +88,11 @@ export function InvestmentReturnModal({
       setAmount('');
       setClose(false);
       onClose();
-      toast.success(close ? 'Return recorded; investment closed' : 'Return recorded');
+      toast.success(
+        close
+          ? t('expensesInvestmentReturnModal.returnRecordedInvestmentClosed')
+          : t('expensesInvestmentReturnModal.returnRecorded'),
+      );
     } catch (err) {
       setError(serverVerdict(err));
       // Keeps the confirm open with the verdict on it, to read and retry.
@@ -107,27 +113,29 @@ export function InvestmentReturnModal({
           }
         }}
         icon={<Banknote size={18} />}
-        title="Record a return"
-        description="Partial returns accumulate. Tick to close only when it is genuinely finished."
+        title={t('expensesInvestmentReturnModal.recordAReturn')}
+        description={t('expensesInvestmentReturnModal.partialReturnsAccumulateTickTo')}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={onClose}>
-              Cancel
+              {t('expensesInvestmentReturnModal.cancel')}
             </Button>
             <Button variant="primary" onClick={review} disabled={record.isPending}>
-              {record.isPending ? 'Recording…' : 'Record return'}
+              {record.isPending
+                ? t('expensesInvestmentReturnModal.recording')
+                : t('expensesInvestmentReturnModal.recordReturn')}
             </Button>
           </DialogFooter>
         }
       >
         <div className="mo-fields">
           <Select
-            label="Into account"
+            label={t('expensesInvestmentReturnModal.intoAccount')}
             requiredMark
             value={toAccountId}
             onChange={(e) => setToAccountId(e.target.value)}
           >
-            <option value="">Select an account…</option>
+            <option value="">{t('expensesInvestmentReturnModal.selectAnAccount')}</option>
             {(accounts.data ?? [])
               .filter((a) => a.isActive)
               .map((a) => (
@@ -138,7 +146,9 @@ export function InvestmentReturnModal({
           </Select>
           <div className="mo-fields" data-cols="2">
             <TextField
-              label={`Amount${account ? ` (${account.currency})` : ''}`}
+              label={t('expensesInvestmentReturnModal.amount', {
+                value: account ? ` (${account.currency})` : '',
+              })}
               requiredMark
               type="number"
               inputMode="decimal"
@@ -149,7 +159,7 @@ export function InvestmentReturnModal({
               placeholder="0.00"
             />
             <DateField
-              label="Received"
+              label={t('expensesInvestmentReturnModal.received2')}
               requiredMark
               type="datetime-local"
               value={receivedAt}
@@ -159,7 +169,7 @@ export function InvestmentReturnModal({
           <Checkbox
             checked={close}
             onChange={(e) => setClose(e.target.checked)}
-            label="This closes the investment"
+            label={t('expensesInvestmentReturnModal.thisClosesTheInvestment')}
           />
           {error !== null && !confirming && (
             <p className="mo-error" role="alert">
@@ -175,8 +185,16 @@ export function InvestmentReturnModal({
           setConfirming(next);
           if (!next) setError(null);
         }}
-        title={close ? 'Record this return and close the investment?' : 'Record this return?'}
-        entity={account === undefined ? 'Into account' : `${account.label} · ${account.bankName}`}
+        title={
+          close
+            ? t('expensesInvestmentReturnModal.recordThisReturnAndClose')
+            : t('expensesInvestmentReturnModal.recordThisReturn')
+        }
+        entity={
+          account === undefined
+            ? t('expensesInvestmentReturnModal.intoAccount')
+            : `${account.label} · ${account.bankName}`
+        }
         amount={
           <Money
             amount={Number(amount).toFixed(2)}
@@ -187,16 +205,18 @@ export function InvestmentReturnModal({
         }
         consequence={
           close
-            ? 'The money lands in this account and the investment is closed for good; no further return can be recorded against it.'
-            : 'The money lands in this account and the investment stays open for further returns.'
+            ? t('expensesInvestmentReturnModal.theMoneyLandsInThis')
+            : t('expensesInvestmentReturnModal.theMoneyLandsInThis2')
         }
-        confirmLabel="Record return"
+        confirmLabel={t('expensesInvestmentReturnModal.recordReturn')}
         onConfirm={save}
         error={confirming ? (error ?? undefined) : undefined}
       >
         <div className="ex-confirm-lines">
           <span>
-            Received: {receivedAt === '' ? '—' : new Date(receivedAt).toLocaleString('en-IN')}
+            {t('expensesInvestmentReturnModal.received', {
+              value: receivedAt === '' ? '—' : new Date(receivedAt).toLocaleString('en-IN'),
+            })}
           </span>
         </div>
       </ConfirmDialog>

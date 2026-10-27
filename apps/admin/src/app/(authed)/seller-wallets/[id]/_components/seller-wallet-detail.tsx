@@ -23,6 +23,7 @@ import { useInstantPayAdvances, useSellerHoldings } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { MoveSellerCashModal, type HoldingRef } from './move-seller-cash-modal';
 import { MkCard } from '../../_components/money-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * One seller's wallet, from our side — the same three views they have,
@@ -33,6 +34,7 @@ import { MkCard } from '../../_components/money-parts';
  * one where a mis-click looks like a report.
  */
 export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string }): ReactElement {
+  const t = useT();
   // The bank book is a narrower permission than the wallet — gated here
   // rather than left to 403, so somebody without it sees a page that
   // works instead of one that looks broken.
@@ -58,14 +60,18 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
             <Skeleton key={i} height={132} rounded="md" />
           ))}
         </div>
-        <SkeletonRows rows={6} cols={5} label="Loading wallet…" />
+        <SkeletonRows
+          rows={6}
+          cols={5}
+          label={t('sellerWalletsIdSellerWalletDetail.loadingWallet')}
+        />
       </div>
     );
   }
   if (detail.isError || detail.data === undefined) {
     return (
       <ErrorState
-        message={detail.error?.message ?? 'Failed to load.'}
+        message={detail.error?.message ?? t('sellerWalletsIdSellerWalletDetail.failedToLoad')}
         retry={() => void detail.refetch()}
       />
     );
@@ -77,7 +83,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
       <PageHeader
         breadcrumb={
           <Link href="/seller-wallets" className="mk-link">
-            <ArrowLeft size={14} aria-hidden /> All wallets
+            <ArrowLeft size={14} aria-hidden /> {t('sellerWalletsIdSellerWalletDetail.allWallets')}
           </Link>
         }
         title={d.seller.companyName}
@@ -89,26 +95,30 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
           is what could actually leave today. */}
       <div className="mk-kpis">
         <KpiCard
-          label="Balance"
+          label={t('sellerWalletsIdSellerWalletDetail.balance')}
           figure={<Money amount={d.balanceInr} currency="INR" />}
-          hint={Number(d.balanceInr) < 0 ? 'They owe us' : 'We owe them'}
+          hint={
+            Number(d.balanceInr) < 0
+              ? t('sellerWalletsIdSellerWalletDetail.theyOweUs')
+              : t('sellerWalletsIdSellerWalletDetail.weOweThem')
+          }
           tone={Number(d.balanceInr) < 0 ? 'debit' : 'neutral'}
         />
         <KpiCard
-          label="Available to withdraw"
+          label={t('sellerWalletsIdSellerWalletDetail.availableToWithdraw')}
           figure={<Money amount={d.withdrawableInr} currency="INR" />}
-          hint="Balance, less the floor and anything already requested"
+          hint={t('sellerWalletsIdSellerWalletDetail.balanceLessTheFloorAnd')}
         />
         <KpiCard
-          label="Requested, not yet paid"
+          label={t('sellerWalletsIdSellerWalletDetail.requestedNotYetPaid')}
           figure={<Money amount={d.pendingWithdrawalInr} currency="INR" />}
-          hint="Still in the balance — held, because a request is not a payment"
+          hint={t('sellerWalletsIdSellerWalletDetail.stillInTheBalanceHeld')}
           tone="pending"
         />
         <KpiCard
-          label="Top-ups awaiting review"
+          label={t('sellerWalletsIdSellerWalletDetail.topUpsAwaitingReview')}
           figure={<Money amount={d.pendingTopupInr} currency="INR" />}
-          hint="Claimed, not matched to a statement — in no balance yet"
+          hint={t('sellerWalletsIdSellerWalletDetail.claimedNotMatchedToA')}
         />
       </div>
 
@@ -118,18 +128,18 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
       {canReadTreasury &&
         (advances.isError ? (
           <p className="mk-muted">
-            Could not read Instant Pay advances.{' '}
+            {t('sellerWalletsIdSellerWalletDetail.couldNotReadInstantPay')}{' '}
             <button
               type="button"
               className="mk-inline-link"
               onClick={() => void advances.refetch()}
             >
-              Retry
+              {t('sellerWalletsIdSellerWalletDetail.retry')}
             </button>
           </p>
         ) : advances.data !== undefined ? (
           <p className="mk-muted">
-            <span>Advanced via Instant Pay, awaiting courier: </span>
+            <span>{t('sellerWalletsIdSellerWalletDetail.advancedViaInstantPayAwaiting')} </span>
             <span className="mk-body">
               <Money amount={advances.data.totalCodInr} currency="INR" convert={false} />
             </span>{' '}
@@ -141,7 +151,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
                   href={`/liabilities/instant-pay?sellerId=${sellerId}`}
                   className="mk-inline-link"
                 >
-                  See orders →
+                  {t('sellerWalletsIdSellerWalletDetail.seeOrders')}
                 </Link>
               </>
             )}
@@ -154,15 +164,17 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
           answer before it can be made, because paying BDT out of an
           account holding only INR is not something a balance can warn
           you about. */}
-      <MkCard title="Where their money is held" icon={<Landmark size={18} />}>
+      <MkCard
+        title={t('sellerWalletsIdSellerWalletDetail.whereTheirMoneyIsHeld')}
+        icon={<Landmark size={18} />}
+      >
         {holdings.isLoading ? (
-          <p className="mk-muted">Reading the bank book…</p>
+          <p className="mk-muted">{t('sellerWalletsIdSellerWalletDetail.readingTheBankBook')}</p>
         ) : holdings.isError || holdings.data === undefined ? (
-          <p className="mk-muted">Could not read the bank book. The balance above is unaffected.</p>
+          <p className="mk-muted">{t('sellerWalletsIdSellerWalletDetail.couldNotReadTheBank')}</p>
         ) : holdings.data.length === 0 ? (
           <p className="mk-muted">
-            No cash is recorded against this client in any account. If they hold a balance, it was
-            credited before the bank book existed, or by a flow that has not been wired to it.
+            {t('sellerWalletsIdSellerWalletDetail.noCashIsRecordedAgainst')}
           </p>
         ) : (
           <dl className="mk-dl">
@@ -179,7 +191,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
                       className="mk-inline-link mk-small"
                       onClick={() => setMoving(h)}
                     >
-                      Correct
+                      {t('sellerWalletsIdSellerWalletDetail.correct')}
                     </button>
                   )}
                 </dd>
@@ -202,12 +214,13 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
           places it might have come from (SET-1). Read-only: they are
           edited where they are owned. */}
       <MkCard
-        title="Wallet rules for this client"
-        subtitle="What is in force right now. A value marked override was set for them; the rest are the system default."
+        title={t('sellerWalletsIdSellerWalletDetail.walletRulesForThisClient')}
+        subtitle={t('sellerWalletsIdSellerWalletDetail.whatIsInForceRight')}
         icon={<Scale size={18} />}
         aside={
           <Link href="/settings" className="mk-link">
-            Edit defaults <ArrowRight size={14} aria-hidden />
+            {t('sellerWalletsIdSellerWalletDetail.editDefaults')}{' '}
+            <ArrowRight size={14} aria-hidden />
           </Link>
         }
       >
@@ -228,7 +241,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
       </MkCard>
 
       <Tabs
-        label="Wallet history"
+        label={t('sellerWalletsIdSellerWalletDetail.walletHistory')}
         value={tab}
         onChange={(id) =>
           // A transition: the tab answers the click at once and the
@@ -238,26 +251,28 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
         items={[
           {
             id: 'ledger',
-            label: 'Ledger',
+            label: t('sellerWalletsIdSellerWalletDetail.ledger'),
             panel: (
               <MkCard
                 flush
-                title="Ledger"
-                subtitle="Every entry, newest first. Only money that actually moved appears here."
+                title={t('sellerWalletsIdSellerWalletDetail.ledger')}
+                subtitle={t('sellerWalletsIdSellerWalletDetail.everyEntryNewestFirstOnly')}
               >
-                <Table caption="Ledger">
+                <Table caption={t('sellerWalletsIdSellerWalletDetail.ledger')}>
                   <THead>
                     <Tr>
-                      <Th>When</Th>
-                      <Th>Type</Th>
-                      <Th>Linked</Th>
-                      <Th align="right">Amount</Th>
-                      <Th align="right">Balance after</Th>
+                      <Th>{t('sellerWalletsIdSellerWalletDetail.when')}</Th>
+                      <Th>{t('sellerWalletsIdSellerWalletDetail.type')}</Th>
+                      <Th>{t('sellerWalletsIdSellerWalletDetail.linked')}</Th>
+                      <Th align="right">{t('sellerWalletsIdSellerWalletDetail.amount')}</Th>
+                      <Th align="right">{t('sellerWalletsIdSellerWalletDetail.balanceAfter')}</Th>
                     </Tr>
                   </THead>
                   <TBody>
                     {(entries.data?.items ?? []).length === 0 ? (
-                      <TableEmpty colSpan={5}>No entries yet.</TableEmpty>
+                      <TableEmpty colSpan={5}>
+                        {t('sellerWalletsIdSellerWalletDetail.noEntriesYet')}
+                      </TableEmpty>
                     ) : (
                       (entries.data?.items ?? []).map((e: AdminWalletEntry) => (
                         <Tr key={e.id}>
@@ -285,14 +300,18 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
                                 href={`/orders/${e.linkedOrderId}`}
                                 className="mk-inline-link sk-ident mk-small"
                               >
-                                {e.linkedOrderNumber ?? 'Order'} →
+                                {e.linkedOrderNumber ??
+                                  t('sellerWalletsIdSellerWalletDetail.order')}{' '}
+                                →
                               </Link>
                             ) : e.linkedConsignmentId !== null ? (
                               <Link
                                 href={`/warehouse/consignments/${e.linkedConsignmentId}`}
                                 className="mk-inline-link sk-ident mk-small"
                               >
-                                {e.linkedConsignmentNumber ?? 'Consignment'} →
+                                {e.linkedConsignmentNumber ??
+                                  t('sellerWalletsIdSellerWalletDetail.consignment')}{' '}
+                                →
                               </Link>
                             ) : (
                               <span className="mk-faint">—</span>
@@ -327,27 +346,33 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
           },
           {
             id: 'topups',
-            label: 'Top-ups',
+            label: t('sellerWalletsIdSellerWalletDetail.topUps'),
             panel: (
               <MkCard
                 flush
-                title="Top-ups"
-                subtitle="Every claim, whatever became of it. Only accepted ones reach the ledger."
+                title={t('sellerWalletsIdSellerWalletDetail.topUps')}
+                subtitle={t('sellerWalletsIdSellerWalletDetail.everyClaimWhateverBecameOf')}
               >
-                <RawList rows={topups.data ?? []} empty="No top-ups claimed." />
+                <RawList
+                  rows={topups.data ?? []}
+                  empty={t('sellerWalletsIdSellerWalletDetail.noTopUpsClaimed')}
+                />
               </MkCard>
             ),
           },
           {
             id: 'withdrawals',
-            label: 'Withdrawal requests',
+            label: t('sellerWalletsIdSellerWalletDetail.withdrawalRequests'),
             panel: (
               <MkCard
                 flush
-                title="Withdrawal requests"
-                subtitle="A request never moves the balance — the remittance does."
+                title={t('sellerWalletsIdSellerWalletDetail.withdrawalRequests')}
+                subtitle={t('sellerWalletsIdSellerWalletDetail.aRequestNeverMovesThe')}
               >
-                <RawList rows={withdrawals.data ?? []} empty="No withdrawal requests." />
+                <RawList
+                  rows={withdrawals.data ?? []}
+                  empty={t('sellerWalletsIdSellerWalletDetail.noWithdrawalRequests')}
+                />
               </MkCard>
             ),
           },
@@ -371,6 +396,7 @@ function RawList({
   readonly rows: readonly unknown[];
   readonly empty: string;
 }): ReactElement {
+  const t = useT();
   if (rows.length === 0) {
     return (
       <div className="mk-card__head">
@@ -382,10 +408,10 @@ function RawList({
     <Table>
       <THead>
         <Tr>
-          <Th>When</Th>
-          <Th align="right">Amount</Th>
-          <Th>Status</Th>
-          <Th>Note</Th>
+          <Th>{t('sellerWalletsIdSellerWalletDetail.when')}</Th>
+          <Th align="right">{t('sellerWalletsIdSellerWalletDetail.amount')}</Th>
+          <Th>{t('sellerWalletsIdSellerWalletDetail.status')}</Th>
+          <Th>{t('sellerWalletsIdSellerWalletDetail.note')}</Th>
         </Tr>
       </THead>
       <TBody>

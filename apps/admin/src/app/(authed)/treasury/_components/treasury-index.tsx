@@ -22,6 +22,7 @@ import { OwnerMoneyModal } from './owner-money-modal';
 import { ReconcileModal } from './reconcile-modal';
 import { TransferModal } from './transfer-modal';
 import './treasury.css';
+import { useT } from '@/i18n/client';
 
 /**
  * What we hold, where, and how much of it is somebody else's.
@@ -64,6 +65,7 @@ interface OpeningTarget {
 }
 
 export function TreasuryIndex(): ReactElement {
+  const t = useT();
   const canManage = usePermission('money.treasury.manage');
   const overview = useTreasuryOverview();
   const [transferring, setTransferring] = useState(false);
@@ -113,8 +115,8 @@ export function TreasuryIndex(): ReactElement {
   return (
     <div className="mo-page">
       <PageHeader
-        title="Treasury"
-        subtitle="Which account holds what, how much of it is ours, and whether what we owe clients is covered."
+        title={t('treasuryTreasuryIndex.treasury')}
+        subtitle={t('treasuryTreasuryIndex.whichAccountHoldsWhatHow')}
         action={
           canManage ? (
             <Button
@@ -123,7 +125,7 @@ export function TreasuryIndex(): ReactElement {
               icon={<ArrowLeftRight size={14} />}
               onClick={() => setTransferring(true)}
             >
-              Move money
+              {t('treasuryTreasuryIndex.moveMoney')}
             </Button>
           ) : undefined
         }
@@ -137,11 +139,11 @@ export function TreasuryIndex(): ReactElement {
             <Skeleton rounded="md" />
             <Skeleton rounded="md" />
           </div>
-          <SkeletonRows rows={4} cols={7} label="Loading the treasury" />
+          <SkeletonRows rows={4} cols={7} label={t('treasuryTreasuryIndex.loadingTheTreasury')} />
         </div>
       ) : overview.isError || overview.data === undefined ? (
         <ErrorState
-          message={overview.error?.message ?? 'Could not read the treasury.'}
+          message={overview.error?.message ?? t('treasuryTreasuryIndex.couldNotReadTheTreasury')}
           retry={() => void overview.refetch()}
         />
       ) : (
@@ -150,15 +152,15 @@ export function TreasuryIndex(): ReactElement {
               on this page that can mean we are in trouble. */}
           <div className="mo-kpis">
             <KpiCard
-              label="Owed to clients"
+              label={t('treasuryTreasuryIndex.owedToClients')}
               figure={<Money amount={overview.data.clientMoney.owedToSellersInr} currency="INR" />}
-              hint="Sum of positive wallet balances — what they could ask for"
+              hint={t('treasuryTreasuryIndex.sumOfPositiveWalletBalances')}
               tone="pending"
             />
             <KpiCard
-              label="Held for clients"
+              label={t('treasuryTreasuryIndex.heldForClients')}
               figure={<Money amount={overview.data.clientMoney.heldForSellersInr} currency="INR" />}
-              hint="Cash in our accounts marked as theirs"
+              hint={t('treasuryTreasuryIndex.cashInOurAccountsMarked')}
             />
             {/* The label and the number have to describe the SAME thing.
                 `gapInr` is owed − held, so it is zero or negative when
@@ -167,7 +169,11 @@ export function TreasuryIndex(): ReactElement {
                 a real surplus read as "Covered −₹5,000.00". Show the
                 magnitude, and let the label say which direction it is. */}
             <KpiCard
-              label={overview.data.clientMoney.covered ? 'Surplus held' : 'Shortfall'}
+              label={
+                overview.data.clientMoney.covered
+                  ? t('treasuryTreasuryIndex.surplusHeld')
+                  : t('treasuryTreasuryIndex.shortfall')
+              }
               figure={
                 // Magnitude WITHOUT a float round-trip: money is carried
                 // as a string everywhere in this codebase precisely so it
@@ -179,9 +185,9 @@ export function TreasuryIndex(): ReactElement {
               hint={
                 overview.data.clientMoney.covered
                   ? isZeroAmount(overview.data.clientMoney.gapInr)
-                    ? 'Exactly covered — we hold what we owe, to the rupee'
-                    : 'Held for clients over and above what we owe them'
-                  : 'We owe more than we hold — money in transit is a normal cause, but check'
+                    ? t('treasuryTreasuryIndex.exactlyCoveredWeHoldWhat')
+                    : t('treasuryTreasuryIndex.heldForClientsOverAnd')
+                  : t('treasuryTreasuryIndex.weOweMoreThanWe')
               }
               tone={overview.data.clientMoney.covered ? 'credit' : 'debit'}
               icon={
@@ -201,7 +207,7 @@ export function TreasuryIndex(): ReactElement {
             overview.data.courierWallets.accounts.length > 0 ? (
               <Link href="/courier-wallet" className="tr-kpi-link">
                 <KpiCard
-                  label="In courier wallets"
+                  label={t('treasuryTreasuryIndex.inCourierWallets')}
                   figure={
                     <Money
                       amount={overview.data.courierWallets.totalInr}
@@ -209,7 +215,7 @@ export function TreasuryIndex(): ReactElement {
                       convert={false}
                     />
                   }
-                  hint="Prepaid float — ours, held on their system"
+                  hint={t('treasuryTreasuryIndex.prepaidFloatOursHeldOn')}
                   tone="info"
                 />
               </Link>
@@ -217,7 +223,7 @@ export function TreasuryIndex(): ReactElement {
             {overview.data.totals.byCurrency.map((c) => (
               <KpiCard
                 key={c.currency}
-                label={`Total ${c.currency}`}
+                label={t('treasuryTreasuryIndex.total2', { currency: c.currency })}
                 figure={<Money amount={c.total} currency={c.currency} convert={false} />}
                 hint={
                   // Through Money, like every other figure on the page.
@@ -236,29 +242,25 @@ export function TreasuryIndex(): ReactElement {
 
           {!overview.data.clientMoney.covered && (
             <Notice tone="bad" icon={<AlertTriangle size={16} />} role="status">
-              <p>
-                We owe clients more than we are holding for them. That is not automatically wrong —
-                COD the courier has collected but not yet settled shows up exactly like this — but
-                it is the gap to be able to explain.
-              </p>
+              <p>{t('treasuryTreasuryIndex.weOweClientsMoreThan')}</p>
             </Notice>
           )}
 
           <MoSection
-            title="Accounts"
-            note="Open one to see whose money is inside it. A balance is the sum of its entries, so it cannot lag behind them."
+            title={t('treasuryTreasuryIndex.accounts')}
+            note={t('treasuryTreasuryIndex.openOneToSeeWhose')}
             flush
           >
-            <Table caption="Our bank accounts">
+            <Table caption={t('treasuryTreasuryIndex.ourBankAccounts')}>
               <THead>
                 <Tr>
-                  <Th>Account</Th>
-                  <Th>Purpose</Th>
-                  <Th>Settles from</Th>
-                  <Th align="right">Ours</Th>
-                  <Th align="right">Held for clients</Th>
-                  <Th align="right">Total</Th>
-                  <Th align="right">Actions</Th>
+                  <Th>{t('treasuryTreasuryIndex.account')}</Th>
+                  <Th>{t('treasuryTreasuryIndex.purpose')}</Th>
+                  <Th>{t('treasuryTreasuryIndex.settlesFrom')}</Th>
+                  <Th align="right">{t('treasuryTreasuryIndex.ours')}</Th>
+                  <Th align="right">{t('treasuryTreasuryIndex.heldForClients')}</Th>
+                  <Th align="right">{t('treasuryTreasuryIndex.total')}</Th>
+                  <Th align="right">{t('treasuryTreasuryIndex.actions')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -266,8 +268,8 @@ export function TreasuryIndex(): ReactElement {
                   <TableEmpty colSpan={7}>
                     <EmptyState
                       bare
-                      title="No bank accounts yet"
-                      description="Add one on the Bank accounts page, with its opening balance."
+                      title={t('treasuryTreasuryIndex.noBankAccountsYet')}
+                      description={t('treasuryTreasuryIndex.addOneOnTheBank')}
                     />
                   </TableEmpty>
                 ) : (
@@ -293,7 +295,7 @@ export function TreasuryIndex(): ReactElement {
                         {openAccount === a.accountId &&
                           (a.bySeller.length === 0 ? (
                             <p className="mo-faint tr-holders">
-                              Nothing in here belongs to a client.
+                              {t('treasuryTreasuryIndex.nothingInHereBelongsTo')}
                             </p>
                           ) : (
                             <dl className="tr-holders">
@@ -337,7 +339,7 @@ export function TreasuryIndex(): ReactElement {
                                 })
                               }
                             >
-                              Owner money
+                              {t('treasuryTreasuryIndex.ownerMoney')}
                             </Button>
                             <Button
                               variant="ghost"
@@ -352,7 +354,7 @@ export function TreasuryIndex(): ReactElement {
                                 })
                               }
                             >
-                              Reconcile
+                              {t('treasuryTreasuryIndex.reconcile')}
                             </Button>
                           </div>
                         ) : (
@@ -367,31 +369,37 @@ export function TreasuryIndex(): ReactElement {
           </MoSection>
 
           <MoSection
-            title="Recent movements"
-            note="Append-only. A correction is a new entry saying who corrected it and by how much — never an edit."
+            title={t('treasuryTreasuryIndex.recentMovements')}
+            note={t('treasuryTreasuryIndex.appendOnlyACorrectionIs')}
             flush
           >
             {entries.isError ? (
               <div className="mo-card__pad">
                 <ErrorState
-                  message={entries.error?.message ?? 'Could not read the ledger.'}
+                  message={
+                    entries.error?.message ?? t('treasuryTreasuryIndex.couldNotReadTheLedger')
+                  }
                   retry={() => void entries.refetch()}
                 />
               </div>
             ) : entries.isLoading ? (
               <div className="mo-card__pad">
-                <SkeletonRows rows={5} cols={6} label="Loading recent movements" />
+                <SkeletonRows
+                  rows={5}
+                  cols={6}
+                  label={t('treasuryTreasuryIndex.loadingRecentMovements')}
+                />
               </div>
             ) : (
-              <Table caption="Recent bank movements">
+              <Table caption={t('treasuryTreasuryIndex.recentBankMovements')}>
                 <THead>
                   <Tr>
-                    <Th>When</Th>
-                    <Th>Account</Th>
-                    <Th>What</Th>
-                    <Th>Whose</Th>
-                    <Th align="right">Amount</Th>
-                    <Th align="right">Opening balance</Th>
+                    <Th>{t('treasuryTreasuryIndex.when')}</Th>
+                    <Th>{t('treasuryTreasuryIndex.account')}</Th>
+                    <Th>{t('treasuryTreasuryIndex.what')}</Th>
+                    <Th>{t('treasuryTreasuryIndex.whose')}</Th>
+                    <Th align="right">{t('treasuryTreasuryIndex.amount')}</Th>
+                    <Th align="right">{t('treasuryTreasuryIndex.openingBalance')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -399,8 +407,8 @@ export function TreasuryIndex(): ReactElement {
                     <TableEmpty colSpan={6}>
                       <EmptyState
                         bare
-                        title="Nothing recorded yet"
-                        description="Settlements, top-ups and payouts will appear here as they are wired in."
+                        title={t('treasuryTreasuryIndex.nothingRecordedYet')}
+                        description={t('treasuryTreasuryIndex.settlementsTopUpsAndPayouts')}
                       />
                     </TableEmpty>
                   ) : (
@@ -417,7 +425,9 @@ export function TreasuryIndex(): ReactElement {
                           )}
                         </Td>
                         <Td className="mo-muted">
-                          {e.ownerKind === 'CAPITAL' ? 'Ours' : (e.sellerName ?? 'A client')}
+                          {e.ownerKind === 'CAPITAL'
+                            ? t('treasuryTreasuryIndex.ours')
+                            : (e.sellerName ?? t('treasuryTreasuryIndex.aClient'))}
                         </Td>
                         <Td align="right">
                           {/* Sign carries the direction, so a debit and a
@@ -426,7 +436,11 @@ export function TreasuryIndex(): ReactElement {
                         </Td>
                         <Td align="right">
                           {e.isOpeningBalance ? (
-                            <StatusChip kind="confirmed" label="Opening balance" size="sm" />
+                            <StatusChip
+                              kind="confirmed"
+                              label={t('treasuryTreasuryIndex.openingBalance')}
+                              size="sm"
+                            />
                           ) : canManage &&
                             e.ownerKind === 'CAPITAL' &&
                             (e.type === 'RECONCILIATION_ADJUSTMENT' ||
@@ -446,7 +460,7 @@ export function TreasuryIndex(): ReactElement {
                                 })
                               }
                             >
-                              Mark as opening balance
+                              {t('treasuryTreasuryIndex.markAsOpeningBalance')}
                             </Button>
                           ) : null}
                         </Td>
@@ -461,12 +475,12 @@ export function TreasuryIndex(): ReactElement {
           {overview.data.clientMoney.covered && overview.data.accounts.length > 0 && (
             <p className="tr-covered">
               <ShieldCheck size={14} aria-hidden />
-              Client money is covered by what we hold.
+              {t('treasuryTreasuryIndex.clientMoneyIsCoveredBy')}
             </p>
           )}
 
           <div>
-            <StatusChip kind="draft" label="Phase 1B" size="sm" />
+            <StatusChip kind="draft" label={t('treasuryTreasuryIndex.phase1b')} size="sm" />
           </div>
         </>
       )}
@@ -480,8 +494,8 @@ export function TreasuryIndex(): ReactElement {
           }
         }}
         icon={<BookMarked size={18} />}
-        title="Mark as the opening balance?"
-        description="The P&L leaves the marked entry off its reconciliation line, so money the business already had never reads as income. Once per account."
+        title={t('treasuryTreasuryIndex.markAsTheOpeningBalance')}
+        description={t('treasuryTreasuryIndex.thePLLeavesThe')}
         locked={markOpening.isPending}
         footer={
           <DialogFooter>
@@ -490,10 +504,14 @@ export function TreasuryIndex(): ReactElement {
               onClick={() => setMarking(null)}
               disabled={markOpening.isPending}
             >
-              Cancel
+              {t('treasuryTreasuryIndex.cancel')}
             </Button>
             <AsyncButton
-              labels={{ idle: 'Mark as opening balance', busy: 'Marking…', done: 'Marked' }}
+              labels={{
+                idle: t('treasuryTreasuryIndex.markAsOpeningBalance'),
+                busy: t('treasuryTreasuryIndex.marking'),
+                done: t('treasuryTreasuryIndex.marked'),
+              }}
               onAction={() =>
                 marking === null ? Promise.resolve() : markAsOpening(marking.id, markReason)
               }
@@ -504,9 +522,9 @@ export function TreasuryIndex(): ReactElement {
         {marking !== null && (
           <div className="mo-fields">
             <dl className="mo-facts">
-              <dt>Account</dt>
+              <dt>{t('treasuryTreasuryIndex.account')}</dt>
               <dd>{marking.accountLabel}</dd>
-              <dt>Entry</dt>
+              <dt>{t('treasuryTreasuryIndex.entry')}</dt>
               <dd>
                 <Money amount={marking.signedAmount} currency={marking.currency} convert={false} />
                 <span className="mo-sub">{new Date(marking.occurredAt).toLocaleString()}</span>
@@ -514,8 +532,8 @@ export function TreasuryIndex(): ReactElement {
             </dl>
             <TextArea
               id="treasury-opening-reason"
-              label="Why is this the money the account already had when the book started?"
-              hint="At least 10 characters. Kept with the audit record."
+              label={t('treasuryTreasuryIndex.whyIsThisTheMoney')}
+              hint={t('treasuryTreasuryIndex.atLeast10CharactersKept')}
               value={markReason}
               onChange={(ev) => setMarkReason(ev.target.value)}
               rows={3}
