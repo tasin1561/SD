@@ -8,32 +8,23 @@ import { useSellerIdentity } from '@skydrop/auth/client';
 import { useOrderStatusSummary, usePendingRows, useOrdersList } from '@/lib/api-hooks';
 import { can, canSeePath } from '@/lib/page-access';
 import { useResellerStores } from '@/lib/reseller-store-hooks';
-import {
-  CheckCircle2,
-  Hourglass,
-  Package,
-  PhoneCall,
-  Plus,
-  Search,
-  ShoppingCart,
-  Truck,
-  Upload,
-} from 'lucide-react';
-import { Money } from '@skydrop/ui/components';
+import { Hourglass, Package, Plus, Search, Upload } from 'lucide-react';
 import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
-import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
-import { KpiCard } from '@skydrop/ui/app/kpi-card';
-import { FilterBar, FilterField } from '@skydrop/ui/app/filter-bar';
-import { TextField } from '@skydrop/ui/app/text-field';
 import { Select } from '@skydrop/ui/app/select';
-import { DateField } from '@skydrop/ui/app/date-field';
 import { Tabs, type TabItem } from '@skydrop/ui/app/tabs';
 import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { Pagination } from '@skydrop/ui/app/pagination';
 import { chipWords, StatusChip } from '@skydrop/ui/app/status-chip';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { LinkButton, MetaFact } from './orders-parts';
+import { LinkButton } from './orders-parts';
+import {
+  formatPlaced,
+  KpiStrip,
+  MoreFilters,
+  OrdMoney,
+  type KpiSegment,
+} from './orders-list-parts';
 import { useStores } from '@/lib/store-hooks';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
@@ -110,7 +101,7 @@ const RANGES: ReadonlyArray<{
   // "that week in August", which is a rarer question than "recently".
   { key: 'custom', labelKey: 'orderList.customRange', days: null },
 ];
-const DEFAULT_PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 50;
 /** The status tab that means "no status filter". Not an OrderStatus value. */
 const ALL_TAB = 'all';
 
@@ -199,6 +190,7 @@ export function OrdersIndex(): ReactElement {
   const params = useMemo(() => parseParams(new URLSearchParams(sp.toString())), [sp]);
 
   const [searchInput, setSearchInput] = useState(params.search);
+  const [moreOpen, setMoreOpen] = useState(false);
   // CLOSED stores are still listed: they hold past orders, and a filter
   // that could not reach them would make those orders unfindable.
   const channelStores = useStores().data ?? [];
@@ -306,205 +298,163 @@ export function OrdersIndex(): ReactElement {
     }),
   ];
 
+  const rangeText =
+    list.data === undefined || list.data.total === 0
+      ? undefined
+      : `${(params.page - 1) * params.pageSize + 1}–${Math.min(
+          params.page * params.pageSize,
+          list.data.total,
+        )}`;
+
+  /** A tile filters by ONE status (the list takes one): the first of its
+      group that has orders, so the click lands on something non-empty. */
+  const firstWith = (group: readonly OrderStatus[]): OrderStatus =>
+    group.find((s) => (counts.get(s)?.count ?? 0) > 0) ?? (group[0] as OrderStatus);
+  const loaded = summary.data !== undefined;
+  const segments: KpiSegment[] = [
+    {
+      id: 'total',
+      label: t('orderList.kpiTotal'),
+      tint: 'neutral',
+      value: summary.data?.total,
+      active: params.status === '',
+      onSelect: () => updateUrl({ status: '', page: 1 }),
+      foot: loaded
+        ? richMessage(t('orderList.kpiCodNote'), {
+            amount: <OrdMoney amount={summary.data?.totalCodInr ?? 0} />,
+          })
+        : null,
+    },
+    {
+      id: 'processing',
+      label: t('orderList.kpiProcessing'),
+      tint: 'warn',
+      value: loaded ? countOf(PROCESSING) : undefined,
+      active: params.status !== '' && PROCESSING.includes(params.status),
+      onSelect: () => updateUrl({ status: firstWith(PROCESSING), page: 1 }),
+      foot: loaded
+        ? t('orderList.kpiAwaitingCall', {
+            n: counts.get(OrderStatus.PENDING_CONFIRMATION)?.count ?? 0,
+          })
+        : null,
+    },
+    {
+      id: 'moving',
+      label: t('orderList.onTheRoad2'),
+      tint: 'info',
+      value: loaded ? countOf(MOVING) : undefined,
+      active: params.status !== '' && MOVING.includes(params.status),
+      onSelect: () => updateUrl({ status: firstWith(MOVING), page: 1 }),
+      foot: loaded
+        ? richMessage(t('orderList.kpiToCollect'), {
+            amount: <OrdMoney amount={String(codOf(MOVING))} />,
+          })
+        : null,
+    },
+    {
+      id: 'delivered',
+      label: t('orderList.delivered'),
+      tint: 'good',
+      value: loaded ? (counts.get(OrderStatus.DELIVERED)?.count ?? 0) : undefined,
+      active: params.status === OrderStatus.DELIVERED,
+      onSelect: () => updateUrl({ status: OrderStatus.DELIVERED, page: 1 }),
+      foot: loaded
+        ? richMessage(t('orderList.kpiCollected'), {
+            amount: <OrdMoney amount={String(counts.get(OrderStatus.DELIVERED)?.cod ?? 0)} />,
+          })
+        : null,
+    },
+    {
+      id: 'returning',
+      label: t('orderList.returning'),
+      tint: 'bad',
+      value: loaded ? countOf(RETURNING) : undefined,
+      active: params.status !== '' && RETURNING.includes(params.status),
+      onSelect: () => updateUrl({ status: firstWith(RETURNING), page: 1 }),
+      foot: loaded ? t('orderList.kpiRtoNote') : null,
+    },
+  ];
+
   return (
-    <div className="ord-page">
-      <PageHeader
-        breadcrumbs={[
-          { label: t('orderList.clientConsole') },
-          { label: t('orderList.fulfilment') },
-          { label: t('orderList.orders') },
-        ]}
-        Link={Link}
-        title={t('orderList.orders')}
-        subtitle={t('orderList.everythingYouHaveSent')}
-        meta={
-          summary.data === undefined ? undefined : (
-            <span className="ord-meta">
-              <MetaFact tone="accent">{summary.data.total} placed</MetaFact>
-              {countOf(MOVING) > 0 && (
-                <MetaFact dot>
-                  {richMessage(t('orderList.onTheRoad'), { moving: countOf(MOVING) })}
-                </MetaFact>
-              )}
-              {pendingCount > 0 && <MetaFact tone="warn">{pendingCount} pending</MetaFact>}
-            </span>
-          )
-        }
-        action={
-          <div className="ord-row">
-            {/* Only when there IS something waiting. A permanent nav
-                item for an empty queue is noise; a queue nobody knows
-                about is worse than both. */}
-            {pendingCount > 0 && canSeePath(identity, '/orders/pending') && (
-              <LinkButton href="/orders/pending" variant="ghost" icon={<Hourglass size={15} />}>
-                {pendingCount} pending
-              </LinkButton>
-            )}
-            {canSeePath(identity, '/orders/import') && (
-              <LinkButton href="/orders/import" variant="ghost" icon={<Upload size={15} />}>
-                {t('orderList.csvImport')}
-              </LinkButton>
-            )}
-            {canSeePath(identity, '/orders/new') && (
-              <LinkButton href="/orders/new" variant="primary" icon={<Plus size={15} />}>
-                {t('orderList.newOrder')}
-              </LinkButton>
-            )}
-          </div>
-        }
-      />
-
-      {/* ── How the day is going, before the table says anything ────
-             A value is ABSENT rather than 0 while loading: a tile reading
-             "0 delivered" that then becomes 8 has told you something false
-             in between. The count-up runs once per load, never on a
-             refetch. */}
-      <div className="ord-kpis">
-        <KpiCard
-          label={t('orderList.totalOrders')}
-          icon={<ShoppingCart size={14} />}
-          tone="neutral"
-          {...(summary.data === undefined
-            ? { figure: <span className="ord-faint">—</span> }
-            : { value: summary.data.total, unit: 'orders' })}
-          {...(summary.data === undefined
-            ? {}
-            : {
-                foot: [
-                  {
-                    label: t('orderList.codPlaced'),
-                    value: <Money amount={summary.data.totalCodInr} />,
-                  },
-                ],
-              })}
-        />
-        <KpiCard
-          label={t('orderList.beingProcessed')}
-          icon={<PhoneCall size={14} />}
-          tone={countOf(PROCESSING) > 0 ? 'pending' : 'neutral'}
-          {...(summary.data === undefined
-            ? { figure: <span className="ord-faint">—</span> }
-            : { value: countOf(PROCESSING), unit: 'orders' })}
-          {...(summary.data === undefined
-            ? {}
-            : {
-                foot: [
-                  {
-                    label: t('orderList.awaitingTheCall'),
-                    value: counts.get(OrderStatus.PENDING_CONFIRMATION)?.count ?? 0,
-                  },
-                ],
-              })}
-        />
-        <KpiCard
-          label={t('orderList.onTheRoad2')}
-          icon={<Truck size={14} />}
-          tone="info"
-          {...(summary.data === undefined
-            ? { figure: <span className="ord-faint">—</span> }
-            : { value: countOf(MOVING), unit: 'parcels' })}
-          {...(summary.data === undefined
-            ? {}
-            : {
-                foot: [
-                  {
-                    label: t('orderList.stillToCollect'),
-                    value: <Money amount={String(codOf(MOVING))} />,
-                  },
-                ],
-              })}
-        />
-        <KpiCard
-          label={t('orderList.delivered')}
-          icon={<CheckCircle2 size={14} />}
-          tone="credit"
-          {...(summary.data === undefined
-            ? { figure: <span className="ord-faint">—</span> }
-            : { value: counts.get(OrderStatus.DELIVERED)?.count ?? 0, unit: 'settled' })}
-          {...(summary.data === undefined
-            ? {}
-            : {
-                foot: [
-                  {
-                    label: t('orderList.collected'),
-                    value: <Money amount={String(counts.get(OrderStatus.DELIVERED)?.cod ?? 0)} />,
-                  },
-                  { label: t('orderList.comingBack'), value: countOf(RETURNING) },
-                ],
-              })}
-        />
-      </div>
-
-      {/* ── ONE region: the heading names it, the filters narrow it, the
-             status tabs say what is in it, and the table is it. ───── */}
-      <section className="ord-section">
-        <SectionHeading
-          title={t('orderList.consignmentMonitor')}
-          note={
-            list.data === undefined
-              ? undefined
-              : t('orderList.ofShown', { items: list.data.items.length, total: list.data.total })
-          }
-        />
-
-        <FilterBar
-          activeCount={activeFilters}
-          onReset={() => {
-            setSearchInput('');
-            // `storeId` too. It counts towards `filtered`, so the
-            // reset is offered because a store is selected — a Reset
-            // that left it selected would not clear the thing that
-            // summoned it.
-            updateUrl({
-              status: '',
-              search: '',
-              range: '',
-              from: '',
-              to: '',
-              storeId: '',
-              page: 1,
-            });
-          }}
-        >
-          <FilterField wide>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                updateUrl({ search: searchInput.trim(), page: 1 });
-              }}
+    <div className="ord-page ord-page--list">
+      {/* ── ONE row: where you are, how many, what you can do ──────── */}
+      <header className="ord-head">
+        <div className="ord-head__lead">
+          <span className="ord-head__crumb">{t('orderList.fulfilment')} /</span>
+          <h1 className="ord-head__title">{t('orderList.orders')}</h1>
+          <span className="ord-head__pill sk-figure">{summary.data?.total ?? '—'}</span>
+        </div>
+        <div className="ord-head__actions">
+          {/* Only when there IS something waiting. A permanent nav
+              item for an empty queue is noise; a queue nobody knows
+              about is worse than both. */}
+          {pendingCount > 0 && canSeePath(identity, '/orders/pending') && (
+            <LinkButton
+              href="/orders/pending"
+              variant="ghost"
+              size="sm"
+              icon={<Hourglass size={14} />}
             >
-              {/*
-                ONE magnifier, and it is the button: a real
-                <button type="submit"> with an aria-label, so Enter still
-                submits, it is reachable by keyboard, and a screen reader
-                hears "Search".
-              */}
-              <TextField
-                label={t('orderList.search')}
-                aria-label={t('orderList.searchOrders')}
-                placeholder={t('orderList.orderNumberRefAwb')}
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                trail={
-                  <button
-                    type="submit"
-                    aria-label={t('orderList.search')}
-                    title={t('orderList.search')}
-                    className="ord-search-btn"
-                  >
-                    <Search size={16} aria-hidden />
-                  </button>
-                }
-              />
-            </form>
-          </FilterField>
+              {t('orderList.pendingN', { n: pendingCount })}
+            </LinkButton>
+          )}
+          {canSeePath(identity, '/orders/import') && (
+            <LinkButton href="/orders/import" variant="ghost" size="sm" icon={<Upload size={14} />}>
+              {t('orderList.csvImport')}
+            </LinkButton>
+          )}
+          {canSeePath(identity, '/orders/new') && (
+            <LinkButton href="/orders/new" variant="primary" size="sm" icon={<Plus size={14} />}>
+              {t('orderList.newOrder')}
+            </LinkButton>
+          )}
+        </div>
+      </header>
 
-          <FilterField>
+      {/* A value is ABSENT rather than 0 while loading: a tile reading
+          "0 delivered" that then becomes 8 has told you something false
+          in between. The count-up runs once per load, never on a refetch. */}
+      <KpiStrip label={t('orderList.kpiStripLabel')} segments={segments} />
+
+      <section className="ord-section ord-section--list">
+        {/* ── Filters: one row, no card ─────────────────────────────── */}
+        <div className="ord-filters">
+          <form
+            className="ord-filters__search"
+            role="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              updateUrl({ search: searchInput.trim(), page: 1 });
+            }}
+          >
+            <Search size={14} aria-hidden className="ord-filters__icon" />
+            <input
+              type="search"
+              className="ord-ctl ord-ctl--search"
+              aria-label={t('orderList.searchOrders')}
+              placeholder={t('orderList.orderNumberRefAwb')}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+            {/* Enter submits; the button keeps it reachable by keyboard
+                and by a screen reader ("Search"). */}
+            <button type="submit" className="ord-sr" aria-label={t('orderList.search')}>
+              {t('orderList.search')}
+            </button>
+          </form>
+
+          <div className="ord-sel">
+            <span className="ord-sel__k" aria-hidden>
+              {t('orderList.placedWhen')}
+            </span>
             <Select
               label={t('orderList.placedWhen')}
               aria-label={t('orderList.placedWhen')}
               value={params.range}
-              onChange={(e) => updateUrl({ range: e.target.value, from: '', to: '', page: 1 })}
+              onChange={(e) => {
+                updateUrl({ range: e.target.value, from: '', to: '', page: 1 });
+                if (e.target.value === 'custom') setMoreOpen(true);
+              }}
             >
               {RANGES.map((r) => (
                 <option key={r.key} value={r.key}>
@@ -512,34 +462,16 @@ export function OrdersIndex(): ReactElement {
                 </option>
               ))}
             </Select>
-          </FilterField>
-
-          {custom && (
-            <FilterField wide>
-              <div className="ord-dates">
-                <DateField
-                  label={t('orderList.from')}
-                  aria-label={t('orderList.placedFrom')}
-                  value={params.from}
-                  max={params.to === '' ? undefined : params.to}
-                  onChange={(e) => updateUrl({ from: e.target.value, page: 1 })}
-                />
-                <DateField
-                  label={t('orderList.to')}
-                  aria-label={t('orderList.placedTo')}
-                  value={params.to}
-                  min={params.from === '' ? undefined : params.from}
-                  onChange={(e) => updateUrl({ to: e.target.value, page: 1 })}
-                />
-              </div>
-            </FilterField>
-          )}
+          </div>
 
           {/* Only when there is a choice to make. One shopfront is the
               ordinary case, and a filter with a single option is a
               control that can only ever narrow to everything. */}
           {stores.length > 1 && (
-            <FilterField>
+            <div className="ord-sel">
+              <span className="ord-sel__k" aria-hidden>
+                {t('orderList.store')}
+              </span>
               <Select
                 label={t('orderList.store')}
                 aria-label={t('orderList.filterByStore')}
@@ -553,43 +485,78 @@ export function OrdersIndex(): ReactElement {
                   </option>
                 ))}
               </Select>
-            </FilterField>
+            </div>
           )}
 
-          <FilterField>
-            <Select
-              label={t('orderList.status')}
-              aria-label={t('orderList.filterByStatus')}
-              value={params.status}
-              onChange={(e) =>
-                updateUrl({ status: (e.target.value as OrderStatus | '') || '', page: 1 })
-              }
+          <MoreFilters
+            open={moreOpen}
+            setOpen={setMoreOpen}
+            activeCount={(params.status !== '' ? 1 : 0) + (custom ? 1 : 0)}
+            status={params.status}
+            statuses={STATUSES.map((s) => ({
+              value: s,
+              label: chipWords(statusLabel(s, locale)),
+            }))}
+            onStatus={(v) => {
+              updateUrl({ status: (v as OrderStatus | '') || '', page: 1 });
+              setMoreOpen(false);
+            }}
+            from={params.from}
+            to={params.to}
+            onFrom={(v) => updateUrl({ range: 'custom', from: v, page: 1 })}
+            onTo={(v) => updateUrl({ range: 'custom', to: v, page: 1 })}
+            showDates
+          />
+
+          {activeFilters > 0 && (
+            <button
+              type="button"
+              className="ord-filters__reset"
+              onClick={() => {
+                setSearchInput('');
+                // `storeId` too. It counts towards `filtered`, so the
+                // reset is offered because a store is selected — a Reset
+                // that left it selected would not clear the thing that
+                // summoned it.
+                updateUrl({
+                  status: '',
+                  search: '',
+                  range: '',
+                  from: '',
+                  to: '',
+                  storeId: '',
+                  page: 1,
+                });
+              }}
             >
-              <option value="">{t('orderList.allStatuses')}</option>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {chipWords(statusLabel(s, locale))}
-                </option>
-              ))}
-            </Select>
-          </FilterField>
-        </FilterBar>
+              {t('orderList.reset')}
+            </button>
+          )}
+        </div>
 
         {/* ── The counts live HERE rather than only in a dropdown,
                because "how many are stuck at the call" is the question
                this page is opened to answer. ───────────────────────── */}
-        <Tabs
-          label={t('orderList.filterByStatus')}
-          size="sm"
-          items={statusTabs}
-          value={params.status === '' ? ALL_TAB : params.status}
-          onChange={(id) =>
-            updateUrl({ status: id === ALL_TAB ? '' : (id as OrderStatus), page: 1 })
-          }
-        />
+        <div className="ord-tabsrow">
+          <Tabs
+            label={t('orderList.filterByStatus')}
+            size="sm"
+            className="ord-tabsrow__tabs"
+            items={statusTabs}
+            value={params.status === '' ? ALL_TAB : params.status}
+            onChange={(id) =>
+              updateUrl({ status: id === ALL_TAB ? '' : (id as OrderStatus), page: 1 })
+            }
+          />
+          <span className="ord-tabsrow__count sk-figure" aria-live="polite">
+            {rangeText !== undefined &&
+              list.data !== undefined &&
+              t('orderList.rangeOfTotal', { range: rangeText, total: list.data.total })}
+          </span>
+        </div>
 
         {list.isLoading ? (
-          <SkeletonRows rows={6} cols={6} label={t('orderList.loadingOrders')} />
+          <SkeletonRows rows={8} cols={6} label={t('orderList.loadingOrders')} />
         ) : list.isError ? (
           <ErrorState
             message={list.error?.message ?? t('orderList.failedToLoadOrders')}
@@ -611,79 +578,88 @@ export function OrdersIndex(): ReactElement {
             }
           />
         ) : (
-          <div className="ord-card" data-flush="1">
+          <div className="ord-card ord-card--list" data-flush="1">
             <Table caption={t('orderList.orders')}>
               <THead>
                 <Tr>
                   <Th>{t('orderList.order')}</Th>
                   <Th>{t('orderList.recipient')}</Th>
-                  <Th>{t('orderList.phone')}</Th>
+                  <Th className="ord-col-phone">{t('orderList.phone')}</Th>
                   <Th>{t('orderList.status')}</Th>
                   <Th align="right">{t('orderList.cod')}</Th>
                   <Th>{t('orderList.placed')}</Th>
                 </Tr>
               </THead>
               <TBody>
-                {list.data.items.map((o) => (
-                  <Tr key={o.id} onActivate={() => router.push(`/orders/${o.id}`)}>
-                    <Td>
-                      <Link href={`/orders/${o.id}`} className="ord-order-link sk-ident">
-                        {o.orderNumber}
-                      </Link>
-                      {o.sellerOrderRef !== null && o.sellerOrderRef !== '' && (
-                        <span className="ord-sub">
-                          ref <span className="sk-ident">{o.sellerOrderRef}</span>
+                {list.data.items.map((o) => {
+                  // City is blank on everything placed since the form
+                  // stopped asking (ORD-5), so the PIN carries the
+                  // destination and the city joins it when present.
+                  const where = [o.recipientCity, o.recipientPostalCode]
+                    .filter((v) => v !== '')
+                    .join(' · ');
+                  // Detail the dense row drops goes in the tooltip.
+                  const tip = [o.recipientName, where, o.recipientPhoneE164]
+                    .filter((v) => v !== '' && v !== null)
+                    .join('\n');
+                  return (
+                    <Tr key={o.id} onActivate={() => router.push(`/orders/${o.id}`)}>
+                      <Td>
+                        <Link href={`/orders/${o.id}`} className="ord-order-link sk-ident">
+                          {o.orderNumber}
+                        </Link>
+                        {o.sellerOrderRef !== null && o.sellerOrderRef !== '' && (
+                          <span className="ord-sub">
+                            ref <span className="sk-ident">{o.sellerOrderRef}</span>
+                          </span>
+                        )}
+                        {/* RS-5: which reseller store placed it. */}
+                        {o.storeKind === 'RESELLER' && (
+                          <span className="ord-sub">
+                            via{' '}
+                            {o.storeId !== undefined ? (
+                              <Link href={`/reseller-stores/${o.storeId}`} className="ord-link">
+                                {o.storeNameSnapshot ?? t('orderList.aMemberStore')}
+                              </Link>
+                            ) : (
+                              (o.storeNameSnapshot ?? t('orderList.aMemberStore'))
+                            )}
+                          </span>
+                        )}
+                      </Td>
+                      <Td>
+                        <span className="ord-recipient" title={tip}>
+                          <span className="ord-recipient__name">{o.recipientName}</span>
+                          <span className="ord-recipient__pin sk-figure">
+                            {o.recipientPostalCode === '' ? '' : ` · ${o.recipientPostalCode}`}
+                          </span>
                         </span>
-                      )}
-                      {/* RS-5: which reseller store placed it. */}
-                      {o.storeKind === 'RESELLER' && (
-                        <span className="ord-sub">
-                          via{' '}
-                          {o.storeId !== undefined ? (
-                            <Link href={`/reseller-stores/${o.storeId}`} className="ord-link">
-                              {o.storeNameSnapshot ?? t('orderList.aMemberStore')}
-                            </Link>
-                          ) : (
-                            (o.storeNameSnapshot ?? t('orderList.aMemberStore'))
-                          )}
+                      </Td>
+                      <Td className="ord-col-phone">
+                        <span className="sk-figure ord-nowrap">{o.recipientPhoneE164 || '—'}</span>
+                      </Td>
+                      <Td>
+                        <StatusChip
+                          kind={orderStatusKind(o.status)}
+                          label={statusLabel(o.status, locale)}
+                          size="sm"
+                        />
+                      </Td>
+                      <Td align="right">
+                        {o.codAmountInr === null ? (
+                          <span className="ord-prepaid">{t('orderList.prepaid')}</span>
+                        ) : (
+                          <OrdMoney amount={o.codAmountInr} />
+                        )}
+                      </Td>
+                      <Td>
+                        <span className="sk-figure ord-nowrap ord-muted">
+                          {formatPlaced(o.placedAt, locale)}
                         </span>
-                      )}
-                    </Td>
-                    <Td>
-                      <div>{o.recipientName}</div>
-                      {/* City is blank on everything placed since the form
-                          stopped asking (ORD-5), so the PIN carries the
-                          destination and the city joins it when present. */}
-                      <span className="ord-sub">
-                        {[o.recipientCity, o.recipientPostalCode]
-                          .filter((v) => v !== '')
-                          .join(' · ') || '—'}
-                      </span>
-                    </Td>
-                    <Td>
-                      <span className="sk-figure ord-nowrap">{o.recipientPhoneE164 || '—'}</span>
-                    </Td>
-                    <Td>
-                      <StatusChip
-                        kind={orderStatusKind(o.status)}
-                        label={statusLabel(o.status, locale)}
-                        size="sm"
-                      />
-                    </Td>
-                    <Td align="right">
-                      {o.codAmountInr === null ? (
-                        <span className="ord-prepaid">{t('orderList.prepaid')}</span>
-                      ) : (
-                        <Money amount={o.codAmountInr} />
-                      )}
-                    </Td>
-                    <Td>
-                      <span className="sk-figure ord-nowrap ord-muted">
-                        {new Date(o.placedAt).toISOString().slice(0, 16).replace('T', ' ')}
-                      </span>
-                    </Td>
-                  </Tr>
-                ))}
+                      </Td>
+                    </Tr>
+                  );
+                })}
               </TBody>
             </Table>
             <div className="ord-table-foot">
