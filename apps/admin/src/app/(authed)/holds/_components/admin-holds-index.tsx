@@ -17,6 +17,7 @@ import { AgeChip, Notice, OoSection } from '../../orders/_components/order-ops-p
 import { EarlyReservationReviewStatus } from '@skydrop/db';
 import { useAdminHoldReviews } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT, useLocale } from '@/i18n/client';
 
 /** Whole days a hold has been sitting, for the ageing column. */
 function ageDays(iso: string): number {
@@ -43,6 +44,8 @@ function ageDays(iso: string): number {
  * call that resolves it.
  */
 export function AdminHoldsIndex(): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const [status, setStatus] = useState<string>(EarlyReservationReviewStatus.OPEN);
   const list = useAdminHoldReviews(status === '' ? {} : { status });
 
@@ -56,36 +59,36 @@ export function AdminHoldsIndex(): ReactElement {
   return (
     <div className="oo-page">
       <PageHeader
-        title="Held stock"
-        subtitle="Orders where stock was claimed at placement and the customer could not be reached. The client decides; this is the view that tells you who to chase."
+        title={t('holdsAdminHoldsIndex.heldStock')}
+        subtitle={t('holdsAdminHoldsIndex.ordersWhereStockWasClaimed')}
       />
 
       <div className="oo-kpis">
         <KpiCard
-          label="Units frozen"
+          label={t('holdsAdminHoldsIndex.unitsFrozen')}
           icon={<Hourglass size={14} />}
           tone={heldUnits > 0 ? 'pending' : 'credit'}
-          hint="Unavailable to any other order until decided"
+          hint={t('holdsAdminHoldsIndex.unavailableToAnyOtherOrder')}
           {...(list.isLoading ? { figure: dash } : { figure: <Num value={heldUnits} /> })}
         />
         <KpiCard
-          label="Awaiting a client"
+          label={t('holdsAdminHoldsIndex.awaitingAClient')}
           icon={<Users size={14} />}
           tone="neutral"
-          hint="Open reviews"
+          hint={t('holdsAdminHoldsIndex.openReviews')}
           {...(list.isLoading ? { figure: dash } : { value: open.length })}
         />
         <KpiCard
-          label="Oldest"
+          label={t('holdsAdminHoldsIndex.oldest')}
           icon={<Timer size={14} />}
           tone={oldest >= 3 ? 'debit' : oldest > 0 ? 'pending' : 'neutral'}
-          hint="The TTL sweep resolves these eventually"
+          hint={t('holdsAdminHoldsIndex.theTtlSweepResolvesThese')}
           {...(list.isLoading ? { figure: dash } : { figure: <Num value={oldest} suffix="d" /> })}
         />
       </div>
 
       <OoSection
-        title="Holds"
+        title={t('holdsAdminHoldsIndex.holds')}
         note={list.data === undefined ? undefined : `${rows.length} shown`}
         flush
       >
@@ -94,11 +97,11 @@ export function AdminHoldsIndex(): ReactElement {
             <FilterField>
               <Select
                 id="admin-hold-status"
-                label="Status"
+                label={t('holdsAdminHoldsIndex.status')}
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
               >
-                <option value="">All</option>
+                <option value="">{t('holdsAdminHoldsIndex.all')}</option>
                 {Object.values(EarlyReservationReviewStatus).map((s) => (
                   <option key={s} value={s}>
                     {humanise(s)}
@@ -115,7 +118,7 @@ export function AdminHoldsIndex(): ReactElement {
           </div>
         ) : list.isLoading ? (
           <div className="oo-card__pad">
-            <SkeletonRows rows={4} cols={6} label="Loading holds…" />
+            <SkeletonRows rows={4} cols={6} label={t('holdsAdminHoldsIndex.loadingHolds')} />
           </div>
         ) : rows.length === 0 ? (
           <EmptyState
@@ -124,25 +127,25 @@ export function AdminHoldsIndex(): ReactElement {
             icon={<PackageCheck size={20} />}
             title={
               status === EarlyReservationReviewStatus.OPEN
-                ? 'No stock held pending a decision'
-                : 'No reviews match this filter'
+                ? t('holdsAdminHoldsIndex.noStockHeldPendingA')
+                : t('holdsAdminHoldsIndex.noReviewsMatchThisFilter')
             }
             description={
               status === EarlyReservationReviewStatus.OPEN
-                ? 'No client is sitting on stock frozen against an unreachable customer.'
-                : 'Try a different status.'
+                ? t('holdsAdminHoldsIndex.noClientIsSittingOn')
+                : t('holdsAdminHoldsIndex.tryADifferentStatus')
             }
           />
         ) : (
-          <Table caption="Held stock reviews">
+          <Table caption={t('holdsAdminHoldsIndex.heldStockReviews')}>
             <THead>
               <Tr>
-                <Th>Client</Th>
-                <Th>Order</Th>
-                <Th align="right">Units</Th>
-                <Th align="right">Calls</Th>
-                <Th align="right">Age</Th>
-                <Th>Status</Th>
+                <Th>{t('holdsAdminHoldsIndex.client')}</Th>
+                <Th>{t('holdsAdminHoldsIndex.order')}</Th>
+                <Th align="right">{t('holdsAdminHoldsIndex.units')}</Th>
+                <Th align="right">{t('holdsAdminHoldsIndex.calls')}</Th>
+                <Th align="right">{t('holdsAdminHoldsIndex.age')}</Th>
+                <Th>{t('holdsAdminHoldsIndex.status')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -186,7 +189,7 @@ export function AdminHoldsIndex(): ReactElement {
                       <StatusChip
                         size="sm"
                         kind={earlyReviewStatusKind(r.status)}
-                        label={statusLabel(r.status)}
+                        label={statusLabel(r.status, locale)}
                       />
                     </Td>
                   </Tr>
@@ -198,12 +201,7 @@ export function AdminHoldsIndex(): ReactElement {
       </OoSection>
 
       <Notice tone="info">
-        <p>
-          There is no release control here on purpose. Whether to give the stock back or keep
-          calling is the client&apos;s commercial decision, and an unanswered review is released by
-          the TTL sweep rather than held forever. If a hold genuinely has to be broken from this
-          side, that is god mode — audited as the exception it is.
-        </p>
+        <p>{t('holdsAdminHoldsIndex.thereIsNoReleaseControl')}</p>
       </Notice>
     </div>
   );

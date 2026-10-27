@@ -18,6 +18,7 @@ import { useTicketsList } from '@/lib/ops-hooks';
 import { AfCard } from '@/app/(authed)/system/_components/af-parts';
 import { TicketHandlingChip, TicketStatusChip } from './ticket-chips';
 import './tickets.css';
+import { useT } from '@/i18n/client';
 
 const PAGE_SIZE = 25;
 
@@ -34,6 +35,7 @@ const PAGE_SIZE = 25;
  * The default filter is OPEN: this is a worklist, not an archive.
  */
 export function TicketsIndex(): ReactElement {
+  const tr = useT();
   // STAGE, not raw status. "Closed" is four different outcomes in the
   // database — refunded, goods back, write-off, not upheld — and a
   // filter listing all four made somebody choose which kind of finished
@@ -85,36 +87,51 @@ export function TicketsIndex(): ReactElement {
   return (
     <div className="af-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Operations' }, { label: 'Tickets' }]}
+        breadcrumbs={[
+          { label: tr('ticketsTicketsIndex.operations') },
+          { label: tr('ticketsTicketsIndex.tickets') },
+        ]}
         Link={Link}
-        title="Tickets"
-        subtitle="Scrap/damage raised by RTO inspection, and parcel issues raised by clients. Resolving with a refund credits the client's wallet in the same transaction."
+        title={tr('ticketsTicketsIndex.tickets')}
+        subtitle={tr('ticketsTicketsIndex.scrapDamageRaisedByRto')}
       />
 
       <div className="af-kpis">
         {list.isLoading ? (
-          <KpiCard label="Matching this filter" figure="—" hint="Loading" />
+          <KpiCard
+            label={tr('ticketsTicketsIndex.matchingThisFilter')}
+            figure="—"
+            hint={tr('ticketsTicketsIndex.loading')}
+          />
         ) : (
           <KpiCard
-            label="Matching this filter"
+            label={tr('ticketsTicketsIndex.matchingThisFilter')}
             value={total}
             tone={status === 'OPEN' && total > 0 ? 'pending' : 'neutral'}
-            hint={status === 'OPEN' ? 'Open tickets waiting on a decision' : 'Across all pages'}
+            hint={
+              status === 'OPEN'
+                ? tr('ticketsTicketsIndex.openTicketsWaitingOnA')
+                : tr('ticketsTicketsIndex.acrossAllPages')
+            }
           />
         )}
         <KpiCard
-          label="Refunded on this page"
+          label={tr('ticketsTicketsIndex.refundedOnThisPage')}
           figure={<Money amount={refundOnPage} decimals={false} />}
           tone="credit"
-          hint="Already credited to client wallets"
+          hint={tr('ticketsTicketsIndex.alreadyCreditedToClientWallets')}
         />
         {list.isLoading ? (
-          <KpiCard label="Auto-raised" figure="—" hint="Loading" />
+          <KpiCard
+            label={tr('ticketsTicketsIndex.autoRaised')}
+            figure="—"
+            hint={tr('ticketsTicketsIndex.loading')}
+          />
         ) : (
           <KpiCard
-            label="Auto-raised"
+            label={tr('ticketsTicketsIndex.autoRaised')}
             value={autoRaised}
-            hint="Opened by RTO inspection, not by a client"
+            hint={tr('ticketsTicketsIndex.openedByRtoInspectionNot')}
           />
         )}
       </div>
@@ -123,23 +140,23 @@ export function TicketsIndex(): ReactElement {
         <div className="tk-filters">
           <Select
             id="ticket-status"
-            label="Status"
+            label={tr('ticketsTicketsIndex.status')}
             value={status}
             onChange={(e) => changeFilter(() => setStatus(e.target.value))}
           >
-            <option value="">All</option>
-            <option value="OPEN">Open</option>
-            <option value="REVIEWING">Reviewing</option>
-            <option value="CLOSED">Closed</option>
+            <option value="">{tr('ticketsTicketsIndex.all')}</option>
+            <option value="OPEN">{tr('ticketsTicketsIndex.open')}</option>
+            <option value="REVIEWING">{tr('ticketsTicketsIndex.reviewing')}</option>
+            <option value="CLOSED">{tr('ticketsTicketsIndex.closed')}</option>
           </Select>
 
           <Select
             id="ticket-type"
-            label="Type"
+            label={tr('ticketsTicketsIndex.type')}
             value={ticketType}
             onChange={(e) => changeFilter(() => setTicketType(e.target.value))}
           >
-            <option value="">All types</option>
+            <option value="">{tr('ticketsTicketsIndex.allTypes')}</option>
             {Object.values(TicketType).map((t) => (
               <option key={t} value={t}>
                 {humanise(t)}
@@ -149,7 +166,7 @@ export function TicketsIndex(): ReactElement {
 
           <Select
             id="ticket-handling"
-            label="Handling"
+            label={tr('ticketsTicketsIndex.handling')}
             value={handling}
             onChange={(e) => changeFilter(() => setHandling(e.target.value))}
           >
@@ -160,39 +177,43 @@ export function TicketsIndex(): ReactElement {
               offering it as a third answer would invite the reading that
               it is waiting on someone.
             */}
-            <option value="">Auto and manual</option>
-            <option value="MANUAL">Manual — needs a person</option>
-            <option value="AUTO">Auto — software is carrying it</option>
+            <option value="">{tr('ticketsTicketsIndex.autoAndManual')}</option>
+            <option value="MANUAL">{tr('ticketsTicketsIndex.manualNeedsAPerson')}</option>
+            <option value="AUTO">{tr('ticketsTicketsIndex.autoSoftwareIsCarryingIt')}</option>
           </Select>
 
           <TextField
             type="search"
-            label="Search"
+            label={tr('ticketsTicketsIndex.search')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Ticket (TK-…), order, parcel or waybill"
-            aria-label="Search tickets"
+            placeholder={tr('ticketsTicketsIndex.ticketTkOrderParcelOr')}
+            aria-label={tr('ticketsTicketsIndex.searchTickets')}
           />
         </div>
       </AfCard>
 
       {list.isError ? (
         <ErrorState
-          message={list.error?.message ?? 'Failed to load tickets.'}
+          message={list.error?.message ?? tr('ticketsTicketsIndex.failedToLoadTickets')}
           retry={() => void list.refetch()}
         />
       ) : list.isLoading ? (
         <AfCard flush>
-          <SkeletonRows rows={6} cols={6} label="Loading tickets" />
+          <SkeletonRows rows={6} cols={6} label={tr('ticketsTicketsIndex.loadingTickets')} />
         </AfCard>
       ) : items.length === 0 ? (
         <EmptyState
           tone={status === TicketStatus.OPEN ? 'positive' : 'neutral'}
-          title={status === TicketStatus.OPEN ? 'No open tickets' : 'No tickets match this filter'}
+          title={
+            status === TicketStatus.OPEN
+              ? tr('ticketsTicketsIndex.noOpenTickets')
+              : tr('ticketsTicketsIndex.noTicketsMatchThisFilter')
+          }
           description={
             status === TicketStatus.OPEN
-              ? 'Nothing is waiting on a decision. Damage found during RTO inspection opens a ticket here automatically.'
-              : 'Try widening the status or type filter.'
+              ? tr('ticketsTicketsIndex.nothingIsWaitingOnA')
+              : tr('ticketsTicketsIndex.tryWideningTheStatusOr')
           }
         />
       ) : (
@@ -200,14 +221,14 @@ export function TicketsIndex(): ReactElement {
           <Table>
             <THead>
               <Tr>
-                <Th>Ticket</Th>
-                <Th>Type</Th>
-                <Th>Handling</Th>
-                <Th>Subject</Th>
-                <Th>Order</Th>
-                <Th>Status</Th>
-                <Th align="right">Refund</Th>
-                <Th>Raised</Th>
+                <Th>{tr('ticketsTicketsIndex.ticket')}</Th>
+                <Th>{tr('ticketsTicketsIndex.type')}</Th>
+                <Th>{tr('ticketsTicketsIndex.handling')}</Th>
+                <Th>{tr('ticketsTicketsIndex.subject')}</Th>
+                <Th>{tr('ticketsTicketsIndex.order')}</Th>
+                <Th>{tr('ticketsTicketsIndex.status')}</Th>
+                <Th align="right">{tr('ticketsTicketsIndex.refund')}</Th>
+                <Th>{tr('ticketsTicketsIndex.raised')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -276,7 +297,7 @@ export function TicketsIndex(): ReactElement {
             pageSize={list.data?.pageSize ?? PAGE_SIZE}
             total={total}
             onPageChange={setPage}
-            label="Ticket pages"
+            label={tr('ticketsTicketsIndex.ticketPages')}
           />
         </div>
       )}

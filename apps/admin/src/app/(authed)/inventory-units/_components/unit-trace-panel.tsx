@@ -12,6 +12,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { useUnitTrace, useUnitTriage } from '@/lib/ops-hooks';
 import { InlineError, Note, Panel, Stack } from '../../inventory/_components/stock-kit';
 import './units.css';
+import { useT, useLocale } from '@/i18n/client';
 
 /**
  * Where one unit has been.
@@ -29,6 +30,8 @@ import './units.css';
  * meant it would eventually show somebody another company's unit.
  */
 export function UnitTracePanel(): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const triage = useUnitTriage();
   const [sellerId, setSellerId] = useState('');
   const [typed, setTyped] = useState('');
@@ -47,18 +50,18 @@ export function UnitTracePanel(): ReactElement {
 
   return (
     <Panel
-      title="Trace a serial"
-      subtitle="Scan or type the number on the item. Its whole history, in the order it happened."
+      title={t('inventoryUnitsUnitTracePanel.traceASerial')}
+      subtitle={t('inventoryUnitsUnitTracePanel.scanOrTypeTheNumber')}
     >
       <div className="unit-trace__form">
         <Select
-          label="Client"
+          label={t('inventoryUnitsUnitTracePanel.client')}
           requiredMark
-          hint="A serial is only unique within one company."
+          hint={t('inventoryUnitsUnitTracePanel.aSerialIsOnlyUnique')}
           value={sellerId}
           onChange={(e) => setSellerId(e.target.value)}
         >
-          <option value="">Choose…</option>
+          <option value="">{t('inventoryUnitsUnitTracePanel.choose')}</option>
           {sellers.map((s) => (
             <option key={s.sellerId} value={s.sellerId}>
               {s.companyName ?? s.sellerId}
@@ -81,7 +84,7 @@ export function UnitTracePanel(): ReactElement {
                 submit();
               }
             }}
-            placeholder="Scan or type"
+            placeholder={t('inventoryUnitsUnitTracePanel.scanOrType')}
           />
         </label>
         <Button
@@ -91,7 +94,7 @@ export function UnitTracePanel(): ReactElement {
           disabled={sellerId === '' || typed.trim() === ''}
           onClick={submit}
         >
-          Trace
+          {t('inventoryUnitsUnitTracePanel.trace')}
         </Button>
       </div>
 
@@ -102,10 +105,7 @@ export function UnitTracePanel(): ReactElement {
       {trace.isLoading && searched && <SkeletonRows rows={3} cols={5} />}
 
       {searched && !trace.isLoading && unit === null && trace.isError === false && (
-        <Note>
-          No unit with that serial belongs to this client. Either it is another company&apos;s, or
-          it was never received as a tracked unit.
-        </Note>
+        <Note>{t('inventoryUnitsUnitTracePanel.noUnitWithThatSerial')}</Note>
       )}
 
       {unit !== null && (
@@ -116,19 +116,23 @@ export function UnitTracePanel(): ReactElement {
             <StatusChip
               size="sm"
               kind={stockUnitStatusKind(unit.status)}
-              label={statusLabel(unit.status)}
+              label={statusLabel(unit.status, locale)}
             />
-            <span className="stk-faint sk-figure">{unit.hoursInStatus}h in this status</span>
+            <span className="stk-faint sk-figure">
+              {t('inventoryUnitsUnitTracePanel.hInThisStatus', {
+                hoursInStatus: unit.hoursInStatus,
+              })}
+            </span>
           </div>
 
           <Table>
             <THead>
               <Tr>
-                <Th>When</Th>
-                <Th>Moved</Th>
-                <Th>Gate</Th>
-                <Th>Parcel</Th>
-                <Th>Note</Th>
+                <Th>{t('inventoryUnitsUnitTracePanel.when')}</Th>
+                <Th>{t('inventoryUnitsUnitTracePanel.moved')}</Th>
+                <Th>{t('inventoryUnitsUnitTracePanel.gate')}</Th>
+                <Th>{t('inventoryUnitsUnitTracePanel.parcel')}</Th>
+                <Th>{t('inventoryUnitsUnitTracePanel.note')}</Th>
               </Tr>
             </THead>
             <TBody>

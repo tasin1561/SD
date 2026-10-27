@@ -20,6 +20,7 @@ import {
   Stack,
   mutationPhase,
 } from '../../_components/stock-kit';
+import { useT } from '@/i18n/client';
 
 /**
  * Raising a stock correction.
@@ -58,6 +59,7 @@ export function NewAdjustmentPanel({
 }: {
   readonly prefill?: AdjustmentPrefill | null;
 } = {}): ReactElement | null {
+  const t = useT();
   const toast = useToast();
   const mayCreate = usePermission('inventory.adjustments.create');
   const create = useCreateAdjustment();
@@ -137,8 +139,10 @@ export function NewAdjustmentPanel({
       // leave the operator not knowing if stock moved.
       toast.success(
         result.status === 'PENDING'
-          ? 'Raised — waiting for approval before it moves any stock.'
-          : `Applied — stock adjusted (${result.status}).`,
+          ? t('inventoryAdjustmentsNewAdjustmentPanel.raisedWaitingForApprovalBefore')
+          : t('inventoryAdjustmentsNewAdjustmentPanel.appliedStockAdjusted', {
+              status: result.status,
+            }),
       );
     } catch (err) {
       setError(serverVerdict(err));
@@ -148,7 +152,7 @@ export function NewAdjustmentPanel({
   return (
     <>
       <Button variant="primary" size="md" icon={<Plus size={16} />} onClick={() => setOpen(true)}>
-        New adjustment
+        {t('inventoryAdjustmentsNewAdjustmentPanel.newAdjustment')}
       </Button>
 
       <Dialog
@@ -159,7 +163,7 @@ export function NewAdjustmentPanel({
             reset();
           }
         }}
-        title="Raise a stock adjustment"
+        title={t('inventoryAdjustmentsNewAdjustmentPanel.raiseAStockAdjustment')}
         footer={
           <DialogFooter>
             <Button
@@ -170,13 +174,16 @@ export function NewAdjustmentPanel({
                 reset();
               }}
             >
-              Cancel
+              {t('inventoryAdjustmentsNewAdjustmentPanel.cancel')}
             </Button>
             <AsyncButton
               variant="primary"
               size="md"
               state={mutationPhase(create)}
-              labels={{ idle: 'Raise adjustment', busy: 'Raising…' }}
+              labels={{
+                idle: t('inventoryAdjustmentsNewAdjustmentPanel.raiseAdjustment'),
+                busy: t('inventoryAdjustmentsNewAdjustmentPanel.raising'),
+              }}
               disabled={!complete || create.isPending}
               onClick={() => void onSubmit()}
             />
@@ -184,15 +191,12 @@ export function NewAdjustmentPanel({
         }
       >
         <Stack>
-          <Note>
-            Corrects counted stock for one batch in one bin. Below the value threshold it applies
-            straight away; above it, it waits here for a second person.
-          </Note>
+          <Note>{t('inventoryAdjustmentsNewAdjustmentPanel.correctsCountedStockForOne')}</Note>
 
           {error !== null && <InlineError message={error} />}
 
           <TextField
-            label="Client id"
+            label={t('inventoryAdjustmentsNewAdjustmentPanel.clientId')}
             requiredMark
             inputClassName="sk-ident"
             value={sellerId}
@@ -201,18 +205,22 @@ export function NewAdjustmentPanel({
 
           <FieldGrid columns={2}>
             <Select
-              label="Direction"
+              label={t('inventoryAdjustmentsNewAdjustmentPanel.direction')}
               requiredMark
               value={type}
               onChange={(e) => setType(e.target.value as 'INCREASE' | 'DECREASE')}
             >
-              <option value="DECREASE">Remove stock</option>
-              <option value="INCREASE">Add stock</option>
+              <option value="DECREASE">
+                {t('inventoryAdjustmentsNewAdjustmentPanel.removeStock')}
+              </option>
+              <option value="INCREASE">
+                {t('inventoryAdjustmentsNewAdjustmentPanel.addStock')}
+              </option>
             </Select>
             <TextField
-              label="Quantity"
+              label={t('inventoryAdjustmentsNewAdjustmentPanel.quantity')}
               requiredMark
-              hint="How many units, unsigned."
+              hint={t('inventoryAdjustmentsNewAdjustmentPanel.howManyUnitsUnsigned')}
               inputMode="numeric"
               inputClassName="sk-figure"
               value={qty}
@@ -221,7 +229,7 @@ export function NewAdjustmentPanel({
           </FieldGrid>
 
           <Select
-            label="Reason"
+            label={t('inventoryAdjustmentsNewAdjustmentPanel.reason')}
             requiredMark
             value={reasonCode}
             onChange={(e) => setReasonCode(e.target.value)}
@@ -235,25 +243,24 @@ export function NewAdjustmentPanel({
 
           <Panel>
             <Note tone="faint">
-              Stock is held per batch per bin, so all three are needed — read them off the count
-              sheet or the movements report.
+              {t('inventoryAdjustmentsNewAdjustmentPanel.stockIsHeldPerBatch')}
             </Note>
             <TextField
-              label="Variant id"
+              label={t('inventoryAdjustmentsNewAdjustmentPanel.variantId')}
               requiredMark
               inputClassName="sk-ident"
               value={variantId}
               onChange={(e) => setVariantId(e.target.value)}
             />
             <TextField
-              label="Bin id"
+              label={t('inventoryAdjustmentsNewAdjustmentPanel.binId')}
               requiredMark
               inputClassName="sk-ident"
               value={binId}
               onChange={(e) => setBinId(e.target.value)}
             />
             <TextField
-              label="Batch id"
+              label={t('inventoryAdjustmentsNewAdjustmentPanel.batchId')}
               requiredMark
               inputClassName="sk-ident"
               value={batchId}
@@ -276,19 +283,21 @@ export function NewAdjustmentPanel({
               with 62 of 64 batches on the demo box carrying no cost.
             */}
             <TextField
-              label="Unit cost (₹)"
-              hint="Only needed when the batch has no recorded cost. It is what decides whether this correction needs a second person."
+              label={t('inventoryAdjustmentsNewAdjustmentPanel.unitCost')}
+              hint={t('inventoryAdjustmentsNewAdjustmentPanel.onlyNeededWhenTheBatch')}
               inputMode="decimal"
               inputClassName="sk-figure"
               value={unitCost}
               onChange={(e) => setUnitCost(e.target.value)}
-              {...(costValid ? {} : { error: 'Must be a number, zero or more.' })}
+              {...(costValid
+                ? {}
+                : { error: t('inventoryAdjustmentsNewAdjustmentPanel.mustBeANumberZero') })}
             />
           </Panel>
 
           <TextArea
-            label="What happened"
-            hint="Kept on the adjustment. The approver reads this and nothing else."
+            label={t('inventoryAdjustmentsNewAdjustmentPanel.whatHappened')}
+            hint={t('inventoryAdjustmentsNewAdjustmentPanel.keptOnTheAdjustmentThe')}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}

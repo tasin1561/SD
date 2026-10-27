@@ -22,6 +22,9 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { AdminTicketConversation } from './admin-ticket-conversation';
 import { StoreDisputeSettle } from './store-dispute-settle';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * THREE stages, in the order a ticket actually travels: Open →
@@ -40,17 +43,24 @@ import { StoreDisputeSettle } from './store-dispute-settle';
  * all — so the four outcomes survive, asked at the step where they are
  * the actual question.
  */
-const STAGES: ReadonlyArray<{ value: 'REVIEWING' | 'CLOSED'; label: string }> = [
-  { value: 'REVIEWING', label: 'Reviewing' },
-  { value: 'CLOSED', label: 'Closed' },
+const STAGES = (
+  tr: Translate<MessageKey>,
+): ReadonlyArray<{ value: 'REVIEWING' | 'CLOSED'; label: string }> => [
+  { value: 'REVIEWING', label: tr('ticketsAdminTicketDetail.reviewing') },
+  { value: 'CLOSED', label: tr('ticketsAdminTicketDetail.closed') },
 ];
 
 /** How a ticket finished. Asked only once "Closed" is chosen. */
-const OUTCOMES: ReadonlyArray<{ value: TicketStatus; label: string }> = [
-  { value: TicketStatus.RESOLVED_REFUND, label: 'Refunded the client' },
-  { value: TicketStatus.RESOLVED_RETURNED, label: 'Goods went back' },
-  { value: TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED, label: 'Client accepted the loss' },
-  { value: TicketStatus.REJECTED, label: 'Not upheld' },
+const OUTCOMES = (
+  tr: Translate<MessageKey>,
+): ReadonlyArray<{ value: TicketStatus; label: string }> => [
+  { value: TicketStatus.RESOLVED_REFUND, label: tr('ticketsAdminTicketDetail.refundedTheClient') },
+  { value: TicketStatus.RESOLVED_RETURNED, label: tr('ticketsAdminTicketDetail.goodsWentBack') },
+  {
+    value: TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED,
+    label: tr('ticketsAdminTicketDetail.clientAcceptedTheLoss'),
+  },
+  { value: TicketStatus.REJECTED, label: tr('ticketsAdminTicketDetail.notUpheld') },
 ];
 
 /**
@@ -62,6 +72,7 @@ const OUTCOMES: ReadonlyArray<{ value: TicketStatus; label: string }> = [
  * exchange this ticket exists to carry.
  */
 export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): ReactElement {
+  const tr = useT();
   const toast = useToast();
   const ticket = useAdminTicket(ticketId);
   const events = useTicketEvents(ticketId);
@@ -77,7 +88,10 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
   // asks first when that is the outcome chosen; the request is unchanged.
   const [confirmRefund, setConfirmRefund] = useState(false);
 
-  if (ticket.isLoading) return <SkeletonRows rows={6} cols={1} label="Loading the ticket" />;
+  if (ticket.isLoading)
+    return (
+      <SkeletonRows rows={6} cols={1} label={tr('ticketsAdminTicketDetail.loadingTheTicket')} />
+    );
   if (ticket.isError) {
     return <ErrorState message={serverVerdict(ticket.error)} retry={() => void ticket.refetch()} />;
   }
@@ -88,8 +102,8 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
   // on this type with STORE_DISPUTE_USE_SETTLEMENT regardless.
   const isStoreDispute = t.ticketType === TicketType.STORE_DISPUTE;
   const outcomes = isStoreDispute
-    ? OUTCOMES.filter((o) => o.value !== TicketStatus.RESOLVED_REFUND)
-    : OUTCOMES;
+    ? OUTCOMES(tr).filter((o) => o.value !== TicketStatus.RESOLVED_REFUND)
+    : OUTCOMES(tr);
 
   /*
     The request itself. It resolves on success and rejects on a refusal
@@ -111,7 +125,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
       setTo('');
       setNotes('');
       setRefund('');
-      toast.success('Ticket moved');
+      toast.success(tr('ticketsAdminTicketDetail.ticketMoved'));
     } catch (err) {
       toast.error(serverVerdict(err));
       throw err;
@@ -120,15 +134,15 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
 
   const openedBy =
     t.openedBy === 'SELLER'
-      ? 'the client'
+      ? tr('ticketsAdminTicketDetail.theClient')
       : t.openedBy === 'STORE'
-        ? (t.storeName ?? 'a member store')
-        : 'Skydrop';
+        ? (t.storeName ?? tr('ticketsAdminTicketDetail.aMemberStore'))
+        : tr('ticketsAdminTicketDetail.skydrop');
 
   return (
     <div className="af-page">
       <Link href="/tickets" className="af-back">
-        <ArrowLeft size={14} aria-hidden /> All tickets
+        <ArrowLeft size={14} aria-hidden /> {tr('ticketsAdminTicketDetail.allTickets')}
       </Link>
 
       <PageHeader
@@ -139,14 +153,17 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
           </>
         }
         meta={<TicketStatusChip status={t.status} />}
-        subtitle={`Raised ${new Date(t.createdAt).toLocaleString()} by ${openedBy}`}
+        subtitle={tr('ticketsAdminTicketDetail.raisedBy', {
+          value: new Date(t.createdAt).toLocaleString(),
+          openedBy,
+        })}
       />
 
       <AfCard>
         <Facts
           items={[
             {
-              label: 'Type',
+              label: tr('ticketsAdminTicketDetail.type'),
               // Who is asking, then what about — in the COURIER's own
               // words, so an operator taking it to them is already
               // speaking their vocabulary.
@@ -166,7 +183,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                   {
                     // A short-count ticket (TKT-3) is about a count,
                     // not a parcel: name the receipt and its journey.
-                    label: 'Goods receipt',
+                    label: tr('ticketsAdminTicketDetail.goodsReceipt'),
                     value: (
                       <span className="sk-ident">
                         {t.receiptNumber}
@@ -176,7 +193,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                   },
                 ]),
             {
-              label: 'Order',
+              label: tr('ticketsAdminTicketDetail.order'),
               // The NUMBER. An operator quoting a ticket to a seller
               // or a courier needs the name they both use.
               value:
@@ -189,7 +206,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                 ),
             },
             {
-              label: 'Parcel',
+              label: tr('ticketsAdminTicketDetail.parcel'),
               value:
                 t.shipmentId === null ? (
                   '—'
@@ -199,17 +216,19 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                   <Ident value={t.shipmentId} />
                 ),
             },
-            { label: 'Courier', value: t.courierCode ?? '—' },
-            ...(t.storeName == null ? [] : [{ label: 'Member store', value: t.storeName }]),
+            { label: tr('ticketsAdminTicketDetail.courier'), value: t.courierCode ?? '—' },
+            ...(t.storeName == null
+              ? []
+              : [{ label: tr('ticketsAdminTicketDetail.memberStore'), value: t.storeName }]),
             ...(t.disputePayer == null
               ? []
               : [
                   {
-                    label: 'Settled',
+                    label: tr('ticketsAdminTicketDetail.settled'),
                     value:
                       t.disputePayer === 'STORE'
-                        ? 'The store paid the client'
-                        : 'The client paid the store',
+                        ? tr('ticketsAdminTicketDetail.theStorePaidTheClient')
+                        : tr('ticketsAdminTicketDetail.theClientPaidTheStore'),
                   },
                 ]),
           ]}
@@ -226,7 +245,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
 
       {/* The conversation FIRST — it is what the ticket is. The courier
           exchange and the status machinery are how we act on it. */}
-      <AfSection title="Conversation">
+      <AfSection title={tr('ticketsAdminTicketDetail.conversation')}>
         <AfCard>
           <AdminTicketConversation ticket={t} />
         </AfCard>
@@ -249,12 +268,16 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
         seller's ticket page.
       */}
 
-      <AfSection title="History">
+      <AfSection title={tr('ticketsAdminTicketDetail.history')}>
         <AfCard>
           {events.isLoading ? (
-            <SkeletonRows rows={3} cols={1} label="Loading the history" />
+            <SkeletonRows
+              rows={3}
+              cols={1}
+              label={tr('ticketsAdminTicketDetail.loadingTheHistory')}
+            />
           ) : (events.data ?? []).length === 0 ? (
-            <p className="af-muted">Nothing yet.</p>
+            <p className="af-muted">{tr('ticketsAdminTicketDetail.nothingYet')}</p>
           ) : (
             <ol className="tk-history">
               {(events.data ?? []).map((e) => (
@@ -263,7 +286,9 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                     {new Date(e.createdAt).toLocaleString()}
                   </span>
                   <span className="tk-history__what">
-                    {e.fromStatus === null ? 'Opened' : `${e.fromStatus} → ${e.toStatus}`}
+                    {e.fromStatus === null
+                      ? tr('ticketsAdminTicketDetail.opened')
+                      : `${e.fromStatus} → ${e.toStatus}`}
                   </span>
                   {e.note !== null && e.note !== '' && <p className="tk-history__note">{e.note}</p>}
                 </li>
@@ -280,24 +305,36 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
         question from the one being argued.
       */}
       {t.disputeKind === 'FIGURE_CORRECTION' && t.disputedFigures != null ? (
-        <AfSection title="The figures when this was raised">
+        <AfSection title={tr('ticketsAdminTicketDetail.theFiguresWhenThisWas')}>
           <AfCard>
             <p className="af-small">
               As at {new Date(t.disputedFigures.capturedAt).toLocaleString()} · order{' '}
               <span className="sk-ident">{t.disputedFigures.orderNumber}</span> ·{' '}
               {t.disputedFigures.paymentMode}
-              {t.disputedFigures.codInr === null ? null : ` · COD ₹${t.disputedFigures.codInr}`} ·
-              transfer ₹{t.disputedFigures.transferTotalInr} · retail ₹
+              {t.disputedFigures.codInr === null
+                ? null
+                : tr('ticketsAdminTicketDetail.cod', { codInr: t.disputedFigures.codInr })}{' '}
+              · transfer ₹{t.disputedFigures.transferTotalInr} · retail ₹
               {t.disputedFigures.retailTotalInr}
             </p>
             <ul className="tk-figures">
               {t.disputedFigures.parties.map((p) => (
                 <li key={p.party}>
-                  <span className="af-strong">{p.party === 'STORE' ? 'Store' : 'Client'}</span> net
-                  ₹{p.netInr}{' '}
+                  <span className="af-strong">
+                    {p.party === 'STORE'
+                      ? tr('ticketsAdminTicketDetail.store')
+                      : tr('ticketsAdminTicketDetail.client')}
+                  </span>{' '}
+                  net ₹{p.netInr}{' '}
                   <span className="af-small">
-                    (gross ₹{p.grossInr}, transfer ₹{p.transferInr}, tax ₹{p.taxShareInr}, COD fee ₹
-                    {p.codFeeShareInr}, instant ₹{p.instantFeeShareInr} — {p.status.toLowerCase()})
+                    {tr('ticketsAdminTicketDetail.grossTransferTaxCodFee', {
+                      grossInr: p.grossInr,
+                      transferInr: p.transferInr,
+                      taxShareInr: p.taxShareInr,
+                      codFeeShareInr: p.codFeeShareInr,
+                      instantFeeShareInr: p.instantFeeShareInr,
+                      value: p.status.toLowerCase(),
+                    })}
                   </span>
                 </li>
               ))}
@@ -306,7 +343,12 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
               <ul className="tk-figures af-small">
                 {t.disputedFigures.fees.map((f) => (
                   <li key={f.fee}>
-                    {f.fee}: store ₹{f.storeInr} · client ₹{f.sellerInr} · total ₹{f.totalInr}
+                    {tr('ticketsAdminTicketDetail.storeClientTotal', {
+                      fee: f.fee,
+                      storeInr: f.storeInr,
+                      sellerInr: f.sellerInr,
+                      totalInr: f.totalInr,
+                    })}
                   </li>
                 ))}
               </ul>
@@ -316,7 +358,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
       ) : null}
 
       {canResolve && t.resolvedAt === null && isStoreDispute ? (
-        <AfSection title="Settle between store and client">
+        <AfSection title={tr('ticketsAdminTicketDetail.settleBetweenStoreAndClient')}>
           <StoreDisputeSettle
             ticketId={ticketId}
             storeName={t.storeName ?? null}
@@ -330,7 +372,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
       ) : null}
 
       {canResolve && t.resolvedAt === null ? (
-        <AfSection title="Move this on">
+        <AfSection title={tr('ticketsAdminTicketDetail.moveThisOn')}>
           <AfCard>
             {/*
               ONE ROW. Stage, outcome, refund, note, Apply.
@@ -343,7 +385,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
             <div className="tk-move">
               <Select
                 id="admin-ticket-stage"
-                label="Move to"
+                label={tr('ticketsAdminTicketDetail.moveTo')}
                 value={stage}
                 onChange={(e) => {
                   const next = e.target.value as '' | 'REVIEWING' | 'CLOSED';
@@ -353,8 +395,8 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                   setTo(next === 'REVIEWING' ? TicketStatus.NEGOTIATING : '');
                 }}
               >
-                <option value="">Choose…</option>
-                {STAGES.map((o) => (
+                <option value="">{tr('ticketsAdminTicketDetail.choose')}</option>
+                {STAGES(tr).map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>
@@ -364,11 +406,11 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
               {stage === 'CLOSED' ? (
                 <Select
                   id="admin-ticket-to"
-                  label="How"
+                  label={tr('ticketsAdminTicketDetail.how')}
                   value={to}
                   onChange={(e) => setTo(e.target.value as TicketStatus | '')}
                 >
-                  <option value="">Outcome…</option>
+                  <option value="">{tr('ticketsAdminTicketDetail.outcome')}</option>
                   {outcomes.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
@@ -380,22 +422,22 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
               {to === TicketStatus.RESOLVED_REFUND ? (
                 <TextField
                   id="admin-ticket-refund"
-                  label="Refund (INR)"
+                  label={tr('ticketsAdminTicketDetail.refundInr')}
                   value={refund}
                   onChange={(e) => setRefund(e.target.value)}
                   inputMode="decimal"
                   // This credits a seller's wallet in the same
                   // transaction, so it says so where it cannot be missed.
-                  title="Credited to the client's wallet in the same transaction."
+                  title={tr('ticketsAdminTicketDetail.creditedToTheClientS')}
                 />
               ) : null}
 
               <div className="tk-move__notes">
                 <TextArea
                   id="admin-ticket-notes"
-                  label="Notes"
+                  label={tr('ticketsAdminTicketDetail.notes')}
                   rows={1}
-                  placeholder="The client reads this on their ticket."
+                  placeholder={tr('ticketsAdminTicketDetail.theClientReadsThisOn')}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   // Display only: TransitionTicketDto allows 2000.
@@ -406,7 +448,12 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
               <AsyncButton
                 variant="primary"
                 size="md"
-                labels={{ idle: 'Apply', busy: 'Applying…', done: 'Moved', error: 'Not moved' }}
+                labels={{
+                  idle: tr('ticketsAdminTicketDetail.apply'),
+                  busy: tr('ticketsAdminTicketDetail.applying'),
+                  done: tr('ticketsAdminTicketDetail.moved'),
+                  error: tr('ticketsAdminTicketDetail.notMoved'),
+                }}
                 disabled={to === '' || transition.isPending}
                 onClick={(e) => {
                   // A refund goes through the confirm first; the confirm
@@ -424,12 +471,12 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
           <ConfirmDialog
             open={confirmRefund}
             onOpenChange={setConfirmRefund}
-            title="Refund the client?"
+            title={tr('ticketsAdminTicketDetail.refundTheClient')}
             entity={t.ticketNumber}
             entityIsIdentifier
             amount={refund.trim() === '' ? undefined : <Money amount={refund.trim()} />}
-            consequence="The client's wallet is credited the amount typed, in the same transaction, and the ticket closes as refunded."
-            confirmLabel="Refund and close"
+            consequence={tr('ticketsAdminTicketDetail.theClientSWalletIs')}
+            confirmLabel={tr('ticketsAdminTicketDetail.refundAndClose')}
             onConfirm={send}
           />
         </AfSection>

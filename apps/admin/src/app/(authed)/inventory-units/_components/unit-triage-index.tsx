@@ -25,6 +25,7 @@ import {
 } from '../../inventory/_components/stock-kit';
 import { UnitTracePanel } from './unit-trace-panel';
 import './units.css';
+import { useT, useLocale } from '@/i18n/client';
 
 /**
  * Serialized-unit discrepancies, from the warehouse's side.
@@ -44,6 +45,7 @@ import './units.css';
  * its reason code and its audit row.
  */
 export function UnitTriageIndex(): ReactElement {
+  const t = useT();
   const [selected, setSelected] = useState<string | null>(null);
   const triage = useUnitTriage();
   const data = triage.data;
@@ -51,9 +53,12 @@ export function UnitTriageIndex(): ReactElement {
   return (
     <AreaPage>
       <PageHeader
-        breadcrumbs={[{ label: 'Inventory' }, { label: 'Serial units' }]}
-        title="Unit discrepancies"
-        subtitle="For SKUs tracked per unit by serial. Which clients have a scan missing, a parcel unaccounted for, or serials that disagree with the stock count."
+        breadcrumbs={[
+          { label: t('inventoryUnitsUnitTriageIndex.inventory') },
+          { label: t('inventoryUnitsUnitTriageIndex.serialUnits') },
+        ]}
+        title={t('inventoryUnitsUnitTriageIndex.unitDiscrepancies')}
+        subtitle={t('inventoryUnitsUnitTriageIndex.forSkusTrackedPerUnit')}
       />
 
       {triage.isError ? (
@@ -68,48 +73,50 @@ export function UnitTriageIndex(): ReactElement {
         <>
           <KpiGrid>
             <KpiCard
-              label="Needs attention"
+              label={t('inventoryUnitsUnitTriageIndex.needsAttention')}
               icon={<TriangleAlert size={14} />}
               value={data?.totalNeedsAttention ?? 0}
               tone={(data?.totalNeedsAttention ?? 0) > 0 ? 'pending' : 'credit'}
-              hint="Across every client holding serialized stock"
+              hint={t('inventoryUnitsUnitTriageIndex.acrossEveryClientHoldingSerialized')}
             />
             <KpiCard
-              label="Clients affected"
+              label={t('inventoryUnitsUnitTriageIndex.clientsAffected')}
               icon={<Users size={14} />}
               value={data?.sellers.filter((s) => s.needsAttention > 0).length ?? 0}
-              hint={`of ${data?.examined ?? 0} swept`}
+              hint={t('inventoryUnitsUnitTriageIndex.ofSwept', { value: data?.examined ?? 0 })}
             />
             <KpiCard
-              label="Report generated"
+              label={t('inventoryUnitsUnitTriageIndex.reportGenerated')}
               icon={<Clock size={14} />}
               figure={data === undefined ? '—' : new Date(data.generatedAt).toLocaleTimeString()}
-              hint="Recomputed on load"
+              hint={t('inventoryUnitsUnitTriageIndex.recomputedOnLoad')}
             />
           </KpiGrid>
 
           {data?.truncated === true && (
             <InlineError
-              message={`Only the first ${data.examined} clients were swept. More hold serialized stock — the rest are not shown, and are not counted above.`}
+              message={t('inventoryUnitsUnitTriageIndex.onlyTheFirstClientsWere', {
+                examined: data.examined,
+              })}
             />
           )}
 
           {(data?.sellers.length ?? 0) === 0 ? (
             <EmptyState
               tone="positive"
-              title="No serialized stock anywhere"
-              description="Nothing to reconcile — no client has a SKU set to strict per-unit tracking yet."
+              title={t('inventoryUnitsUnitTriageIndex.noSerializedStockAnywhere')}
+              description={t('inventoryUnitsUnitTriageIndex.nothingToReconcileNoClient')}
             />
           ) : (
             <Table>
               <THead>
                 <Tr>
-                  <Th>Client</Th>
-                  <Th align="right">Stuck</Th>
-                  <Th align="right">Unresolved dispatch</Th>
-                  <Th align="right">Count mismatch</Th>
-                  <Th align="right">Total</Th>
-                  <Th>Their thresholds</Th>
+                  <Th>{t('inventoryUnitsUnitTriageIndex.client')}</Th>
+                  <Th align="right">{t('inventoryUnitsUnitTriageIndex.stuck')}</Th>
+                  <Th align="right">{t('inventoryUnitsUnitTriageIndex.unresolvedDispatch')}</Th>
+                  <Th align="right">{t('inventoryUnitsUnitTriageIndex.countMismatch')}</Th>
+                  <Th align="right">{t('inventoryUnitsUnitTriageIndex.total')}</Th>
+                  <Th>{t('inventoryUnitsUnitTriageIndex.theirThresholds')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -120,7 +127,9 @@ export function UnitTriageIndex(): ReactElement {
                     onActivate={() => setSelected(selected === s.sellerId ? null : s.sellerId)}
                   >
                     <Td>
-                      <span className="unit-seller">{s.companyName ?? 'Unknown client'}</span>
+                      <span className="unit-seller">
+                        {s.companyName ?? t('inventoryUnitsUnitTriageIndex.unknownClient')}
+                      </span>
                       <span className="stk-sub">
                         <Link
                           href={`/sellers/${s.sellerId}`}
@@ -162,8 +171,10 @@ export function UnitTriageIndex(): ReactElement {
                       )}
                     </Td>
                     <Td className="stk-faint stk-nowrap">
-                      stuck &gt;{s.thresholds.stuckSlaHours}h · dispatch &gt;
-                      {s.thresholds.dispatchedUnresolvedDays}d
+                      {t('inventoryUnitsUnitTriageIndex.stuckHDispatchD', {
+                        stuckSlaHours: s.thresholds.stuckSlaHours,
+                        dispatchedUnresolvedDays: s.thresholds.dispatchedUnresolvedDays,
+                      })}
                     </Td>
                   </Tr>
                 ))}
@@ -188,13 +199,14 @@ export function UnitTriageIndex(): ReactElement {
 }
 
 function SellerDetail({ sellerId }: { readonly sellerId: string }): ReactElement {
+  const t = useT();
   const report = useSellerUnitReport(sellerId);
   const d = report.data;
 
   return (
     <AreaSection
-      title="Detail"
-      note="Exactly what this client sees on their own screen — same computation, so the two cannot disagree."
+      title={t('inventoryUnitsUnitTriageIndex.detail')}
+      note={t('inventoryUnitsUnitTriageIndex.exactlyWhatThisClientSees')}
     >
       {report.isError ? (
         <InlineError message={serverVerdict(report.error)} retry={() => void report.refetch()} />
@@ -203,26 +215,28 @@ function SellerDetail({ sellerId }: { readonly sellerId: string }): ReactElement
       ) : (
         <Stack>
           <UnitTable
-            title="Stuck mid-lifecycle"
+            title={t('inventoryUnitsUnitTriageIndex.stuckMidLifecycle')}
             rows={d?.stuckUnits ?? []}
-            empty="Every unit that started a pick has been scanned on."
+            empty={t('inventoryUnitsUnitTriageIndex.everyUnitThatStartedA')}
           />
           <UnitTable
-            title="Unresolved dispatches"
+            title={t('inventoryUnitsUnitTriageIndex.unresolvedDispatches')}
             rows={d?.unresolvedDispatched ?? []}
-            empty="Every dispatched unit has been delivered or come back."
+            empty={t('inventoryUnitsUnitTriageIndex.everyDispatchedUnitHasBeen')}
           />
           {(d?.countMismatches.length ?? 0) > 0 && (
             <div>
-              <h4 className="unit-group-title">Count mismatches</h4>
+              <h4 className="unit-group-title">
+                {t('inventoryUnitsUnitTriageIndex.countMismatches')}
+              </h4>
               <Table>
                 <THead>
                   <Tr>
                     <Th>SKU</Th>
-                    <Th>Warehouse</Th>
-                    <Th align="right">Serials</Th>
-                    <Th align="right">On hand</Th>
-                    <Th align="right">Difference</Th>
+                    <Th>{t('inventoryUnitsUnitTriageIndex.warehouse')}</Th>
+                    <Th align="right">{t('inventoryUnitsUnitTriageIndex.serials')}</Th>
+                    <Th align="right">{t('inventoryUnitsUnitTriageIndex.onHand')}</Th>
+                    <Th align="right">{t('inventoryUnitsUnitTriageIndex.difference')}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -266,6 +280,8 @@ function UnitTable({
   readonly rows: readonly StuckUnitRow[];
   readonly empty: string;
 }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   return (
     <div className="stk-stack stk-stack--tight">
       <h4 className="unit-group-title">{title}</h4>
@@ -275,11 +291,11 @@ function UnitTable({
         <Table>
           <THead>
             <Tr>
-              <Th>Serial</Th>
+              <Th>{t('inventoryUnitsUnitTriageIndex.serial')}</Th>
               <Th>SKU</Th>
-              <Th>Status</Th>
-              <Th align="right">In status</Th>
-              <Th>Last scan</Th>
+              <Th>{t('inventoryUnitsUnitTriageIndex.status')}</Th>
+              <Th align="right">{t('inventoryUnitsUnitTriageIndex.inStatus')}</Th>
+              <Th>{t('inventoryUnitsUnitTriageIndex.lastScan')}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -295,7 +311,7 @@ function UnitTable({
                   <StatusChip
                     size="sm"
                     kind={stockUnitStatusKind(u.status)}
-                    label={statusLabel(u.status)}
+                    label={statusLabel(u.status, locale)}
                   />
                 </Td>
                 <Td align="right" className="sk-figure">
@@ -309,7 +325,11 @@ function UnitTable({
                 </Td>
                 <Td className="stk-muted stk-nowrap">
                   {u.lastScanAt === null ? (
-                    <StatusChip size="sm" kind="failed" label="never scanned" />
+                    <StatusChip
+                      size="sm"
+                      kind="failed"
+                      label={t('inventoryUnitsUnitTriageIndex.neverScanned')}
+                    />
                   ) : (
                     new Date(u.lastScanAt).toLocaleString()
                   )}
