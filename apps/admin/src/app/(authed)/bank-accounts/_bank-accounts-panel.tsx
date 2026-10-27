@@ -168,7 +168,7 @@ export function BankAccountsPanel(): ReactElement | null {
     setError(null);
     try {
       await retire.mutateAsync({ id: a.id });
-      toast.info(`${a.label} retired — it is off the client transfer page. Past top-ups keep it.`);
+      toast.info(t('bankAccountsBankAccountsPanel.retiredItIsOffThe', { label: a.label }));
     } catch (err) {
       setError(serverVerdict(err));
       // Keeps the confirm open with the verdict on it.

@@ -114,7 +114,7 @@ export function InviteStaffModal({
           <AcAlert
             tone="warn"
             message={t('staffInviteStaffModal.theRoleListDidNot', {
-              value: serverVerdict(roles.error, 'Could not load roles.'),
+              value: serverVerdict(roles.error, t('staffInviteStaffModal.couldNotLoadRoles')),
             })}
           />
         ) : (

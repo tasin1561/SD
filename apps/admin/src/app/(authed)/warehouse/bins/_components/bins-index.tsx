@@ -192,7 +192,7 @@ export function BinsIndex(): ReactElement {
     setError(null);
     try {
       await deleteBin.mutateAsync(bin.id);
-      toast.info(`Bin ${bin.code} removed`);
+      toast.info(tr('warehouseBinsBinsIndex.binRemoved', { code: bin.code }));
     } catch (err) {
       // The server refuses while a bin holds stock or an active
       // reservation — surfaced verbatim, because "which bin still has

@@ -717,7 +717,10 @@ function BatchesTab(): ReactElement {
         // Named, not swallowed: a serialised parcel still needs its
         // units scanning, and a silent partial would leave it sitting.
         toast.error(
-          `${r.picked} sent to packing; ${r.skipped.length} still need scanning at the pick station`,
+          t('warehousePrintingPrintingStation.sentToPackingStillNeed', {
+            picked: r.picked,
+            skippedLength: r.skipped.length,
+          }),
         );
       } else {
         toast.success(

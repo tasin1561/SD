@@ -140,7 +140,7 @@ export function StaffManagementIndex(): ReactElement {
         <AcAlert
           tone="warn"
           message={t('staffStaffManagementIndex.rolesCouldNotBeLoaded', {
-            value: serverVerdict(roles.error, 'The role list did not load.'),
+            value: serverVerdict(roles.error, t('staffStaffManagementIndex.theRoleListDidNot')),
           })}
         />
       )}

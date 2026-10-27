@@ -93,7 +93,11 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
           }),
         );
       } else {
-        toast.error(`Closed with ${r.failures.length} failure(s). See manifest detail.`);
+        toast.error(
+          t('warehouseManifestsManifestDetailView.closedWithFailureSSee', {
+            failuresLength: r.failures.length,
+          }),
+        );
       }
     } catch (err) {
       setError(fmtError(err));
@@ -113,7 +117,11 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
           }),
         );
       } else {
-        toast.error(`Handoff partial: ${r.failures.length} failed.`);
+        toast.error(
+          t('warehouseManifestsManifestDetailView.handoffPartialFailed', {
+            failuresLength: r.failures.length,
+          }),
+        );
       }
     } catch (err) {
       setError(fmtError(err));

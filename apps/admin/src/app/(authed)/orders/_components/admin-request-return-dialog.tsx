@@ -48,7 +48,10 @@ export function AdminRequestReturnDialog({
           // saying they are on their way back.
           if (r.collectionBookingFailed !== null) {
             toast.error(
-              `${orderNumber} is marked as returning, but the courier did NOT take the collection: ${r.collectionBookingFailed} — arrange it by hand.`,
+              t('ordersAdminRequestReturnDialog.isMarkedAsReturningBut', {
+                orderNumber,
+                collectionBookingFailed: r.collectionBookingFailed,
+              }),
             );
           } else {
             toast.success(

@@ -284,4 +284,8 @@ export const extra = defineMessages({
     '{total}টি শিপমেন্টের মধ্যে {done}টি গোনা হয়েছে',
   ],
   'rolesPage.metaTitle': ['Roles · Skydrop admin', 'ভূমিকা · Skydrop অ্যাডমিন'],
+  'courierEscalationCourierEscalationIndex.humanOnlyAlwaysList': [
+    'Human-only, always: {categories}. These can never be added to the auto list.',
+    'সবসময় শুধু মানুষের জন্য: {categories}। এগুলো কখনো স্বয়ংক্রিয় তালিকায় যোগ করা যায় না।',
+  ],
 });

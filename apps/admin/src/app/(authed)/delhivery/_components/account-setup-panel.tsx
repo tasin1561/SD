@@ -107,7 +107,7 @@ export function AccountSetupPanel(): ReactElement | null {
     try {
       const r = await probe.mutateAsync(pin.trim() === '' ? {} : { pincode: pin.trim() });
       if (r.stubMode) {
-        toast.info('Stub mode — nothing left the box. This proves nothing about the real account.');
+        toast.info(t('delhiveryAccountSetupPanel.stubModeNothingLeftThe'));
       } else if (r.reachedLiveApi) {
         toast.success(
           t('delhiveryAccountSetupPanel.reachedDelhiveryIs', {

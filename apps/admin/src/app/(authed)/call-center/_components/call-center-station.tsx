@@ -245,7 +245,7 @@ export function CallCenterStation(): ReactElement {
         const r = await pull.mutateAsync();
         if (!r.assignment) {
           setQueueEmpty(true);
-          if (announce) toast.info('Queue is empty.');
+          if (announce) toast.info(tr('callCenterCallCenterStation.queueIsEmpty'));
           return;
         }
         setQueueEmpty(false);
@@ -482,7 +482,7 @@ export function CallCenterStation(): ReactElement {
     setError(null);
     try {
       await release.mutateAsync({ assignmentId: assignment.assignmentId });
-      toast.info('Released — entry returns to the queue.');
+      toast.info(tr('callCenterCallCenterStation.releasedEntryReturnsToThe'));
       resetCall();
     } catch (err) {
       setError(fmtError(err));

@@ -46,7 +46,7 @@ export function TrackingLookupPanel(): ReactElement | null {
       .map((s) => s.trim())
       .filter((s) => s !== '');
     if (awbNumbers.length === 0) {
-      toast.error('Paste at least one AWB.');
+      toast.error(t('delhiveryTrackingLookupPanel.pasteAtLeastOneAwb'));
       // Rejects so the button shows it did not look anything up.
       throw new Error('Paste at least one AWB.');
     }

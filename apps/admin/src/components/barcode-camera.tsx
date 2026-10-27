@@ -42,6 +42,10 @@ export function BarcodeCamera({
   const t = useT();
 
   const title = titleProp ?? t('barcodeCamera.scanWithTheCamera');
+  // The effect below opens the camera; a language switch must not restart the stream, so it reads
+  // the translator through a ref instead of listing it as a dependency.
+  const tRef = useRef(t);
+  tRef.current = t;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stopRef = useRef<(() => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +89,7 @@ export function BarcodeCamera({
           is another app already holding it, and an absent
           `mediaDevices` is a page that is not a secure context.
         */
-        if (!cancelled) setError(cameraFailure(t, err));
+        if (!cancelled) setError(cameraFailure(tRef.current, err));
       }
     })();
 

@@ -117,8 +117,8 @@ describe('retiring says what it does and does not do', () => {
 
   it('the wording promises exactly that', () => {
     // "Delete" would read as though the history went with it.
-    expect(PANEL).toContain('Retire');
-    expect(flat(PANEL)).toContain('Past top-ups keep it');
+    expect(withCatalogEnglish(PANEL)).toContain('Retire');
+    expect(flat(withCatalogEnglish(PANEL))).toContain('Past top-ups keep it');
     expect(PANEL).not.toMatch(/>\s*Delete\s*</);
   });
 });

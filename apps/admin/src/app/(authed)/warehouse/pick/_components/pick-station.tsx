@@ -61,7 +61,7 @@ export function PickStation(): ReactElement {
     try {
       const result = await pull.mutateAsync();
       if (!result.pick) {
-        toast.info('Queue is empty.');
+        toast.info(t('warehousePickPickStation.queueIsEmpty'));
         setPick(null);
         return;
       }
@@ -83,7 +83,7 @@ export function PickStation(): ReactElement {
     try {
       const r = await start.mutateAsync({ shipmentId: pick.shipmentId });
       if (r.status === 'PENDING_MANUAL_PLACEMENT') {
-        toast.error('Pick shortfall — order routed to manual placement.');
+        toast.error(t('warehousePickPickStation.pickShortfallOrderRoutedTo'));
         setPick(null);
       } else {
         setStarted(true);

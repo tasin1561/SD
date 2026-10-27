@@ -211,12 +211,12 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
         // not an error — it is a fact about the count, and the goods are
         // already on the shelf either way.
         if (result.hasDiscrepancies) {
-          toast.info('Completed — stock written for what arrived, and the difference recorded.');
+          toast.info(t('warehouseReceiveReceiveDetailView.completedStockWrittenForWhat'));
         } else {
           toast.success(t('warehouseReceiveReceiveDetailView.receiptCompletedStockWritten'));
         }
       } else {
-        toast.info(`Status now ${result.status}.`);
+        toast.info(t('warehouseReceiveReceiveDetailView.statusNow', { status: result.status }));
       }
       return true;
     } catch (e) {
@@ -234,7 +234,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       await cancelReceipt.mutateAsync({ id, reason: cancelReason.trim() });
       setCancelOpen(false);
       setCancelReason('');
-      toast.info('Receipt cancelled. Nothing was written to stock.');
+      toast.info(t('warehouseReceiveReceiveDetailView.receiptCancelledNothingWasWritten'));
     } catch (e) {
       setError(serverVerdict(e));
     } finally {

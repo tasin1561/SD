@@ -120,7 +120,7 @@ export function CourierEscalationIndex(): ReactElement {
   const copy = (text: string): void => {
     void navigator.clipboard.writeText(text).then(
       () => toast.success(t('courierEscalationCourierEscalationIndex.copied')),
-      () => toast.error('Could not copy'),
+      () => toast.error(t('courierEscalationCourierEscalationIndex.couldNotCopy')),
     );
   };
 
@@ -355,9 +355,9 @@ export function CourierEscalationIndex(): ReactElement {
             <p className="af-small ce-lock">
               <Lock size={13} aria-hidden />
               <span>
-                {t('courierEscalationCourierEscalationIndex.humanOnlyAlways')}{' '}
-                {(channel.data?.lockedCategoryLabels ?? []).join(' · ') || '—'}. These can never be
-                added to the auto list.
+                {t('courierEscalationCourierEscalationIndex.humanOnlyAlwaysList', {
+                  categories: (channel.data?.lockedCategoryLabels ?? []).join(' · ') || '—',
+                })}
               </span>
             </p>
           </div>
