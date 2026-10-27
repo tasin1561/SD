@@ -2,6 +2,29 @@ import { defineMessages } from '../define';
 
 /** Copy owned by the "orderDetail" feature. */
 export const orderDetail = defineMessages({
+  'orderDetail.extrasTitle': [
+    'Columns from your file we did not use',
+    'আপনার ফাইলের যে কলামগুলো আমরা ব্যবহার করিনি',
+  ],
+  'orderDetail.extrasShow': ['Show {count} recorded values', '{count}টি সংরক্ষিত মান দেখুন'],
+  'orderDetail.extrasHide': ['Hide recorded values', 'সংরক্ষিত মান লুকান'],
+  'orderDetail.extrasWarning': [
+    'These values were saved exactly as written in your file. We did not use them and did not act on them. They do not change how this order is handled.',
+    'এই মানগুলো আপনার ফাইলে যেভাবে লেখা ছিল সেভাবেই সংরক্ষিত। আমরা এগুলো ব্যবহার করিনি, এগুলোর ওপর কোনো কাজও করিনি। এগুলো এই অর্ডার কীভাবে সামলানো হবে তা বদলায় না।',
+  ],
+  'orderDetail.extrasRow': ['Row {row} of your file', 'আপনার ফাইলের {row} নম্বর সারি'],
+  'orderDetail.extrasNotUsed': ['Not used', 'ব্যবহার করা হয়নি'],
+  'orderDetail.extrasWhy': ['Why: {reason}', 'কারণ: {reason}'],
+  'orderDetail.extrasNotUnderstood': ['Not understood', 'বোঝা যায়নি'],
+  'orderDetail.extrasNotUnderstoodHint': [
+    'We do not recognise this column, so it was not used.',
+    'এই কলামটি আমরা চিনি না, তাই এটি ব্যবহার করা হয়নি।',
+  ],
+  'orderDetail.extrasTruncated': ['Shortened to fit', 'ছোট করে রাখা হয়েছে'],
+  'orderDetail.extrasOmitted': [
+    '{count} more values were not kept because the file had too many unused columns.',
+    'ফাইলে অব্যবহৃত কলাম অনেক বেশি থাকায় আরও {count}টি মান রাখা হয়নি।',
+  ],
   'orderDetail.orders': ['Orders', 'অর্ডার'],
   'orderDetail.loadingOrder': ['Loading order…', 'অর্ডার লোড হচ্ছে…'],
   'orderDetail.failedToLoadOrder': ['Failed to load order.', 'অর্ডার লোড করা যায়নি।'],

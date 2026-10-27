@@ -1,5 +1,12 @@
 import { BadRequestException, HttpException, Injectable, Logger } from '@nestjs/common';
-import { ActorType, BulkUploadStatus, OrderSource, OrderStatus, PaymentMode } from '@skydrop/db';
+import {
+  ActorType,
+  BulkUploadStatus,
+  OrderSource,
+  OrderStatus,
+  PaymentMode,
+  Prisma,
+} from '@skydrop/db';
 import Papa from 'papaparse';
 import { buildErrorReportXlsx, XLSX_CONTENT_TYPE } from '../order-xlsx';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -398,6 +405,9 @@ export class OrderCsvImportProcessorService {
     await this.resellerOrders.create({ kind: 'STORE_USER', storeId, storeUserId }, dto, ctx, {
       source: OrderSource.BULK_UPLOAD,
       bulkUploadId: uploadId,
+      ...(row.csvExtras === undefined
+        ? {}
+        : { csvExtras: row.csvExtras as unknown as Prisma.InputJsonValue }),
     });
   }
 
@@ -605,6 +615,9 @@ export class OrderCsvImportProcessorService {
       source: OrderSource.BULK_UPLOAD,
       initialStatus: OrderStatus.PENDING_CONFIRMATION,
       bulkUploadId: uploadId,
+      ...(row.csvExtras === undefined
+        ? {}
+        : { csvExtras: row.csvExtras as unknown as Prisma.InputJsonValue }),
     });
   }
 

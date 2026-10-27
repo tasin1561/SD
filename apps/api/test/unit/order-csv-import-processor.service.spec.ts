@@ -113,6 +113,18 @@ describe('OrderCsvImportProcessorService.process', () => {
     expect(data.ordersCreated).toBe(1);
   });
 
+  it('hands the unused cells of the file to the order writer, per row', async () => {
+    const { svc, orders } = makeService({
+      existing: null,
+      csv: `${HEADER},Transport Mode,Mystery\n${ROW},Express,zzz\n`,
+    });
+    await svc.process('u1', MAPPING);
+    const opts = orders.create.mock.calls[0]![4] as unknown as AnyArgs;
+    const extras = opts.csvExtras as { rows: Array<{ row: number; unused: unknown[] }> };
+    expect(extras.rows[0]!.row).toBe(2);
+    expect(extras.rows[0]!.unused).toHaveLength(1);
+  });
+
   it('PATCHes when externalRef matches a DRAFT/PENDING order', async () => {
     const { svc, update, orders } = makeService({
       existing: { id: 'o9', status: OrderStatus.PENDING_CONFIRMATION },

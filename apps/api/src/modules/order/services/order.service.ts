@@ -331,6 +331,8 @@ export interface CreateOrderOptions {
   initialStatus?: OrderStatus;
   /** Set on the order when created by a bulk upload. */
   bulkUploadId?: string;
+  /** Unused cells of the uploaded file, kept verbatim (ORD-6 snapshot). */
+  csvExtras?: Prisma.InputJsonValue;
   /**
    * RS-5 — a RESELLER STORE's order. Supplied ONLY by
    * `ResellerOrderService`, after every refusal has run: the order is
@@ -655,6 +657,7 @@ export class OrderService {
             createdVia: input.addressCheckReferenceId === undefined ? null : 'order_page_v2',
             status: initialStatus,
             bulkUploadId: options.bulkUploadId ?? null,
+            ...(options.csvExtras === undefined ? {} : { csvExtras: options.csvExtras }),
             recipientName: prefixedRecipientName,
             recipientPhoneE164: input.recipientPhoneE164.trim(),
             recipientAltPhoneE164: input.recipientAltPhoneE164 ?? null,

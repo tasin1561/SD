@@ -104,6 +104,32 @@ export interface OrderItemView {
   readonly resellerStockMode?: 'SHARED' | 'SET_ASIDE' | null;
 }
 
+/**
+ * The cells of an uploaded file the importer did NOT use, kept verbatim
+ * (ORD-6 snapshot). Headers are exactly as the seller wrote them. `row` is
+ * the 1-based file row (header counted).
+ */
+export interface OrderCsvExtras {
+  readonly v: 1;
+  readonly rows: ReadonlyArray<{
+    readonly row: number;
+    /** Known to us and deliberately not used; `reason` says why. */
+    readonly unused: ReadonlyArray<{
+      readonly header: string;
+      readonly value: string;
+      readonly reason: string;
+      readonly truncated?: true;
+    }>;
+    /** Columns we do not recognise at all. */
+    readonly unrecognised: ReadonlyArray<{
+      readonly header: string;
+      readonly value: string;
+      readonly truncated?: true;
+    }>;
+  }>;
+  readonly omitted?: number;
+}
+
 export interface OrderView {
   readonly id: string;
   readonly orderNumber: string;
@@ -170,6 +196,8 @@ export interface OrderView {
 
   // Notes
   readonly sellerNotes: string | null;
+  /** Unused spreadsheet cells; null for an order not placed by an upload. */
+  readonly csvExtras?: OrderCsvExtras | null;
   readonly internalNotes: string | null;
   readonly callNotes: string | null;
 

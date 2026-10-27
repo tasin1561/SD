@@ -1,0 +1,13 @@
+-- Keep every spreadsheet column we do not use (owner, 2026-10-27).
+--
+-- ADDITIVE AND NULLABLE: no default, no backfill, nothing an existing
+-- reader or the old order pages touch. Null means "not placed by an
+-- upload, or the file had no unused cells" — every order that exists today.
+--
+-- It lives on `orders` and not on a per-row table because the order is
+-- what the seller opens, and a CSV row is not an order: rows sharing an
+-- Order ID are ONE order (ORD-9). The JSON therefore keys each row's cells
+-- by the 1-based file row number, so a seller can match them to their sheet.
+-- Written once at import and never edited (ORD-6). Size is capped by the
+-- importer (see order-csv-extras.ts), not by the database.
+ALTER TABLE "orders" ADD COLUMN "csv_extras" JSONB;

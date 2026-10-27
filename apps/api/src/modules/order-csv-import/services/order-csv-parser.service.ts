@@ -1,3 +1,4 @@
+import { buildCsvExtras, type CsvExtras } from '../order-csv-extras';
 import { Injectable } from '@nestjs/common';
 import { PaymentMode } from '@skydrop/db';
 import Papa from 'papaparse';
@@ -106,6 +107,8 @@ export interface CoercedOrderGroup {
   discountInr?: number;
   totalWeightGrams?: number;
   lines: CoercedOrderLine[];
+  /** Cells we do not use, per file row — recorded on the order, never acted on. */
+  csvExtras?: CsvExtras;
 }
 
 export interface GroupedCsv {
@@ -645,7 +648,13 @@ export class OrderCsvParserService {
         continue;
       }
 
-      groups.push(this.assemble(g.ref, g.rowNumbers, g.order, g.lines));
+      const group = this.assemble(g.ref, g.rowNumbers, g.order, g.lines);
+      const extras = buildCsvExtras(
+        g.rowNumbers.map((rowNumber, idx) => ({ rowNumber, raw: g.raws[idx] ?? {} })),
+        mapping,
+      );
+      if (extras !== undefined) group.csvExtras = extras;
+      groups.push(group);
     }
 
     rowErrors.sort((a, b) => a.rowNumber - b.rowNumber);
