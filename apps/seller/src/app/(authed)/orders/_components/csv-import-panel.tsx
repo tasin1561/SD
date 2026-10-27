@@ -2,7 +2,15 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { Download, FileSpreadsheet, FileWarning, Upload } from 'lucide-react';
+import {
+  Download,
+  FileSpreadsheet,
+  FileWarning,
+  History,
+  ShieldCheck,
+  Upload,
+  X,
+} from 'lucide-react';
 import { BulkUploadStatus } from '@skydrop/db';
 import { uploadStatusKind, uploadStatusLabel } from '@skydrop/ui/status';
 import { Button } from '@skydrop/ui/app/button';
@@ -19,6 +27,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CsvColumnGuide, type CsvColumnGuideColumn } from '@skydrop/ui/app/csv-column-guide';
 import { verdict } from '@/i18n/verdict';
 import { Notice, OrdSection } from './orders-parts';
+import {
+  CompactColumnGuide,
+  GuideDisclosure,
+  ImportSteps,
+  useGuidePanelId,
+} from './import-page-parts';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
@@ -306,7 +320,7 @@ export function CsvImportPanel({
     setError(null);
     const f = pickedFile.current ?? fileRef.current?.files?.[0];
     if (!f) {
-      setError(t('orderImport.pickACsvFile'));
+      setError(t(kind === 'orders' ? 'orderImport.pickAFile' : 'orderImport.pickACsvFile'));
       return;
     }
     // Only the ORDER importer reads a workbook; the catalogue one is CSV only.
@@ -392,31 +406,100 @@ export function CsvImportPanel({
   const items = list.data?.items ?? [];
   const latest = items[0];
 
+  const guideNotes = {
+    externalRef: t('csvcols.d.externalRef'),
+    paymentMode: t('csvcols.d.paymentMode'),
+    customerName: t('csvcols.d.customerName'),
+    customerPhone: t('csvcols.d.customerPhone'),
+    addressLine1: t('csvcols.d.addressLine1'),
+    city: t('csvcols.d.city'),
+    state: t('csvcols.d.state'),
+    pinCode: t('csvcols.d.pinCode'),
+    productSku: t('csvcols.d.productSku'),
+    quantity: t('csvcols.d.quantity'),
+    retailUnitPrice: t('csvcols.d.retailUnitPrice'),
+    advanceAmount: t('csvcols.d.advanceAmount'),
+    codAmount: t('csvcols.d.codAmount'),
+    deliveryFee: t('csvcols.d.deliveryFee'),
+    discountValue: t('csvcols.d.discountValue'),
+    discountType: t('csvcols.d.discountType'),
+    declaredValue: t('csvcols.d.declaredValue'),
+    productName: t('csvcols.d.productName'),
+    productExternalRef: t('csvcols.d.productExternalRef'),
+    variantSkuCode: t('csvcols.d.variantSkuCode'),
+    weightGrams: t('csvcols.d.weightGrams'),
+    lengthCm: t('csvcols.d.lengthCm'),
+    widthCm: t('csvcols.d.widthCm'),
+    heightCm: t('csvcols.d.heightCm'),
+    declaredValueInr: t('csvcols.d.declaredValueInr'),
+    barcode: t('csvcols.d.barcode'),
+    variantAttributes: t('csvcols.d.variantAttributes'),
+    addressLine2: t('csvcols.landmarkNote'),
+  };
+  const guideLabels = {
+    title: t('csvcols.title'),
+    colTitle: t('csvcols.colTitle'),
+    colMandatory: t('csvcols.colMandatory'),
+    colDescription: t('csvcols.colDescription'),
+    colSample: t('csvcols.colSample'),
+    yes: t('csvcols.yes'),
+    no: t('csvcols.no'),
+    notUsed: t('csvcols.notUsed'),
+    everyRow: t('csvcols.everyRow'),
+    everyRowHint: t('csvcols.everyRowHint'),
+    oncePerOrder: t('csvcols.oncePerOrder'),
+    oncePerOrderHint: t('csvcols.oncePerOrderHint'),
+    uat: t('csvcols.uat'),
+  };
+
+  const isOrders = kind === 'orders';
+  const [guideOpen, setGuideOpen] = useState(false);
+  const guidePanelId = useGuidePanelId();
+
+  // Step indicator: read from state that already exists, nothing new.
+  // A file in the zone = upload done; the preview = review; the confirmed
+  // run (processing, or the watched job still running) = import.
+  const importing =
+    busy === 'processing' ||
+    (latest !== undefined && watching === latest.id && RUNNING.has(latest.status));
+  const currentStep = importing ? 4 : pending !== null ? 3 : 2;
+  const doneThrough = importing ? 3 : pending !== null ? 2 : selectedName ? 2 : 1;
+  const stepNames = [
+    t('orderImport.stepDownload'),
+    t('orderImport.stepUpload'),
+    t('orderImport.stepReview'),
+    t('orderImport.stepImport'),
+  ];
+
+  function clearFile(): void {
+    pickedFile.current = null;
+    if (fileRef.current) fileRef.current.value = '';
+    setSelectedName('');
+    setZoneKey((k) => k + 1);
+  }
+  const pickedSize = pickedFile.current?.size ?? null;
+  const sizeText =
+    pickedSize === null
+      ? ''
+      : pickedSize < 1024
+        ? `${pickedSize} B`
+        : pickedSize < 1024 * 1024
+          ? `${(pickedSize / 1024).toFixed(0)} KB`
+          : `${(pickedSize / (1024 * 1024)).toFixed(1)} MB`;
+
   return (
-    <div className="ord-stack">
-      <OrdSection
-        title={t('orderImport.upload')}
-        note={
-          // A row is a LINE on the orders importer since 2026-09-29
-          // (ORD-9 widened) — the product importer is still one row per
-          // thing, so the two say different words rather than one
-          // sentence that is half true.
-          kind === 'orders' ? t('orderImport.oneRowIsOne') : t('orderImport.oneRowIsOne2')
-        }
-        action={
-          kind === 'orders' ? (
-            <div className="ord-row">
-              <AsyncButton
-                variant="primary"
-                size="sm"
-                icon={<Download size={14} />}
-                labels={{
-                  idle: t('orderImport.downloadTemplateXlsx'),
-                  busy: t('orderImport.downloading'),
-                  done: t('orderImport.downloaded'),
-                }}
-                onAction={() => downloadTemplateXlsx()}
-              />
+    <div className={isOrders ? 'ord-stack imp-root' : 'ord-stack'}>
+      {isOrders ? (
+        <>
+          <header className="imp-head">
+            <div className="imp-head__main">
+              <nav aria-label={t('orderImport.breadcrumbLabel')} className="imp-head__crumb">
+                <Link href="/orders">{t('orderImport.crumbOrders')}</Link>
+                <span aria-hidden>/</span>
+              </nav>
+              <h1 className="imp-head__title">{t('orderImport.importTitle')}</h1>
+            </div>
+            <div className="imp-head__actions">
               <AsyncButton
                 variant="ghost"
                 size="sm"
@@ -428,8 +511,143 @@ export function CsvImportPanel({
                 }}
                 onAction={() => downloadTemplateOrThrow()}
               />
+              <AsyncButton
+                variant="primary"
+                size="sm"
+                icon={<Download size={14} />}
+                labels={{
+                  idle: t('orderImport.templateExcelShort'),
+                  busy: t('orderImport.downloading'),
+                  done: t('orderImport.downloaded'),
+                }}
+                onAction={() => downloadTemplateXlsx()}
+              />
             </div>
-          ) : (
+            <p className="imp-head__sub">{t('orderImport.importOneLiner')}</p>
+          </header>
+
+          <ImportSteps
+            label={t('orderImport.stepsLabel')}
+            steps={stepNames}
+            current={currentStep}
+            doneThrough={doneThrough}
+            mobileText={t('orderImport.stepMobile', {
+              n: currentStep,
+              label: stepNames[currentStep - 1] ?? '',
+            })}
+          />
+
+          <div className="imp-grid">
+            <section className="imp-card imp-upload" aria-label={t('orderImport.stepUpload')}>
+              <DropZone
+                key={zoneKey}
+                ref={fileRef}
+                className="imp-drop"
+                accept=".csv,.xlsx,text/csv"
+                label={
+                  selectedName ? (
+                    <span className="imp-file" aria-label={t('orderImport.selectedFile')}>
+                      <FileSpreadsheet size={16} aria-hidden />
+                      <span className="imp-file__name" title={selectedName}>
+                        {selectedName}
+                      </span>
+                      <span className="imp-file__size sk-figure">{sizeText}</span>
+                      <button
+                        type="button"
+                        className="imp-file__x"
+                        aria-label={t('orderImport.removeFile', { name: selectedName })}
+                        disabled={busy !== null}
+                        onClick={clearFile}
+                      >
+                        <X size={14} aria-hidden />
+                      </button>
+                    </span>
+                  ) : (
+                    <>
+                      <span className="imp-drop__title">{t('orderImport.dropYourSheetHere')}</span>
+                      <span className="imp-drop__hint">{t('orderImport.dropHint')}</span>
+                    </>
+                  )
+                }
+                buttonText={
+                  selectedName ? t('orderImport.changeFile') : t('orderImport.chooseFile')
+                }
+                showFiles={false}
+                onFiles={onPickFiles}
+                disabled={busy !== null}
+              />
+              <div className="imp-upload__foot">
+                <span className="imp-upload__note">
+                  <ShieldCheck size={16} aria-hidden />
+                  {t('orderImport.reviewFirst')}
+                </span>
+                <AsyncButton
+                  variant="primary"
+                  icon={<Upload size={15} />}
+                  state={busy === 'uploading' ? 'busy' : undefined}
+                  labels={{
+                    idle: t('orderImport.uploadAndCheck'),
+                    busy: t('orderImport.checking'),
+                  }}
+                  onClick={() => void upload()}
+                  disabled={busy !== null || !selectedName}
+                />
+              </div>
+              {error && (
+                <Notice tone="bad" role="alert" icon={<FileWarning size={16} />}>
+                  <span>{error}</span>
+                </Notice>
+              )}
+            </section>
+
+            {columnGuide.data !== undefined ? (
+              <CompactColumnGuide
+                columns={columnGuide.data.columns}
+                notes={guideNotes}
+                warnFields={['addressLine2']}
+                open={guideOpen}
+                onToggle={() => setGuideOpen((o) => !o)}
+                panelId={guidePanelId}
+                labels={{
+                  title: t('orderImport.guideTitle'),
+                  groupEvery: t('orderImport.groupEvery'),
+                  groupOnce: t('orderImport.groupOnce'),
+                  groupOptional: t('orderImport.groupOptional'),
+                  example: (sample) => t('orderImport.chipExample', { sample }),
+                  important: t('orderImport.chipImportant'),
+                  ignored: (count) =>
+                    t(count === 1 ? 'orderImport.ignoredOne' : 'orderImport.ignoredMany', {
+                      count,
+                    }),
+                  fullGuide: t('orderImport.fullGuide'),
+                }}
+              />
+            ) : null}
+          </div>
+
+          {columnGuide.data !== undefined ? (
+            <GuideDisclosure open={guideOpen} id={guidePanelId}>
+              <CsvColumnGuide
+                columns={columnGuide.data.columns}
+                notes={guideNotes}
+                labels={guideLabels}
+              />
+            </GuideDisclosure>
+          ) : null}
+        </>
+      ) : null}
+
+      {!isOrders ? (
+        <OrdSection
+          title={t('orderImport.upload')}
+          note={
+            // A row is a LINE on the orders importer since 2026-09-29
+            // (ORD-9 widened) — the product importer is still one row per
+            // thing, so the two say different words rather than one
+            // sentence that is half true.
+            t('orderImport.oneRowIsOne2')
+          }
+          action={
             <AsyncButton
               variant="ghost"
               size="sm"
@@ -441,97 +659,49 @@ export function CsvImportPanel({
               }}
               onAction={() => downloadTemplateOrThrow()}
             />
-          )
-        }
-      >
-        <div className="ord-stack ord-stack--tight">
-          <p className="ord-p">{t('orderImport.downloadTheTemplateFill')}</p>
+          }
+        >
+          <div className="ord-stack ord-stack--tight">
+            <p className="ord-p">{t('orderImport.downloadTheTemplateFill')}</p>
 
-          {columnGuide.data !== undefined ? (
-            <CsvColumnGuide
-              columns={columnGuide.data.columns}
-              notes={{
-                externalRef: t('csvcols.d.externalRef'),
-                paymentMode: t('csvcols.d.paymentMode'),
-                customerName: t('csvcols.d.customerName'),
-                customerPhone: t('csvcols.d.customerPhone'),
-                addressLine1: t('csvcols.d.addressLine1'),
-                city: t('csvcols.d.city'),
-                state: t('csvcols.d.state'),
-                pinCode: t('csvcols.d.pinCode'),
-                productSku: t('csvcols.d.productSku'),
-                quantity: t('csvcols.d.quantity'),
-                retailUnitPrice: t('csvcols.d.retailUnitPrice'),
-                advanceAmount: t('csvcols.d.advanceAmount'),
-                codAmount: t('csvcols.d.codAmount'),
-                deliveryFee: t('csvcols.d.deliveryFee'),
-                discountValue: t('csvcols.d.discountValue'),
-                discountType: t('csvcols.d.discountType'),
-                declaredValue: t('csvcols.d.declaredValue'),
-                productName: t('csvcols.d.productName'),
-                productExternalRef: t('csvcols.d.productExternalRef'),
-                variantSkuCode: t('csvcols.d.variantSkuCode'),
-                weightGrams: t('csvcols.d.weightGrams'),
-                lengthCm: t('csvcols.d.lengthCm'),
-                widthCm: t('csvcols.d.widthCm'),
-                heightCm: t('csvcols.d.heightCm'),
-                declaredValueInr: t('csvcols.d.declaredValueInr'),
-                barcode: t('csvcols.d.barcode'),
-                variantAttributes: t('csvcols.d.variantAttributes'),
-                addressLine2: t('csvcols.landmarkNote'),
-              }}
-              labels={{
-                title: t('csvcols.title'),
-                colTitle: t('csvcols.colTitle'),
-                colMandatory: t('csvcols.colMandatory'),
-                colDescription: t('csvcols.colDescription'),
-                colSample: t('csvcols.colSample'),
-                yes: t('csvcols.yes'),
-                no: t('csvcols.no'),
-                notUsed: t('csvcols.notUsed'),
-                everyRow: t('csvcols.everyRow'),
-                everyRowHint: t('csvcols.everyRowHint'),
-                oncePerOrder: t('csvcols.oncePerOrder'),
-                oncePerOrderHint: t('csvcols.oncePerOrderHint'),
-                uat: t('csvcols.uat'),
-              }}
+            {columnGuide.data !== undefined ? (
+              <CsvColumnGuide
+                columns={columnGuide.data.columns}
+                notes={guideNotes}
+                labels={guideLabels}
+              />
+            ) : null}
+
+            <DropZone
+              key={zoneKey}
+              ref={fileRef}
+              accept=".csv,text/csv"
+              label={selectedName || t('orderImport.dropYourCsvHere')}
+              buttonText={t('orderImport.chooseCsv')}
+              showFiles={false}
+              onFiles={onPickFiles}
+              disabled={busy !== null}
             />
-          ) : null}
 
-          <DropZone
-            key={zoneKey}
-            ref={fileRef}
-            accept={kind === 'orders' ? '.csv,.xlsx,text/csv' : '.csv,text/csv'}
-            label={
-              selectedName ||
-              (kind === 'orders'
-                ? t('orderImport.dropYourSheetHere')
-                : t('orderImport.dropYourCsvHere'))
-            }
-            buttonText={t('orderImport.chooseCsv')}
-            showFiles={false}
-            onFiles={onPickFiles}
-            disabled={busy !== null}
-          />
+            <div className="ord-row">
+              <AsyncButton
+                variant="primary"
+                icon={<Upload size={15} />}
+                state={busy === 'uploading' ? 'busy' : undefined}
+                labels={{ idle: t('orderImport.uploadAndCheck'), busy: t('orderImport.checking') }}
+                onClick={() => void upload()}
+                disabled={busy !== null || !selectedName}
+              />
+            </div>
 
-          <div className="ord-row">
-            <AsyncButton
-              variant="primary"
-              icon={<Upload size={15} />}
-              state={busy === 'uploading' ? 'busy' : undefined}
-              labels={{ idle: t('orderImport.uploadAndCheck'), busy: t('orderImport.checking') }}
-              onClick={() => void upload()}
-              disabled={busy !== null || !selectedName}
-            />
+            {error && (
+              <Notice tone="bad" role="alert" icon={<FileWarning size={16} />}>
+                <span>{error}</span>
+              </Notice>
+            )}
           </div>
-
-          {error && (
-            <Notice tone="bad" role="alert" icon={<FileWarning size={16} />}>
-              <span>{error}</span>
-            </Notice>
-          )}
-        </div>
-      </OrdSection>
+        </OrdSection>
+      ) : null}
 
       {/* Nothing has been imported yet. This is the step that was
           missing: the file went straight to process, so a column we
@@ -682,111 +852,215 @@ export function CsvImportPanel({
         <ImportRunProgress job={latest} kind={kind} />
       )}
 
-      <OrdSection
-        title={t('orderImport.recentImports')}
-        note={
-          list.data === undefined
-            ? undefined
-            : t('orderImport.shownNewestFirst', { items: list.data.items.length })
-        }
-        flush={list.data !== undefined && list.data.items.length > 0}
-      >
-        {list.isLoading ? (
-          <SkeletonRows rows={3} cols={4} label={t('orderImport.loadingRecentImports')} />
-        ) : list.isError ? (
-          <ErrorState
-            message={verdict(list.error, t, t('orderImport.failedToLoadUploads'))}
-            retry={() => void list.refetch()}
-          />
-        ) : !list.data || list.data.items.length === 0 ? (
-          <EmptyState
-            bare
-            icon={<FileSpreadsheet size={20} />}
-            title={t('orderImport.noImportsYet')}
-            description={t('orderImport.uploadACsvAbove')}
-          />
-        ) : (
-          <Table caption={t('orderImport.recentImports')}>
-            <THead>
-              <Tr>
-                <Th>{t('orderImport.file')}</Th>
-                <Th>{t('orderImport.status')}</Th>
-                <Th align="right">{t('orderImport.rows')}</Th>
-                <Th align="right">{t('orderImport.created')}</Th>
-                <Th align="right">{t('orderImport.failed')}</Th>
-                <Th>{t('orderImport.when')}</Th>
-                <Th aria-label={t('orderImport.errorReport')} />
-              </Tr>
-            </THead>
-            <TBody>
-              {list.data.items.map((u) => {
-                const created =
-                  u.ordersCreated ?? (u.productsCreated ?? 0) + (u.variantsCreated ?? 0);
-                return (
-                  <Tr key={u.id}>
-                    <Td>
-                      {detailHrefBase === undefined ? (
-                        <span className="sk-ident ord-file-name" title={u.fileName}>
-                          {u.fileName}
+      {isOrders ? (
+        <section className="ord-section">
+          <div className="imp-recent">
+            <div className="imp-recent__head">
+              <History size={16} aria-hidden />
+              <h2 className="imp-recent__title">
+                {list.data !== undefined && list.data.items.length > 0
+                  ? t('orderImport.recentCount', { count: list.data.total })
+                  : t('orderImport.recentImports')}
+              </h2>
+              {list.data !== undefined && list.data.items.length === 0 ? (
+                <>
+                  <span>{t('orderImport.noneYet')}</span>
+                  <span className="imp-recent__aside">{t('orderImport.uploadsAppearHere')}</span>
+                </>
+              ) : null}
+            </div>
+            <div
+              className="imp-recent__body"
+              data-flush={list.data !== undefined && list.data.items.length > 0 ? '' : undefined}
+            >
+              {list.isLoading ? (
+                <SkeletonRows rows={3} cols={4} label={t('orderImport.loadingRecentImports')} />
+              ) : list.isError ? (
+                <ErrorState
+                  message={verdict(list.error, t, t('orderImport.failedToLoadUploads'))}
+                  retry={() => void list.refetch()}
+                />
+              ) : !list.data || list.data.items.length === 0 ? null : (
+                <Table caption={t('orderImport.recentImports')}>
+                  <THead>
+                    <Tr>
+                      <Th>{t('orderImport.file')}</Th>
+                      <Th>{t('orderImport.status')}</Th>
+                      <Th align="right">{t('orderImport.rows')}</Th>
+                      <Th align="right">{t('orderImport.created')}</Th>
+                      <Th align="right">{t('orderImport.failed')}</Th>
+                      <Th>{t('orderImport.when')}</Th>
+                      <Th aria-label={t('orderImport.errorReport')} />
+                    </Tr>
+                  </THead>
+                  <TBody>
+                    {list.data.items.map((u) => {
+                      const created =
+                        u.ordersCreated ?? (u.productsCreated ?? 0) + (u.variantsCreated ?? 0);
+                      return (
+                        <Tr key={u.id}>
+                          <Td>
+                            {detailHrefBase === undefined ? (
+                              <span className="sk-ident ord-file-name" title={u.fileName}>
+                                {u.fileName}
+                              </span>
+                            ) : (
+                              <Link
+                                href={`${detailHrefBase}/${u.id}`}
+                                className="ord-link sk-ident ord-file-name"
+                                title={u.fileName}
+                              >
+                                {u.fileName}
+                              </Link>
+                            )}
+                          </Td>
+                          <Td>
+                            <UploadStatusChip status={u.status} />
+                          </Td>
+                          <Td align="right">
+                            <span className="sk-figure">{u.rowCount}</span>
+                          </Td>
+                          <Td align="right">
+                            <span className="sk-figure">{created}</span>
+                          </Td>
+                          <Td align="right">
+                            <span className="sk-figure">{u.rowsFailed ?? 0}</span>
+                          </Td>
+                          <Td>
+                            <span className="sk-figure ord-nowrap ord-muted">
+                              {new Date(u.createdAt).toISOString().slice(0, 16).replace('T', ' ')}
+                            </span>
+                          </Td>
+                          <Td>
+                            {u.errorReportKey && (
+                              <div className="ord-row">
+                                {kind === 'orders' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void downloadErrorReportXlsx(u.id)}
+                                    className="ord-expand"
+                                  >
+                                    <Download size={14} aria-hidden />
+                                    {t('orderImport.errorsXlsx')}
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  onClick={() => void downloadErrorReport(u.id)}
+                                  className="ord-expand"
+                                >
+                                  <Download size={14} aria-hidden />
+                                  {t('orderImport.errorsCsv')}
+                                </button>
+                              </div>
+                            )}
+                          </Td>
+                        </Tr>
+                      );
+                    })}
+                  </TBody>
+                </Table>
+              )}
+            </div>
+          </div>
+        </section>
+      ) : (
+        <OrdSection
+          title={t('orderImport.recentImports')}
+          note={
+            list.data === undefined
+              ? undefined
+              : t('orderImport.shownNewestFirst', { items: list.data.items.length })
+          }
+          flush={list.data !== undefined && list.data.items.length > 0}
+        >
+          {list.isLoading ? (
+            <SkeletonRows rows={3} cols={4} label={t('orderImport.loadingRecentImports')} />
+          ) : list.isError ? (
+            <ErrorState
+              message={verdict(list.error, t, t('orderImport.failedToLoadUploads'))}
+              retry={() => void list.refetch()}
+            />
+          ) : !list.data || list.data.items.length === 0 ? (
+            <EmptyState
+              bare
+              icon={<FileSpreadsheet size={20} />}
+              title={t('orderImport.noImportsYet')}
+              description={t('orderImport.uploadACsvAbove')}
+            />
+          ) : (
+            <Table caption={t('orderImport.recentImports')}>
+              <THead>
+                <Tr>
+                  <Th>{t('orderImport.file')}</Th>
+                  <Th>{t('orderImport.status')}</Th>
+                  <Th align="right">{t('orderImport.rows')}</Th>
+                  <Th align="right">{t('orderImport.created')}</Th>
+                  <Th align="right">{t('orderImport.failed')}</Th>
+                  <Th>{t('orderImport.when')}</Th>
+                  <Th aria-label={t('orderImport.errorReport')} />
+                </Tr>
+              </THead>
+              <TBody>
+                {list.data.items.map((u) => {
+                  const created =
+                    u.ordersCreated ?? (u.productsCreated ?? 0) + (u.variantsCreated ?? 0);
+                  return (
+                    <Tr key={u.id}>
+                      <Td>
+                        {detailHrefBase === undefined ? (
+                          <span className="sk-ident ord-file-name" title={u.fileName}>
+                            {u.fileName}
+                          </span>
+                        ) : (
+                          <Link
+                            href={`${detailHrefBase}/${u.id}`}
+                            className="ord-link sk-ident ord-file-name"
+                            title={u.fileName}
+                          >
+                            {u.fileName}
+                          </Link>
+                        )}
+                      </Td>
+                      <Td>
+                        <UploadStatusChip status={u.status} />
+                      </Td>
+                      <Td align="right">
+                        <span className="sk-figure">{u.rowCount}</span>
+                      </Td>
+                      <Td align="right">
+                        <span className="sk-figure">{created}</span>
+                      </Td>
+                      <Td align="right">
+                        <span className="sk-figure">{u.rowsFailed ?? 0}</span>
+                      </Td>
+                      <Td>
+                        <span className="sk-figure ord-nowrap ord-muted">
+                          {new Date(u.createdAt).toISOString().slice(0, 16).replace('T', ' ')}
                         </span>
-                      ) : (
-                        <Link
-                          href={`${detailHrefBase}/${u.id}`}
-                          className="ord-link sk-ident ord-file-name"
-                          title={u.fileName}
-                        >
-                          {u.fileName}
-                        </Link>
-                      )}
-                    </Td>
-                    <Td>
-                      <UploadStatusChip status={u.status} />
-                    </Td>
-                    <Td align="right">
-                      <span className="sk-figure">{u.rowCount}</span>
-                    </Td>
-                    <Td align="right">
-                      <span className="sk-figure">{created}</span>
-                    </Td>
-                    <Td align="right">
-                      <span className="sk-figure">{u.rowsFailed ?? 0}</span>
-                    </Td>
-                    <Td>
-                      <span className="sk-figure ord-nowrap ord-muted">
-                        {new Date(u.createdAt).toISOString().slice(0, 16).replace('T', ' ')}
-                      </span>
-                    </Td>
-                    <Td>
-                      {u.errorReportKey && (
-                        <div className="ord-row">
-                          {kind === 'orders' ? (
+                      </Td>
+                      <Td>
+                        {u.errorReportKey && (
+                          <div className="ord-row">
                             <button
                               type="button"
-                              onClick={() => void downloadErrorReportXlsx(u.id)}
+                              onClick={() => void downloadErrorReport(u.id)}
                               className="ord-expand"
                             >
                               <Download size={14} aria-hidden />
-                              {t('orderImport.errorsXlsx')}
+                              {t('orderImport.errorsCsv')}
                             </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => void downloadErrorReport(u.id)}
-                            className="ord-expand"
-                          >
-                            <Download size={14} aria-hidden />
-                            {t('orderImport.errorsCsv')}
-                          </button>
-                        </div>
-                      )}
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
-        )}
-      </OrdSection>
+                          </div>
+                        )}
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </TBody>
+            </Table>
+          )}
+        </OrdSection>
+      )}
     </div>
   );
 }
