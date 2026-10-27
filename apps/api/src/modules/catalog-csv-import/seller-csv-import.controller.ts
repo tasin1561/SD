@@ -45,7 +45,7 @@ export class SellerCsvImportController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Which template columns are required or optional' })
   columns(): CsvColumnGuide {
-    return buildCatalogColumnGuide(TEMPLATE_COLUMNS.map(([h]) => h));
+    return buildCatalogColumnGuide(TEMPLATE_COLUMNS);
   }
 
   @Get('template')

@@ -27,8 +27,8 @@ import {
  */
 const NONE = { orderDeliveryFee: false, orderDiscount: false, orderDeclaredValue: false };
 const ALL = { orderDeliveryFee: true, orderDiscount: true, orderDeclaredValue: true };
-const seller = TEMPLATE_COLUMNS.map(([h]) => h);
-const store = STORE_TEMPLATE_COLUMNS.map(([h]) => h);
+const seller = TEMPLATE_COLUMNS;
+const store = STORE_TEMPLATE_COLUMNS;
 
 const fieldsAt = (g: ReturnType<typeof buildOrderColumnGuide>, level: string): string[] =>
   g.columns.filter((c) => c.level === level).map((c) => c.field);
@@ -54,7 +54,7 @@ describe.each([
   it('every template header the importer uses appears, with no duplicates', () => {
     const fields = g.columns.map((c) => c.field);
     expect(new Set(fields).size).toBe(fields.length);
-    for (const h of headers) {
+    for (const [h = ''] of headers) {
       const f = lookupFieldForHeader(h);
       // A column we ship but the importer ignores (Customer Email) is not
       // advertised as a column that does anything.
@@ -66,7 +66,7 @@ describe.each([
   it('what the guide calls once-per-order, the importer really refuses when missing', () => {
     const parser = new OrderCsvParserService();
     const full: Record<string, string> = Object.fromEntries(
-      TEMPLATE_COLUMNS.map(([h, v]) => [h, v]),
+      TEMPLATE_COLUMNS.map(([h, v]) => [h, v ?? '']),
     );
     const mapping = parser.detectMapping(Object.keys(full)).mapping;
     for (const f of fieldsAt(g, 'ONCE_PER_ORDER')) {
@@ -103,7 +103,7 @@ describe('order column guide: UAT-controlled columns follow the CURRENT state', 
 });
 
 describe('catalog column guide', () => {
-  const g = buildCatalogColumnGuide(CATALOG_TEMPLATE.map(([h]) => h));
+  const g = buildCatalogColumnGuide(CATALOG_TEMPLATE);
   it('required columns are exactly CSV_REQUIRED_FIELDS, all per row', () => {
     expect(
       g.columns

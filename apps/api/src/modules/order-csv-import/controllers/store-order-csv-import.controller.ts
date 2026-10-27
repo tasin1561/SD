@@ -63,7 +63,7 @@ export class StoreOrderCsvImportController {
   })
   async columns(): Promise<CsvColumnGuide> {
     return buildOrderColumnGuide(
-      STORE_TEMPLATE_COLUMNS.map(([h]) => h),
+      STORE_TEMPLATE_COLUMNS,
       ORDER_CSV_STORE_REQUIRED_FIELDS,
       await this.uat.all(),
     );

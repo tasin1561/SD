@@ -58,11 +58,7 @@ export class SellerOrderCsvImportController {
     summary: 'Which template columns are required (per row / per order) or optional',
   })
   async columns(): Promise<CsvColumnGuide> {
-    return buildOrderColumnGuide(
-      TEMPLATE_COLUMNS.map(([h]) => h),
-      ORDER_CSV_REQUIRED_FIELDS,
-      await this.uat.all(),
-    );
+    return buildOrderColumnGuide(TEMPLATE_COLUMNS, ORDER_CSV_REQUIRED_FIELDS, await this.uat.all());
   }
 
   @Get('template')

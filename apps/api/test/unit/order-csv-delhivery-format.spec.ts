@@ -430,14 +430,14 @@ describe('the templates we hand out import cleanly through the parser', () => {
     return parser.groupRows(parsed.rows, detected.mapping);
   }
 
-  it("the seller's template is one order of two lines, with nothing to fix", () => {
+  it("the seller's template is three orders (one of two lines), with nothing to fix", () => {
     const csv = buildSellerTemplateForTest();
     const { groups, rowErrors } = roundTrip(csv);
     expect(rowErrors).toEqual([]);
-    // Two rows sharing one reference — the whole point of shipping two.
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.lines).toHaveLength(2);
-    expect(groups[0]?.paymentMode).toBe(PaymentMode.COD);
+    // Four rows, three orders: SD-1003's two rows share one reference — the
+    // whole point of shipping them (ORD-9).
+    expect(groups.map((g) => g.lines.length)).toEqual([1, 1, 2]);
+    expect(groups[2]?.paymentMode).toBe(PaymentMode.COD);
   });
 
   it("the store's template is one order of two lines, with nothing to fix", () => {

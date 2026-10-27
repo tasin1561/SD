@@ -382,15 +382,49 @@ export function CsvImportPanel({
           {columnGuide.data !== undefined ? (
             <CsvColumnGuide
               columns={columnGuide.data.columns}
-              notes={{ addressLine2: t('csvcols.landmarkNote') }}
+              notes={{
+                externalRef: t('csvcols.d.externalRef'),
+                paymentMode: t('csvcols.d.paymentMode'),
+                customerName: t('csvcols.d.customerName'),
+                customerPhone: t('csvcols.d.customerPhone'),
+                addressLine1: t('csvcols.d.addressLine1'),
+                city: t('csvcols.d.city'),
+                state: t('csvcols.d.state'),
+                pinCode: t('csvcols.d.pinCode'),
+                productSku: t('csvcols.d.productSku'),
+                quantity: t('csvcols.d.quantity'),
+                retailUnitPrice: t('csvcols.d.retailUnitPrice'),
+                advanceAmount: t('csvcols.d.advanceAmount'),
+                codAmount: t('csvcols.d.codAmount'),
+                deliveryFee: t('csvcols.d.deliveryFee'),
+                discountValue: t('csvcols.d.discountValue'),
+                discountType: t('csvcols.d.discountType'),
+                declaredValue: t('csvcols.d.declaredValue'),
+                productName: t('csvcols.d.productName'),
+                productExternalRef: t('csvcols.d.productExternalRef'),
+                variantSkuCode: t('csvcols.d.variantSkuCode'),
+                weightGrams: t('csvcols.d.weightGrams'),
+                lengthCm: t('csvcols.d.lengthCm'),
+                widthCm: t('csvcols.d.widthCm'),
+                heightCm: t('csvcols.d.heightCm'),
+                declaredValueInr: t('csvcols.d.declaredValueInr'),
+                barcode: t('csvcols.d.barcode'),
+                variantAttributes: t('csvcols.d.variantAttributes'),
+                addressLine2: t('csvcols.landmarkNote'),
+              }}
               labels={{
                 title: t('csvcols.title'),
+                colTitle: t('csvcols.colTitle'),
+                colMandatory: t('csvcols.colMandatory'),
+                colDescription: t('csvcols.colDescription'),
+                colSample: t('csvcols.colSample'),
+                yes: t('csvcols.yes'),
+                no: t('csvcols.no'),
+                notUsed: t('csvcols.notUsed'),
                 everyRow: t('csvcols.everyRow'),
                 everyRowHint: t('csvcols.everyRowHint'),
                 oncePerOrder: t('csvcols.oncePerOrder'),
                 oncePerOrderHint: t('csvcols.oncePerOrderHint'),
-                optional: t('csvcols.optional'),
-                optionalHint: t('csvcols.optionalHint'),
                 uat: t('csvcols.uat'),
               }}
             />

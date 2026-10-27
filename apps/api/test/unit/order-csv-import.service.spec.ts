@@ -78,7 +78,7 @@ describe('OrderCsvImportService', () => {
       .trim()
       .split('\n');
     expect(h).toContain('Product SKU');
-    expect(h).toContain('External Ref');
+    expect(h).toContain('Order ID');
     expect(ex!.split(',').length).toBe(h!.split(',').length);
   });
 

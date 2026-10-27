@@ -210,6 +210,49 @@ export function normalizeIndianPhone(raw: string): string {
   return raw.trim();
 }
 
+/**
+ * A phone Excel stored as a Number: `9.19877E+11` is what a 12-digit number
+ * becomes when it outgrows the column.
+ *
+ * Expanded EXACTLY (string arithmetic, no float), it is accepted only when
+ * NOTHING was lost: the mantissa must state at least as many digits as the
+ * expanded number has. `9.19876543210E+11` states all twelve and is the phone;
+ * `9.19877E+11` states six of twelve, the sixth already rounded, and expands to
+ * a different valid-looking number — a stranger's phone. That case is refused,
+ * never guessed back.
+ */
+export const EXCEL_MANGLED_NUMBER = /^\d(\.\d+)?[eE][+-]?\d+$/;
+
+export type ExcelPhoneExpansion =
+  | { readonly kind: 'not-scientific' }
+  | { readonly kind: 'lossless'; readonly digits: string }
+  | { readonly kind: 'lossy' };
+
+export function expandExcelScientificPhone(raw: string): ExcelPhoneExpansion {
+  const s = raw.trim();
+  if (!EXCEL_MANGLED_NUMBER.test(s)) return { kind: 'not-scientific' };
+  const [mantissa = '', exp = ''] = s.toLowerCase().split('e');
+  const [whole = '', frac = ''] = mantissa.split('.');
+  const e = Number(exp);
+  const digits = whole + frac;
+  const pad = e - frac.length;
+  // A negative exponent, or one that leaves a fraction, is not a phone at all.
+  if (!Number.isInteger(e) || pad < 0) return { kind: 'lossy' };
+  // Lossless only when the mantissa states every digit: no zeros had to be invented.
+  if (pad > 0) return { kind: 'lossy' };
+  return { kind: 'lossless', digits };
+}
+
+/** The phone with a LOSSLESS scientific form expanded; anything else unchanged. */
+function excelPhoneDigits(raw: string): string {
+  const x = expandExcelScientificPhone(raw);
+  return x.kind === 'lossless' ? x.digits : raw;
+}
+
+export function excelMangledPhoneReason(raw: string): string {
+  return `Customer Phone "${raw.trim()}" was saved as a number by Excel, so most of its digits are lost and we cannot recover them. Format the phone column as Text before typing the numbers (select the column, Format Cells, Text), then enter this phone again.`;
+}
+
 /** `*Payment Mode` → our enum. Null when the word is not one we know. */
 export function parsePaymentMode(raw: string): PaymentMode | null {
   const s = raw.toLowerCase().replace(/[^a-z]/g, '');
@@ -387,6 +430,11 @@ export class OrderCsvParserService {
       }
     }
 
+    const phoneRaw = get('customerPhone');
+    if (phoneRaw !== undefined && expandExcelScientificPhone(phoneRaw).kind === 'lossy') {
+      errors.push({ field: 'customerPhone', reason: excelMangledPhoneReason(phoneRaw) });
+    }
+
     if (errors.length > 0) return { row: null, errors };
 
     const row: CoercedOrderRow = {
@@ -402,7 +450,7 @@ export class OrderCsvParserService {
       'customerPhone',
       get('customerPhone') === undefined
         ? undefined
-        : normalizeIndianPhone(get('customerPhone') as string),
+        : normalizeIndianPhone(excelPhoneDigits(get('customerPhone') as string)),
     );
     set('notes', get('notes'));
     set('storeName', get('storeName'));

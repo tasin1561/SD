@@ -2,7 +2,9 @@ import type { CsvColumnGuide, CsvColumnGuideEntry } from '../../common/text/csv-
 import type { UatField } from '../uat-settings/services/uat-fields.service';
 import {
   ORDER_CSV_REQUIRED_FIELDS,
+  ignoredReasonForHeader,
   lookupFieldForHeader,
+  normalizeHeader,
   orderCsvFieldLabel,
   type OrderCsvField,
 } from './order-csv-fields';
@@ -28,7 +30,7 @@ export const UAT_CONTROLLED_ORDER_FIELDS: Partial<Record<OrderCsvField, UatField
  * so this cannot drift from what `groupRows` actually enforces.
  */
 export function buildOrderColumnGuide(
-  templateHeaders: readonly string[],
+  templateColumns: ReadonlyArray<readonly string[]>,
   required: readonly OrderCsvField[],
   uatShown: Readonly<Record<UatField, boolean>>,
 ): CsvColumnGuide {
@@ -40,7 +42,7 @@ export function buildOrderColumnGuide(
       : required.includes(f) && ORDER_REQUIRED_FIELDS.includes(f)
         ? 'ONCE_PER_ORDER'
         : 'OPTIONAL';
-  const add = (field: OrderCsvField, header: string, inTemplate: boolean): void => {
+  const add = (field: OrderCsvField, header: string, inTemplate: boolean, sample = ''): void => {
     if (seen.has(field)) return;
     const uat = UAT_CONTROLLED_ORDER_FIELDS[field];
     if (uat !== undefined && !uatShown[uat]) return;
@@ -51,11 +53,31 @@ export function buildOrderColumnGuide(
       level: levelOf(field),
       uatControlled: uat !== undefined,
       inTemplate,
+      sample,
+      description: null,
     });
   };
-  for (const h of templateHeaders) {
+  for (const [h = '', ...samples] of templateColumns) {
+    const sample = samples.find((v) => v !== '') ?? '';
     const field = lookupFieldForHeader(h);
-    if (field !== null) add(field, h, true);
+    if (field !== null) {
+      add(field, h, true, sample);
+      continue;
+    }
+    // A column the template carries and the importer deliberately ignores —
+    // listed as NOT_USED with the importer's own reason, never as "optional".
+    const reason = ignoredReasonForHeader(h);
+    if (reason !== null) {
+      columns.push({
+        field: normalizeHeader(h),
+        header: h,
+        level: 'NOT_USED',
+        uatControlled: false,
+        inTemplate: true,
+        sample,
+        description: reason,
+      });
+    }
   }
   // A required field the template somehow lacks must still be listed.
   for (const f of ORDER_CSV_REQUIRED_FIELDS) add(f, orderCsvFieldLabel(f), false);

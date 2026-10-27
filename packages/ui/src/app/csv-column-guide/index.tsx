@@ -1,41 +1,57 @@
 import { clsx } from 'clsx';
-import { Asterisk, CircleDashed, Layers } from 'lucide-react';
 import type { ReactElement } from 'react';
 import './csv-column-guide.css';
 
 /**
- * CsvColumnGuide — which columns of a bulk-upload template are required
- * and which are optional, shown BEFORE the seller fills anything in.
+ * CsvColumnGuide — the Glossary of a bulk-upload template: one row per
+ * column with TITLE, MANDATORY, DESCRIPTION and SAMPLE, shown BEFORE the
+ * seller fills anything in.
  *
- * It draws what the API hands it (`GET .../template/columns`, derived
- * from the importer's own required sets) and keeps NO list of its own, so
- * a field that becomes required later changes the page with it. All words
- * come in through `labels` so each console owns its own catalogue keys.
+ * It draws what the API hands it (`GET .../template/columns`, derived from
+ * the importer's own required sets and the template's own sample row) and
+ * keeps NO column list of its own, so a field that becomes required later
+ * changes the page with it. All words come in through `labels` so each
+ * console owns its own catalogue keys.
  *
- * Required comes in two grains for orders: a column EVERY ROW must carry,
- * and one stated ONCE PER ORDER (later rows of the same order may blank
- * it). The two are separate groups on purpose; a flat "required" list
- * tells a seller to repeat the customer on every row.
+ * MANDATORY has THREE states, not two. A column we ship but deliberately
+ * ignore is `NOT_USED`: calling it "optional" would tell a seller it does
+ * something. Required orders columns keep their two grains as a caption
+ * under the Yes pill: every row, or once per order.
  */
-export type CsvColumnLevel = 'EVERY_ROW' | 'ONCE_PER_ORDER' | 'OPTIONAL';
+export type CsvColumnLevel = 'EVERY_ROW' | 'ONCE_PER_ORDER' | 'OPTIONAL' | 'NOT_USED';
 
 export interface CsvColumnGuideColumn {
   readonly field: string;
   readonly header: string;
   readonly level: CsvColumnLevel;
   readonly uatControlled: boolean;
+  /** The template's own sample cell. */
+  readonly sample?: string;
+  /** Why the column is not used (NOT_USED only), written for a person. */
+  readonly description?: string | null;
 }
 
 export interface CsvColumnGuideLabels {
   readonly title: string;
+  readonly colTitle: string;
+  readonly colMandatory: string;
+  readonly colDescription: string;
+  readonly colSample: string;
+  readonly yes: string;
+  readonly no: string;
+  readonly notUsed: string;
   readonly everyRow: string;
   readonly everyRowHint: string;
   readonly oncePerOrder: string;
   readonly oncePerOrderHint: string;
-  readonly optional: string;
-  readonly optionalHint: string;
   /** Badge on a column that a UAT setting switched on. */
   readonly uat: string;
+}
+
+/** The pill's word and tone for each level. Exported so tests can pin the three states. */
+export function mandatoryState(level: CsvColumnLevel): 'yes' | 'no' | 'notUsed' {
+  if (level === 'NOT_USED') return 'notUsed';
+  return level === 'OPTIONAL' ? 'no' : 'yes';
 }
 
 export function CsvColumnGuide({
@@ -46,65 +62,68 @@ export function CsvColumnGuide({
 }: {
   readonly columns: readonly CsvColumnGuideColumn[];
   readonly labels: CsvColumnGuideLabels;
-  /** One short line under a specific field's chip, keyed by field. */
+  /** Description for a mapped field, keyed by field (NOT_USED rows use the API's reason). */
   readonly notes?: Readonly<Record<string, string>>;
   readonly className?: string;
 }): ReactElement | null {
   if (columns.length === 0) return null;
-  const groups: Array<{
-    level: CsvColumnLevel;
-    title: string;
-    hint: string;
-    icon: ReactElement;
-  }> = [
-    {
-      level: 'EVERY_ROW',
-      title: labels.everyRow,
-      hint: labels.everyRowHint,
-      icon: <Asterisk size={14} aria-hidden />,
-    },
-    {
-      level: 'ONCE_PER_ORDER',
-      title: labels.oncePerOrder,
-      hint: labels.oncePerOrderHint,
-      icon: <Layers size={14} aria-hidden />,
-    },
-    {
-      level: 'OPTIONAL',
-      title: labels.optional,
-      hint: labels.optionalHint,
-      icon: <CircleDashed size={14} aria-hidden />,
-    },
-  ];
+  const hasOnce = columns.some((c) => c.level === 'ONCE_PER_ORDER');
+  const hasEvery = columns.some((c) => c.level === 'EVERY_ROW');
+  const word = { yes: labels.yes, no: labels.no, notUsed: labels.notUsed } as const;
   return (
     <section className={clsx('sk-csvg', className)} aria-label={labels.title}>
       <h3 className="sk-csvg__title">{labels.title}</h3>
-      {groups.map((g) => {
-        const cols = columns.filter((c) => c.level === g.level);
-        if (cols.length === 0) return null;
-        return (
-          <div key={g.level} className="sk-csvg__group" data-level={g.level}>
-            <p className="sk-csvg__head">
-              <span className="sk-csvg__icon">{g.icon}</span>
-              <span className="sk-csvg__name">{g.title}</span>
-            </p>
-            <p className="sk-csvg__hint">{g.hint}</p>
-            <ul className="sk-csvg__list">
-              {cols.map((c) => (
-                <li key={c.field} className="sk-csvg__item">
-                  <span className="sk-csvg__chip">
-                    {c.header}
-                    {c.uatControlled ? <span className="sk-csvg__uat">{labels.uat}</span> : null}
+      {hasEvery || hasOnce ? (
+        <ul className="sk-csvg__legend">
+          {hasEvery ? (
+            <li>
+              <strong>{labels.everyRow}</strong> {labels.everyRowHint}
+            </li>
+          ) : null}
+          {hasOnce ? (
+            <li>
+              <strong>{labels.oncePerOrder}</strong> {labels.oncePerOrderHint}
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+      <div className="sk-csvg__table" role="table" aria-label={labels.title}>
+        <div className="sk-csvg__row sk-csvg__row--head" role="row">
+          <span role="columnheader">{labels.colTitle}</span>
+          <span role="columnheader">{labels.colMandatory}</span>
+          <span role="columnheader">{labels.colDescription}</span>
+          <span role="columnheader">{labels.colSample}</span>
+        </div>
+        {columns.map((c) => {
+          const state = mandatoryState(c.level);
+          const description =
+            c.level === 'NOT_USED' ? (c.description ?? '') : (notes?.[c.field] ?? '');
+          return (
+            <div key={c.field} className="sk-csvg__row" role="row" data-level={c.level}>
+              <span role="cell" className="sk-csvg__cell sk-csvg__cell--title">
+                {c.header}
+                {c.uatControlled ? <span className="sk-csvg__uat">{labels.uat}</span> : null}
+              </span>
+              <span role="cell" className="sk-csvg__cell sk-csvg__cell--flag">
+                <span className="sk-csvg__pill" data-state={state}>
+                  {word[state]}
+                </span>
+                {c.level === 'EVERY_ROW' || c.level === 'ONCE_PER_ORDER' ? (
+                  <span className="sk-csvg__grain">
+                    {c.level === 'EVERY_ROW' ? labels.everyRow : labels.oncePerOrder}
                   </span>
-                  {notes?.[c.field] !== undefined ? (
-                    <span className="sk-csvg__note">{notes[c.field]}</span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      })}
+                ) : null}
+              </span>
+              <span role="cell" className="sk-csvg__cell sk-csvg__cell--desc">
+                {description}
+              </span>
+              <span role="cell" className="sk-csvg__cell sk-csvg__cell--sample">
+                {c.sample !== undefined && c.sample !== '' ? c.sample : null}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }
