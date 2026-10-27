@@ -1,5 +1,5 @@
 /**
- * apps/track i18n — English + Hindi.
+ * apps/track i18n — English + Hindi + Bangla.
  *
  * The public tracking page is the only customer-facing surface in
  * Phase 1A; CLAUDE.md scopes it as bilingual. Approach: cookie-driven
@@ -11,14 +11,14 @@
 
 import type { PublicShipmentDisplayStatus } from './types';
 
-export type Locale = 'en' | 'hi';
+export type Locale = 'en' | 'hi' | 'bn';
 
-export const LOCALES: ReadonlyArray<Locale> = ['en', 'hi'];
+export const LOCALES: ReadonlyArray<Locale> = ['en', 'hi', 'bn'];
 
 export const DEFAULT_LOCALE: Locale = 'en';
 
 export function isLocale(v: string | undefined): v is Locale {
-  return v === 'en' || v === 'hi';
+  return v === 'en' || v === 'hi' || v === 'bn';
 }
 
 /**
@@ -86,6 +86,8 @@ type Dict = {
   // Locale switcher
   readonly switchToEn: string;
   readonly switchToHi: string;
+  readonly switchToBn: string;
+  readonly languageLabel: string;
 };
 
 const EN: Dict = {
@@ -135,6 +137,8 @@ const EN: Dict = {
   s_cancelled: 'Cancelled',
   switchToEn: 'English',
   switchToHi: 'हिन्दी',
+  switchToBn: 'বাংলা',
+  languageLabel: 'Language',
 };
 
 const HI: Dict = {
@@ -184,9 +188,63 @@ const HI: Dict = {
   s_cancelled: 'रद्द',
   switchToEn: 'English',
   switchToHi: 'हिन्दी',
+  switchToBn: 'বাংলা',
+  languageLabel: 'भाषा',
 };
 
-const TABLE: Record<Locale, Dict> = { en: EN, hi: HI };
+const BN: Dict = {
+  brand: 'স্কাইড্রপ',
+  tagline: 'পার্সেল ট্র্যাকিং',
+  landingTitle: 'আপনার পার্সেল ট্র্যাক করুন',
+  landingSubtitle: 'আপনার কনফার্মেশন ইমেইল বা SMS থেকে AWB নম্বরটি লিখুন।',
+  awbLabel: 'AWB নম্বর',
+  awbPlaceholder: 'যেমন DL12345678',
+  trackButton: 'ট্র্যাক করুন',
+  notFoundTitle: 'ট্র্যাকিং নম্বর পাওয়া যায়নি',
+  notFoundBody:
+    'এই নম্বরে আমরা কোনো পার্সেল খুঁজে পাইনি। আপনার কনফার্মেশন ইমেইল বা SMS থেকে AWB নম্বরটি আবার মিলিয়ে দেখুন। ডিসপ্যাচের পর ট্র্যাকিং চালু হতে ২৪ ঘণ্টা পর্যন্ত সময় লাগতে পারে।',
+  tryAnother: 'অন্য একটি AWB চেষ্টা করুন',
+  unavailableTitle: 'ট্র্যাকিং সাময়িকভাবে পাওয়া যাচ্ছে না',
+  unavailableBody:
+    'আমরা এইমাত্র ট্র্যাকিং সেবার সাথে যোগাযোগ করতে পারিনি। আপনার পার্সেলের কোনো ক্ষতি হয়নি — অনুগ্রহ করে এক মিনিট পর আবার চেষ্টা করুন।',
+  retry: 'আবার চেষ্টা করুন',
+  trackAnother: 'অন্যটি ট্র্যাক করুন',
+  updated: 'আপডেট',
+  destination: 'গন্তব্য',
+  estimatedDelivery: 'আনুমানিক ডেলিভারি',
+  soldBy: 'বিক্রেতা',
+  timelineHeading: 'টাইমলাইন',
+  noScansYet:
+    'এখনও কোনো স্ক্যান নেই। কুরিয়ার পার্সেলটি নেওয়ার পর স্ক্যানের তথ্য এখানে দেখা যাবে।',
+  courier: 'কুরিয়ার',
+  parcel: 'পার্সেল',
+  journey: 'পার্সেলের যাত্রা',
+  onTheWay: 'পথে আছে',
+  stepDone: 'সম্পন্ন',
+  stepCurrent: 'বর্তমান ধাপ',
+  stepTodo: 'এখনও বাকি',
+  stepSkipped: 'বাদ দেওয়া হয়েছে',
+  earlierShow: '{n}টি আগের স্ক্যান দেখুন',
+  earlierHide: 'আগের স্ক্যান লুকান',
+  s_processing: 'প্রক্রিয়াধীন',
+  s_dispatched: 'ডিসপ্যাচ হয়েছে',
+  s_in_transit: 'পথে আছে',
+  s_out_for_delivery: 'ডেলিভারির জন্য বেরিয়েছে',
+  s_delivery_attempted: 'ডেলিভারির চেষ্টা হয়েছে',
+  s_delivered: 'ডেলিভারি হয়েছে',
+  s_return_initiated: 'ফেরত শুরু হয়েছে',
+  s_returning: 'ফেরত আসছে',
+  s_returned: 'ফেরত এসেছে',
+  s_lost: 'হারিয়ে গেছে',
+  s_damaged: 'ক্ষতিগ্রস্ত',
+  s_cancelled: 'বাতিল',
+  switchToEn: 'English',
+  switchToHi: 'हिन्दी',
+  switchToBn: 'বাংলা',
+  languageLabel: 'ভাষা',
+};
+
+const TABLE: Record<Locale, Dict> = { en: EN, hi: HI, bn: BN };
 
 export function t(locale: Locale, key: keyof Dict): string {
   return TABLE[locale][key];
