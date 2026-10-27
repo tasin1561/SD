@@ -123,4 +123,12 @@ export const authedShell = defineMessages({
   'authedShell.storeRequestMany': ['{count} store requests', '{count}টি স্টোর অনুরোধ'],
   'authedShell.digest': ['digest {digest}', 'ডাইজেস্ট {digest}'],
   'authedShell.unknown': ['unknown', 'অজানা'],
+
+  'authedShell.card.placed': ['Placed', 'অর্ডারের তারিখ'],
+  'authedShell.card.weight': ['Weight', 'ওজন'],
+  'authedShell.card.size': ['Size', 'আকার'],
+  'authedShell.card.courier': ['Courier', 'কুরিয়ার'],
+  'authedShell.card.awb': ['AWB', 'AWB'],
+  'authedShell.card.awbPending': ['Not issued yet', 'এখনও ইস্যু হয়নি'],
+  'authedShell.card.notDispatched': ['Not dispatched yet', 'এখনও পাঠানো হয়নি'],
 });

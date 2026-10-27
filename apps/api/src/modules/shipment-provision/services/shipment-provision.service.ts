@@ -64,6 +64,24 @@ export interface ProvisionResult {
 }
 
 /**
+ * What an order LIST row shows about its parcel. A display read, not the
+ * shipment: raw `courierCode` is a routing fact (CUR-8, 'manual' is not a
+ * name), so both the registry name and the manual name travel and the
+ * client resolves them with `courierLabel`.
+ */
+export interface OrderShipmentSummary {
+  awbNumber: string | null;
+  courierCode: string;
+  courierDisplayName: string | null;
+  manualCourierName: string | null;
+  /** Actual, else declared, else the booked total. */
+  weightGrams: number;
+  lengthCm: number | null;
+  widthCm: number | null;
+  heightCm: number | null;
+}
+
+/**
  * Module 8 — the R3 SHARED PRIMITIVE (standalone `shipment-provision`
  * module). Creates the dispatch parcel (`Shipment` + `OrderShipment` +
  * `ShipmentItem`s, status CREATED) on order CONFIRMED, and voids it on a
@@ -251,6 +269,58 @@ export class ShipmentProvisionService {
       );
     });
     return { voided: ids.length };
+  }
+
+  /**
+   * The current parcel of each order, for a page of the order list.
+   *
+   * ONE query for the whole page (WMS-1: the order module reads shipments
+   * only through here). The newest live shipment wins when an order has
+   * more than one (supersede / split); an order with none is simply
+   * absent from the map.
+   */
+  async summariesForOrders(orderIds: string[]): Promise<Map<string, OrderShipmentSummary>> {
+    const out = new Map<string, OrderShipmentSummary>();
+    if (orderIds.length === 0) return out;
+    const rows = await this.prisma.client.orderShipment.findMany({
+      where: {
+        orderId: { in: orderIds },
+        shipment: { deletedAt: null, status: { not: ShipmentStatus.CANCELLED } },
+      },
+      orderBy: [{ shipmentSequence: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        orderId: true,
+        shipment: {
+          select: {
+            awbNumber: true,
+            courierCode: true,
+            manualCourierName: true,
+            courier: { select: { displayName: true } },
+            totalWeightGrams: true,
+            declaredWeightGrams: true,
+            actualWeightGrams: true,
+            lengthCm: true,
+            widthCm: true,
+            heightCm: true,
+          },
+        },
+      },
+    });
+    // Ascending, so the last row for an order is its newest.
+    for (const r of rows) {
+      const s = r.shipment;
+      out.set(r.orderId, {
+        awbNumber: s.awbNumber,
+        courierCode: s.courierCode,
+        courierDisplayName: s.courier?.displayName ?? null,
+        manualCourierName: s.manualCourierName,
+        weightGrams: s.actualWeightGrams ?? s.declaredWeightGrams ?? s.totalWeightGrams,
+        lengthCm: s.lengthCm === null ? null : s.lengthCm.toNumber(),
+        widthCm: s.widthCm === null ? null : s.widthCm.toNumber(),
+        heightCm: s.heightCm === null ? null : s.heightCm.toNumber(),
+      });
+    }
+    return out;
   }
 
   // ── internal ──────────────────────────────────────────────────────

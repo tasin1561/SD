@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useRouter } from 'next/navigation';
+import { OrderSearchCard } from './order-search-card';
 import { Loader2, Search } from 'lucide-react';
 import { useOrdersList } from '@/lib/api-hooks';
 import { useSellerTickets } from '@/lib/ops-hooks';
@@ -146,7 +147,7 @@ export function OrderOmnisearch(): ReactElement | null {
       </div>
 
       {open && debounced.length >= 2 && (
-        <div className="border-border bg-surface absolute right-0 z-50 mt-1 w-[22rem] max-w-[90vw] overflow-hidden rounded-md border shadow-lg">
+        <div className="border-border bg-surface absolute right-0 z-50 mt-1 w-[26rem] max-w-[92vw] overflow-hidden rounded-md border shadow-lg">
           {tickets.length > 0 ? (
             <ul className="border-border border-b">
               {tickets.map((t) => (
@@ -182,18 +183,13 @@ export function OrderOmnisearch(): ReactElement | null {
                 <li key={o.id}>
                   <button
                     type="button"
-                    className="hover:bg-surface-raised block w-full px-3 py-2 text-left"
+                    className="hover:bg-surface-raised focus-visible:bg-surface-raised block min-h-11 w-full min-w-0 px-3 py-2 text-left transition-colors motion-reduce:transition-none"
                     onClick={() => go(o.id)}
                   >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="font-mono text-xs">{o.orderNumber}</span>
-                      <span className="text-text-faint text-[11px] tracking-wide uppercase">
-                        {o.status.replaceAll('_', ' ').toLowerCase()}
-                      </span>
-                    </div>
-                    <div className="text-text-muted truncate text-xs">
-                      {o.recipientName} · {o.recipientPhoneE164}
-                    </div>
+                    <OrderSearchCard
+                      order={o}
+                      statusText={o.status.replaceAll('_', ' ').toLowerCase()}
+                    />
                   </button>
                 </li>
               ))}

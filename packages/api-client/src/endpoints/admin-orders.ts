@@ -49,6 +49,25 @@ export interface OrderListItem {
   readonly storeId?: string;
   readonly storeKind?: StoreKindValue;
   readonly storeNameSnapshot?: string;
+  /** Booked weight of the order, in grams — the fallback before a parcel exists. */
+  readonly totalWeightGrams?: number;
+  /** The order's current parcel, null until one exists. Read through
+   *  ShipmentProvisionService in one query per page (WMS-1). */
+  readonly shipment?: OrderListShipment | null;
+}
+
+/** What a list row shows of its parcel. Resolve the carrier's name with
+ *  `courierLabel(courierDisplayName ?? courierCode, manualCourierName)` —
+ *  `courierCode` 'manual' is a routing fact, not a name (CUR-8). */
+export interface OrderListShipment {
+  readonly awbNumber: string | null;
+  readonly courierCode: string;
+  readonly courierDisplayName: string | null;
+  readonly manualCourierName: string | null;
+  readonly weightGrams: number;
+  readonly lengthCm: number | null;
+  readonly widthCm: number | null;
+  readonly heightCm: number | null;
 }
 
 /** RS-1 / RS-5 — a store's kind: the seller's own channel, or a reseller store. */

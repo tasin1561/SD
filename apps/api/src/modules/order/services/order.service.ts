@@ -7,6 +7,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  ShipmentProvisionService,
+  type OrderShipmentSummary,
+} from '../../shipment-provision/services/shipment-provision.service';
+import {
   ActorType,
   OrderSource,
   OrderStatus,
@@ -214,7 +218,14 @@ const ORDER_LIST_SELECT = {
   storeNameSnapshot: true,
 } satisfies Prisma.OrderSelect;
 
-export type OrderListItem = Prisma.OrderGetPayload<{ select: typeof ORDER_LIST_SELECT }>;
+/**
+ * A list row. `shipment` is the order's current parcel as the list shows
+ * it (null until one exists) — read through ShipmentProvisionService in
+ * ONE query per page, never per row.
+ */
+export type OrderListItem = Prisma.OrderGetPayload<{ select: typeof ORDER_LIST_SELECT }> & {
+  shipment: OrderShipmentSummary | null;
+};
 
 const ORDER_EVENT_SELECT = {
   id: true,
@@ -384,7 +395,17 @@ export class OrderService {
     // hook shared with god mode, so the two writers of a money-affecting
     // field cannot drift (ORD-2 / `order-post-commit-hooks-shared.spec`).
     private readonly postCommit: OrderPostCommitHooksService,
+    // The order list's AWB / courier / dimensions (WMS-1: shipments are
+    // read only through this service).
+    private readonly shipments: ShipmentProvisionService,
   ) {}
+
+  private async withShipments<T extends { id: string }>(
+    rows: T[],
+  ): Promise<Array<T & { shipment: OrderShipmentSummary | null }>> {
+    const byOrder = await this.shipments.summariesForOrders(rows.map((r) => r.id));
+    return rows.map((r) => ({ ...r, shipment: byOrder.get(r.id) ?? null }));
+  }
 
   /**
    * M15→M6 auto-compute charges. POST-COMMIT, best-effort: a failure
@@ -1788,7 +1809,7 @@ export class OrderService {
       }),
       this.prisma.client.order.count({ where }),
     ]);
-    return { items, total, page, pageSize };
+    return { items: await this.withShipments(items), total, page, pageSize };
   }
 
   /**
@@ -1843,7 +1864,7 @@ export class OrderService {
       }),
       this.prisma.client.order.count({ where }),
     ]);
-    return { items, total, page, pageSize };
+    return { items: await this.withShipments(items), total, page, pageSize };
   }
 
   /** Admin order detail (no seller scope). 404 on missing/soft-deleted. */

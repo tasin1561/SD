@@ -167,6 +167,8 @@ function makeService(
     }
   });
 
+  const summariesForOrders = jest.fn(async () => new Map<string, unknown>());
+
   const svc = new OrderService(
     { client } as unknown as PrismaService,
     // Not on hold. A restricted seller is covered in
@@ -216,9 +218,12 @@ function makeService(
         refusal: null,
       })),
     } as never,
+    // The list's parcel read — one call per page (WMS-1).
+    { summariesForOrders } as never,
   );
   return {
     svc,
+    summariesForOrders,
     resolveStore,
     findOpenOrdersForPhone,
     assertCanPlaceOrder,
@@ -882,5 +887,19 @@ describe('OrderService.applyBulkPatch — ORD-9 (commit 21 gap-fill)', () => {
     await expect(svc.applyBulkPatch('s1', 'o1', { ...PATCH }, ACTOR)).rejects.toMatchObject({
       response: { code: 'VARIANT_NOT_FOUND' },
     });
+  });
+});
+
+describe('OrderService.list — the parcel on each row', () => {
+  it('asks for the whole page of shipments in ONE call, and nulls an order with none', async () => {
+    const { svc, orderFindMany, summariesForOrders } = makeService();
+    orderFindMany.mockResolvedValueOnce([{ id: 'o1' }, { id: 'o2' }, { id: 'o3' }]);
+    summariesForOrders.mockResolvedValueOnce(
+      new Map([['o2', { awbNumber: 'W1', courierCode: 'manual', manualCourierName: 'Pathao' }]]),
+    );
+    const out = await svc.list('s1', { pageSize: 3 } as never);
+    expect(summariesForOrders).toHaveBeenCalledTimes(1);
+    expect(summariesForOrders).toHaveBeenCalledWith(['o1', 'o2', 'o3']);
+    expect(out.items.map((i) => i.shipment === null)).toEqual([true, false, true]);
   });
 });
