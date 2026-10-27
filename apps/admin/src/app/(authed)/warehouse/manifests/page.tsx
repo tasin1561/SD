@@ -1,14 +1,19 @@
 import type { ReactElement } from 'react';
 import { AreaPage, StockPageHeader } from '../../inventory/_components/stock-kit';
 import { ManifestsIndex } from './_components/manifests-index';
+import { getT } from '@/i18n/server';
 
-export default function ManifestsPage(): ReactElement {
+export default async function ManifestsPage(): Promise<ReactElement> {
+  const { t } = await getT();
   return (
     <AreaPage>
       <StockPageHeader
-        breadcrumbs={[{ label: 'Warehouse', href: '/warehouse' }, { label: 'Manifests' }]}
-        title="Manifests"
-        subtitle="A record of which parcels went out together. Closing and courier handoff are automatic once a box is packed — nothing here needs doing unless something went wrong."
+        breadcrumbs={[
+          { label: t('warehouseManifestsPage.warehouse'), href: '/warehouse' },
+          { label: t('warehouseManifestsPage.manifests') },
+        ]}
+        title={t('warehouseManifestsPage.manifests')}
+        subtitle={t('warehouseManifestsPage.aRecordOfWhichParcels')}
       />
       <ManifestsIndex />
     </AreaPage>

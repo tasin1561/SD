@@ -12,6 +12,7 @@ import { usePermission } from '@/lib/use-permission';
 import { useCancelManualPlacement, usePlaceManualAwb } from '@/lib/api-hooks';
 import { Notice } from './order-ops-parts';
 import './order-shipping.css';
+import { useT } from '@/i18n/client';
 
 /**
  * The fallback when no integrated courier will carry a parcel (CUR-8).
@@ -53,6 +54,7 @@ export function ManualPlacementPanel({
   readonly shipmentNumber: string;
   readonly hasAwb: boolean;
 }): ReactElement | null {
+  const t = useT();
   // COSMETIC (FE-2), and necessary: this panel sits on /orders, which is
   // gated on `orders.view`. Without this, everyone who can read an order
   // would see two buttons the server refuses them. The server is still
@@ -92,7 +94,12 @@ export function ManualPlacementPanel({
       // The order status comes back from the SERVER rather than being
       // assumed here — the dispatch is a saga and where it lands is its
       // to report, not ours to predict.
-      toast.success(`AWB ${r.awbNumber} recorded. Order is now ${r.orderStatus}.`);
+      toast.success(
+        t('ordersManualPlacementPanel.awbRecordedOrderIsNow', {
+          awbNumber: r.awbNumber,
+          orderStatus: r.orderStatus,
+        }),
+      );
     } catch (err) {
       setError(serverVerdict(err));
     }
@@ -104,7 +111,7 @@ export function ManualPlacementPanel({
       await cancel.mutateAsync({ shipmentId, reason: reason.trim() });
       setCancelling(false);
       reset();
-      toast.success('Order cancelled and stock released.');
+      toast.success(t('ordersManualPlacementPanel.orderCancelledAndStockReleased'));
     } catch (err) {
       setError(serverVerdict(err));
     }
@@ -131,7 +138,7 @@ export function ManualPlacementPanel({
           onClick={() => setPlacing(true)}
           disabled={hasAwb}
         >
-          Place with another courier
+          {t('ordersManualPlacementPanel.placeWithAnotherCourier')}
         </Button>
         <Button
           variant="destructive"
@@ -139,9 +146,11 @@ export function ManualPlacementPanel({
           icon={<Ban size={14} />}
           onClick={() => setCancelling(true)}
         >
-          Cannot be fulfilled
+          {t('ordersManualPlacementPanel.cannotBeFulfilled')}
         </Button>
-        {hasAwb && <span className="os-note">Already has an AWB — nothing further to place.</span>}
+        {hasAwb && (
+          <span className="os-note">{t('ordersManualPlacementPanel.alreadyHasAnAwbNothing')}</span>
+        )}
       </div>
 
       {/* ── Place ─────────────────────────────────────────────────── */}
@@ -169,12 +178,15 @@ export function ManualPlacementPanel({
                 reset();
               }}
             >
-              Cancel
+              {t('ordersManualPlacementPanel.cancel')}
             </Button>
             <AsyncButton
               variant="primary"
               size="md"
-              labels={{ idle: 'Record AWB and dispatch', busy: 'Recording…' }}
+              labels={{
+                idle: t('ordersManualPlacementPanel.recordAwbAndDispatch'),
+                busy: t('ordersManualPlacementPanel.recording'),
+              }}
               state={place.isPending ? 'busy' : 'idle'}
               disabled={awbTooShort || carrierMissing || place.isPending}
               onClick={() => void onPlace()}
@@ -194,11 +206,7 @@ export function ManualPlacementPanel({
             the decrement fired at PICKED → PACKED. Where it lands is
             the server's to report, which the toast already does.
           */}
-          <p className="oo-p">
-            You have booked this parcel with a courier outside Skydrop, so record the waybill once
-            it is really with them. A parcel that has already been picked and packed goes out; one
-            that has not goes to the warehouse floor to be picked first. The result says which.
-          </p>
+          <p className="oo-p">{t('ordersManualPlacementPanel.youHaveBookedThisParcel')}</p>
 
           {error !== null && (
             <p className="oo-error" role="alert">
@@ -207,25 +215,25 @@ export function ManualPlacementPanel({
           )}
 
           <TextField
-            label="AWB number"
+            label={t('ordersManualPlacementPanel.awbNumber')}
             requiredMark
             value={awbNumber}
             onChange={(e) => setAwbNumber(e.target.value)}
             maxLength={64}
-            placeholder="As printed on their label"
+            placeholder={t('ordersManualPlacementPanel.asPrintedOnTheirLabel')}
             inputClassName="sk-ident"
           />
           <TextField
-            label="Courier"
+            label={t('ordersManualPlacementPanel.courier')}
             requiredMark
-            hint="Bluedart, DTDC, whoever has it. The client and the customer both see this name on their tracking — leave it blank and they are told their parcel is with a courier called “manual”."
+            hint={t('ordersManualPlacementPanel.bluedartDtdcWhoeverHasIt')}
             value={courierName}
             onChange={(e) => setCourierName(e.target.value)}
             maxLength={80}
           />
           <TextField
-            label="Service type"
-            hint="Their service tier, if it matters later. Optional."
+            label={t('ordersManualPlacementPanel.serviceType')}
+            hint={t('ordersManualPlacementPanel.theirServiceTierIfIt')}
             value={serviceType}
             onChange={(e) => setServiceType(e.target.value)}
             maxLength={40}
@@ -259,12 +267,15 @@ export function ManualPlacementPanel({
                 reset();
               }}
             >
-              Keep the order
+              {t('ordersManualPlacementPanel.keepTheOrder')}
             </Button>
             <AsyncButton
               variant="destructive"
               size="md"
-              labels={{ idle: 'Cancel the order', busy: 'Cancelling…' }}
+              labels={{
+                idle: t('ordersManualPlacementPanel.cancelTheOrder'),
+                busy: t('ordersManualPlacementPanel.cancelling'),
+              }}
               state={cancel.isPending ? 'busy' : 'idle'}
               disabled={reasonTooShort || cancel.isPending}
               onClick={() => void onCancel()}
@@ -274,11 +285,7 @@ export function ManualPlacementPanel({
       >
         <div className="os-fields">
           <Notice tone="bad" icon={<Ban size={16} />}>
-            <p>
-              No courier will carry this parcel. Cancelling releases the stock back to inventory and
-              voids the shipment. The client sees a cancelled order, so say why in terms they would
-              recognise.
-            </p>
+            <p>{t('ordersManualPlacementPanel.noCourierWillCarryThis')}</p>
           </Notice>
 
           {error !== null && (
@@ -288,15 +295,15 @@ export function ManualPlacementPanel({
           )}
 
           <TextArea
-            label="Reason"
+            label={t('ordersManualPlacementPanel.reason')}
             requiredMark
-            hint="At least 10 characters — it is kept on the order."
+            hint={t('ordersManualPlacementPanel.atLeast10CharactersIt')}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             maxLength={500}
             showCount
             rows={3}
-            placeholder="e.g. No courier serves this PIN; customer contacted and agrees to cancel."
+            placeholder={t('ordersManualPlacementPanel.eGNoCourierServes')}
           />
         </div>
       </Dialog>

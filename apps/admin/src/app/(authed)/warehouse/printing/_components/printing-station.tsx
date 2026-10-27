@@ -40,6 +40,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { downloadPdf, printPdf } from '@/lib/print-pdf';
 import { SelectionTable } from './selection-table';
 import '../../_components/benches.css';
+import { useT } from '@/i18n/client';
 
 type Tab = 'labels' | 'reprint' | 'picking' | 'batches' | 'locate';
 
@@ -58,27 +59,35 @@ type Tab = 'labels' | 'reprint' | 'picking' | 'batches' | 'locate';
  * moves anything. The modal says what it will do before it does it.
  */
 export function PrintingStation(): ReactElement {
+  const t = useT();
   const [tab, setTab] = useState<Tab>('labels');
 
   return (
     <div className="wh-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Warehouse', href: '/warehouse' }, { label: 'Printing' }]}
+        breadcrumbs={[
+          { label: t('warehousePrintingPrintingStation.warehouse'), href: '/warehouse' },
+          { label: t('warehousePrintingPrintingStation.printing') },
+        ]}
         Link={Link}
-        title="Printing"
-        subtitle="Labels first, then the picking sheet. Nothing moves until somebody confirms the paper came out."
+        title={t('warehousePrintingPrintingStation.printing')}
+        subtitle={t('warehousePrintingPrintingStation.labelsFirstThenThePicking')}
       />
 
       {/* Real buttons (the specs drive them by role), drawn as one
           segmented bar; `aria-pressed` says which view is showing. */}
-      <div className="wh-seg" role="group" aria-label="Printing views">
+      <div
+        className="wh-seg"
+        role="group"
+        aria-label={t('warehousePrintingPrintingStation.printingViews')}
+      >
         {(
           [
-            ['labels', 'Shipping labels'],
-            ['reprint', 'Reprint a label'],
-            ['picking', 'Picking list'],
-            ['batches', 'Past batches'],
-            ['locate', 'Find a product'],
+            ['labels', t('warehousePrintingPrintingStation.shippingLabels')],
+            ['reprint', t('warehousePrintingPrintingStation.reprintALabel')],
+            ['picking', t('warehousePrintingPrintingStation.pickingList')],
+            ['batches', t('warehousePrintingPrintingStation.pastBatches')],
+            ['locate', t('warehousePrintingPrintingStation.findAProduct')],
           ] as ReadonlyArray<[Tab, string]>
         ).map(([key, label]) => (
           <button
@@ -105,6 +114,7 @@ export function PrintingStation(): ReactElement {
 // ── tab 1 ─────────────────────────────────────────────────────────────
 
 function LabelTab(): ReactElement {
+  const t = useT();
   const queue = useLabelQueue();
   const build = useBuildLabels();
   const confirm = useConfirmLabelsPrinted();
@@ -143,7 +153,10 @@ function LabelTab(): ReactElement {
     try {
       const r = await confirm.mutateAsync([...selected]);
       toast.success(
-        `${r.confirmed} label${r.confirmed === 1 ? '' : 's'} confirmed — those parcels are ready to pick`,
+        t('warehousePrintingPrintingStation.labelConfirmedThoseParcelsAre', {
+          confirmed: r.confirmed,
+          value: r.confirmed === 1 ? '' : t('common.pluralS'),
+        }),
       );
       setSheet(null);
       setSelected(new Set());
@@ -163,7 +176,10 @@ function LabelTab(): ReactElement {
       <div className="wh-row wh-row--between">
         <div className="wh-note sk-figure">
           {selected.size === 0
-            ? `${rows.length} parcel${rows.length === 1 ? '' : 's'} waiting on a label`
+            ? t('warehousePrintingPrintingStation.parcelWaitingOnALabel', {
+                length: rows.length,
+                value: rows.length === 1 ? '' : t('common.pluralS'),
+              })
             : `${selected.size} selected`}
         </div>
         <Button
@@ -172,15 +188,23 @@ function LabelTab(): ReactElement {
           aria-busy={build.isPending}
           icon={<Printer size={16} />}
         >
-          {build.isPending ? 'Building…' : 'Print labels'}
+          {build.isPending
+            ? t('warehousePrintingPrintingStation.building')
+            : t('warehousePrintingPrintingStation.printLabels')}
         </Button>
       </div>
 
       {queue.isLoading ? (
-        <SkeletonRows rows={5} cols={7} label="Loading the label queue…" />
+        <SkeletonRows
+          rows={5}
+          cols={7}
+          label={t('warehousePrintingPrintingStation.loadingTheLabelQueue')}
+        />
       ) : queue.isError ? (
         <ErrorState
-          message={queue.error?.message ?? 'Could not load the queue.'}
+          message={
+            queue.error?.message ?? t('warehousePrintingPrintingStation.couldNotLoadTheQueue')
+          }
           retry={() => void queue.refetch()}
         />
       ) : (
@@ -189,8 +213,8 @@ function LabelTab(): ReactElement {
           selected={selected}
           onToggle={toggle}
           onToggleAll={toggleAll}
-          emptyTitle="No labels waiting"
-          emptyBody="A parcel appears here once a courier has issued its waybill."
+          emptyTitle={t('warehousePrintingPrintingStation.noLabelsWaiting')}
+          emptyBody={t('warehousePrintingPrintingStation.aParcelAppearsHereOnce')}
         />
       )}
 
@@ -199,15 +223,15 @@ function LabelTab(): ReactElement {
         onOpenChange={(o) => {
           if (!o) setSheet(null);
         }}
-        title="Did the labels print?"
+        title={t('warehousePrintingPrintingStation.didTheLabelsPrint')}
         icon={<Printer size={18} />}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={() => setSheet(null)}>
-              Not yet
+              {t('warehousePrintingPrintingStation.notYet')}
             </Button>
             <Button onClick={() => void onConfirm()} disabled={confirm.isPending}>
-              Yes, they printed
+              {t('warehousePrintingPrintingStation.yesTheyPrinted')}
             </Button>
           </DialogFooter>
         }
@@ -215,15 +239,21 @@ function LabelTab(): ReactElement {
         {sheet !== null && (
           <div className="wh-stack">
             <p className="wh-title sk-figure">
-              {sheet.shipmentCount} label{sheet.shipmentCount === 1 ? '' : 's'} across{' '}
-              {sheet.pageCount} page{sheet.pageCount === 1 ? '' : 's'}.
+              {t('warehousePrintingPrintingStation.labelAcrossPage', {
+                shipmentCount: sheet.shipmentCount,
+                value: sheet.shipmentCount === 1 ? '' : t('common.pluralS'),
+                pageCount: sheet.pageCount,
+                value2: sheet.pageCount === 1 ? '' : t('common.pluralS'),
+              })}
             </p>
             {/* Named, never dropped: a short stack looks identical to a
                 complete one once it is on the bench. */}
             {sheet.failed.length > 0 && (
               <div className="wh-callout" data-tone="bad">
                 <div className="wh-callout__title">
-                  {sheet.failed.length} could not be printed and are NOT in this file
+                  {t('warehousePrintingPrintingStation.couldNotBePrintedAnd', {
+                    failedLength: sheet.failed.length,
+                  })}
                 </div>
                 <ul>
                   {sheet.failed.map((f) => (
@@ -235,8 +265,7 @@ function LabelTab(): ReactElement {
               </div>
             )}
             <p className="wh-note">
-              Confirming marks these parcels as labelled and moves them to the picking tab. Only
-              confirm what is actually on paper in front of you.
+              {t('warehousePrintingPrintingStation.confirmingMarksTheseParcelsAs')}
             </p>
             <div>
               <Button
@@ -244,7 +273,7 @@ function LabelTab(): ReactElement {
                 icon={<Download size={16} />}
                 onClick={() => downloadPdf(sheet.pdfBase64, sheet.fileName)}
               >
-                Download instead
+                {t('warehousePrintingPrintingStation.downloadInstead')}
               </Button>
             </div>
           </div>
@@ -257,6 +286,7 @@ function LabelTab(): ReactElement {
 // ── tab 2 ─────────────────────────────────────────────────────────────
 
 function PickingTab(): ReactElement {
+  const t = useT();
   const queue = usePickPrintQueue();
   const createBatch = useCreatePickBatch();
   const buildList = useBuildPickList();
@@ -299,7 +329,10 @@ function PickingTab(): ReactElement {
     try {
       const r = await confirm.mutateAsync(list.batchId);
       toast.success(
-        `${r.batchNumber} is on the floor — ${r.transitioned} orders sent to be picked`,
+        t('warehousePrintingPrintingStation.isOnTheFloorOrders', {
+          batchNumber: r.batchNumber,
+          transitioned: r.transitioned,
+        }),
       );
       setList(null);
       setSelected(new Set());
@@ -312,7 +345,7 @@ function PickingTab(): ReactElement {
     if (list === null) return false;
     try {
       await cancel.mutateAsync(list.batchId);
-      toast.success('Batch abandoned — those parcels are back in the queue');
+      toast.success(t('warehousePrintingPrintingStation.batchAbandonedThoseParcelsAre'));
       setList(null);
       setSelected(new Set());
       return true;
@@ -335,7 +368,10 @@ function PickingTab(): ReactElement {
       <div className="wh-row wh-row--between">
         <div className="wh-note sk-figure">
           {selected.size === 0
-            ? `${rows.length} labelled parcel${rows.length === 1 ? '' : 's'} ready to pick`
+            ? t('warehousePrintingPrintingStation.labelledParcelReadyToPick', {
+                length: rows.length,
+                value: rows.length === 1 ? '' : t('common.pluralS'),
+              })
             : `${selected.size} selected`}
         </div>
         <Button
@@ -344,15 +380,23 @@ function PickingTab(): ReactElement {
           aria-busy={busy}
           icon={<Printer size={16} />}
         >
-          {busy ? 'Building…' : 'Print picking list'}
+          {busy
+            ? t('warehousePrintingPrintingStation.building')
+            : t('warehousePrintingPrintingStation.printPickingList')}
         </Button>
       </div>
 
       {queue.isLoading ? (
-        <SkeletonRows rows={5} cols={7} label="Loading the picking queue…" />
+        <SkeletonRows
+          rows={5}
+          cols={7}
+          label={t('warehousePrintingPrintingStation.loadingThePickingQueue')}
+        />
       ) : queue.isError ? (
         <ErrorState
-          message={queue.error?.message ?? 'Could not load the queue.'}
+          message={
+            queue.error?.message ?? t('warehousePrintingPrintingStation.couldNotLoadTheQueue')
+          }
           retry={() => void queue.refetch()}
         />
       ) : (
@@ -361,8 +405,8 @@ function PickingTab(): ReactElement {
           selected={selected}
           onToggle={toggle}
           onToggleAll={toggleAll}
-          emptyTitle="Nothing ready to pick"
-          emptyBody="Print a shipping label first — a parcel with no label has nothing saying where it goes."
+          emptyTitle={t('warehousePrintingPrintingStation.nothingReadyToPick')}
+          emptyBody={t('warehousePrintingPrintingStation.printAShippingLabelFirst')}
         />
       )}
 
@@ -371,7 +415,7 @@ function PickingTab(): ReactElement {
         onOpenChange={(o) => {
           if (!o) setList(null);
         }}
-        title="Did the picking list print?"
+        title={t('warehousePrintingPrintingStation.didThePickingListPrint')}
         icon={<FileCheck2 size={18} />}
         footer={
           <DialogFooter>
@@ -385,10 +429,10 @@ function PickingTab(): ReactElement {
               }}
               disabled={cancel.isPending}
             >
-              Abandon this batch
+              {t('warehousePrintingPrintingStation.abandonThisBatch')}
             </Button>
             <Button onClick={() => void onConfirm()} disabled={confirm.isPending}>
-              Yes, it printed
+              {t('warehousePrintingPrintingStation.yesItPrinted')}
             </Button>
           </DialogFooter>
         }
@@ -402,30 +446,30 @@ function PickingTab(): ReactElement {
             </p>
             {list.strictMode && (
               <p className="wh-note">
-                Strict products on this sheet show no SKU barcode — each of their units is scanned
-                by its own serial at the packing table. Normal products keep their barcode.
+                {t('warehousePrintingPrintingStation.strictProductsOnThisSheet')}
               </p>
             )}
             {list.shortfalls.length > 0 && (
               <div className="wh-callout" data-tone="bad">
                 <div className="wh-callout__title">
-                  {list.shortfalls.length} line{list.shortfalls.length === 1 ? '' : 's'} could not
-                  be allocated
+                  {t('warehousePrintingPrintingStation.lineCouldNotBeAllocated', {
+                    shortfallsLength: list.shortfalls.length,
+                    value: list.shortfalls.length === 1 ? '' : t('common.pluralS'),
+                  })}
                 </div>
-                <p>
-                  They are on the sheet marked NOT ALLOCATED. The rest of the batch is still
-                  walkable; bring those back to a supervisor.
-                </p>
+                <p>{t('warehousePrintingPrintingStation.theyAreOnTheSheet')}</p>
               </div>
             )}
-            <p className="wh-note">Confirming sends these orders to be picked and then packed.</p>
+            <p className="wh-note">
+              {t('warehousePrintingPrintingStation.confirmingSendsTheseOrdersTo')}
+            </p>
             <div>
               <Button
                 variant="ghost"
                 icon={<Download size={16} />}
                 onClick={() => downloadPdf(list.pdfBase64, list.fileName)}
               >
-                Download instead
+                {t('warehousePrintingPrintingStation.downloadInstead')}
               </Button>
             </div>
 
@@ -433,11 +477,11 @@ function PickingTab(): ReactElement {
             <ConfirmDialog
               open={abandonOpen}
               onOpenChange={setAbandonOpen}
-              title="Abandon this batch?"
+              title={t('warehousePrintingPrintingStation.abandonThisBatch2')}
               entity={list.batchNumber}
               entityIsIdentifier
-              consequence="The picking list is withdrawn and every parcel on it goes back to the picking queue, unpicked."
-              confirmLabel="Abandon the batch"
+              consequence={t('warehousePrintingPrintingStation.thePickingListIsWithdrawn')}
+              confirmLabel={t('warehousePrintingPrintingStation.abandonTheBatch')}
               destructive
               error={error}
               onConfirm={async () => {
@@ -477,6 +521,7 @@ const MIN_REPRINT_REASON = 10;
  * before adding another copy is how many are already out there.
  */
 function ReprintTab(): ReactElement {
+  const t = useT();
   const queue = useLabelReprintQueue();
   const reprint = useReprintLabels();
   const toast = useToast();
@@ -503,7 +548,10 @@ function ReprintTab(): ReactElement {
       const sheet = await reprint.mutateAsync({ shipmentIds: [...selected], reason });
       printPdf(sheet.pdfBase64, sheet.fileName);
       toast.success(
-        `${sheet.shipmentCount} label${sheet.shipmentCount === 1 ? '' : 's'} reprinted`,
+        t('warehousePrintingPrintingStation.labelReprinted', {
+          shipmentCount: sheet.shipmentCount,
+          value: sheet.shipmentCount === 1 ? '' : t('common.pluralS'),
+        }),
       );
       setSelected(new Set());
       setReason('');
@@ -520,19 +568,18 @@ function ReprintTab(): ReactElement {
         </div>
       )}
 
-      <p className="wh-note">
-        Parcels whose label is printed but which have not been packed. A packed parcel is not here
-        on purpose — a second label on a sealed box is how two parcels come to carry one waybill.
-      </p>
+      <p className="wh-note">{t('warehousePrintingPrintingStation.parcelsWhoseLabelIsPrinted')}</p>
 
       <div className="wh-fields wh-reprint">
         <TextField
           id="reprint-reason"
-          label="Why is it being reprinted?"
+          label={t('warehousePrintingPrintingStation.whyIsItBeingReprinted')}
           value={reason}
           requiredMark
-          placeholder="e.g. label torn off the carton in the aisle"
-          hint={`At least ${MIN_REPRINT_REASON} characters. It is the only record of why a second label exists for a parcel.`}
+          placeholder={t('warehousePrintingPrintingStation.eGLabelTornOff')}
+          hint={t('warehousePrintingPrintingStation.atLeastCharactersItIs', {
+            minReprintReason: MIN_REPRINT_REASON,
+          })}
           onChange={(e) => setReason(e.target.value)}
         />
         <Button
@@ -543,22 +590,34 @@ function ReprintTab(): ReactElement {
           }
           title={
             selected.size === 0
-              ? 'Tick the parcel(s) whose label you are reprinting'
+              ? t('warehousePrintingPrintingStation.tickTheParcelSWhose')
               : reason.trim().length < MIN_REPRINT_REASON
-                ? `Give a reason of at least ${MIN_REPRINT_REASON} characters`
+                ? t('warehousePrintingPrintingStation.giveAReasonOfAt', {
+                    minReprintReason: MIN_REPRINT_REASON,
+                  })
                 : undefined
           }
           icon={<Printer size={16} />}
         >
-          {reprint.isPending ? 'Building…' : `Reprint ${selected.size === 0 ? '' : selected.size}`}
+          {reprint.isPending
+            ? t('warehousePrintingPrintingStation.building')
+            : t('warehousePrintingPrintingStation.reprint', {
+                value: selected.size === 0 ? '' : selected.size,
+              })}
         </Button>
       </div>
 
       {queue.isLoading ? (
-        <SkeletonRows rows={5} cols={8} label="Loading printed parcels…" />
+        <SkeletonRows
+          rows={5}
+          cols={8}
+          label={t('warehousePrintingPrintingStation.loadingPrintedParcels')}
+        />
       ) : queue.isError ? (
         <ErrorState
-          message={queue.error?.message ?? 'Could not load the list.'}
+          message={
+            queue.error?.message ?? t('warehousePrintingPrintingStation.couldNotLoadTheList')
+          }
           retry={() => void queue.refetch()}
         />
       ) : (
@@ -568,8 +627,8 @@ function ReprintTab(): ReactElement {
           onToggle={toggle}
           onToggleAll={toggleAll}
           showPrintCount
-          emptyTitle="Nothing to reprint"
-          emptyBody="A parcel appears here once its label is printed, and leaves once it is packed."
+          emptyTitle={t('warehousePrintingPrintingStation.nothingToReprint')}
+          emptyBody={t('warehousePrintingPrintingStation.aParcelAppearsHereOnce2')}
         />
       )}
     </section>
@@ -579,6 +638,7 @@ function ReprintTab(): ReactElement {
 // ── tab 3 ─────────────────────────────────────────────────────────────
 
 function BatchesTab(): ReactElement {
+  const t = useT();
   const [search, setSearch] = useState('');
   const batches = usePickBatches(search);
   const buildList = useBuildPickList();
@@ -622,7 +682,10 @@ function BatchesTab(): ReactElement {
     try {
       const r = await confirm.mutateAsync(batchId);
       toast.success(
-        `${r.batchNumber} is on the floor — ${r.transitioned} orders sent to be picked`,
+        t('warehousePrintingPrintingStation.isOnTheFloorOrders', {
+          batchNumber: r.batchNumber,
+          transitioned: r.transitioned,
+        }),
       );
     } catch (e) {
       setError(serverVerdict(e));
@@ -633,7 +696,7 @@ function BatchesTab(): ReactElement {
     setError(null);
     try {
       await cancel.mutateAsync(batchId);
-      toast.success('Batch abandoned — those parcels are back in the picking queue');
+      toast.success(t('warehousePrintingPrintingStation.batchAbandonedThoseParcelsAre2'));
       return true;
     } catch (e) {
       setError(serverVerdict(e));
@@ -653,7 +716,12 @@ function BatchesTab(): ReactElement {
           `${r.picked} sent to packing; ${r.skipped.length} still need scanning at the pick station`,
         );
       } else {
-        toast.success(`${r.batchNumber} picked — ${r.picked} parcels are at the packing bench`);
+        toast.success(
+          t('warehousePrintingPrintingStation.pickedParcelsAreAtThe', {
+            batchNumber: r.batchNumber,
+            picked: r.picked,
+          }),
+        );
       }
       return true;
     } catch (e) {
@@ -682,40 +750,48 @@ function BatchesTab(): ReactElement {
       <SkippedNotice skippedByBatch={skippedByBatch} batches={batches.data ?? []} />
       <div className="wh-search">
         <TextField
-          label="Search batches"
+          label={t('warehousePrintingPrintingStation.searchBatches')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Batch number, order number or AWB"
-          aria-label="Search batches"
+          placeholder={t('warehousePrintingPrintingStation.batchNumberOrderNumberOr')}
+          aria-label={t('warehousePrintingPrintingStation.searchBatches')}
           icon={<Search size={16} />}
         />
       </div>
 
       {batches.isLoading ? (
-        <SkeletonRows rows={5} cols={7} label="Loading batches…" />
+        <SkeletonRows
+          rows={5}
+          cols={7}
+          label={t('warehousePrintingPrintingStation.loadingBatches')}
+        />
       ) : batches.isError ? (
         <ErrorState
-          message={batches.error?.message ?? 'Could not load batches.'}
+          message={
+            batches.error?.message ?? t('warehousePrintingPrintingStation.couldNotLoadBatches')
+          }
           retry={() => void batches.refetch()}
         />
       ) : (
-        <Table caption="Pick batches">
+        <Table caption={t('warehousePrintingPrintingStation.pickBatches')}>
           <THead>
             <Tr>
-              <Th>Batch</Th>
-              <Th>Status</Th>
-              <Th>Warehouse</Th>
-              <Th align="right">Parcels</Th>
-              <Th>Created</Th>
-              <Th>Printed</Th>
-              <Th>Actions</Th>
+              <Th>{t('warehousePrintingPrintingStation.batch')}</Th>
+              <Th>{t('warehousePrintingPrintingStation.status')}</Th>
+              <Th>{t('warehousePrintingPrintingStation.warehouse')}</Th>
+              <Th align="right">{t('warehousePrintingPrintingStation.parcels')}</Th>
+              <Th>{t('warehousePrintingPrintingStation.created')}</Th>
+              <Th>{t('warehousePrintingPrintingStation.printed')}</Th>
+              <Th>{t('warehousePrintingPrintingStation.actions')}</Th>
             </Tr>
           </THead>
           <TBody>
             {(batches.data ?? []).length === 0 ? (
               <TableEmpty colSpan={7}>
                 <div className="wh-empty-cell wh-note">
-                  {search.trim() === '' ? 'No batches yet.' : 'Nothing matches that.'}
+                  {search.trim() === ''
+                    ? t('warehousePrintingPrintingStation.noBatchesYet')
+                    : t('warehousePrintingPrintingStation.nothingMatchesThat')}
                 </div>
               </TableEmpty>
             ) : (
@@ -765,7 +841,11 @@ function BatchesTab(): ReactElement {
                         two copies of a walk in the building is the
                         thing worth noticing. */}
                     {b.printCount > 1 && (
-                      <div className="wh-warn sk-figure">{b.printCount} sheets printed</div>
+                      <div className="wh-warn sk-figure">
+                        {t('warehousePrintingPrintingStation.sheetsPrinted', {
+                          printCount: b.printCount,
+                        })}
+                      </div>
                     )}
                   </Td>
                   <Td>
@@ -775,7 +855,9 @@ function BatchesTab(): ReactElement {
                         size="sm"
                         onClick={() => void reprint(b.id)}
                         disabled={buildList.isPending}
-                        aria-label={`Reprint ${b.batchNumber}`}
+                        aria-label={t('warehousePrintingPrintingStation.reprint2', {
+                          batchNumber: b.batchNumber,
+                        })}
                         icon={<Printer size={16} />}
                       />
                       {/* A draft has exactly two ways out, and the
@@ -787,10 +869,12 @@ function BatchesTab(): ReactElement {
                             size="sm"
                             onClick={() => void onConfirmPrinted(b.id)}
                             disabled={confirm.isPending}
-                            aria-label={`Confirm ${b.batchNumber} printed`}
+                            aria-label={t('warehousePrintingPrintingStation.confirmPrinted', {
+                              batchNumber: b.batchNumber,
+                            })}
                             icon={<Check size={16} />}
                           >
-                            It printed
+                            {t('warehousePrintingPrintingStation.itPrinted')}
                           </Button>
                           <Button
                             variant="ghost"
@@ -804,10 +888,12 @@ function BatchesTab(): ReactElement {
                               })
                             }
                             disabled={cancel.isPending}
-                            aria-label={`Abandon ${b.batchNumber}`}
+                            aria-label={t('warehousePrintingPrintingStation.abandon2', {
+                              batchNumber: b.batchNumber,
+                            })}
                             icon={<X size={16} />}
                           >
-                            Abandon
+                            {t('warehousePrintingPrintingStation.abandon')}
                           </Button>
                         </>
                       )}
@@ -826,15 +912,19 @@ function BatchesTab(): ReactElement {
                             })
                           }
                           disabled={markPicked.isPending}
-                          aria-label={`Mark ${b.batchNumber} picked`}
+                          aria-label={t('warehousePrintingPrintingStation.markPicked', {
+                            batchNumber: b.batchNumber,
+                          })}
                           icon={<Check size={16} />}
                         >
-                          Picked
+                          {t('warehousePrintingPrintingStation.picked')}
                         </Button>
                       )}
                       {(skippedByBatch[b.id]?.length ?? 0) > 0 && (
                         <Link href="/warehouse/pick" className="wh-link">
-                          Scan {skippedByBatch[b.id]?.length} at the pick station →
+                          {t('warehousePrintingPrintingStation.scanAtThePickStation', {
+                            length: skippedByBatch[b.id]?.length ?? 0,
+                          })}
                         </Link>
                       )}
                     </div>
@@ -851,15 +941,27 @@ function BatchesTab(): ReactElement {
         onOpenChange={(next) => {
           if (!next) setPendingAct(null);
         }}
-        title={pendingAct?.kind === 'picked' ? 'Mark this batch picked?' : 'Abandon this batch?'}
+        title={
+          pendingAct?.kind === 'picked'
+            ? t('warehousePrintingPrintingStation.markThisBatchPicked')
+            : t('warehousePrintingPrintingStation.abandonThisBatch2')
+        }
         entity={pendingAct?.batchNumber ?? ''}
         entityIsIdentifier
         consequence={
           pendingAct?.kind === 'picked'
-            ? `Its ${pendingAct.shipmentCount} parcel(s) are recorded as picked and go to the packing bench; any with serialised units stay behind for the pick station.`
-            : `The batch is withdrawn and its ${pendingAct?.shipmentCount ?? 0} parcel(s) go back to the picking queue, unpicked.`
+            ? t('warehousePrintingPrintingStation.itsParcelSAreRecorded', {
+                shipmentCount: pendingAct.shipmentCount,
+              })
+            : t('warehousePrintingPrintingStation.theBatchIsWithdrawnAnd', {
+                value: pendingAct?.shipmentCount ?? 0,
+              })
         }
-        confirmLabel={pendingAct?.kind === 'picked' ? 'Mark picked' : 'Abandon the batch'}
+        confirmLabel={
+          pendingAct?.kind === 'picked'
+            ? t('warehousePrintingPrintingStation.markPicked2')
+            : t('warehousePrintingPrintingStation.abandonTheBatch')
+        }
         destructive={pendingAct?.kind !== 'picked'}
         error={error}
         onConfirm={async () => {
@@ -890,15 +992,15 @@ function SkippedNotice({
   >;
   readonly batches: ReadonlyArray<{ id: string; batchNumber: string }>;
 }): ReactElement | null {
+  const t = useT();
   const entries = Object.entries(skippedByBatch).filter(([, list]) => list.length > 0);
   if (entries.length === 0) return null;
   return (
     <div className="wh-callout">
       <p className="wh-callout__lead">
-        These parcels carry serialised units, so their units must be scanned one by one before they
-        can be packed.{' '}
+        {t('warehousePrintingPrintingStation.theseParcelsCarrySerialisedUnits')}{' '}
         <Link href="/warehouse/pick" className="wh-link">
-          Open the pick station →
+          {t('warehousePrintingPrintingStation.openThePickStation')}
         </Link>
       </p>
       <ul>
@@ -922,6 +1024,7 @@ function SkippedNotice({
 // ── tab 4 ─────────────────────────────────────────────────────────────
 
 function LocateTab(): ReactElement {
+  const t = useT();
   const toast = useToast();
   const [q, setQ] = useState('');
   const results = useProductLocations(q);
@@ -937,11 +1040,11 @@ function LocateTab(): ReactElement {
       <section className="wh-card wh-stack">
         <div className="wh-search">
           <TextField
-            label="Find a product"
+            label={t('warehousePrintingPrintingStation.findAProduct')}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Product name, SKU or barcode"
-            aria-label="Find a product"
+            placeholder={t('warehousePrintingPrintingStation.productNameSkuOrBarcode')}
+            aria-label={t('warehousePrintingPrintingStation.findAProduct')}
             icon={<Search size={16} />}
           />
         </div>
@@ -950,18 +1053,18 @@ function LocateTab(): ReactElement {
           <EmptyState
             bare
             icon={<Search size={22} />}
-            title="Where is it?"
-            description="Type at least two characters. Every bin holding the product is shown, including returns and quarantine — stock on the returns bench is still where it is."
+            title={t('warehousePrintingPrintingStation.whereIsIt')}
+            description={t('warehousePrintingPrintingStation.typeAtLeastTwoCharacters')}
           />
         ) : results.isLoading ? (
-          <SkeletonRows rows={3} cols={3} label="Looking…" />
+          <SkeletonRows rows={3} cols={3} label={t('warehousePrintingPrintingStation.looking')} />
         ) : results.isError ? (
           <ErrorState
-            message={results.error?.message ?? 'Could not search.'}
+            message={results.error?.message ?? t('warehousePrintingPrintingStation.couldNotSearch')}
             retry={() => void results.refetch()}
           />
         ) : (results.data ?? []).length === 0 ? (
-          <EmptyState bare title="Nothing matches that." />
+          <EmptyState bare title={t('warehousePrintingPrintingStation.nothingMatchesThat')} />
         ) : (
           <div className="wh-stack">
             {(results.data ?? []).map((r) => (
@@ -989,7 +1092,12 @@ function LocateTab(): ReactElement {
                       icon={<Tags size={14} />}
                       disabled={reprint.isPending}
                       onClick={() => {
-                        const raw = window.prompt(`How many labels for ${r.skuCode}?`, '1');
+                        const raw = window.prompt(
+                          t('warehousePrintingPrintingStation.howManyLabelsFor', {
+                            skuCode: r.skuCode,
+                          }),
+                          '1',
+                        );
                         if (raw === null) return;
                         const quantity = Number.parseInt(raw, 10);
                         if (!Number.isFinite(quantity) || quantity < 1) return;
@@ -1001,12 +1109,14 @@ function LocateTab(): ReactElement {
                         });
                       }}
                     >
-                      Labels
+                      {t('warehousePrintingPrintingStation.labels')}
                     </Button>
                   </div>
                 </div>
                 {r.locations.length === 0 ? (
-                  <div className="wh-note">No stock on hand anywhere.</div>
+                  <div className="wh-note">
+                    {t('warehousePrintingPrintingStation.noStockOnHandAnywhere')}
+                  </div>
                 ) : (
                   <div className="wh-locs">
                     {r.locations.map((loc, i) => (
@@ -1019,7 +1129,11 @@ function LocateTab(): ReactElement {
                         <div className="wh-row">
                           <span className="sk-figure">{loc.qtyOnHand}</span>
                           {!loc.pickable && (
-                            <StatusChip kind="pending" label="not sellable" size="sm" />
+                            <StatusChip
+                              kind="pending"
+                              label={t('warehousePrintingPrintingStation.notSellable')}
+                              size="sm"
+                            />
                           )}
                         </div>
                       </div>
@@ -1043,36 +1157,38 @@ function LocateTab(): ReactElement {
  * of the printer is not something the server can see.
  */
 function StickerHistory(): ReactElement {
+  const t = useT();
   const history = useSkuLabelHistory();
   return (
     <section className="wh-card wh-stack">
       <SectionHeading
-        title="Recently printed stickers"
-        note="Every product-label sheet built here or from a goods receipt, newest first."
+        title={t('warehousePrintingPrintingStation.recentlyPrintedStickers')}
+        note={t('warehousePrintingPrintingStation.everyProductLabelSheetBuilt')}
       />
       {history.isLoading ? (
-        <SkeletonRows rows={4} cols={5} label="Loading…" />
+        <SkeletonRows rows={4} cols={5} label={t('warehousePrintingPrintingStation.loading')} />
       ) : history.isError ? (
         <ErrorState
-          message={history.error?.message ?? 'Could not load the sticker history.'}
+          message={
+            history.error?.message ?? t('warehousePrintingPrintingStation.couldNotLoadTheSticker')
+          }
           retry={() => void history.refetch()}
         />
       ) : (
-        <Table caption="Recently printed stickers">
+        <Table caption={t('warehousePrintingPrintingStation.recentlyPrintedStickers')}>
           <THead>
             <Tr>
-              <Th>When</Th>
-              <Th>Who</Th>
-              <Th>Stickers</Th>
-              <Th>From</Th>
-              <Th align="right">Total</Th>
+              <Th>{t('warehousePrintingPrintingStation.when')}</Th>
+              <Th>{t('warehousePrintingPrintingStation.who')}</Th>
+              <Th>{t('warehousePrintingPrintingStation.stickers')}</Th>
+              <Th>{t('warehousePrintingPrintingStation.from')}</Th>
+              <Th align="right">{t('warehousePrintingPrintingStation.total')}</Th>
             </Tr>
           </THead>
           <TBody>
             {(history.data ?? []).length === 0 ? (
               <TableEmpty colSpan={5}>
-                No stickers printed yet. Print them from a goods receipt, or find a product above
-                and choose Labels.
+                {t('warehousePrintingPrintingStation.noStickersPrintedYetPrint')}
               </TableEmpty>
             ) : (
               (history.data ?? []).map((p, i) => <StickerHistoryRow key={`${p.at}-${i}`} p={p} />)
@@ -1085,6 +1201,7 @@ function StickerHistory(): ReactElement {
 }
 
 function StickerHistoryRow({ p }: { p: SkuLabelPrint }): ReactElement {
+  const t = useT();
   const when = new Date(p.at).toLocaleString('en-IN', {
     day: 'numeric',
     month: 'short',
@@ -1093,9 +1210,9 @@ function StickerHistoryRow({ p }: { p: SkuLabelPrint }): ReactElement {
   });
   const from =
     p.source === 'GOODS_RECEIPT'
-      ? `Receipt ${p.receiptNumber ?? ''}`.trim()
+      ? t('warehousePrintingPrintingStation.receipt', { value: p.receiptNumber ?? '' }).trim()
       : p.source === 'FIND_A_PRODUCT'
-        ? 'Find a product'
+        ? t('warehousePrintingPrintingStation.findAProduct')
         : '—';
   return (
     <Tr>

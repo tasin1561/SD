@@ -18,14 +18,17 @@ import {
 } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
-const STATE_LABEL: Record<LabelReprintState, string> = {
-  PENDING: 'Waiting for approval',
-  APPROVED: 'Approved — ready to print',
-  REJECTED: 'Rejected',
-  PRINTED: 'Printed',
-  EXPIRED: 'Approval lapsed',
-};
+const STATE_LABEL = (t: Translate<MessageKey>): Record<LabelReprintState, string> => ({
+  PENDING: t('warehouseConsignmentsIdLabelReprintRequests.waitingForApproval'),
+  APPROVED: t('warehouseConsignmentsIdLabelReprintRequests.approvedReadyToPrint'),
+  REJECTED: t('warehouseConsignmentsIdLabelReprintRequests.rejected'),
+  PRINTED: t('warehouseConsignmentsIdLabelReprintRequests.printed'),
+  EXPIRED: t('warehouseConsignmentsIdLabelReprintRequests.approvalLapsed'),
+});
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', {
@@ -51,6 +54,7 @@ export function LabelReprintRequests({
   readonly consignmentId: string;
   readonly onSheet: (sheet: LabelSheet) => void;
 }): ReactElement | null {
+  const t = useT();
   const toast = useToast();
   const requests = useLabelReprintRequests(consignmentId);
   const approve = useApproveLabelReprint();
@@ -84,7 +88,7 @@ export function LabelReprintRequests({
     setError(null);
     try {
       await reject.mutateAsync({ requestId: r.id, note: rejectNote.trim() });
-      toast.success('Rejected');
+      toast.success(t('warehouseConsignmentsIdLabelReprintRequests.rejected'));
       setRejectingId(null);
       setRejectNote('');
     } catch (e) {
@@ -97,7 +101,11 @@ export function LabelReprintRequests({
     try {
       const sheet = await print.mutateAsync({ requestId: r.id });
       onSheet(sheet);
-      toast.success(`${sheet.labels.length} label(s) ready to reprint`);
+      toast.success(
+        t('warehouseConsignmentsIdLabelReprintRequests.labelSReadyToReprint', {
+          labelsLength: sheet.labels.length,
+        }),
+      );
     } catch (e) {
       setError(serverVerdict(e));
     }
@@ -107,10 +115,14 @@ export function LabelReprintRequests({
 
   return (
     <div className="stk-stack stk-stack--tight">
-      <p className="cns-requests__title">Label reprint requests</p>
+      <p className="cns-requests__title">
+        {t('warehouseConsignmentsIdLabelReprintRequests.labelReprintRequests')}
+      </p>
       {requests.isError && (
         <InlineError
-          message={`Could not load the reprint requests: ${serverVerdict(requests.error)}`}
+          message={t('warehouseConsignmentsIdLabelReprintRequests.couldNotLoadTheReprint', {
+            value: serverVerdict(requests.error),
+          })}
           retry={() => void requests.refetch()}
         />
       )}
@@ -124,17 +136,27 @@ export function LabelReprintRequests({
                 <StatusChip
                   size="sm"
                   kind={labelReprintStateKind(r.state)}
-                  label={STATE_LABEL[r.state]}
+                  label={STATE_LABEL(t)[r.state]}
                 />
                 <Code>{r.serials.join(', ')}</Code>
               </div>
               <p className="stk-note">{r.reason}</p>
               <p className="stk-note" data-tone="faint">
-                Asked by {r.requestedBy.email ?? 'a colleague'} · {when(r.requestedAt)}
+                {t('warehouseConsignmentsIdLabelReprintRequests.askedBy', {
+                  value:
+                    r.requestedBy.email ??
+                    t('warehouseConsignmentsIdLabelReprintRequests.aColleague'),
+                  value2: when(r.requestedAt),
+                })}
                 {r.decidedBy !== null && r.decidedAt !== null && (
                   <>
                     {' '}
-                    · decided by {r.decidedBy.email ?? 'a colleague'} · {when(r.decidedAt)}
+                    {t('warehouseConsignmentsIdLabelReprintRequests.decidedBy', {
+                      value:
+                        r.decidedBy.email ??
+                        t('warehouseConsignmentsIdLabelReprintRequests.aColleague'),
+                      value2: when(r.decidedAt),
+                    })}
                   </>
                 )}
                 {r.decisionNote !== null && <> — “{r.decisionNote}”</>}
@@ -142,7 +164,7 @@ export function LabelReprintRequests({
 
               {r.state === 'PENDING' && mine && (
                 <Note tone="faint">
-                  Somebody else holding the reprint permission has to approve this.
+                  {t('warehouseConsignmentsIdLabelReprintRequests.somebodyElseHoldingTheReprint')}
                 </Note>
               )}
               {r.state === 'PENDING' && !mine && mayDecide && (
@@ -153,7 +175,9 @@ export function LabelReprintRequests({
                     disabled={approve.isPending}
                     onClick={() => setApproving(r)}
                   >
-                    {approve.isPending ? 'Approving…' : 'Approve'}
+                    {approve.isPending
+                      ? t('warehouseConsignmentsIdLabelReprintRequests.approving')
+                      : t('warehouseConsignmentsIdLabelReprintRequests.approve')}
                   </Button>
                   <Button
                     size="sm"
@@ -161,7 +185,7 @@ export function LabelReprintRequests({
                     icon={<X size={14} />}
                     onClick={() => setRejectingId(r.id)}
                   >
-                    Reject…
+                    {t('warehouseConsignmentsIdLabelReprintRequests.reject')}
                   </Button>
                 </Actions>
               )}
@@ -173,19 +197,34 @@ export function LabelReprintRequests({
                     disabled={print.isPending}
                     onClick={() => setPrinting(r)}
                   >
-                    {print.isPending ? 'Preparing…' : 'Print these labels'}
+                    {print.isPending
+                      ? t('warehouseConsignmentsIdLabelReprintRequests.preparing')
+                      : t('warehouseConsignmentsIdLabelReprintRequests.printTheseLabels')}
                   </Button>
                   {r.approvalExpiresAt !== null && (
                     <span className="stk-faint stk-note">
-                      Prints once, until {when(r.approvalExpiresAt)}
+                      {t('warehouseConsignmentsIdLabelReprintRequests.printsOnceUntil', {
+                        value: when(r.approvalExpiresAt),
+                      })}
                     </span>
                   )}
                 </Actions>
               )}
               {r.state === 'APPROVED' && !mine && (
                 <Note tone="faint">
-                  Only {r.requestedBy.email ?? 'the person who asked'} can print this
-                  {r.approvalExpiresAt !== null && <>, until {when(r.approvalExpiresAt)}</>}.
+                  {t('warehouseConsignmentsIdLabelReprintRequests.onlyCanPrintThis', {
+                    value:
+                      r.requestedBy.email ??
+                      t('warehouseConsignmentsIdLabelReprintRequests.thePersonWhoAsked'),
+                  })}
+                  {r.approvalExpiresAt !== null && (
+                    <>
+                      {t('warehouseConsignmentsIdLabelReprintRequests.until', {
+                        value: when(r.approvalExpiresAt),
+                      })}
+                    </>
+                  )}
+                  .
                 </Note>
               )}
             </li>
@@ -198,11 +237,11 @@ export function LabelReprintRequests({
         onOpenChange={(next) => {
           if (!next) setApproving(null);
         }}
-        title="Approve this reprint?"
+        title={t('warehouseConsignmentsIdLabelReprintRequests.approveThisReprint')}
         entity={approving?.serials.join(', ') ?? ''}
         entityIsIdentifier
         consequence={`${approving?.requestedBy.email ?? 'The person who asked'} can then print these labels once, and each reprint is recorded on the unit's own ledger.`}
-        confirmLabel="Approve"
+        confirmLabel={t('warehouseConsignmentsIdLabelReprintRequests.approve')}
         onConfirm={async () => {
           if (approving !== null) await onApprove(approving);
         }}
@@ -213,11 +252,11 @@ export function LabelReprintRequests({
         onOpenChange={(next) => {
           if (!next) setRejectingId(null);
         }}
-        title="Reject this reprint?"
+        title={t('warehouseConsignmentsIdLabelReprintRequests.rejectThisReprint')}
         entity={rejecting?.serials.join(', ') ?? ''}
         entityIsIdentifier
-        consequence="Nothing is printed, and the person who asked reads your reason."
-        confirmLabel="Reject"
+        consequence={t('warehouseConsignmentsIdLabelReprintRequests.nothingIsPrintedAndThe')}
+        confirmLabel={t('warehouseConsignmentsIdLabelReprintRequests.reject2')}
         destructive
         onConfirm={async () => {
           if (rejecting !== null) await onReject(rejecting);
@@ -225,9 +264,9 @@ export function LabelReprintRequests({
       >
         <input
           className="stk-input"
-          aria-label="Why not"
+          aria-label={t('warehouseConsignmentsIdLabelReprintRequests.whyNot')}
           value={rejectNote}
-          placeholder="Why not? The person who asked reads this."
+          placeholder={t('warehouseConsignmentsIdLabelReprintRequests.whyNotThePersonWho')}
           onChange={(e) => setRejectNote(e.target.value)}
         />
       </ConfirmDialog>
@@ -237,11 +276,11 @@ export function LabelReprintRequests({
         onOpenChange={(next) => {
           if (!next) setPrinting(null);
         }}
-        title="Print these labels?"
+        title={t('warehouseConsignmentsIdLabelReprintRequests.printTheseLabels2')}
         entity={printing?.serials.join(', ') ?? ''}
         entityIsIdentifier
-        consequence="The approval is used up by this print: the same labels cannot be printed again without a new request."
-        confirmLabel="Print these labels"
+        consequence={t('warehouseConsignmentsIdLabelReprintRequests.theApprovalIsUsedUp')}
+        confirmLabel={t('warehouseConsignmentsIdLabelReprintRequests.printTheseLabels')}
         onConfirm={async () => {
           if (printing !== null) await onPrint(printing);
         }}

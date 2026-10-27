@@ -14,6 +14,9 @@ import {
   type RtoPutawayPending,
 } from '@/lib/api-hooks';
 import '../../_components/benches.css';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Shelving returned goods an OLDER finalise left in the returns hold.
@@ -43,12 +46,13 @@ import '../../_components/benches.css';
  * operator from having to find that out.
  */
 
-const REASON_LABEL: Record<string, string> = {
-  PICKED_FROM: 'picked from here',
-  RECENT_LOCATION: 'where this SKU lives',
-};
+const REASON_LABEL = (t: Translate<MessageKey>): Record<string, string> => ({
+  PICKED_FROM: t('warehouseRtoPutawayPanel.pickedFromHere'),
+  RECENT_LOCATION: t('warehouseRtoPutawayPanel.whereThisSkuLives'),
+});
 
 export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): ReactElement | null {
+  const t = useT();
   const toast = useToast();
   const pending = useRtoPutawayPending(shipmentId);
   const putaway = useRtoPutaway();
@@ -101,7 +105,10 @@ export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): R
         })),
       });
       toast.success(
-        `${result.movedCount} line${result.movedCount === 1 ? '' : 's'} shelved — now sellable.`,
+        t('warehouseRtoPutawayPanel.lineShelvedNowSellable', {
+          movedCount: result.movedCount,
+          value: result.movedCount === 1 ? '' : t('common.pluralS'),
+        }),
       );
       setChoices({});
       return true;
@@ -125,10 +132,7 @@ export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): R
         <h2 className="wh-title">
           In hold — not yet sellable (<span className="sk-figure">{rows.length}</span>)
         </h2>
-        <span className="wh-faint">
-          An earlier version of finalise left these in the returns hold. They stay unsellable until
-          they are on a shelf — returns finalised now go straight back into stock.
-        </span>
+        <span className="wh-faint">{t('warehouseRtoPutawayPanel.anEarlierVersionOfFinalise')}</span>
       </div>
 
       {error !== null && (
@@ -139,7 +143,9 @@ export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): R
 
       {bins.isError && (
         <div role="alert" className="wh-alert">
-          Could not load bins for this warehouse — {bins.error?.message ?? 'unknown error'}.
+          {t('warehouseRtoPutawayPanel.couldNotLoadBinsFor', {
+            value: bins.error?.message ?? t('warehouseRtoPutawayPanel.unknownError'),
+          })}
         </div>
       )}
 
@@ -155,7 +161,10 @@ export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): R
                   <div className="wh-item__sub">
                     <span className="sk-ident">{r.skuCode}</span> ·{' '}
                     <span className="sk-figure">
-                      {r.quantity} unit{r.quantity === 1 ? '' : 's'}
+                      {t('warehouseRtoPutawayPanel.unit', {
+                        quantity: r.quantity,
+                        value: r.quantity === 1 ? '' : t('common.pluralS'),
+                      })}
                     </span>{' '}
                     · in <span className="sk-ident">{r.holdBinCode}</span>
                   </div>
@@ -165,29 +174,29 @@ export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): R
                   {r.suggestedBinCode !== null && r.suggestionReason !== null ? (
                     <span>
                       suggested <span className="sk-ident">{r.suggestedBinCode}</span>{' '}
-                      <span>({REASON_LABEL[r.suggestionReason] ?? r.suggestionReason})</span>
+                      <span>({REASON_LABEL(t)[r.suggestionReason] ?? r.suggestionReason})</span>
                     </span>
                   ) : (
                     // Said out loud rather than shown as an empty dropdown:
                     // this SKU has never been here before.
-                    <span>no suggestion — pick a shelf</span>
+                    <span>{t('warehouseRtoPutawayPanel.noSuggestionPickAShelf')}</span>
                   )}
                 </div>
 
                 <Select
-                  label="Shelf"
-                  aria-label={`Shelf for ${r.skuCode}`}
+                  label={t('warehouseRtoPutawayPanel.shelf')}
+                  aria-label={t('warehouseRtoPutawayPanel.shelfFor', { skuCode: r.skuCode })}
                   value={chosen}
                   onChange={(e: ChangeEvent<HTMLSelectElement>) =>
                     setChoices((prev) => ({ ...prev, [r.shipmentItemId]: e.target.value }))
                   }
-                  {...(isSuggestion ? { hint: 'Suggested shelf' } : {})}
+                  {...(isSuggestion ? { hint: t('warehouseRtoPutawayPanel.suggestedShelf') } : {})}
                 >
-                  <option value="">Choose a shelf…</option>
+                  <option value="">{t('warehouseRtoPutawayPanel.chooseAShelf')}</option>
                   {shelvable.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.code}
-                      {b.id === r.suggestedBinId ? ' — suggested' : ''}
+                      {b.id === r.suggestedBinId ? t('warehouseRtoPutawayPanel.suggested') : ''}
                     </option>
                   ))}
                 </Select>
@@ -208,28 +217,34 @@ export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): R
           }}
         >
           {putaway.isPending
-            ? 'Shelving…'
+            ? t('warehouseRtoPutawayPanel.shelving')
             : allChosen
-              ? `Shelve all ${rows.length}`
-              : `Shelve ${ready.length} of ${rows.length}`}
+              ? t('warehouseRtoPutawayPanel.shelveAll', { length: rows.length })
+              : t('warehouseRtoPutawayPanel.shelveOf', {
+                  length: ready.length,
+                  length2: rows.length,
+                })}
         </Button>
         {!allChosen && ready.length > 0 && (
           // Partial is allowed on purpose — an operator who can place
           // three of four items should not have to hold all four.
-          <span className="wh-faint">The rest stay in hold until they have a shelf.</span>
+          <span className="wh-faint">{t('warehouseRtoPutawayPanel.theRestStayInHold')}</span>
         )}
       </div>
 
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Shelve these returns?"
+        title={t('warehouseRtoPutawayPanel.shelveTheseReturns')}
         entity={ready
           .map((r) => `${r.skuCode} → ${binCode(choices[r.shipmentItemId] ?? '')}`)
           .join(', ')}
         entityIsIdentifier
-        consequence={`${ready.length} of ${rows.length} line(s) move out of the returns hold onto the chosen shelves and become sellable at once.`}
-        confirmLabel="Shelve now"
+        consequence={t('warehouseRtoPutawayPanel.ofLineSMoveOut', {
+          length: ready.length,
+          length2: rows.length,
+        })}
+        confirmLabel={t('warehouseRtoPutawayPanel.shelveNow')}
         error={error}
         onConfirm={async () => {
           const ok = await onShelve();

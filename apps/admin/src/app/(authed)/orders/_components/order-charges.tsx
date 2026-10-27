@@ -15,6 +15,7 @@ import { OoCard } from './order-ops-parts';
 import './order-core.css';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * Admin order-charges section (Module 17). Renders all charge rows
@@ -31,6 +32,7 @@ export function OrderChargesSection({
   /** Restated in the compute confirm; the id stands in when it is not passed. */
   orderNumber?: string | undefined;
 }): ReactElement {
+  const t = useT();
   // The section is on the order page, which anyone with `orders.view`
   // may open — but the money is a separate permission. Gated on the
   // QUERY too, so somebody without it never issues the request.
@@ -46,9 +48,9 @@ export function OrderChargesSection({
     setServerError(null);
     try {
       await compute.mutateAsync();
-      toast.success('Charges computed and saved.');
+      toast.success(t('ordersOrderCharges.chargesComputedAndSaved'));
     } catch (err) {
-      setServerError(serverVerdict(err, 'Compute failed.'));
+      setServerError(serverVerdict(err, t('ordersOrderCharges.computeFailed')));
       throw err;
     }
   }
@@ -56,14 +58,14 @@ export function OrderChargesSection({
   if (charges.isLoading) {
     return (
       <OoCard>
-        <SkeletonRows rows={4} cols={3} label="Loading charges…" />
+        <SkeletonRows rows={4} cols={3} label={t('ordersOrderCharges.loadingCharges')} />
       </OoCard>
     );
   }
   if (charges.isError) {
     return (
       <ErrorState
-        message={serverVerdict(charges.error, 'Failed to load charges.')}
+        message={serverVerdict(charges.error, t('ordersOrderCharges.failedToLoadCharges'))}
         retry={() => void charges.refetch()}
       />
     );
@@ -79,7 +81,7 @@ export function OrderChargesSection({
         <span className="oo-muted">
           {charges.data && charges.data.length > 0
             ? `${charges.data.length} line${charges.data.length === 1 ? '' : 's'}`
-            : 'No charges'}
+            : t('ordersOrderCharges.noCharges')}
         </span>
         {canCompute && (
           <Button
@@ -91,7 +93,7 @@ export function OrderChargesSection({
             }}
             loading={compute.isPending}
           >
-            Compute & persist charges
+            {t('ordersOrderCharges.computePersistCharges')}
           </Button>
         )}
       </div>
@@ -107,17 +109,17 @@ export function OrderChargesSection({
           <EmptyState
             bare
             icon={<Receipt size={20} />}
-            title="No charges persisted yet"
-            description="Click 'Compute & persist charges' to evaluate via the M15 pricing engine."
+            title={t('ordersOrderCharges.noChargesPersistedYet')}
+            description={t('ordersOrderCharges.clickComputePersistChargesTo')}
           />
         </div>
       ) : (
-        <Table caption="Charges">
+        <Table caption={t('ordersOrderCharges.charges')}>
           <THead>
             <Tr>
-              <Th>Charge</Th>
-              <Th>Visibility</Th>
-              <Th align="right">Amount (INR)</Th>
+              <Th>{t('ordersOrderCharges.charge')}</Th>
+              <Th>{t('ordersOrderCharges.visibility')}</Th>
+              <Th align="right">{t('ordersOrderCharges.amountInr')}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -125,7 +127,7 @@ export function OrderChargesSection({
               <ChargeRow key={c.id} charge={c} />
             ))}
             <Tr className="oc-total-row">
-              <Td colSpan={2}>Total</Td>
+              <Td colSpan={2}>{t('ordersOrderCharges.total')}</Td>
               <Td align="right">
                 <Money amount={total} />
               </Td>
@@ -137,11 +139,11 @@ export function OrderChargesSection({
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Compute and save this order's charges?"
+        title={t('ordersOrderCharges.computeAndSaveThisOrder')}
         entity={orderNumber ?? orderId}
         entityIsIdentifier
-        consequence="The pricing engine evaluates this order and writes its charge lines; they cannot be computed again once saved."
-        confirmLabel="Compute & persist charges"
+        consequence={t('ordersOrderCharges.thePricingEngineEvaluatesThis')}
+        confirmLabel={t('ordersOrderCharges.computePersistCharges')}
         onConfirm={handleCompute}
         error={serverError}
       />
@@ -150,6 +152,7 @@ export function OrderChargesSection({
 }
 
 function ChargeRow({ charge }: { charge: OrderChargeView }): ReactElement {
+  const t = useT();
   return (
     <Tr>
       <Td>
@@ -158,7 +161,11 @@ function ChargeRow({ charge }: { charge: OrderChargeView }): ReactElement {
           {charge.type.toLowerCase().replace(/_/g, ' ')} · {charge.status.toLowerCase()}
         </span>
       </Td>
-      <Td className="oo-muted">{charge.isVisibleToSeller ? 'Client-visible' : 'Internal'}</Td>
+      <Td className="oo-muted">
+        {charge.isVisibleToSeller
+          ? t('ordersOrderCharges.clientVisible')
+          : t('ordersOrderCharges.internal')}
+      </Td>
       <Td align="right">
         <Money amount={charge.totalAmountInr} />
       </Td>

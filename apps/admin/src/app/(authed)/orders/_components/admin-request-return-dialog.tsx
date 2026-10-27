@@ -9,6 +9,7 @@ import { useToast } from '@skydrop/ui/app/toast';
 import './order-ops.css';
 import { useAdminRequestReturn } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * Raise a customer return on a seller's behalf.
@@ -28,6 +29,7 @@ export function AdminRequestReturnDialog({
   readonly open: boolean;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const request = useAdminRequestReturn(orderId);
   const toast = useToast();
   const [reason, setReason] = useState('');
@@ -49,7 +51,7 @@ export function AdminRequestReturnDialog({
           } else {
             toast.success(
               r.alreadyRequested
-                ? `${orderNumber} was already coming back.`
+                ? t('ordersAdminRequestReturnDialog.wasAlreadyComingBack', { orderNumber })
                 : `Return booked for ${orderNumber}${r.reverseAwbNumber === null ? '' : ` · pickup ${r.reverseAwbNumber}`}.`,
             );
           }
@@ -76,7 +78,7 @@ export function AdminRequestReturnDialog({
       footer={
         <DialogFooter>
           <Button variant="secondary" onClick={onClose}>
-            Cancel
+            {t('ordersAdminRequestReturnDialog.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -84,7 +86,7 @@ export function AdminRequestReturnDialog({
             loading={request.isPending}
             disabled={request.isPending || reason.trim().length < 5}
           >
-            Request return
+            {t('ordersAdminRequestReturnDialog.requestReturn')}
           </Button>
         </DialogFooter>
       }
@@ -92,14 +94,17 @@ export function AdminRequestReturnDialog({
       <div className="oo-stack oo-stack--tight">
         <p className="oo-p">
           The courier collects it from the customer and returns it to the warehouse. It travels the
-          same distance again, so <span className="oo-strong">the client is charged ₹200</span> — a
-          second delivery, on top of the one they already paid. Charged when the parcel arrives, not
-          now.
+          same distance again, so{' '}
+          <span className="oo-strong">
+            {t('ordersAdminRequestReturnDialog.theClientIsCharged200')}
+          </span>{' '}
+          — a second delivery, on top of the one they already paid. Charged when the parcel arrives,
+          not now.
         </p>
 
         <TextArea
-          label="Why is it coming back?"
-          hint="The warehouse reads this on arrival; it decides whether the stock can be resold."
+          label={t('ordersAdminRequestReturnDialog.whyIsItComingBack')}
+          hint={t('ordersAdminRequestReturnDialog.theWarehouseReadsThisOn')}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           maxLength={500}

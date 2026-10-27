@@ -4,6 +4,7 @@ import { type ReactElement } from 'react';
 import { Select } from '@skydrop/ui/app/select';
 import { useBinContents, type BinStockLine } from '@/lib/bin-contents-hooks';
 import { Note } from '../../../inventory/_components/stock-kit';
+import { useT } from '@/i18n/client';
 
 /**
  * WHICH line in this bin is moving — asked by NAME, never typed.
@@ -64,14 +65,15 @@ export function BinLinePicker({
   readonly value: string;
   readonly onChange: (picked: PickedBinLine | null) => void;
 }): ReactElement {
+  const t = useT();
   // The query lives in the inner component so that it is MOUNTED, not
   // merely disabled, only once there is a bin to ask about: every draft
   // line starts without one, and a hook called with '' would put a
   // request for `/bin-contents/` on the wire per empty row.
   if (binId === '') {
     return (
-      <Select value="" aria-label="Product" disabled>
-        <option value="">— choose a From bin first —</option>
+      <Select value="" aria-label={t('warehouseBinsBinLinePicker.product')} disabled>
+        <option value="">{t('warehouseBinsBinLinePicker.chooseAFromBinFirst')}</option>
       </Select>
     );
   }
@@ -87,21 +89,22 @@ function LoadedBinLinePicker({
   readonly value: string;
   readonly onChange: (picked: PickedBinLine | null) => void;
 }): ReactElement {
+  const t = useT();
   const contents = useBinContents(binId, 1, PAGE_SIZE);
   const items = contents.data?.items ?? [];
   const truncated = (contents.data?.total ?? 0) > items.length;
 
   function placeholder(): string {
-    if (contents.isLoading) return '— loading —';
-    if (items.length === 0) return '— this bin is empty —';
-    return '— choose a product —';
+    if (contents.isLoading) return t('warehouseBinsBinLinePicker.loading');
+    if (items.length === 0) return t('warehouseBinsBinLinePicker.thisBinIsEmpty');
+    return t('warehouseBinsBinLinePicker.chooseAProduct');
   }
 
   return (
     <>
       <Select
         value={value}
-        aria-label="Product"
+        aria-label={t('warehouseBinsBinLinePicker.product')}
         disabled={items.length === 0}
         onChange={(e) => {
           const picked = items.find((l) => l.stockLevelId === e.target.value);
@@ -136,8 +139,10 @@ function LoadedBinLinePicker({
         // lint, and not the test, which asserts the WORDS. A component
         // cannot be misspelled without the build saying so.
         <Note tone="warn">
-          Showing the first {items.length} of {contents.data?.total ?? 0}. Move in smaller batches,
-          or move the whole bin.
+          {t('warehouseBinsBinLinePicker.showingTheFirstOfMove', {
+            length: items.length,
+            value: contents.data?.total ?? 0,
+          })}
         </Note>
       )}
     </>

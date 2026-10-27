@@ -14,6 +14,7 @@ import { usePermission } from '@/lib/use-permission';
 import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
 import { HandoverQueue } from './handover-queue';
 import '../../_components/benches.css';
+import { useT } from '@/i18n/client';
 
 /**
  * The last look at a parcel before a driver takes it.
@@ -28,6 +29,7 @@ import '../../_components/benches.css';
  * moment it is scanned cannot answer that.
  */
 export function HandoverBench(): ReactElement {
+  const t = useT();
   const scan = useHandoverScan();
   const block = useScanBlock();
   const canManagePickups = usePermission('courier.pickups.manage');
@@ -92,23 +94,26 @@ export function HandoverBench(): ReactElement {
   return (
     <div className="wh-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Warehouse', href: '/warehouse' }, { label: 'Handover' }]}
+        breadcrumbs={[
+          { label: t('warehouseHandoverHandoverBench.warehouse'), href: '/warehouse' },
+          { label: t('warehouseHandoverHandoverBench.handover') },
+        ]}
         Link={Link}
-        title="Handover"
-        subtitle="Scan every parcel as it goes onto the van. The scan is the handover: the parcel is dispatched the moment it is read, and the manifest closes itself once its last parcel goes."
+        title={t('warehouseHandoverHandoverBench.handover')}
+        subtitle={t('warehouseHandoverHandoverBench.scanEveryParcelAsIt')}
       />
 
       {block.data != null && (
         <div className="wh-stop">
           <div className="wh-stop__title">
-            <AlertTriangle size={18} /> Scanning is stopped
+            <AlertTriangle size={18} /> {t('warehouseHandoverHandoverBench.scanningIsStopped')}
           </div>
           <p>{block.data.title}</p>
           <p className="wh-pre">{block.data.detail}</p>
           <p>
             Put the box aside and get an admin. They clear it on{' '}
             <Link href="/system-issues" className="wh-link">
-              system issues
+              {t('warehouseHandoverHandoverBench.systemIssues')}
             </Link>
             , after checking whether there are two of them.
           </p>
@@ -117,7 +122,7 @@ export function HandoverBench(): ReactElement {
 
       <section className="wh-card wh-scan">
         <label htmlFor="handover-scan" className="wh-scan__label">
-          Scan the shipping label
+          {t('warehouseHandoverHandoverBench.scanTheShippingLabel')}
         </label>
         <div className="wh-scan__row">
           <input
@@ -139,16 +144,18 @@ export function HandoverBench(): ReactElement {
           <CameraScanButton onClick={() => setCamera(true)} />
         </div>
         <p className="wh-scan__meta">
-          {done.length === 0 ? 'Nothing scanned yet.' : `${done.length} scanned in this session.`}
+          {done.length === 0
+            ? t('warehouseHandoverHandoverBench.nothingScannedYet')
+            : t('warehouseHandoverHandoverBench.scannedInThisSession', { length: done.length })}
         </p>
         {/* The manifest is no longer a step, but "what went out on
             Tuesday's van" is still a real question, and this is where
             somebody stands when they ask it. */}
         <p className="wh-faint">
           <Link href="/warehouse/manifests" className="wh-link">
-            Manifest history
+            {t('warehouseHandoverHandoverBench.manifestHistory')}
           </Link>{' '}
-          — closed out automatically as each van finishes loading.
+          {t('warehouseHandoverHandoverBench.closedOutAutomaticallyAsEach')}
         </p>
         {/* The van is asked for automatically when the day's first box
             is packed (CUR-10 amendment #3). A day that failed is not
@@ -158,7 +165,7 @@ export function HandoverBench(): ReactElement {
           <p className="wh-faint">
             No van coming?{' '}
             <Link href="/warehouse/pickups" className="wh-link">
-              Pickups
+              {t('warehouseHandoverHandoverBench.pickups')}
             </Link>{' '}
             — retry a failed day or ask for one by hand.
           </p>
@@ -171,8 +178,8 @@ export function HandoverBench(): ReactElement {
       {done.length > 0 && (
         <section className="wh-card" data-flush="1">
           <div className="wh-card__head">
-            <h2 className="wh-card__title">This session</h2>
-            <div className="wh-card__sub">Newest first</div>
+            <h2 className="wh-card__title">{t('warehouseHandoverHandoverBench.thisSession')}</h2>
+            <div className="wh-card__sub">{t('warehouseHandoverHandoverBench.newestFirst')}</div>
           </div>
           <ul className="wh-list">
             {done.map((d, i) => (
@@ -183,12 +190,18 @@ export function HandoverBench(): ReactElement {
                   description={<span className="sk-ident">{d.awb}</span>}
                   meta={
                     !d.repeat && d.manifestDispatched ? (
-                      <span className="wh-faint">manifest closed</span>
+                      <span className="wh-faint">
+                        {t('warehouseHandoverHandoverBench.manifestClosed')}
+                      </span>
                     ) : undefined
                   }
                   status={
                     d.repeat ? (
-                      <StatusChip kind="draft" label="already gone" size="sm" />
+                      <StatusChip
+                        kind="draft"
+                        label={t('warehouseHandoverHandoverBench.alreadyGone')}
+                        size="sm"
+                      />
                     ) : (
                       <StatusChip
                         kind="delivered"
@@ -211,7 +224,7 @@ export function HandoverBench(): ReactElement {
           setCamera(false);
           void submit(scanned);
         }}
-        title="Scan the shipping label"
+        title={t('warehouseHandoverHandoverBench.scanTheShippingLabel')}
       />
 
       <Dialog
@@ -222,7 +235,7 @@ export function HandoverBench(): ReactElement {
             inputRef.current?.focus();
           }
         }}
-        title="That parcel was refused"
+        title={t('warehouseHandoverHandoverBench.thatParcelWasRefused')}
         tone="critical"
         icon={<OctagonX size={18} />}
         footer={
@@ -233,20 +246,20 @@ export function HandoverBench(): ReactElement {
                 inputRef.current?.focus();
               }}
             >
-              Understood
+              {t('warehouseHandoverHandoverBench.understood')}
             </Button>
           </DialogFooter>
         }
       >
         <p className="wh-alert">{refusal}</p>
         <p className="wh-note wh-gap-top">
-          It has NOT been recorded. Put it aside rather than loading it.
+          {t('warehouseHandoverHandoverBench.itHasNotBeenRecorded')}
         </p>
       </Dialog>
 
       <p className="wh-faint wh-row">
         <ScanLine size={12} aria-hidden />
-        Turn this requirement on or off in Settings → ops.handover_scan_required.
+        {t('warehouseHandoverHandoverBench.turnThisRequirementOnOr')}
       </p>
     </div>
   );

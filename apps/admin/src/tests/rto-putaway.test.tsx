@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withCatalogEnglish } from './i18n-source';
 
 /**
  * The RTO putaway panel.
@@ -109,7 +110,7 @@ describe('the suggestion is offered, not imposed', () => {
   });
 
   it('still lets a shelf be chosen when there is no suggestion', () => {
-    expect(src).toContain('no suggestion — pick a shelf');
+    expect(withCatalogEnglish(src)).toContain('no suggestion — pick a shelf');
   });
 });
 
@@ -124,7 +125,7 @@ describe('partial shelving is allowed', () => {
   });
 
   it('says what happens to the rest', () => {
-    expect(src).toContain('stay in hold');
+    expect(withCatalogEnglish(src)).toContain('stay in hold');
   });
 });
 

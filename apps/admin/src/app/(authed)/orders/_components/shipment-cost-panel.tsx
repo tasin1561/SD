@@ -10,6 +10,7 @@ import { useRecordShipmentCost } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import './order-shipping.css';
+import { useT } from '@/i18n/client';
 
 /**
  * What this parcel actually cost us.
@@ -41,6 +42,7 @@ export function ShipmentCostPanel({
   readonly awbNumber?: string | null | undefined;
   readonly wasReturned: boolean;
 }): ReactElement | null {
+  const t = useT();
   const canWrite = usePermission('money.treasury.manage');
   const record = useRecordShipmentCost();
   const [open, setOpen] = useState(false);
@@ -54,7 +56,7 @@ export function ShipmentCostPanel({
   function review(): void {
     setError(null);
     if (forward.trim() === '' && rto.trim() === '') {
-      setError('Enter at least one figure');
+      setError(t('ordersShipmentCostPanel.enterAtLeastOneFigure'));
       return;
     }
     setConfirming(true);
@@ -78,7 +80,7 @@ export function ShipmentCostPanel({
     }
   }
 
-  const entity = awbNumber ?? shipmentNumber ?? 'This parcel';
+  const entity = awbNumber ?? shipmentNumber ?? t('ordersShipmentCostPanel.thisParcel');
 
   return (
     <>
@@ -88,7 +90,7 @@ export function ShipmentCostPanel({
         icon={<ReceiptIndianRupee size={14} />}
         onClick={() => setOpen(true)}
       >
-        Record courier cost
+        {t('ordersShipmentCostPanel.recordCourierCost')}
       </Button>
 
       <Dialog
@@ -98,23 +100,23 @@ export function ShipmentCostPanel({
           if (!next) setError(null);
         }}
         icon={<ReceiptIndianRupee size={18} />}
-        title="What did this parcel cost us?"
-        description="From the courier's invoice. Feeds the delivery and returns margins; changes nothing the client was billed."
+        title={t('ordersShipmentCostPanel.whatDidThisParcelCost')}
+        description={t('ordersShipmentCostPanel.fromTheCourierSInvoice')}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={() => setOpen(false)}>
-              Cancel
+              {t('ordersShipmentCostPanel.cancel')}
             </Button>
             <Button variant="primary" onClick={review} disabled={record.isPending}>
-              Save
+              {t('ordersShipmentCostPanel.save')}
             </Button>
           </DialogFooter>
         }
       >
         <div className="os-fields">
           <TextField
-            label="Delivery cost (INR)"
-            hint="What they charged to take it out"
+            label={t('ordersShipmentCostPanel.deliveryCostInr')}
+            hint={t('ordersShipmentCostPanel.whatTheyChargedToTake')}
             type="number"
             inputMode="decimal"
             step="0.01"
@@ -124,11 +126,11 @@ export function ShipmentCostPanel({
             placeholder="0.00"
           />
           <TextField
-            label="Return cost (INR)"
+            label={t('ordersShipmentCostPanel.returnCostInr')}
             hint={
               wasReturned
-                ? 'What they charged to bring it back. The delivery deduction is refunded on a return, so this is the whole cost of the parcel.'
-                : 'Only if it came back. Leave blank otherwise.'
+                ? t('ordersShipmentCostPanel.whatTheyChargedToBring')
+                : t('ordersShipmentCostPanel.onlyIfItCameBack')
             }
             type="number"
             inputMode="decimal"
@@ -152,25 +154,26 @@ export function ShipmentCostPanel({
           setConfirming(next);
           if (!next) setError(null);
         }}
-        title="Record this courier cost?"
+        title={t('ordersShipmentCostPanel.recordThisCourierCost')}
         entity={entity}
         entityIsIdentifier={awbNumber !== null && awbNumber !== undefined}
         amount={
           <span className="oo-stack oo-stack--tight">
             {forward.trim() !== '' && (
               <span>
-                Delivery <Money amount={Number(forward).toFixed(2)} />
+                {t('ordersShipmentCostPanel.delivery')}{' '}
+                <Money amount={Number(forward).toFixed(2)} />
               </span>
             )}
             {rto.trim() !== '' && (
               <span>
-                Return <Money amount={Number(rto).toFixed(2)} />
+                {t('ordersShipmentCostPanel.return')} <Money amount={Number(rto).toFixed(2)} />
               </span>
             )}
           </span>
         }
-        consequence="The P&L reads this cost as what the parcel cost us to carry; nothing the client was billed changes."
-        confirmLabel="Save the cost"
+        consequence={t('ordersShipmentCostPanel.thePLReadsThis')}
+        confirmLabel={t('ordersShipmentCostPanel.saveTheCost')}
         onConfirm={save}
         error={confirming ? (error ?? undefined) : undefined}
       />

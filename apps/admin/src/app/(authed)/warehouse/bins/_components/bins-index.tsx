@@ -41,6 +41,9 @@ import {
   mutationPhase,
 } from '../../../inventory/_components/stock-kit';
 import { NON_PICKABLE_BIN_TYPES as NON_PICKABLE } from '@/lib/bin-policy';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Where things go.
@@ -70,19 +73,21 @@ function composeCode(aisle: string, rack: string, shelf: string): string | null 
   return `${a}-${r.padStart(2, '0')}-${s.padStart(2, '0')}`;
 }
 
-const BIN_TYPES = [
-  { value: 'STORAGE', label: 'Storage — the normal shelf' },
-  { value: 'PICKING', label: 'Picking' },
-  { value: 'RECEIVING', label: 'Receiving' },
-  { value: 'PACKING', label: 'Packing' },
-  { value: 'RTO_HOLD', label: 'Returns hold — not pickable' },
-  // Returns kept aside damaged land here at finalise (WMS-8d); they leave
-  // by an Inventory → Adjustments decrease from this bin.
-  { value: 'DAMAGED', label: 'Damaged — not pickable (returns kept aside go here)' },
-  { value: 'QUARANTINE', label: 'Quarantine — not pickable' },
-] as const;
+const BIN_TYPES = (tr: Translate<MessageKey>) =>
+  [
+    { value: 'STORAGE', label: tr('warehouseBinsBinsIndex.storageTheNormalShelf') },
+    { value: 'PICKING', label: tr('warehouseBinsBinsIndex.picking') },
+    { value: 'RECEIVING', label: tr('warehouseBinsBinsIndex.receiving') },
+    { value: 'PACKING', label: tr('warehouseBinsBinsIndex.packing') },
+    { value: 'RTO_HOLD', label: tr('warehouseBinsBinsIndex.returnsHoldNotPickable') },
+    // Returns kept aside damaged land here at finalise (WMS-8d); they leave
+    // by an Inventory → Adjustments decrease from this bin.
+    { value: 'DAMAGED', label: tr('warehouseBinsBinsIndex.damagedNotPickableReturnsKept') },
+    { value: 'QUARANTINE', label: tr('warehouseBinsBinsIndex.quarantineNotPickable') },
+  ] as const;
 
 export function BinsIndex(): ReactElement {
+  const tr = useT();
   const toast = useToast();
   const warehouses = useWarehouses();
   const [warehouseId, setWarehouseId] = useState('');
@@ -136,7 +141,9 @@ export function BinsIndex(): ReactElement {
         code: zoneForm.code.trim().toUpperCase(),
         name: zoneForm.name.trim(),
       });
-      toast.success(`Zone ${zoneForm.code.toUpperCase()} created`);
+      toast.success(
+        tr('warehouseBinsBinsIndex.zoneCreated', { value: zoneForm.code.toUpperCase() }),
+      );
       setZoneForm({ code: '', name: '' });
       setZoneOpen(false);
     } catch (err) {
@@ -154,7 +161,7 @@ export function BinsIndex(): ReactElement {
         rack: binForm.rack,
         shelf: binForm.shelf,
       });
-      toast.success(`Bin ${created.code} created`);
+      toast.success(tr('warehouseBinsBinsIndex.binCreated', { code: created.code }));
       // Keep the aisle and rack — an operator adding shelving works
       // along a rack, not at random.
       setBinForm((f) => ({ ...f, shelf: '' }));
@@ -171,8 +178,8 @@ export function BinsIndex(): ReactElement {
       await setTracking.mutateAsync(next);
       toast.success(
         next
-          ? 'Location tracking on — receiving will now ask where goods were put'
-          : 'Location tracking off — receiving will stop asking. Nothing moved.',
+          ? tr('warehouseBinsBinsIndex.locationTrackingOnReceivingWill')
+          : tr('warehouseBinsBinsIndex.locationTrackingOffReceivingWill'),
       );
       setConfirmToggle(false);
     } catch (err) {
@@ -194,20 +201,21 @@ export function BinsIndex(): ReactElement {
     }
   }
 
-  if (warehouses.isLoading) return <SkeletonRows rows={6} label="Loading warehouses" />;
+  if (warehouses.isLoading)
+    return <SkeletonRows rows={6} label={tr('warehouseBinsBinsIndex.loadingWarehouses')} />;
 
   return (
     <AreaPage>
       <PageHeader
-        title="Bins"
-        subtitle="Where stock physically sits and what is in each bin. The layout and the tracking switch are further down."
+        title={tr('warehouseBinsBinsIndex.bins')}
+        subtitle={tr('warehouseBinsBinsIndex.whereStockPhysicallySitsAnd')}
         action={
           <Actions>
             {(warehouses.data?.length ?? 0) > 1 && (
               <Select
                 value={activeId}
                 onChange={(e) => setWarehouseId(e.target.value)}
-                aria-label="Warehouse"
+                aria-label={tr('warehouseBinsBinsIndex.warehouse')}
               >
                 {(warehouses.data ?? []).map((w) => (
                   <option key={w.id} value={w.id}>
@@ -233,19 +241,19 @@ export function BinsIndex(): ReactElement {
 
       {active !== null && (
         <Panel
-          title="Location tracking"
+          title={tr('warehouseBinsBinsIndex.locationTracking')}
           subtitle={
             active.binTrackingEnabled
-              ? 'On — receiving asks which bin the goods went into, and pick sheets name a shelf.'
-              : 'Off — everything goes to FLOOR and pick sheets name no location. Receiving can still note one, but it is only a note.'
+              ? tr('warehouseBinsBinsIndex.onReceivingAsksWhichBin')
+              : tr('warehouseBinsBinsIndex.offEverythingGoesToFloor')
           }
         >
           <Note>
             {active.binTrackingEnabled
-              ? 'Turning it off stops the system asking. It does NOT collapse the bins you have built — everything stays exactly where it is recorded.'
+              ? tr('warehouseBinsBinsIndex.turningItOffStopsThe')
               : realBins.length === 0
-                ? 'Create at least one bin below before turning this on, otherwise receiving would have nowhere to put anything.'
-                : `Turning it on does not relocate what is already in FLOOR. New receipts go into real bins; the FLOOR pile drains as it is picked, or you move it deliberately.`}
+                ? tr('warehouseBinsBinsIndex.createAtLeastOneBin')
+                : tr('warehouseBinsBinsIndex.turningItOnDoesNot')}
           </Note>
           <Actions>
             <Button
@@ -256,22 +264,24 @@ export function BinsIndex(): ReactElement {
               }
               onClick={() => setConfirmToggle(true)}
             >
-              {active.binTrackingEnabled ? 'Turn tracking off' : 'Turn tracking on'}
+              {active.binTrackingEnabled
+                ? tr('warehouseBinsBinsIndex.turnTrackingOff')
+                : tr('warehouseBinsBinsIndex.turnTrackingOn')}
             </Button>
           </Actions>
         </Panel>
       )}
 
       <AreaSection
-        title="Add a bin"
-        note="The code is built from the three coordinates — you never type it. That is what stops one shelf becoming A-01-03, A-1-3 and a01-03."
+        title={tr('warehouseBinsBinsIndex.addABin')}
+        note={tr('warehouseBinsBinsIndex.theCodeIsBuiltFrom')}
       >
         <Panel>
           {(zones.data ?? []).length === 0 ? (
             <EmptyState
               bare
-              title="No zones yet"
-              description="A bin lives in a zone. Zones also carry pick order, so a picker walks the building in a sensible sequence."
+              title={tr('warehouseBinsBinsIndex.noZonesYet')}
+              description={tr('warehouseBinsBinsIndex.aBinLivesInA')}
               action={
                 <Button
                   variant="primary"
@@ -279,7 +289,7 @@ export function BinsIndex(): ReactElement {
                   icon={<Plus size={16} />}
                   onClick={() => setZoneOpen(true)}
                 >
-                  Create a zone
+                  {tr('warehouseBinsBinsIndex.createAZone')}
                 </Button>
               }
             />
@@ -287,11 +297,11 @@ export function BinsIndex(): ReactElement {
             <>
               <FieldGrid columns={2}>
                 <Select
-                  label="Zone"
+                  label={tr('warehouseBinsBinsIndex.zone')}
                   value={binForm.zoneId}
                   onChange={(e) => setBinForm((f) => ({ ...f, zoneId: e.target.value }))}
                 >
-                  <option value="">Choose…</option>
+                  <option value="">{tr('warehouseBinsBinsIndex.choose')}</option>
                   {(zones.data ?? []).map((z) => (
                     <option key={z.id} value={z.id}>
                       {z.code} — {z.name}
@@ -299,11 +309,11 @@ export function BinsIndex(): ReactElement {
                   ))}
                 </Select>
                 <Select
-                  label="Type"
+                  label={tr('warehouseBinsBinsIndex.type')}
                   value={binForm.type}
                   onChange={(e) => setBinForm((f) => ({ ...f, type: e.target.value }))}
                 >
-                  {BIN_TYPES.map((t) => (
+                  {BIN_TYPES(tr).map((t) => (
                     <option key={t.value} value={t.value}>
                       {t.label}
                     </option>
@@ -313,14 +323,14 @@ export function BinsIndex(): ReactElement {
 
               <FieldGrid columns={3}>
                 <TextField
-                  label="Aisle"
-                  hint="1–2 letters"
+                  label={tr('warehouseBinsBinsIndex.aisle')}
+                  hint={tr('warehouseBinsBinsIndex.12Letters')}
                   value={binForm.aisle}
                   placeholder="A"
                   onChange={(e) => setBinForm((f) => ({ ...f, aisle: e.target.value }))}
                 />
                 <TextField
-                  label="Rack"
+                  label={tr('warehouseBinsBinsIndex.rack')}
                   hint="digits"
                   value={binForm.rack}
                   placeholder="1"
@@ -328,7 +338,7 @@ export function BinsIndex(): ReactElement {
                   onChange={(e) => setBinForm((f) => ({ ...f, rack: e.target.value }))}
                 />
                 <TextField
-                  label="Shelf"
+                  label={tr('warehouseBinsBinsIndex.shelf')}
                   hint="digits"
                   value={binForm.shelf}
                   placeholder="3"
@@ -344,17 +354,21 @@ export function BinsIndex(): ReactElement {
               <div aria-live="polite">
                 {preview === null ? (
                   <Note tone="faint">
-                    Fill all three to see the bin code — e.g. A + 1 + 3 becomes <Code>A-01-03</Code>
-                    .
+                    {tr('warehouseBinsBinsIndex.fillAllThreeToSee')} <Code>A-01-03</Code>.
                   </Note>
                 ) : existing !== null ? (
                   <Note tone="warn">
-                    <Code>{preview}</Code> already exists
-                    {existing.type !== binForm.type ? ` as a ${existing.type} bin` : ''}.
+                    <Code>{preview}</Code>{' '}
+                    {tr('warehouseBinsBinsIndex.alreadyExists', {
+                      value:
+                        existing.type !== binForm.type
+                          ? tr('warehouseBinsBinsIndex.asABin', { type: existing.type })
+                          : '',
+                    })}
                   </Note>
                 ) : (
                   <Note tone="good">
-                    Will be created as <Code>{preview}</Code>.
+                    {tr('warehouseBinsBinsIndex.willBeCreatedAs')} <Code>{preview}</Code>.
                   </Note>
                 )}
               </div>
@@ -365,7 +379,10 @@ export function BinsIndex(): ReactElement {
                   size="md"
                   icon={<Plus size={16} />}
                   state={mutationPhase(createBin)}
-                  labels={{ idle: 'Add bin', busy: 'Creating…' }}
+                  labels={{
+                    idle: tr('warehouseBinsBinsIndex.addBin'),
+                    busy: tr('warehouseBinsBinsIndex.creating'),
+                  }}
                   disabled={
                     preview === null ||
                     existing !== null ||
@@ -375,7 +392,7 @@ export function BinsIndex(): ReactElement {
                   onClick={() => void submitBin()}
                 />
                 <Button variant="ghost" size="md" onClick={() => setZoneOpen(true)}>
-                  Add a zone
+                  {tr('warehouseBinsBinsIndex.addAZone')}
                 </Button>
               </Actions>
             </>
@@ -383,24 +400,27 @@ export function BinsIndex(): ReactElement {
         </Panel>
       </AreaSection>
 
-      <AreaSection title="Bins" note={`${realBins.length} bin(s) plus FLOOR.`}>
+      <AreaSection
+        title={tr('warehouseBinsBinsIndex.bins')}
+        note={tr('warehouseBinsBinsIndex.binSPlusFloor', { length: realBins.length })}
+      >
         {bins.isLoading ? (
-          <SkeletonRows rows={5} cols={6} label="Loading bins" />
+          <SkeletonRows rows={5} cols={6} label={tr('warehouseBinsBinsIndex.loadingBins')} />
         ) : (
           <Table>
             <THead>
               <Tr>
-                <Th>Bin</Th>
-                <Th>Zone</Th>
-                <Th>Type</Th>
-                <Th>Pickable</Th>
-                <Th align="right">On hand</Th>
+                <Th>{tr('warehouseBinsBinsIndex.bin')}</Th>
+                <Th>{tr('warehouseBinsBinsIndex.zone')}</Th>
+                <Th>{tr('warehouseBinsBinsIndex.type')}</Th>
+                <Th>{tr('warehouseBinsBinsIndex.pickable')}</Th>
+                <Th align="right">{tr('warehouseBinsBinsIndex.onHand')}</Th>
                 <Th> </Th>
               </Tr>
             </THead>
             <TBody>
               {(bins.data ?? []).length === 0 ? (
-                <TableEmpty colSpan={6}>No bins yet.</TableEmpty>
+                <TableEmpty colSpan={6}>{tr('warehouseBinsBinsIndex.noBinsYet')}</TableEmpty>
               ) : (
                 (bins.data ?? []).map((b) => {
                   const zone = (zones.data ?? []).find((z) => z.id === b.zoneId);
@@ -414,20 +434,24 @@ export function BinsIndex(): ReactElement {
                         </Link>
                         {isFloor && (
                           <span className="stk-sub">
-                            the off-state bin — stock with no recorded location
+                            {tr('warehouseBinsBinsIndex.theOffStateBinStock')}
                           </span>
                         )}
                       </Td>
                       <Td>{zone?.code ?? '—'}</Td>
                       <Td>{b.type}</Td>
                       <Td>
-                        {NON_PICKABLE.has(b.type) ? <ToneText tone="bad">No</ToneText> : 'Yes'}
+                        {NON_PICKABLE.has(b.type) ? (
+                          <ToneText tone="bad">{tr('warehouseBinsBinsIndex.no')}</ToneText>
+                        ) : (
+                          tr('warehouseBinsBinsIndex.yes')
+                        )}
                       </Td>
                       <Td align="right">
                         {held === undefined ? (
                           '—'
                         ) : held.lineCount === 0 ? (
-                          <ToneText tone="faint">Empty</ToneText>
+                          <ToneText tone="faint">{tr('warehouseBinsBinsIndex.empty')}</ToneText>
                         ) : (
                           <span data-testid={`layout-total-${b.code}`} className="sk-figure">
                             <Num value={held.unitsOnHand} suffix=" units" /> ·{' '}
@@ -447,7 +471,7 @@ export function BinsIndex(): ReactElement {
                             onClick={() => setConfirmRemove(b)}
                             disabled={deleteBin.isPending}
                           >
-                            Remove
+                            {tr('warehouseBinsBinsIndex.remove')}
                           </Button>
                         )}
                       </Td>
@@ -463,17 +487,20 @@ export function BinsIndex(): ReactElement {
       <Dialog
         open={zoneOpen}
         onOpenChange={setZoneOpen}
-        title="New zone"
+        title={tr('warehouseBinsBinsIndex.newZone')}
         footer={
           <DialogFooter>
             <Button variant="ghost" size="md" onClick={() => setZoneOpen(false)}>
-              Cancel
+              {tr('warehouseBinsBinsIndex.cancel')}
             </Button>
             <AsyncButton
               variant="primary"
               size="md"
               state={mutationPhase(createZone)}
-              labels={{ idle: 'Create zone', busy: 'Creating…' }}
+              labels={{
+                idle: tr('warehouseBinsBinsIndex.createZone'),
+                busy: tr('warehouseBinsBinsIndex.creating'),
+              }}
               disabled={
                 zoneForm.code.trim() === '' || zoneForm.name.trim() === '' || createZone.isPending
               }
@@ -484,13 +511,13 @@ export function BinsIndex(): ReactElement {
       >
         <FieldGrid columns={1}>
           <TextField
-            label="Code"
-            hint="Short, e.g. MAIN or RET"
+            label={tr('warehouseBinsBinsIndex.code')}
+            hint={tr('warehouseBinsBinsIndex.shortEGMainOr')}
             value={zoneForm.code}
             onChange={(e) => setZoneForm((f) => ({ ...f, code: e.target.value }))}
           />
           <TextField
-            label="Name"
+            label={tr('warehouseBinsBinsIndex.name')}
             value={zoneForm.name}
             onChange={(e) => setZoneForm((f) => ({ ...f, name: e.target.value }))}
           />
@@ -500,17 +527,24 @@ export function BinsIndex(): ReactElement {
       <Dialog
         open={confirmToggle}
         onOpenChange={setConfirmToggle}
-        title={active?.binTrackingEnabled === true ? 'Turn tracking off?' : 'Turn tracking on?'}
+        title={
+          active?.binTrackingEnabled === true
+            ? tr('warehouseBinsBinsIndex.turnTrackingOff2')
+            : tr('warehouseBinsBinsIndex.turnTrackingOn2')
+        }
         footer={
           <DialogFooter>
             <Button variant="ghost" size="md" onClick={() => setConfirmToggle(false)}>
-              Cancel
+              {tr('warehouseBinsBinsIndex.cancel')}
             </Button>
             <AsyncButton
               variant="primary"
               size="md"
               state={mutationPhase(setTracking)}
-              labels={{ idle: 'Confirm', busy: 'Saving…' }}
+              labels={{
+                idle: tr('warehouseBinsBinsIndex.confirm'),
+                busy: tr('warehouseBinsBinsIndex.saving'),
+              }}
               disabled={setTracking.isPending}
               onClick={() => void toggleTracking()}
             />
@@ -519,8 +553,8 @@ export function BinsIndex(): ReactElement {
       >
         <Note>
           {active?.binTrackingEnabled === true
-            ? 'Receiving will stop asking where goods went, and pick sheets will stop naming a shelf. Nothing moves — every bin and everything in it stays exactly as recorded, and turning this back on restores the prompts.'
-            : 'Receiving will start asking which bin goods went into, and pick sheets will name a shelf. Stock already in FLOOR is not relocated: it drains as it is picked, or you move it deliberately.'}
+            ? tr('warehouseBinsBinsIndex.receivingWillStopAskingWhere')
+            : tr('warehouseBinsBinsIndex.receivingWillStartAskingWhich')}
         </Note>
       </Dialog>
 
@@ -529,11 +563,11 @@ export function BinsIndex(): ReactElement {
         onOpenChange={(next) => {
           if (!next) setConfirmRemove(null);
         }}
-        title="Remove this bin?"
+        title={tr('warehouseBinsBinsIndex.removeThisBin')}
         entity={`${confirmRemove?.code ?? ''}${active !== null ? ` · ${active.code}` : ''}`}
         entityIsIdentifier
-        consequence="The bin is deleted from this warehouse's layout and cannot be restored — the server refuses while it still holds stock or an active reservation."
-        confirmLabel="Remove bin"
+        consequence={tr('warehouseBinsBinsIndex.theBinIsDeletedFrom')}
+        confirmLabel={tr('warehouseBinsBinsIndex.removeBin')}
         destructive
         onConfirm={async () => {
           if (confirmRemove !== null) await removeBin(confirmRemove);

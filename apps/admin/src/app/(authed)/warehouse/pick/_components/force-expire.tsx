@@ -10,6 +10,7 @@ import { SectionHeading } from '@skydrop/ui/app/page-header';
 import { TextField } from '@skydrop/ui/app/text-field';
 import '../../_components/benches.css';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * Release a stuck pick claim (WMS-5 supervisor override).
@@ -45,6 +46,7 @@ function useForceExpirePick(): UseMutationResult<PickExpireResult, Error, { ship
 }
 
 export function ForceExpirePick(): ReactElement {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [shipmentId, setShipmentId] = useState('');
   const [result, setResult] = useState<PickExpireResult | null>(null);
@@ -60,11 +62,11 @@ export function ForceExpirePick(): ReactElement {
   return (
     <section className="wh-card wh-stack">
       <SectionHeading
-        title="Stuck pick"
-        note="Release a claim a picker is holding but not working."
+        title={t('warehousePickForceExpire.stuckPick')}
+        note={t('warehousePickForceExpire.releaseAClaimAPicker')}
         action={
           <Button variant="secondary" size="md" onClick={() => setOpen(true)}>
-            Release a stuck pick
+            {t('warehousePickForceExpire.releaseAStuckPick')}
           </Button>
         }
       />
@@ -74,13 +76,15 @@ export function ForceExpirePick(): ReactElement {
         onOpenChange={(next) => {
           if (!next) close();
         }}
-        title="Release a stuck pick claim"
-        description="Hands the shipment back to the queue so another picker can take it."
+        title={t('warehousePickForceExpire.releaseAStuckPickClaim')}
+        description={t('warehousePickForceExpire.handsTheShipmentBackTo')}
         icon={<Unlock size={18} />}
         footer={
           <DialogFooter>
             <Button variant="secondary" size="md" onClick={close}>
-              {result === null ? 'Cancel' : 'Done'}
+              {result === null
+                ? t('warehousePickForceExpire.cancel')
+                : t('warehousePickForceExpire.done')}
             </Button>
             {result === null && (
               <Button
@@ -93,7 +97,9 @@ export function ForceExpirePick(): ReactElement {
                   )
                 }
               >
-                {expire.isPending ? 'Releasing…' : 'Release'}
+                {expire.isPending
+                  ? t('warehousePickForceExpire.releasing')
+                  : t('warehousePickForceExpire.release')}
               </Button>
             )}
           </DialogFooter>
@@ -102,8 +108,8 @@ export function ForceExpirePick(): ReactElement {
         <div className="wh-stack">
           <TextField
             id="fe-shipment"
-            label="Shipment id"
-            hint="From the order's shipments section."
+            label={t('warehousePickForceExpire.shipmentId')}
+            hint={t('warehousePickForceExpire.fromTheOrderSShipments')}
             inputClassName="sk-ident"
             value={shipmentId}
             onChange={(e) => {
@@ -112,10 +118,7 @@ export function ForceExpirePick(): ReactElement {
             }}
           />
 
-          <p className="wh-faint">
-            Safe to run twice, and it will not take a shipment away from a picker who has since
-            claimed it — it checks the claim is still the one it expected before releasing.
-          </p>
+          <p className="wh-faint">{t('warehousePickForceExpire.safeToRunTwiceAnd')}</p>
 
           {expire.error !== null && (
             <div role="alert" className="wh-alert">
@@ -124,12 +127,9 @@ export function ForceExpirePick(): ReactElement {
           )}
           {result !== null &&
             (result.expired ? (
-              <p className="wh-good">Released — the shipment is back in the pick queue.</p>
+              <p className="wh-good">{t('warehousePickForceExpire.releasedTheShipmentIsBack')}</p>
             ) : (
-              <p className="wh-note">
-                Nothing to release. Either it was never claimed, it is already finished, or someone
-                has claimed it since.
-              </p>
+              <p className="wh-note">{t('warehousePickForceExpire.nothingToReleaseEitherIt')}</p>
             ))}
         </div>
       </Dialog>

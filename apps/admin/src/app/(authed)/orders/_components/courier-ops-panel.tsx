@@ -31,6 +31,7 @@ import {
 import { serverVerdict } from '@/lib/server-verdict';
 import { Facts } from './order-ops-parts';
 import './order-shipping.css';
+import { useT } from '@/i18n/client';
 
 const MIN_CANCEL_REASON = 10;
 
@@ -71,6 +72,7 @@ function ReasonConfirm({
   readonly onConfirm: () => void;
   readonly children: ReactNode;
 }): ReactElement {
+  const t = useT();
   return (
     <Dialog
       open={open}
@@ -83,7 +85,7 @@ function ReasonConfirm({
       footer={
         <DialogFooter>
           <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={busy}>
-            Cancel
+            {t('ordersCourierOpsPanel.cancel')}
           </Button>
           <AsyncButton
             variant={destructive ? 'destructive' : 'primary'}
@@ -136,14 +138,11 @@ export function CourierOpsPanel({
   readonly status: string;
   readonly courierCancelledAt: string | null;
 }): ReactElement {
+  const t = useT();
   const [open, setOpen] = useState(false);
 
   if (isManualCourier) {
-    return (
-      <p className="os-note">
-        Placed manually with a non-integrated courier — arrange any change directly with them.
-      </p>
-    );
+    return <p className="os-note">{t('ordersCourierOpsPanel.placedManuallyWithANon')}</p>;
   }
   if (status === 'CANCELLED') {
     return (
@@ -155,9 +154,7 @@ export function CourierOpsPanel({
     );
   }
   if (awbNumber === null) {
-    return (
-      <p className="os-note">No AWB yet. Courier actions become available once one is issued.</p>
-    );
+    return <p className="os-note">{t('ordersCourierOpsPanel.noAwbYetCourierActions')}</p>;
   }
 
   return open ? (
@@ -165,7 +162,7 @@ export function CourierOpsPanel({
   ) : (
     <div className="os-tools">
       <Button variant="ghost" size="sm" icon={<Truck size={14} />} onClick={() => setOpen(true)}>
-        Courier actions &amp; costs
+        {t('ordersCourierOpsPanel.courierActionsCosts')}
       </Button>
     </div>
   );
@@ -180,6 +177,7 @@ function CourierOpsBody({
   readonly awbNumber: string;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const insight = useShipmentInsight(shipmentId);
   const readiness = useNdrReadiness(shipmentId);
@@ -203,10 +201,7 @@ function CourierOpsBody({
       await openExternalWhenReady(async () => {
         const r = await document.mutateAsync({ shipmentId, docType });
         if (r.url === null) {
-          toast.error(
-            r.message ??
-              'The courier holds no such document for this parcel. They only serve documents they have not archived.',
-          );
+          toast.error(r.message ?? t('ordersCourierOpsPanel.theCourierHoldsNoSuch'));
           return null;
         }
         return r.url;
@@ -226,8 +221,8 @@ function CourierOpsBody({
       // here would claim more than we know.
       toast.success(
         r.uplId === null
-          ? (r.message ?? 'Request submitted.')
-          : `Request submitted (ref ${r.uplId}). Delhivery confirms separately.`,
+          ? (r.message ?? t('ordersCourierOpsPanel.requestSubmitted'))
+          : t('ordersCourierOpsPanel.requestSubmittedRefDelhiveryConfirms', { uplId: r.uplId }),
       );
     } catch (err) {
       setNdrError(serverVerdict(err));
@@ -238,9 +233,7 @@ function CourierOpsBody({
   async function doCancel(): Promise<void> {
     try {
       await cancel.mutateAsync({ shipmentId, reason: cancelReason.trim() });
-      toast.success(
-        'Cancellation sent. A parcel already moving comes back as a return; its scans will move the order.',
-      );
+      toast.success(t('ordersCourierOpsPanel.cancellationSentAParcelAlready'));
       setConfirmCancel(false);
       setCancelReason('');
     } catch (err) {
@@ -252,16 +245,20 @@ function CourierOpsBody({
   return (
     <div className="os-panel">
       <div className="oo-card__head">
-        <p className="oo-card__title">Courier</p>
+        <p className="oo-card__title">{t('ordersCourierOpsPanel.courier')}</p>
         <Button variant="ghost" size="sm" onClick={onClose}>
-          Hide
+          {t('ordersCourierOpsPanel.hide')}
         </Button>
       </div>
 
       {insight.isError ? (
         <ErrorState message={serverVerdict(insight.error)} retry={() => void insight.refetch()} />
       ) : insight.isLoading ? (
-        <div className="os-skel" role="status" aria-label="Loading courier details">
+        <div
+          className="os-skel"
+          role="status"
+          aria-label={t('ordersCourierOpsPanel.loadingCourierDetails')}
+        >
           <Skeleton width="75%" height={14} />
           <Skeleton width="50%" height={14} />
         </div>
@@ -270,7 +267,7 @@ function CourierOpsBody({
           <Facts
             items={[
               {
-                label: 'Expected transit',
+                label: t('ordersCourierOpsPanel.expectedTransit'),
                 value:
                   insight.data?.tat?.tatDays == null ? (
                     <span className="oo-faint">—</span>
@@ -279,7 +276,7 @@ function CourierOpsBody({
                   ),
               },
               {
-                label: 'Courier cost',
+                label: t('ordersCourierOpsPanel.courierCost'),
                 value:
                   insight.data?.cost == null ? (
                     <span className="oo-faint">—</span>
@@ -288,7 +285,7 @@ function CourierOpsBody({
                   ),
               },
               {
-                label: 'Their zone',
+                label: t('ordersCourierOpsPanel.theirZone'),
                 value: insight.data?.cost?.zone ?? <span className="oo-faint">—</span>,
               },
             ]}
@@ -314,7 +311,7 @@ function CourierOpsBody({
             disabled={document.isPending}
             onClick={() => void getDocument('EPOD')}
           >
-            Proof of delivery
+            {t('ordersCourierOpsPanel.proofOfDelivery')}
           </Button>
           <Button
             variant="ghost"
@@ -323,7 +320,7 @@ function CourierOpsBody({
             disabled={document.isPending}
             onClick={() => void getDocument('SIGNATURE_URL')}
           >
-            Signature
+            {t('ordersCourierOpsPanel.signature')}
           </Button>
         </div>
       </div>
@@ -344,7 +341,9 @@ function CourierOpsBody({
                 setConfirmNdr(true);
               }}
             >
-              {ndr.isPending ? 'Requesting…' : 'Request another delivery attempt'}
+              {ndr.isPending
+                ? t('ordersCourierOpsPanel.requesting')
+                : t('ordersCourierOpsPanel.requestAnotherDeliveryAttempt')}
             </Button>
             <span className="os-note">
               after <span className="sk-figure">{readiness.data.attemptCount}</span> failed attempt
@@ -362,10 +361,12 @@ function CourierOpsBody({
           // is unavailable is the difference between a disabled button
           // and a useful one.
           <p className="os-note">
-            Re-attempt unavailable
-            {readiness.data?.reason === null || readiness.data?.reason === undefined
-              ? '.'
-              : `: ${readiness.data.reason}`}
+            {t('ordersCourierOpsPanel.reAttemptUnavailable', {
+              value:
+                readiness.data?.reason === null || readiness.data?.reason === undefined
+                  ? '.'
+                  : `: ${readiness.data.reason}`,
+            })}
           </p>
         )}
       </div>
@@ -379,7 +380,7 @@ function CourierOpsBody({
             icon={<PenLine size={14} />}
             onClick={() => setEditing(true)}
           >
-            Correct recipient
+            {t('ordersCourierOpsPanel.correctRecipient')}
           </Button>
           {/*
             DELISTED, NOT DELETED — "Attach e-way bill" (2026-09-19).
@@ -403,7 +404,7 @@ function CourierOpsBody({
             icon={<XCircle size={14} />}
             onClick={() => setConfirmCancel(true)}
           >
-            Cancel with courier
+            {t('ordersCourierOpsPanel.cancelWithCourier')}
           </Button>
         </div>
       </div>
@@ -416,32 +417,32 @@ function CourierOpsBody({
           setConfirmNdr(next);
           if (!next) setNdrError(null);
         }}
-        title="Request another delivery attempt?"
+        title={t('ordersCourierOpsPanel.requestAnotherDeliveryAttempt2')}
         entity={awbNumber}
         entityIsIdentifier
-        consequence="The courier is asked to send its van out to the customer again; it confirms separately, and only its own scans move the order."
-        confirmLabel="Request the attempt"
+        consequence={t('ordersCourierOpsPanel.theCourierIsAskedTo')}
+        confirmLabel={t('ordersCourierOpsPanel.requestTheAttempt')}
         onConfirm={takeNdrAction}
         error={ndrError ?? undefined}
       />
       <ReasonConfirm
         open={confirmCancel}
         onOpenChange={setConfirmCancel}
-        title="Cancel this parcel with the courier?"
+        title={t('ordersCourierOpsPanel.cancelThisParcelWithThe')}
         entity={awbNumber}
-        consequence="A parcel already in transit does not vanish — it becomes a return and comes back to us, at the cost of a return leg. Only a not-yet-collected parcel stops where it is."
-        note="The order is not moved by this action; the courier's own scans will move it."
+        consequence={t('ordersCourierOpsPanel.aParcelAlreadyInTransit')}
+        note={t('ordersCourierOpsPanel.theOrderIsNotMoved')}
         destructive
-        confirmLabel="Cancel parcel"
-        busyLabel="Cancelling…"
+        confirmLabel={t('ordersCourierOpsPanel.cancelParcel')}
+        busyLabel={t('ordersCourierOpsPanel.cancelling')}
         busy={cancel.isPending}
         disabled={cancel.isPending || cancelReason.trim().length < MIN_CANCEL_REASON}
         onConfirm={() => void doCancel()}
       >
         <TextArea
-          label="Reason"
+          label={t('ordersCourierOpsPanel.reason')}
           rows={2}
-          placeholder="Why is this being pulled?"
+          placeholder={t('ordersCourierOpsPanel.whyIsThisBeingPulled')}
           value={cancelReason}
           onChange={(e) => setCancelReason(e.target.value)}
         />
@@ -469,6 +470,7 @@ function VoidedWaybill({
   readonly awbNumber: string | null;
   readonly courierCancelledAt: string | null;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const cancel = useCancelWithCourier();
   const recordOutside = useRecordCancelledOutside();
@@ -477,11 +479,7 @@ function VoidedWaybill({
   const [reason, setReason] = useState('');
 
   if (awbNumber === null) {
-    return (
-      <p className="os-note">
-        Voided with its order. It never had a waybill, so there is nothing at the courier.
-      </p>
-    );
+    return <p className="os-note">{t('ordersCourierOpsPanel.voidedWithItsOrderIt')}</p>;
   }
   if (courierCancelledAt !== null) {
     return (
@@ -499,9 +497,9 @@ function VoidedWaybill({
     try {
       const r = await cancel.mutateAsync({ shipmentId, reason: reason.trim() });
       if (r.success) {
-        toast.success('The courier accepted the cancellation. The waybill is closed.');
+        toast.success(t('ordersCourierOpsPanel.theCourierAcceptedTheCancellation'));
       } else {
-        toast.error(r.message ?? 'The courier did not accept the cancellation.');
+        toast.error(r.message ?? t('ordersCourierOpsPanel.theCourierDidNotAccept'));
       }
       setConfirming(false);
       setReason('');
@@ -514,7 +512,7 @@ function VoidedWaybill({
   async function doRecordOutside(): Promise<void> {
     try {
       const r = await recordOutside.mutateAsync({ shipmentId, reason: reason.trim() });
-      toast.success(r.message ?? 'Recorded as cancelled outside Skydrop.');
+      toast.success(r.message ?? t('ordersCourierOpsPanel.recordedAsCancelledOutsideSkydrop'));
       setRecording(false);
       setReason('');
     } catch (err) {
@@ -536,29 +534,29 @@ function VoidedWaybill({
           icon={<XCircle size={14} />}
           onClick={() => setConfirming(true)}
         >
-          Cancel waybill with courier
+          {t('ordersCourierOpsPanel.cancelWaybillWithCourier')}
         </Button>
         <Button variant="secondary" size="sm" onClick={() => setRecording(true)}>
-          Mark cancelled outside Skydrop
+          {t('ordersCourierOpsPanel.markCancelledOutsideSkydrop')}
         </Button>
       </div>
       <ReasonConfirm
         open={recording}
         onOpenChange={setRecording}
-        title="Record this waybill as cancelled outside Skydrop?"
+        title={t('ordersCourierOpsPanel.recordThisWaybillAsCancelled')}
         entity={awbNumber}
-        consequence="Use this only when the waybill was already cancelled in the courier's own portal or by phone. Skydrop does NOT call the courier; it records your word, and the record says so."
+        consequence={t('ordersCourierOpsPanel.useThisOnlyWhenThe')}
         destructive={false}
-        confirmLabel="Record as cancelled"
-        busyLabel="Recording…"
+        confirmLabel={t('ordersCourierOpsPanel.recordAsCancelled')}
+        busyLabel={t('ordersCourierOpsPanel.recording')}
         busy={recordOutside.isPending}
         disabled={recordOutside.isPending || reason.trim().length < MIN_CANCEL_REASON}
         onConfirm={() => void doRecordOutside()}
       >
         <TextArea
-          label="How was it cancelled?"
+          label={t('ordersCourierOpsPanel.howWasItCancelled')}
           rows={2}
-          placeholder="How was it cancelled? e.g. cancelled in the Delhivery portal on 12 Sep"
+          placeholder={t('ordersCourierOpsPanel.howWasItCancelledE')}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
@@ -566,20 +564,20 @@ function VoidedWaybill({
       <ReasonConfirm
         open={confirming}
         onOpenChange={setConfirming}
-        title="Cancel this waybill with the courier?"
+        title={t('ordersCourierOpsPanel.cancelThisWaybillWithThe')}
         entity={awbNumber}
-        consequence="The order is already cancelled. This asks the courier to close the waybill it booked, which is what credits the booking charge back. The order does not change."
+        consequence={t('ordersCourierOpsPanel.theOrderIsAlreadyCancelled')}
         destructive
-        confirmLabel="Cancel waybill"
-        busyLabel="Cancelling…"
+        confirmLabel={t('ordersCourierOpsPanel.cancelWaybill')}
+        busyLabel={t('ordersCourierOpsPanel.cancelling')}
         busy={cancel.isPending}
         disabled={cancel.isPending || reason.trim().length < MIN_CANCEL_REASON}
         onConfirm={() => void doCancel()}
       >
         <TextArea
-          label="Reason"
+          label={t('ordersCourierOpsPanel.reason')}
           rows={2}
-          placeholder="Why? e.g. order cancelled before pickup"
+          placeholder={t('ordersCourierOpsPanel.whyEGOrderCancelled')}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
@@ -597,6 +595,7 @@ function EditRecipientModal({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const edit = useEditShipment();
   const [name, setName] = useState('');
@@ -615,7 +614,7 @@ function EditRecipientModal({
         ...(phone.trim() === '' ? {} : { phone: phone.trim() }),
         ...(address.trim() === '' ? {} : { address: address.trim() }),
       });
-      toast.success('Correction sent to the courier.');
+      toast.success(t('ordersCourierOpsPanel.correctionSentToTheCourier'));
       setName('');
       setPhone('');
       setAddress('');
@@ -631,17 +630,20 @@ function EditRecipientModal({
       onOpenChange={onOpenChange}
       size="md"
       icon={<PenLine size={18} />}
-      title="Correct the recipient"
-      description="Only the fields you fill are changed. Delhivery refuses edits on parcels already dispatched or in a terminal state."
+      title={t('ordersCourierOpsPanel.correctTheRecipient')}
+      description={t('ordersCourierOpsPanel.onlyTheFieldsYouFill')}
       footer={
         <DialogFooter>
           <Button variant="secondary" size="md" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('ordersCourierOpsPanel.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
-            labels={{ idle: 'Send correction', busy: 'Sending…' }}
+            labels={{
+              idle: t('ordersCourierOpsPanel.sendCorrection'),
+              busy: t('ordersCourierOpsPanel.sending'),
+            }}
             state={edit.isPending ? 'busy' : 'idle'}
             disabled={!anything || edit.isPending}
             onClick={() => void submit()}
@@ -652,20 +654,20 @@ function EditRecipientModal({
       <div className="os-fields">
         <TextField
           id="edit-name"
-          label="Name"
+          label={t('ordersCourierOpsPanel.name')}
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
         <TextField
           id="edit-phone"
-          label="Phone"
+          label={t('ordersCourierOpsPanel.phone')}
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="+919812345678"
         />
         <TextArea
           id="edit-address"
-          label="Address"
+          label={t('ordersCourierOpsPanel.address')}
           rows={3}
           value={address}
           onChange={(e) => setAddress(e.target.value)}
@@ -689,6 +691,7 @@ function EwaybillModal({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const attach = useAttachEwaybill();
   const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -703,7 +706,7 @@ function EwaybillModal({
         invoiceNumber: invoiceNumber.trim(),
         ewaybillNumber: ewaybillNumber.trim(),
       });
-      toast.success('E-way bill attached.');
+      toast.success(t('ordersCourierOpsPanel.eWayBillAttached'));
       setInvoiceNumber('');
       setEwaybillNumber('');
       onOpenChange(false);
@@ -718,17 +721,20 @@ function EwaybillModal({
       onOpenChange={onOpenChange}
       size="sm"
       icon={<FileText size={18} />}
-      title="Attach an e-way bill"
-      description="Required by law above ₹50,000 of goods. Moving them without one risks the consignment being detained and penalised."
+      title={t('ordersCourierOpsPanel.attachAnEWayBill')}
+      description={t('ordersCourierOpsPanel.requiredByLawAbove50')}
       footer={
         <DialogFooter>
           <Button variant="secondary" size="md" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('ordersCourierOpsPanel.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
-            labels={{ idle: 'Attach', busy: 'Attaching…' }}
+            labels={{
+              idle: t('ordersCourierOpsPanel.attach'),
+              busy: t('ordersCourierOpsPanel.attaching'),
+            }}
             state={attach.isPending ? 'busy' : 'idle'}
             disabled={
               invoiceNumber.trim() === '' || ewaybillNumber.trim() === '' || attach.isPending
@@ -741,15 +747,15 @@ function EwaybillModal({
       <div className="os-fields">
         <TextField
           id="ewb-invoice"
-          label="Invoice number"
-          hint="The invoice the e-way bill was raised against."
+          label={t('ordersCourierOpsPanel.invoiceNumber')}
+          hint={t('ordersCourierOpsPanel.theInvoiceTheEWay')}
           requiredMark
           value={invoiceNumber}
           onChange={(e) => setInvoiceNumber(e.target.value)}
         />
         <TextField
           id="ewb-number"
-          label="E-way bill number"
+          label={t('ordersCourierOpsPanel.eWayBillNumber')}
           requiredMark
           value={ewaybillNumber}
           onChange={(e) => setEwaybillNumber(e.target.value)}

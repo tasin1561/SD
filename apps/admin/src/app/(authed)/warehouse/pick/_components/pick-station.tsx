@@ -17,6 +17,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { SerialScanner, scanCountMet } from '@/components/ui/serial-scanner';
 import { ForceExpirePick } from './force-expire';
 import '../../_components/benches.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Picker workspace — one parcel at a time. Flow:
@@ -37,6 +38,7 @@ import '../../_components/benches.css';
  * PICK_INCOMPLETE, UNIT_SCAN_COUNT_MISMATCH, UNIT_NOT_FOUND.
  */
 export function PickStation(): ReactElement {
+  const t = useT();
   const toast = useToast();
   const [pick, setPick] = useState<StrictPulledPick | null>(null);
   const [started, setStarted] = useState(false);
@@ -83,7 +85,11 @@ export function PickStation(): ReactElement {
         setPick(null);
       } else {
         setStarted(true);
-        toast.success(`Pick started: ${r.allocations.length} allocations.`);
+        toast.success(
+          t('warehousePickPickStation.pickStartedAllocations', {
+            allocationsLength: r.allocations.length,
+          }),
+        );
       }
     } catch (err) {
       setError(serverVerdict(err));
@@ -100,7 +106,7 @@ export function PickStation(): ReactElement {
     const bin = (binByItem[shipmentItemId] ?? '').trim();
     const batch = (batchByItem[shipmentItemId] ?? '').trim();
     if (!bin || !batch) {
-      setError('Bin and batch are both required for each line.');
+      setError(t('warehousePickPickStation.binAndBatchAreBoth'));
       return;
     }
     const strict = line.inventoryMode === 'STRICT';
@@ -119,7 +125,9 @@ export function PickStation(): ReactElement {
       });
       setRecordedItems((prev) => new Set(prev).add(shipmentItemId));
       toast.success(
-        strict ? `Line recorded — ${serials.length} unit(s) scanned.` : 'Line recorded.',
+        strict
+          ? t('warehousePickPickStation.lineRecordedUnitSScanned', { length: serials.length })
+          : t('warehousePickPickStation.lineRecorded'),
       );
     } catch (err) {
       setError(serverVerdict(err));
@@ -134,7 +142,11 @@ export function PickStation(): ReactElement {
     setBusyId('complete');
     try {
       await complete.mutateAsync({ shipmentId: pick.shipmentId });
-      toast.success(`Picked — shipment ${pick.shipmentNumber} is in the pack queue.`);
+      toast.success(
+        t('warehousePickPickStation.pickedShipmentIsInThe', {
+          shipmentNumber: pick.shipmentNumber,
+        }),
+      );
       // After complete, refresh by clearing — the next "Pull" claims another.
       setPick(null);
       setStarted(false);
@@ -156,7 +168,11 @@ export function PickStation(): ReactElement {
           onClick={() => void onPull()}
           disabled={pull.isPending || (pick !== null && started)}
         >
-          {pull.isPending ? 'Pulling…' : pick ? 'Pull next (after complete)' : 'Pull next'}
+          {pull.isPending
+            ? t('warehousePickPickStation.pulling')
+            : pick
+              ? t('warehousePickPickStation.pullNextAfterComplete')
+              : t('warehousePickPickStation.pullNext')}
         </Button>
         {pick && !started && (
           <Button
@@ -165,7 +181,9 @@ export function PickStation(): ReactElement {
             onClick={() => void onStart()}
             disabled={busyId === 'start'}
           >
-            {busyId === 'start' ? 'Starting…' : 'Start pick'}
+            {busyId === 'start'
+              ? t('warehousePickPickStation.starting')
+              : t('warehousePickPickStation.startPick')}
           </Button>
         )}
       </div>
@@ -178,8 +196,8 @@ export function PickStation(): ReactElement {
 
       {!pick ? (
         <EmptyState
-          title="No pick in progress"
-          description="Click Pull next to claim the next confirmed parcel from the queue."
+          title={t('warehousePickPickStation.noPickInProgress')}
+          description={t('warehousePickPickStation.clickPullNextToClaim')}
         />
       ) : (
         <section className="wh-card wh-stack">
@@ -189,11 +207,13 @@ export function PickStation(): ReactElement {
                 Shipment <span className="sk-ident">{pick.shipmentNumber}</span>
               </div>
               <div className="wh-faint sk-figure">
-                Started {new Date(pick.pickStartedAt).toLocaleTimeString()} · expires{' '}
-                {new Date(pick.pickExpiresAt).toLocaleTimeString()}
+                {t('warehousePickPickStation.startedExpires', {
+                  value: new Date(pick.pickStartedAt).toLocaleTimeString(),
+                  value2: new Date(pick.pickExpiresAt).toLocaleTimeString(),
+                })}
               </div>
             </div>
-            {started && <span className="wh-tag">In progress</span>}
+            {started && <span className="wh-tag">{t('warehousePickPickStation.inProgress')}</span>}
           </div>
 
           <div className="wh-stack wh-stack--tight">
@@ -217,7 +237,9 @@ export function PickStation(): ReactElement {
                       </div>
                       <div className="wh-item__sub">
                         <span className="sk-ident">{it.skuCode}</span> ·{' '}
-                        <span className="sk-figure">qty {it.quantity}</span>
+                        <span className="sk-figure">
+                          {t('warehousePickPickStation.qty', { quantity: it.quantity })}
+                        </span>
                         {it.unitWeightGrams !== null ? (
                           <span className="sk-figure">
                             {` · ${it.unitWeightGrams * it.quantity}g`}
@@ -227,26 +249,31 @@ export function PickStation(): ReactElement {
                         )}
                       </div>
                     </div>
-                    {strict && <span className="wh-tag">Per-unit tracked</span>}
+                    {strict && (
+                      <span className="wh-tag">{t('warehousePickPickStation.perUnitTracked')}</span>
+                    )}
                   </div>
                   {!done && (
                     <>
                       {strict && (
                         <SerialScanner
                           id={`pick-serials-${it.shipmentItemId}`}
-                          label={`Scan ${it.quantity} unit serial(s) for ${it.skuCode}`}
+                          label={t('warehousePickPickStation.scanUnitSerialSFor', {
+                            quantity: it.quantity,
+                            skuCode: it.skuCode,
+                          })}
                           required={it.quantity}
                           serials={serials}
                           disabled={!started || busyId === it.shipmentItemId}
                           onChange={(next) =>
                             setSerialsByItem({ ...serialsByItem, [it.shipmentItemId]: next })
                           }
-                          hint="This SKU is tracked per unit — the serial on each item, not the SKU barcode."
+                          hint={t('warehousePickPickStation.thisSkuIsTrackedPer')}
                         />
                       )}
                       <div className="wh-fields" data-cols="pick">
                         <TextField
-                          label="Bin"
+                          label={t('warehousePickPickStation.bin')}
                           inputClassName="sk-ident"
                           value={binByItem[it.shipmentItemId] ?? ''}
                           onChange={(e) =>
@@ -259,7 +286,7 @@ export function PickStation(): ReactElement {
                           placeholder="bin-A1"
                         />
                         <TextField
-                          label="Batch"
+                          label={t('warehousePickPickStation.batch')}
                           inputClassName="sk-ident"
                           value={batchByItem[it.shipmentItemId] ?? ''}
                           onChange={(e) =>
@@ -277,14 +304,16 @@ export function PickStation(): ReactElement {
                           disabled={!started || busyId === it.shipmentItemId || !serialsReady}
                           onClick={() => void onRecord(it.shipmentItemId)}
                         >
-                          {busyId === it.shipmentItemId ? 'Saving…' : 'Record'}
+                          {busyId === it.shipmentItemId
+                            ? t('warehousePickPickStation.saving')
+                            : t('warehousePickPickStation.record')}
                         </Button>
                       </div>
                     </>
                   )}
                   {done && (
                     <div className="wh-good">
-                      <Check size={14} aria-hidden /> Recorded
+                      <Check size={14} aria-hidden /> {t('warehousePickPickStation.recorded')}
                     </div>
                   )}
                 </div>
@@ -300,7 +329,9 @@ export function PickStation(): ReactElement {
                 onClick={() => void onComplete()}
                 disabled={busyId === 'complete'}
               >
-                {busyId === 'complete' ? 'Completing…' : 'Complete pick'}
+                {busyId === 'complete'
+                  ? t('warehousePickPickStation.completing')
+                  : t('warehousePickPickStation.completePick')}
               </Button>
             </div>
           )}

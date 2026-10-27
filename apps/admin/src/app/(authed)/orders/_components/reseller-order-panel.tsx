@@ -6,6 +6,7 @@ import type { OrderView } from '@skydrop/api-client';
 import { Money } from '@skydrop/ui/components';
 import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { Facts, OoCard, OoSection } from './order-ops-parts';
+import { useT } from '@/i18n/client';
 
 const SHARES: ReadonlyArray<readonly [keyof OrderView, string]> = [
   ['resellerDeliveryFeeStorePercent', 'Delivery fee'],
@@ -30,60 +31,63 @@ function timing(trigger: string | null | undefined, days: number | null | undefi
  * Renders nothing for the seller's own (channel) order.
  */
 export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElement | null {
+  const t = useT();
   if (order.storeKind !== 'RESELLER') return null;
   return (
     <OoSection
-      title="Member store"
-      note="Placed by a member store under the terms below — snapshotted when it was placed, so later edits never re-price it."
+      title={t('ordersResellerOrderPanel.memberStore')}
+      note={t('ordersResellerOrderPanel.placedByAMemberStore')}
     >
       <Facts
         items={[
           {
-            label: 'Store',
+            label: t('ordersResellerOrderPanel.store'),
             value:
               order.storeId === null ? (
                 (order.storeNameSnapshot ?? '—')
               ) : (
                 <Link href={`/reseller-stores/${order.storeId}`} className="oo-link">
-                  {order.storeNameSnapshot ?? 'Member store'}
+                  {order.storeNameSnapshot ?? t('ordersResellerOrderPanel.memberStore')}
                 </Link>
               ),
           },
           {
-            label: 'Terms version',
+            label: t('ordersResellerOrderPanel.termsVersion'),
             value:
               order.resellerTermsVersionNumber === null ||
               order.resellerTermsVersionNumber === undefined
                 ? '—'
-                : `Version ${order.resellerTermsVersionNumber}`,
+                : t('ordersResellerOrderPanel.version', {
+                    resellerTermsVersionNumber: order.resellerTermsVersionNumber,
+                  }),
           },
           ...SHARES.map(([key, label]) => {
             const value = order[key];
             return {
-              label: `${label} — store pays`,
+              label: t('ordersResellerOrderPanel.storePays', { label }),
               value: typeof value === 'string' ? `${value}%` : '—',
             };
           }),
           {
-            label: 'Store credited',
+            label: t('ordersResellerOrderPanel.storeCredited'),
             value: timing(order.resellerStoreCreditTrigger, order.resellerStoreCreditDays),
           },
           {
-            label: 'Client credited',
+            label: t('ordersResellerOrderPanel.clientCredited'),
             value: timing(order.resellerSellerCreditTrigger, order.resellerSellerCreditDays),
           },
         ]}
       />
       <OoCard flush>
-        <Table caption="Member store lines">
+        <Table caption={t('ordersResellerOrderPanel.memberStoreLines')}>
           <THead>
             <Tr>
-              <Th>Line</Th>
-              <Th align="right">Qty</Th>
-              <Th align="right">Transfer price</Th>
-              <Th align="right">Retail</Th>
-              <Th>Range</Th>
-              <Th>Stock</Th>
+              <Th>{t('ordersResellerOrderPanel.line')}</Th>
+              <Th align="right">{t('ordersResellerOrderPanel.qty')}</Th>
+              <Th align="right">{t('ordersResellerOrderPanel.transferPrice')}</Th>
+              <Th align="right">{t('ordersResellerOrderPanel.retail')}</Th>
+              <Th>{t('ordersResellerOrderPanel.range')}</Th>
+              <Th>{t('ordersResellerOrderPanel.stock')}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -113,28 +117,28 @@ export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElemen
                 <Td className="oo-muted">
                   {(i.resellerMinRetailInr ?? null) === null &&
                   (i.resellerMaxRetailInr ?? null) === null ? (
-                    'Any price'
+                    t('ordersResellerOrderPanel.anyPrice')
                   ) : (
                     <>
                       {i.resellerMinRetailInr ? (
                         <Money amount={i.resellerMinRetailInr} convert={false} />
                       ) : (
-                        'no minimum'
+                        t('ordersResellerOrderPanel.noMinimum')
                       )}{' '}
                       –{' '}
                       {i.resellerMaxRetailInr ? (
                         <Money amount={i.resellerMaxRetailInr} convert={false} />
                       ) : (
-                        'no maximum'
+                        t('ordersResellerOrderPanel.noMaximum')
                       )}
                     </>
                   )}
                 </Td>
                 <Td className="oo-muted">
                   {i.resellerStockMode === 'SET_ASIDE'
-                    ? 'Set aside'
+                    ? t('ordersResellerOrderPanel.setAside')
                     : i.resellerStockMode === 'SHARED'
-                      ? 'Shared'
+                      ? t('ordersResellerOrderPanel.shared')
                       : '—'}
                 </Td>
               </Tr>

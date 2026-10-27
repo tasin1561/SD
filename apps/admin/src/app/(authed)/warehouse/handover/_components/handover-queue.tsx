@@ -8,6 +8,7 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Package } from 'lucide-react';
 import '../../_components/benches.css';
 import { useHandoverQueue, type WaitingHandover } from '@/lib/ops-hooks';
+import { useT } from '@/i18n/client';
 
 /**
  * What is standing at the bench, waiting for a van.
@@ -24,17 +25,28 @@ import { useHandoverQueue, type WaitingHandover } from '@/lib/ops-hooks';
  * somebody needs to.
  */
 export function HandoverQueue(): ReactElement {
+  const tr = useT();
+  const t = useT();
   const q = useHandoverQueue();
 
   if (q.isLoading) {
     return (
       <section className="wh-card">
-        <SkeletonRows rows={4} cols={3} label="Loading what is waiting" />
+        <SkeletonRows
+          rows={4}
+          cols={3}
+          label={t('warehouseHandoverHandoverQueue.loadingWhatIsWaiting')}
+        />
       </section>
     );
   }
   if (q.isError) {
-    return <ErrorState message="Could not load what is waiting." retry={() => void q.refetch()} />;
+    return (
+      <ErrorState
+        message={t('warehouseHandoverHandoverQueue.couldNotLoadWhatIs')}
+        retry={() => void q.refetch()}
+      />
+    );
   }
 
   const waiting = q.data ?? [];
@@ -42,8 +54,8 @@ export function HandoverQueue(): ReactElement {
     return (
       <EmptyState
         tone="positive"
-        title="Nothing waiting for a van"
-        description="Parcels appear here once they are packed. Scan a label above when a driver arrives."
+        title={t('warehouseHandoverHandoverQueue.nothingWaitingForAVan')}
+        description={t('warehouseHandoverHandoverQueue.parcelsAppearHereOnceThey')}
       />
     );
   }
@@ -57,7 +69,10 @@ export function HandoverQueue(): ReactElement {
           <span className="sk-figure">{waiting.length}</span> waiting for a van
         </h2>
         <div className="wh-card__sub">
-          {scanned > 0 ? `${scanned} already checked · ` : ''}oldest first
+          {t('warehouseHandoverHandoverQueue.oldestFirst', {
+            value:
+              scanned > 0 ? tr('warehouseHandoverHandoverQueue.alreadyChecked', { scanned }) : '',
+          })}
         </div>
       </div>
       <ul className="wh-list">
@@ -70,6 +85,7 @@ export function HandoverQueue(): ReactElement {
 }
 
 function WaitingRow({ pack }: { pack: WaitingHandover }): ReactElement {
+  const t = useT();
   const checked = pack.handoverScannedAtIso !== null;
   return (
     <li className={checked ? 'wh-quiet' : undefined}>
@@ -87,7 +103,11 @@ function WaitingRow({ pack }: { pack: WaitingHandover }): ReactElement {
           checked ? (
             <StatusChip kind="delivered" label="checked" size="sm" />
           ) : (
-            <StatusChip kind="neutral" label="not scanned" size="sm" />
+            <StatusChip
+              kind="neutral"
+              label={t('warehouseHandoverHandoverQueue.notScanned')}
+              size="sm"
+            />
           )
         }
       />

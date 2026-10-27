@@ -5,6 +5,7 @@ import { Barcode128 } from '@skydrop/ui/components';
 import { Printer } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
 import type { LabelSheet } from '@skydrop/api-client';
+import { useT } from '@/i18n/client';
 
 /**
  * The printable label sheet.
@@ -33,6 +34,7 @@ export function LabelSheetView({
   readonly sheet: LabelSheet;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   return (
     <div className="sd-label-sheet">
       <style>{`
@@ -62,16 +64,20 @@ export function LabelSheetView({
             <span className="sk-ident">{sheet.consignmentNumber}</span>
           </h3>
           <p className="stk-note">
-            Printed in {sheet.site === 'BD' ? 'Bangladesh' : 'India'}. The station is now locked for
-            this consignment.
+            {t('warehouseConsignmentsIdLabelSheet.printedInTheStationIs', {
+              value:
+                sheet.site === 'BD'
+                  ? t('warehouseConsignmentsIdLabelSheet.bangladesh')
+                  : t('warehouseConsignmentsIdLabelSheet.india'),
+            })}
           </p>
         </div>
         <div className="stk-actions">
           <Button icon={<Printer size={16} />} onClick={() => window.print()}>
-            Send to printer
+            {t('warehouseConsignmentsIdLabelSheet.sendToPrinter')}
           </Button>
           <Button variant="secondary" onClick={onClose}>
-            Done
+            {t('warehouseConsignmentsIdLabelSheet.done')}
           </Button>
         </div>
       </div>
@@ -100,7 +106,9 @@ export function LabelSheetView({
             </p>
             {l.expiresAt !== null && (
               <p className="mt-0.5 text-[11px] leading-tight tabular-nums">
-                exp {new Date(l.expiresAt).toISOString().slice(0, 10)}
+                {t('warehouseConsignmentsIdLabelSheet.exp', {
+                  value: new Date(l.expiresAt).toISOString().slice(0, 10),
+                })}
               </p>
             )}
           </div>

@@ -26,6 +26,7 @@ import { useCloseManifest, useConfirmHandoff, useManifestDetail } from '@/lib/ap
 import { serverVerdict } from '@/lib/server-verdict';
 import { MoveShipmentPanel } from './move-shipment-panel';
 import { useRouter } from 'next/navigation';
+import { useT, useLocale } from '@/i18n/client';
 
 /**
  * Manifest detail — shows the manifest header, the list of shipments
@@ -37,6 +38,8 @@ import { useRouter } from 'next/navigation';
  * FE-2: server-verdict surfacing on every action.
  */
 export function ManifestDetailView({ id }: { readonly id: string }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const router = useRouter();
   const toast = useToast();
   const detail = useManifestDetail(id);
@@ -48,22 +51,28 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(err: unknown): string {
-    return serverVerdict(err, 'Action failed');
+    return serverVerdict(err, t('warehouseManifestsManifestDetailView.actionFailed'));
   }
 
-  if (detail.isLoading) return <SkeletonRows rows={6} label="Loading manifest…" />;
+  if (detail.isLoading)
+    return (
+      <SkeletonRows rows={6} label={t('warehouseManifestsManifestDetailView.loadingManifest')} />
+    );
   if (detail.isError)
     return (
       <ErrorState
-        message={serverVerdict(detail.error, 'Failed to load.')}
+        message={serverVerdict(
+          detail.error,
+          t('warehouseManifestsManifestDetailView.failedToLoad'),
+        )}
         retry={() => void detail.refetch()}
       />
     );
   if (!detail.data)
     return (
       <EmptyState
-        title="Manifest not found"
-        description="The manifest may have been deleted or the link is wrong."
+        title={t('warehouseManifestsManifestDetailView.manifestNotFound')}
+        description={t('warehouseManifestsManifestDetailView.theManifestMayHaveBeen')}
       />
     );
 
@@ -78,7 +87,10 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
       setShowCloseConfirm(false);
       if (r.failures.length === 0) {
         toast.success(
-          `Closed ${m.manifestNumber} — ${r.transitionedCount} shipment(s) queued for AWB.`,
+          t('warehouseManifestsManifestDetailView.closedShipmentSQueuedFor', {
+            manifestNumber: m.manifestNumber,
+            transitionedCount: r.transitionedCount,
+          }),
         );
       } else {
         toast.error(`Closed with ${r.failures.length} failure(s). See manifest detail.`);
@@ -95,7 +107,10 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
       setShowHandoffConfirm(false);
       if (r.failures.length === 0) {
         toast.success(
-          `Dispatched ${m.manifestNumber} — ${r.dispatchedShipmentIds.length} shipment(s) handed off.`,
+          t('warehouseManifestsManifestDetailView.dispatchedShipmentSHandedOff', {
+            manifestNumber: m.manifestNumber,
+            dispatchedShipmentIdsLength: r.dispatchedShipmentIds.length,
+          }),
         );
       } else {
         toast.error(`Handoff partial: ${r.failures.length} failed.`);
@@ -110,12 +125,21 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
       <PageHeader
         Link={Link}
         breadcrumbs={[
-          { label: 'Warehouse', href: '/warehouse' },
-          { label: 'Manifests', href: '/warehouse/manifests' },
+          { label: t('warehouseManifestsManifestDetailView.warehouse'), href: '/warehouse' },
+          {
+            label: t('warehouseManifestsManifestDetailView.manifests'),
+            href: '/warehouse/manifests',
+          },
           { label: m.manifestNumber },
         ]}
-        title={`Manifest ${m.manifestNumber}`}
-        subtitle={`${m.courierCode} · ${m.status} · ${m.shipmentCount} shipment(s)`}
+        title={t('warehouseManifestsManifestDetailView.manifest', {
+          manifestNumber: m.manifestNumber,
+        })}
+        subtitle={t('warehouseManifestsManifestDetailView.shipmentS', {
+          courierCode: m.courierCode,
+          status: m.status,
+          shipmentCount: m.shipmentCount,
+        })}
         meta={<StatusChip kind="neutral" label={m.status.replace(/_/g, ' ')} />}
         action={
           <Actions>
@@ -125,7 +149,10 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
                 size="md"
                 icon={<PackageCheck size={16} />}
                 state={mutationPhase(close)}
-                labels={{ idle: 'Close manifest', busy: 'Closing…' }}
+                labels={{
+                  idle: t('warehouseManifestsManifestDetailView.closeManifest'),
+                  busy: t('warehouseManifestsManifestDetailView.closing'),
+                }}
                 disabled={close.isPending}
                 onClick={() => setShowCloseConfirm(true)}
               />
@@ -136,7 +163,10 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
                 size="md"
                 icon={<Truck size={16} />}
                 state={mutationPhase(handoff)}
-                labels={{ idle: 'Confirm handoff', busy: 'Confirming…' }}
+                labels={{
+                  idle: t('warehouseManifestsManifestDetailView.confirmHandoff'),
+                  busy: t('warehouseManifestsManifestDetailView.confirming'),
+                }}
                 disabled={handoff.isPending}
                 onClick={() => setShowHandoffConfirm(true)}
               />
@@ -151,28 +181,34 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
         <Facts
           columns={4}
           items={[
-            { label: 'Created', value: new Date(m.createdAt).toLocaleString() },
-            { label: 'Closed', value: m.closedAt ? new Date(m.closedAt).toLocaleString() : '—' },
-            { label: 'Status', value: m.status },
-            { label: 'Courier', value: m.courierCode },
+            {
+              label: t('warehouseManifestsManifestDetailView.created'),
+              value: new Date(m.createdAt).toLocaleString(),
+            },
+            {
+              label: t('warehouseManifestsManifestDetailView.closed'),
+              value: m.closedAt ? new Date(m.closedAt).toLocaleString() : '—',
+            },
+            { label: t('warehouseManifestsManifestDetailView.status'), value: m.status },
+            { label: t('warehouseManifestsManifestDetailView.courier'), value: m.courierCode },
           ]}
         />
       </Panel>
 
-      <AreaSection title="Shipments">
+      <AreaSection title={t('warehouseManifestsManifestDetailView.shipments')}>
         {m.shipments.length === 0 ? (
           <EmptyState
-            title="No shipments attached"
-            description="DRAFT manifests are auto-populated as packers complete shipments for this courier + warehouse."
+            title={t('warehouseManifestsManifestDetailView.noShipmentsAttached')}
+            description={t('warehouseManifestsManifestDetailView.draftManifestsAreAutoPopulated')}
           />
         ) : (
           <Table>
             <THead>
               <Tr>
-                <Th>Shipment</Th>
-                <Th>Status</Th>
-                <Th>Order</Th>
-                <Th>Packed</Th>
+                <Th>{t('warehouseManifestsManifestDetailView.shipment')}</Th>
+                <Th>{t('warehouseManifestsManifestDetailView.status')}</Th>
+                <Th>{t('warehouseManifestsManifestDetailView.order')}</Th>
+                <Th>{t('warehouseManifestsManifestDetailView.packed')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -190,12 +226,14 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
                     <StatusChip
                       size="sm"
                       kind={shipmentStatusKind(s.status)}
-                      label={statusLabel(s.status)}
+                      label={statusLabel(s.status, locale)}
                     />
                   </Td>
                   <Td>
                     {s.orderId ? (
-                      <TextLink href={`/orders/${s.orderId}`}>view order</TextLink>
+                      <TextLink href={`/orders/${s.orderId}`}>
+                        {t('warehouseManifestsManifestDetailView.viewOrder')}
+                      </TextLink>
                     ) : (
                       <span className="stk-faint">—</span>
                     )}
@@ -222,11 +260,16 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
       <ConfirmDialog
         open={showCloseConfirm}
         onOpenChange={setShowCloseConfirm}
-        title={`Close manifest ${m.manifestNumber}?`}
-        entity={`${m.manifestNumber} · ${m.shipmentCount} shipment(s)`}
+        title={t('warehouseManifestsManifestDetailView.closeManifest2', {
+          manifestNumber: m.manifestNumber,
+        })}
+        entity={t('warehouseManifestsManifestDetailView.shipmentS2', {
+          manifestNumber: m.manifestNumber,
+          shipmentCount: m.shipmentCount,
+        })}
         entityIsIdentifier
-        consequence="This transitions the manifest to CLOSED and queues AWB generation for every attached shipment. Cannot be undone."
-        confirmLabel="Close manifest"
+        consequence={t('warehouseManifestsManifestDetailView.thisTransitionsTheManifestTo')}
+        confirmLabel={t('warehouseManifestsManifestDetailView.closeManifest')}
         closeOnSuccess={false}
         error={error}
         onConfirm={onClose}
@@ -234,11 +277,13 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
       <ConfirmDialog
         open={showHandoffConfirm}
         onOpenChange={setShowHandoffConfirm}
-        title={`Confirm handoff for ${m.manifestNumber}?`}
+        title={t('warehouseManifestsManifestDetailView.confirmHandoffFor', {
+          manifestNumber: m.manifestNumber,
+        })}
         entity={`${m.manifestNumber} · ${m.courierCode}`}
         entityIsIdentifier
-        consequence="This marks every AWB-ready shipment DISPATCHED, stamps the manifest DISPATCHED, and decrements warehouse stock (CUR-3). Run only after the courier driver has accepted the consolidated handoff."
-        confirmLabel="Confirm handoff"
+        consequence={t('warehouseManifestsManifestDetailView.thisMarksEveryAwbReady')}
+        confirmLabel={t('warehouseManifestsManifestDetailView.confirmHandoff')}
         closeOnSuccess={false}
         error={error}
         onConfirm={onHandoff}

@@ -3,6 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation';
 import type { ReactElement, ReactNode } from 'react';
 import { Button, EmptyState, PageHeader } from '@skydrop/ui/components';
+import { useT } from '@/i18n/client';
 import { canSeePath, permissionForPath, FALLBACK_PATH } from '@/lib/page-access';
 
 /**
@@ -29,6 +30,7 @@ export function PermissionBoundary({
   readonly permissions: readonly string[];
   readonly children: ReactNode;
 }): ReactElement {
+  const t = useT();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -40,17 +42,15 @@ export function PermissionBoundary({
     // A refusal is prose, so it keeps a reading width — unlike a
     // page, which fills the space it is given.
     <div className="max-w-2xl">
-      <PageHeader title="Not available" />
+      <PageHeader title={t('boundary.title')} />
       <EmptyState
-        title="This section is not part of your access"
+        title={t('boundary.empty')}
         description={
-          needed === null
-            ? 'Your role does not cover this page.'
-            : `This page needs the “${needed}” permission and your role does not have it. A super admin can grant it under Roles.`
+          needed === null ? t('boundary.noRole') : t('boundary.needs', { permission: needed })
         }
         action={
           <Button variant="primary" size="md" onClick={() => router.push(FALLBACK_PATH)}>
-            Go to the dashboard
+            {t('boundary.goDashboard')}
           </Button>
         }
       />

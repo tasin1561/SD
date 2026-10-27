@@ -6,6 +6,7 @@ import { useRestoreReservations } from '@/lib/api-hooks';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { TextArea } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * The mirror of the release beside it: giving a committed order back a
@@ -37,6 +38,7 @@ export function RestoreReservationsDialog({
   readonly orderNumber?: string | undefined;
   readonly onSuccess: (result: RestoreReservationsResult) => void;
 }): ReactElement {
+  const t = useT();
   const [reason, setReason] = useState('');
   const [serverError, setServerError] = useState<string | null>(null);
   const restore = useRestoreReservations(orderId);
@@ -56,7 +58,9 @@ export function RestoreReservationsDialog({
       onSuccess(result);
       setReason('');
     } catch (err) {
-      setServerError(serverVerdict(err, 'Failed to restore reservations.'));
+      setServerError(
+        serverVerdict(err, t('ordersRestoreReservationsDialog.failedToRestoreReservations')),
+      );
       throw err;
     }
   }
@@ -67,22 +71,22 @@ export function RestoreReservationsDialog({
       onOpenChange={(o) => {
         if (!o) close();
       }}
-      title="Restore this order’s stock claim"
+      title={t('ordersRestoreReservationsDialog.restoreThisOrderSStock')}
       entity={orderNumber ?? orderId}
       entityIsIdentifier
-      consequence="Stock is re-reserved for an order that lost its claim to an expired reservation — refused if it already holds one or is past packing; all or nothing on a shortfall."
-      confirmLabel="Restore stock claim"
+      consequence={t('ordersRestoreReservationsDialog.stockIsReReservedFor')}
+      confirmLabel={t('ordersRestoreReservationsDialog.restoreStockClaim')}
       destructive={false}
       onConfirm={confirm}
       error={serverError}
     >
       <TextArea
         id="restore-reason"
-        label="Reason (optional)"
-        hint="Recorded in the audit log + order event. Audited HIGH."
+        label={t('ordersRestoreReservationsDialog.reasonOptional')}
+        hint={t('ordersRestoreReservationsDialog.recordedInTheAuditLog')}
         value={reason}
         onChange={(e) => setReason(e.target.value)}
-        placeholder="e.g., Reservation expired by the TTL sweep before the fix; order still needs picking."
+        placeholder={t('ordersRestoreReservationsDialog.eGReservationExpiredBy')}
         disabled={restore.isPending}
       />
     </ConfirmDialog>

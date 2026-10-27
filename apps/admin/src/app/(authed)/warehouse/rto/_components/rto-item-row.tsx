@@ -7,6 +7,9 @@ import { Button } from '@skydrop/ui/app/button';
 import { Select } from '@skydrop/ui/app/select';
 import { TextField } from '@skydrop/ui/app/text-field';
 import '../../_components/benches.css';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 export interface RtoItemRowInspection {
   readonly quantity: number;
@@ -64,13 +67,14 @@ export function RtoLineThumb({
   readonly src: string | null;
   readonly productName: string;
 }): ReactElement {
+  const tr = useT();
   if (src === null) return <ProductThumb src={null} size={THUMB_PX} />;
   return (
     <a
       href={src}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={`Open the picture of ${productName} in a new tab`}
+      aria-label={tr('warehouseRtoRtoItemRow.openThePictureOfIn', { productName })}
       className="wh-thumb-link"
     >
       <ProductThumb src={src} size={THUMB_PX} alt={productName} />
@@ -83,11 +87,12 @@ export function RtoLineThumb({
  * server decides); the labels say what each one DOES, because "WRITE_OFF"
  * told the inspector nothing about stock, freight or the seller.
  */
-export const CONDITION_OPTIONS = [
-  { value: 'GOOD', label: 'Good — sellable as new' },
-  { value: 'DAMAGED', label: 'Damaged' },
-  { value: 'MISSING', label: 'Missing from the box' },
-] as const;
+export const CONDITION_OPTIONS = (tr: Translate<MessageKey>) =>
+  [
+    { value: 'GOOD', label: tr('warehouseRtoRtoItemRow.goodSellableAsNew') },
+    { value: 'DAMAGED', label: tr('warehouseRtoRtoItemRow.damaged') },
+    { value: 'MISSING', label: tr('warehouseRtoRtoItemRow.missingFromTheBox') },
+  ] as const;
 
 export const DISPOSITION_OPTIONS = [
   {
@@ -120,8 +125,8 @@ export const DISPOSITION_OPTIONS = [
  * WMS-8e: a received return is already IN the returns hold (booked at
  * receive), so each choice says where it goes FROM there at finalise.
  */
-const DISPOSITION_HINT =
-  'Everything received waits in the returns hold until you decide. Put back in stock: sellable immediately (the floor bin, or its old shelf when bins are tracked). Keep aside (damaged): the Damaged bin, kept for the client and never sold. Write off: removed from the returns hold and from stock, and the client is charged its share of inbound freight. Decide later: stays in the returns hold; the parcel cannot be finalised until you choose.';
+const DISPOSITION_HINT = (tr: Translate<MessageKey>) =>
+  tr('warehouseRtoRtoItemRow.everythingReceivedWaitsInThe');
 
 /**
  * A combination that is allowed but usually a slip — said out loud, never
@@ -188,6 +193,7 @@ export function RtoItemRow({
   readonly onSave: (payload: RtoInspectPayload) => Promise<void>;
   readonly saving: boolean;
 }): ReactElement {
+  const tr = useT();
   const [condition, setCondition] = useState(item.rtoCondition ?? '');
   const [disposition, setDisposition] = useState(item.rtoDisposition ?? '');
   const [notes, setNotes] = useState(item.rtoInspectionNotes ?? '');
@@ -253,13 +259,15 @@ export function RtoItemRow({
             </div>
             <div className="wh-item__sub">
               <span className="sk-ident">{item.skuCode}</span> ·{' '}
-              <span className="sk-figure">qty {item.quantity}</span>
+              <span className="sk-figure">
+                {tr('warehouseRtoRtoItemRow.qty', { quantity: item.quantity })}
+              </span>
             </div>
           </div>
         </div>
         {inspected && (
           <span className="wh-tag" data-tone="good">
-            <Check size={12} aria-hidden /> Inspected
+            <Check size={12} aria-hidden /> {tr('warehouseRtoRtoItemRow.inspected')}
           </span>
         )}
       </div>
@@ -268,27 +276,27 @@ export function RtoItemRow({
         <>
           <div className="wh-fields" data-cols="2">
             <Select
-              label="Condition"
-              hint="What you found in the box. Damaged or Missing opens a damage ticket to the client, which is where any refund is decided."
+              label={tr('warehouseRtoRtoItemRow.condition')}
+              hint={tr('warehouseRtoRtoItemRow.whatYouFoundInThe')}
               value={condition}
               onChange={(e) => setCondition(e.target.value)}
               disabled={saving}
-              aria-label="Condition"
+              aria-label={tr('warehouseRtoRtoItemRow.condition')}
             >
               <option value="">—</option>
-              {CONDITION_OPTIONS.map((o) => (
+              {CONDITION_OPTIONS(tr).map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
             </Select>
             <Select
-              label="What happens to it"
+              label={tr('warehouseRtoRtoItemRow.whatHappensToIt')}
               {...(mismatch === null ? {} : { notice: mismatch })}
               value={disposition}
               onChange={(e) => setDisposition(e.target.value)}
               disabled={saving}
-              aria-label="What happens to it"
+              aria-label={tr('warehouseRtoRtoItemRow.whatHappensToIt')}
             >
               <option value="">—</option>
               {DISPOSITION_OPTIONS.map((o) => (
@@ -300,20 +308,23 @@ export function RtoItemRow({
           </div>
           {selected === undefined ? null : <p className="wh-note">{selected.effect}</p>}
           <details className="wh-details">
-            <summary>What each choice does</summary>
-            <p>{DISPOSITION_HINT}</p>
+            <summary>{tr('warehouseRtoRtoItemRow.whatEachChoiceDoes')}</summary>
+            <p>{DISPOSITION_HINT(tr)}</p>
           </details>
           <TextField
-            label="Notes"
+            label={tr('warehouseRtoRtoItemRow.notes')}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             maxLength={1000}
-            placeholder="Optional inspection notes"
+            placeholder={tr('warehouseRtoRtoItemRow.optionalInspectionNotes')}
             disabled={saving}
           />
         </>
       ) : (
-        <div className="wh-stack wh-stack--tight" aria-label="Split by quantity">
+        <div
+          className="wh-stack wh-stack--tight"
+          aria-label={tr('warehouseRtoRtoItemRow.splitByQuantity')}
+        >
           <p className="wh-note" role="status" aria-live="polite">
             {remainingLabel(item.quantity, split)}
           </p>
@@ -324,35 +335,35 @@ export function RtoItemRow({
               <div key={i} className="wh-split-row">
                 <div className="wh-fields" data-cols="split">
                   <TextField
-                    label={`Units (row ${i + 1})`}
+                    label={tr('warehouseRtoRtoItemRow.unitsRow', { value: i + 1 })}
                     inputMode="numeric"
                     inputClassName="sk-figure"
                     value={row.quantity}
                     onChange={(e) => updateRow(i, { quantity: e.target.value })}
                     disabled={saving}
-                    aria-label={`Units in row ${i + 1}`}
+                    aria-label={tr('warehouseRtoRtoItemRow.unitsInRow', { value: i + 1 })}
                   />
                   <Select
-                    label="Condition"
+                    label={tr('warehouseRtoRtoItemRow.condition')}
                     value={row.condition}
                     onChange={(e) => updateRow(i, { condition: e.target.value })}
                     disabled={saving}
-                    aria-label={`Condition, row ${i + 1}`}
+                    aria-label={tr('warehouseRtoRtoItemRow.conditionRow', { value: i + 1 })}
                   >
                     <option value="">—</option>
-                    {CONDITION_OPTIONS.map((o) => (
+                    {CONDITION_OPTIONS(tr).map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
                       </option>
                     ))}
                   </Select>
                   <Select
-                    label="What happens to them"
+                    label={tr('warehouseRtoRtoItemRow.whatHappensToThem')}
                     {...(rowMismatch === null ? {} : { notice: rowMismatch })}
                     value={row.disposition}
                     onChange={(e) => updateRow(i, { disposition: e.target.value })}
                     disabled={saving}
-                    aria-label={`What happens to them, row ${i + 1}`}
+                    aria-label={tr('warehouseRtoRtoItemRow.whatHappensToThemRow', { value: i + 1 })}
                   >
                     <option value="">—</option>
                     {DISPOSITION_OPTIONS.map((o) => (
@@ -365,13 +376,13 @@ export function RtoItemRow({
                 {rowEffect === undefined ? null : <p className="wh-note">{rowEffect.effect}</p>}
                 <div className="wh-fields wh-split-notes">
                   <TextField
-                    label="Notes"
+                    label={tr('warehouseRtoRtoItemRow.notes')}
                     value={row.notes}
                     onChange={(e) => updateRow(i, { notes: e.target.value })}
                     maxLength={1000}
-                    placeholder="Optional"
+                    placeholder={tr('warehouseRtoRtoItemRow.optional')}
                     disabled={saving}
-                    aria-label={`Notes, row ${i + 1}`}
+                    aria-label={tr('warehouseRtoRtoItemRow.notesRow', { value: i + 1 })}
                   />
                   {split.length > 1 && (
                     <Button
@@ -380,7 +391,7 @@ export function RtoItemRow({
                       disabled={saving}
                       onClick={() => setSplit(split.filter((_, j) => j !== i))}
                     >
-                      Remove row
+                      {tr('warehouseRtoRtoItemRow.removeRow')}
                     </Button>
                   )}
                 </div>
@@ -397,11 +408,11 @@ export function RtoItemRow({
                   setSplit([...split, { quantity: '1', condition: '', disposition: '', notes: '' }])
                 }
               >
-                Add row
+                {tr('warehouseRtoRtoItemRow.addRow')}
               </Button>
             )}
             <Button variant="ghost" size="sm" disabled={saving} onClick={() => setSplit(null)}>
-              One decision for all {item.quantity}
+              {tr('warehouseRtoRtoItemRow.oneDecisionForAll', { quantity: item.quantity })}
             </Button>
           </div>
         </div>
@@ -410,7 +421,7 @@ export function RtoItemRow({
       <div className="wh-row wh-row--end">
         {split === null && item.quantity > 1 && (
           <Button variant="ghost" size="sm" disabled={saving} onClick={startSplit}>
-            Split by quantity
+            {tr('warehouseRtoRtoItemRow.splitByQuantity')}
           </Button>
         )}
         <Button
@@ -419,7 +430,9 @@ export function RtoItemRow({
           disabled={saving || (split === null ? !condition || !disposition : !splitReady)}
           onClick={save}
         >
-          {saving ? 'Saving…' : 'Save inspection'}
+          {saving
+            ? tr('warehouseRtoRtoItemRow.saving')
+            : tr('warehouseRtoRtoItemRow.saveInspection')}
         </Button>
       </div>
     </div>

@@ -13,6 +13,7 @@ import { useGoodsReceiptsList, useSellersList, useWarehouses } from '@/lib/api-h
 import { usePermission } from '@/lib/use-permission';
 import { useRouter } from 'next/navigation';
 import '../../_components/benches.css';
+import { useT } from '@/i18n/client';
 
 const PAGE_SIZE = 20;
 // No DISCREPANCY. Nothing writes that status any more (CNS-3): a count
@@ -27,6 +28,7 @@ const STATUSES: ReadonlyArray<GoodsReceiptStatus> = [
 ] as GoodsReceiptStatus[];
 
 export function ReceiveIndex(): ReactElement {
+  const t = useT();
   const router = useRouter();
   const [status, setStatus] = useState<GoodsReceiptStatus | ''>('PENDING');
   const [sellerId, setSellerId] = useState('');
@@ -56,14 +58,14 @@ export function ReceiveIndex(): ReactElement {
     <div className="wh-stack">
       <div className="wh-fields wh-filters">
         <Select
-          label="Status"
+          label={t('warehouseReceiveReceiveIndex.status')}
           value={status}
           onChange={(e) => {
             setStatus(e.target.value as GoodsReceiptStatus | '');
             setPage(1);
           }}
         >
-          <option value="">All statuses</option>
+          <option value="">{t('warehouseReceiveReceiveIndex.allStatuses')}</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
               {s}
@@ -73,15 +75,15 @@ export function ReceiveIndex(): ReactElement {
 
         {maySeeSellers && (
           <Select
-            label="Client"
+            label={t('warehouseReceiveReceiveIndex.client')}
             value={sellerId}
-            aria-label="Filter by client"
+            aria-label={t('warehouseReceiveReceiveIndex.filterByClient')}
             onChange={(e) => {
               setSellerId(e.target.value);
               setPage(1);
             }}
           >
-            <option value="">All clients</option>
+            <option value="">{t('warehouseReceiveReceiveIndex.allClients')}</option>
             {(sellers.data?.items ?? []).map((s) => (
               <option key={s.id} value={s.id}>
                 {s.companyName}
@@ -91,15 +93,15 @@ export function ReceiveIndex(): ReactElement {
         )}
 
         <Select
-          label="Warehouse"
+          label={t('warehouseReceiveReceiveIndex.warehouse')}
           value={warehouseId}
-          aria-label="Filter by warehouse"
+          aria-label={t('warehouseReceiveReceiveIndex.filterByWarehouse')}
           onChange={(e) => {
             setWarehouseId(e.target.value);
             setPage(1);
           }}
         >
-          <option value="">All warehouses</option>
+          <option value="">{t('warehouseReceiveReceiveIndex.allWarehouses')}</option>
           {(warehouses.data ?? []).map((w) => (
             <option key={w.id} value={w.id}>
               {w.code}
@@ -110,30 +112,34 @@ export function ReceiveIndex(): ReactElement {
 
       {list.isLoading ? (
         <section className="wh-card">
-          <SkeletonRows rows={6} cols={7} label="Loading goods receipts…" />
+          <SkeletonRows
+            rows={6}
+            cols={7}
+            label={t('warehouseReceiveReceiveIndex.loadingGoodsReceipts')}
+          />
         </section>
       ) : list.isError ? (
         <ErrorState
-          message={list.error?.message ?? 'Failed to load.'}
+          message={list.error?.message ?? t('warehouseReceiveReceiveIndex.failedToLoad')}
           retry={() => void list.refetch()}
         />
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
-          title="No goods receipts match"
-          description="Clients declare stock as a consignment from Inbound in their portal before shipping. Once it arrives, its goods receipt appears here for the warehouse team to count."
+          title={t('warehouseReceiveReceiveIndex.noGoodsReceiptsMatch')}
+          description={t('warehouseReceiveReceiveIndex.clientsDeclareStockAsA')}
         />
       ) : (
         <div className="wh-stack">
-          <Table caption="Goods receipts">
+          <Table caption={t('warehouseReceiveReceiveIndex.goodsReceipts')}>
             <THead>
               <Tr>
-                <Th>Receipt</Th>
-                <Th>Consignment</Th>
-                <Th>Client</Th>
-                <Th>Status</Th>
-                <Th align="right">Products</Th>
-                <Th>Declared</Th>
-                <Th>Last update</Th>
+                <Th>{t('warehouseReceiveReceiveIndex.receipt')}</Th>
+                <Th>{t('warehouseReceiveReceiveIndex.consignment')}</Th>
+                <Th>{t('warehouseReceiveReceiveIndex.client')}</Th>
+                <Th>{t('warehouseReceiveReceiveIndex.status')}</Th>
+                <Th align="right">{t('warehouseReceiveReceiveIndex.products')}</Th>
+                <Th>{t('warehouseReceiveReceiveIndex.declared')}</Th>
+                <Th>{t('warehouseReceiveReceiveIndex.lastUpdate')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -185,7 +191,7 @@ export function ReceiveIndex(): ReactElement {
             pageSize={PAGE_SIZE}
             total={list.data.total}
             onPageChange={setPage}
-            label="Goods receipts pages"
+            label={t('warehouseReceiveReceiveIndex.goodsReceiptsPages')}
           />
         </div>
       )}

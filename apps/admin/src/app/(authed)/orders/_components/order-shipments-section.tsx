@@ -14,6 +14,7 @@ import { ManualScanPanel } from './manual-scan-panel';
 import { ManualPlacementPanel } from './manual-placement-panel';
 import { OoCard } from './order-ops-parts';
 import './order-shipping.css';
+import { useT, useLocale } from '@/i18n/client';
 
 const TRACK_URL = process.env.NEXT_PUBLIC_TRACK_URL ?? 'https://track.skydrop.global';
 
@@ -21,9 +22,10 @@ const KNOWN_SHIPMENT_STATUSES: readonly string[] = Object.values(ShipmentStatus)
 
 /** The status chip; a value the vocabulary does not know is shown as sent. */
 function ShipmentChip({ status }: { readonly status: string }): ReactElement {
+  const locale = useLocale();
   if (KNOWN_SHIPMENT_STATUSES.includes(status)) {
     const s = status as ShipmentStatus;
-    return <StatusChip size="sm" kind={shipmentStatusKind(s)} label={statusLabel(s)} />;
+    return <StatusChip size="sm" kind={shipmentStatusKind(s)} label={statusLabel(s, locale)} />;
   }
   return <StatusChip size="sm" kind="neutral" label={status} />;
 }
@@ -44,13 +46,17 @@ export function OrderShipmentsSection({
    *  status can disagree for a moment after a dispatch. */
   readonly orderStatus: string;
 }): ReactElement {
+  const t = useT();
   const shipments = useAdminOrderShipments(orderId);
 
-  if (shipments.isLoading) return <SkeletonRows rows={2} cols={3} label="Loading shipments…" />;
+  if (shipments.isLoading)
+    return (
+      <SkeletonRows rows={2} cols={3} label={t('ordersOrderShipmentsSection.loadingShipments')} />
+    );
   if (shipments.isError)
     return (
       <ErrorState
-        message={shipments.error?.message ?? 'Failed to load shipments.'}
+        message={shipments.error?.message ?? t('ordersOrderShipmentsSection.failedToLoadShipments')}
         retry={() => void shipments.refetch()}
       />
     );
@@ -58,8 +64,8 @@ export function OrderShipmentsSection({
     return (
       <EmptyState
         icon={<PackageOpen size={20} />}
-        title="No shipments yet"
-        description="No shipments yet. A shipment is provisioned when the order is confirmed."
+        title={t('ordersOrderShipmentsSection.noShipmentsYet')}
+        description={t('ordersOrderShipmentsSection.noShipmentsYetAShipment')}
       />
     );
 
@@ -91,12 +97,16 @@ export function OrderShipmentsSection({
                       before we recorded it, so it is shown only when
                       we have it rather than rendered as an em dash
                       beside every Delhivery row. */}
-                  {s.carrierName === null ? null : ` · via ${s.carrierName}`}
-                  {s.isManualCourier ? ' (placed by hand)' : ''} ·{' '}
+                  {s.carrierName === null
+                    ? null
+                    : t('ordersOrderShipmentsSection.via', { carrierName: s.carrierName })}
+                  {s.isManualCourier ? t('ordersOrderShipmentsSection.placedByHand') : ''} ·{' '}
                   <span className="sk-figure">
                     {new Date(s.createdAt).toISOString().slice(0, 16).replace('T', ' ')}
                   </span>
-                  {s.supersedesShipmentId && <span> · supersede</span>}
+                  {s.supersedesShipmentId && (
+                    <span> {t('ordersOrderShipmentsSection.supersede')}</span>
+                  )}
                 </div>
                 {s.awbNumber && (
                   <div className="os-item__awb">
@@ -111,7 +121,8 @@ export function OrderShipmentsSection({
                   rel="noopener noreferrer"
                   className="os-track"
                 >
-                  Public tracking <ExternalLink size={13} aria-hidden />
+                  {t('ordersOrderShipmentsSection.publicTracking')}{' '}
+                  <ExternalLink size={13} aria-hidden />
                 </a>
               )}
             </div>

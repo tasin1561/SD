@@ -5,6 +5,9 @@ import { CustomerRiskStrip } from '../../call-center/_components/customer-risk-s
 import { ArrowLeft, Route, ShieldAlert } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 import type { OrderStatus } from '@skydrop/db';
+import { useLocale, useT } from '@/i18n/client';
+import type { MessageKey } from '@/i18n/catalog';
+import type { Translate } from '@skydrop/ui/app/i18n';
 import { useOrderDetail } from '@/lib/api-hooks';
 import {
   JourneyTimeline,
@@ -44,32 +47,34 @@ import './order-core.css';
  *     the merged Skydrop + courier journey)
  */
 export function OrderDetailView({ orderId }: { orderId: string }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const detail = useOrderDetail(orderId);
 
   return (
     <div className="oo-page">
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
-        Orders
+        {t('orderDetail.back')}
       </BackLink>
 
       {detail.isLoading ? (
         <div className="oo-stack" aria-busy="true">
           <Skeleton height={36} width="40%" />
-          <SkeletonRows rows={6} cols={2} label="Loading order…" />
+          <SkeletonRows rows={6} cols={2} label={t('orderDetail.loading')} />
         </div>
       ) : detail.isError ? (
         <ErrorState
-          message={detail.error?.message ?? 'Failed to load order.'}
+          message={detail.error?.message ?? t('orderDetail.loadFailed')}
           retry={() => void detail.refetch()}
         />
       ) : !detail.data ? (
-        <ErrorState message="Order not found." />
+        <ErrorState message={t('orderDetail.notFound')} />
       ) : (
         <>
           <PageHeader
             breadcrumbs={[
-              { label: 'Operations' },
-              { label: 'Orders', href: '/orders' },
+              { label: t('orderDetail.crumb.operations') },
+              { label: t('orderDetail.crumb.orders'), href: '/orders' },
               { label: detail.data.orderNumber },
             ]}
             Link={Link}
@@ -77,30 +82,28 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             subtitle={
               detail.data.sellerOrderRef ? (
                 <span>
-                  Client ref: <span className="sk-ident">{detail.data.sellerOrderRef}</span>
+                  {t('orderDetail.clientRef')}{' '}
+                  <span className="sk-ident">{detail.data.sellerOrderRef}</span>
                 </span>
               ) : undefined
             }
             action={
               <div className="oc-head-chips">
                 {detail.data.hasAdminOverride && (
-                  <span
-                    className="oc-override"
-                    title="This order was modified via god-mode (ORD-2). The flag is set-once and never cleared — it permanently records that admin override was used."
-                  >
+                  <span className="oc-override" title={t('orderDetail.override.title')}>
                     <ShieldAlert size={12} aria-hidden />
-                    Override
+                    {t('orderDetail.override.chip')}
                   </span>
                 )}
                 <StatusChip
                   kind={orderStatusKind(detail.data.status)}
-                  label={statusLabel(detail.data.status)}
+                  label={statusLabel(detail.data.status, locale)}
                 />
               </div>
             }
           />
 
-          <OoSection title="Recipient">
+          <OoSection title={t('orderDetail.recipient')}>
             {/* The same strip the call agent sees. On this page it is
                 the answer to "why did this one come back?" — a customer
                 who returns a third of what they order was never a
@@ -108,9 +111,9 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             <CustomerRiskStrip orderId={detail.data.id} />
             <Facts
               items={[
-                { label: 'Name', value: detail.data.recipientName },
+                { label: t('orderDetail.name'), value: detail.data.recipientName },
                 {
-                  label: 'Phone',
+                  label: t('orderDetail.phone'),
                   value: (
                     <span className="sk-figure">
                       {detail.data.recipientPhoneE164}
@@ -121,10 +124,10 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                   ),
                 },
                 ...(detail.data.recipientEmail
-                  ? [{ label: 'Email', value: detail.data.recipientEmail }]
+                  ? [{ label: t('orderDetail.email'), value: detail.data.recipientEmail }]
                   : []),
                 {
-                  label: 'Address',
+                  label: t('orderDetail.address'),
                   value: (
                     <>
                       <span className="oo-sub oo-body">{detail.data.recipientAddressLine1}</span>
@@ -132,7 +135,9 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                         <span className="oo-sub oo-body">{detail.data.recipientAddressLine2}</span>
                       )}
                       {detail.data.recipientLandmark && (
-                        <span className="oo-sub">Landmark: {detail.data.recipientLandmark}</span>
+                        <span className="oo-sub">
+                          {t('orderDetail.landmark')} {detail.data.recipientLandmark}
+                        </span>
                       )}
                       <span className="oo-sub oo-body">
                         {[detail.data.recipientCity, detail.data.recipientStateProvince]
@@ -155,42 +160,42 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           <ResellerMoneyPanel orderId={orderId} enabled={detail.data.storeKind === 'RESELLER'} />
 
           <div className="oo-grid-2">
-            <OoSection title="Payment">
+            <OoSection title={t('orderDetail.payment')}>
               <Facts
                 items={[
-                  { label: 'Mode', value: detail.data.paymentMode },
+                  { label: t('orderDetail.mode'), value: detail.data.paymentMode },
                   {
-                    label: 'COD (INR)',
+                    label: t('orderDetail.cod'),
                     value: <span className="sk-figure">{detail.data.codAmountInr ?? '—'}</span>,
                   },
                   {
-                    label: 'Declared (INR)',
+                    label: t('orderDetail.declared'),
                     value: <span className="sk-figure">{detail.data.declaredValueInr ?? '—'}</span>,
                   },
                 ]}
               />
             </OoSection>
-            <OoSection title="Physical">
+            <OoSection title={t('orderDetail.physical')}>
               <Facts
                 items={[
                   {
-                    label: 'Weight (g)',
+                    label: t('orderDetail.weight'),
                     value: <span className="sk-figure">{detail.data.totalWeightGrams ?? '—'}</span>,
                   },
-                  { label: 'Package', value: detail.data.packageType },
+                  { label: t('orderDetail.package'), value: detail.data.packageType },
                   {
-                    label: 'Flags',
+                    label: t('orderDetail.flags'),
                     value:
                       detail.data.isUrgent || detail.data.isHighRisk ? (
                         <span className="oo-row">
                           {detail.data.isUrgent && (
                             <span className="oc-flag" data-tone="warn">
-                              Urgent
+                              {t('orderDetail.urgent')}
                             </span>
                           )}
                           {detail.data.isHighRisk && (
                             <span className="oc-flag" data-tone="bad">
-                              High risk
+                              {t('orderDetail.highRisk')}
                             </span>
                           )}
                         </span>
@@ -203,15 +208,15 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             </OoSection>
           </div>
 
-          <OoSection title={`Items (${detail.data.items.length})`} flush>
-            <Table caption="Items">
+          <OoSection title={t('orderDetail.items', { count: detail.data.items.length })} flush>
+            <Table caption={t('orderDetail.itemsCaption')}>
               <THead>
                 <Tr>
-                  <Th>SKU</Th>
-                  <Th>Product</Th>
-                  <Th align="right">Qty</Th>
-                  <Th align="right">Reserved</Th>
-                  <Th align="right">Weight (g)</Th>
+                  <Th>{t('orderDetail.col.sku')}</Th>
+                  <Th>{t('orderDetail.col.product')}</Th>
+                  <Th align="right">{t('orderDetail.col.qty')}</Th>
+                  <Th align="right">{t('orderDetail.col.reserved')}</Th>
+                  <Th align="right">{t('orderDetail.col.weight')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -242,26 +247,30 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           </OoSection>
 
           {(detail.data.sellerNotes || detail.data.internalNotes || detail.data.callNotes) && (
-            <OoSection title="Notes">
+            <OoSection title={t('orderDetail.notes')}>
               {detail.data.sellerNotes && (
-                <NoteBlock label="From client">{detail.data.sellerNotes}</NoteBlock>
+                <NoteBlock label={t('orderDetail.note.client')}>
+                  {detail.data.sellerNotes}
+                </NoteBlock>
               )}
               {detail.data.callNotes && (
-                <NoteBlock label="Call center">{detail.data.callNotes}</NoteBlock>
+                <NoteBlock label={t('orderDetail.note.call')}>{detail.data.callNotes}</NoteBlock>
               )}
               {detail.data.internalNotes && (
-                <NoteBlock label="Internal">{detail.data.internalNotes}</NoteBlock>
+                <NoteBlock label={t('orderDetail.note.internal')}>
+                  {detail.data.internalNotes}
+                </NoteBlock>
               )}
             </OoSection>
           )}
 
           <section className="oo-section">
-            <SectionHeading title="Charges" />
+            <SectionHeading title={t('orderDetail.charges')} />
             <OrderChargesSection orderId={orderId} orderNumber={detail.data.orderNumber} />
           </section>
 
           <section className="oo-section">
-            <SectionHeading title="Shipments" />
+            <SectionHeading title={t('orderDetail.shipments')} />
             <div className="oo-stack">
               {/* Renders nothing unless the order is actually stuck. */}
               <StuckOrderRecovery
@@ -289,13 +298,15 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           />
 
           <section className="oo-section">
-            <SectionHeading title="Actions" />
+            <SectionHeading title={t('orderDetail.actions')} />
             <OrderActionsPanel order={detail.data} />
           </section>
 
           <div className="oc-footnote sk-figure">
-            Placed {new Date(detail.data.placedAt).toISOString().replace('T', ' ').slice(0, 16)} ·{' '}
-            Updated {new Date(detail.data.updatedAt).toISOString().replace('T', ' ').slice(0, 16)}
+            {t('orderDetail.placed')}{' '}
+            {new Date(detail.data.placedAt).toISOString().replace('T', ' ').slice(0, 16)} ·{' '}
+            {t('orderDetail.updated')}{' '}
+            {new Date(detail.data.updatedAt).toISOString().replace('T', ' ').slice(0, 16)}
           </div>
         </>
       )}
@@ -348,13 +359,16 @@ const STEP_STATE: Record<JourneyMilestoneView['state'], TimelineStepState> = {
 };
 
 /** Milestones → u17 timeline steps. Same labels, same owner word, same times. */
-function milestoneSteps(milestones: readonly JourneyMilestoneView[]): TimelineStep[] {
+function milestoneSteps(
+  milestones: readonly JourneyMilestoneView[],
+  t: Translate<MessageKey>,
+): TimelineStep[] {
   return milestones.map((m) => {
     const owner = journeyOwnerLabel(m.owner);
     const description: ReactNode = (
       <>
         <span>{owner}</span>
-        {m.state === 'SKIPPED' && <span> · not needed</span>}
+        {m.state === 'SKIPPED' && <span>{t('orderDetail.notNeeded')}</span>}
         {m.detail !== null && <span className="oo-sub">{m.detail}</span>}
       </>
     );
@@ -363,7 +377,9 @@ function milestoneSteps(milestones: readonly JourneyMilestoneView[]): TimelineSt
       label: m.label,
       state: STEP_STATE[m.state],
       description,
-      ...(m.at === null ? {} : { time: m.estimated ? `Estimated ${fmtDate(m.at)}` : fmt(m.at) }),
+      ...(m.at === null
+        ? {}
+        : { time: m.estimated ? t('orderDetail.estimated', { date: fmtDate(m.at) }) : fmt(m.at) }),
     };
   });
 }
@@ -381,32 +397,38 @@ function OrderJourney({
   readonly parcels: readonly JourneyParcelView[];
   readonly entries: readonly JourneyEntryView[];
 }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   // The latest parcel, as the shared panels chose it.
   const parcel = parcels[parcels.length - 1] ?? null;
   return (
     <div className="oo-stack">
       <div className={parcel === null ? 'oo-stack' : 'oo-split'}>
-        <OoSection title="Order tracker">
+        <OoSection title={t('orderDetail.tracker')}>
           <Timeline
-            label="Order tracker"
-            steps={milestoneSteps(milestones)}
+            label={t('orderDetail.tracker')}
+            steps={milestoneSteps(milestones, t)}
             header={{
               icon: <Route size={16} />,
-              title: 'Order',
+              title: t('orderDetail.trackerOrder'),
               id: orderNumber,
               status: (
-                <StatusChip kind={orderStatusKind(status)} label={statusLabel(status)} size="sm" />
+                <StatusChip
+                  kind={orderStatusKind(status)}
+                  label={statusLabel(status, locale)}
+                  size="sm"
+                />
               ),
             }}
           />
         </OoSection>
         {parcel !== null && (
-          <OoSection title="Parcel">
+          <OoSection title={t('orderDetail.parcel')}>
             <ParcelFacts parcel={parcel} />
           </OoSection>
         )}
       </div>
-      <OoSection title="Full history">
+      <OoSection title={t('orderDetail.fullHistory')}>
         <JourneyTimeline entries={entries} showCourierCodes />
       </OoSection>
     </div>
@@ -430,11 +452,13 @@ function OrderJourneySection({
   readonly orderNumber: string;
   readonly status: OrderStatus;
 }): ReactElement {
+  const t = useT();
   const journey = useOrderJourney(orderId);
-  if (journey.isPending) return <SkeletonRows rows={4} cols={1} label="Loading the journey…" />;
+  if (journey.isPending)
+    return <SkeletonRows rows={4} cols={1} label={t('orderDetail.journeyLoading')} />;
   if (journey.isError || journey.data === undefined) {
     return (
-      <OoSection title="Order tracker">
+      <OoSection title={t('orderDetail.tracker')}>
         <ErrorState message={serverVerdict(journey.error)} retry={() => void journey.refetch()} />
       </OoSection>
     );

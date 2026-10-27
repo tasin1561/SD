@@ -14,10 +14,12 @@ import { useConsignmentsList, useSellersList } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { Stack, Toolbar } from '../../../inventory/_components/stock-kit';
 import { ROUTE_LABEL, STATUS_LABEL } from './labels';
+import { useT } from '@/i18n/client';
 
 const PAGE_SIZE = 20;
 
 export function ConsignmentsIndex(): ReactElement {
+  const t = useT();
   const router = useRouter();
   const [status, setStatus] = useState<ConsignmentStatus | ''>('');
   const [route, setRoute] = useState<ConsignmentRoute | ''>('');
@@ -43,14 +45,14 @@ export function ConsignmentsIndex(): ReactElement {
     <Stack>
       <Toolbar>
         <Select
-          aria-label="Status"
+          aria-label={t('warehouseConsignmentsConsignmentsIndex.status')}
           value={status}
           onChange={(e) => {
             setStatus(e.target.value as ConsignmentStatus | '');
             setPage(1);
           }}
         >
-          <option value="">All statuses</option>
+          <option value="">{t('warehouseConsignmentsConsignmentsIndex.allStatuses')}</option>
           {(Object.keys(STATUS_LABEL) as ConsignmentStatus[]).map((s) => (
             <option key={s} value={s}>
               {STATUS_LABEL[s]}
@@ -58,14 +60,14 @@ export function ConsignmentsIndex(): ReactElement {
           ))}
         </Select>
         <Select
-          aria-label="Route"
+          aria-label={t('warehouseConsignmentsConsignmentsIndex.route')}
           value={route}
           onChange={(e) => {
             setRoute(e.target.value as ConsignmentRoute | '');
             setPage(1);
           }}
         >
-          <option value="">Any route</option>
+          <option value="">{t('warehouseConsignmentsConsignmentsIndex.anyRoute')}</option>
           {(Object.keys(ROUTE_LABEL) as ConsignmentRoute[]).map((r) => (
             <option key={r} value={r}>
               {ROUTE_LABEL[r]}
@@ -74,14 +76,14 @@ export function ConsignmentsIndex(): ReactElement {
         </Select>
         {maySeeSellers && (
           <Select
-            aria-label="Client"
+            aria-label={t('warehouseConsignmentsConsignmentsIndex.client')}
             value={sellerId}
             onChange={(e) => {
               setSellerId(e.target.value);
               setPage(1);
             }}
           >
-            <option value="">All clients</option>
+            <option value="">{t('warehouseConsignmentsConsignmentsIndex.allClients')}</option>
             {(sellers.data?.items ?? []).map((s) => (
               <option key={s.id} value={s.id}>
                 {s.companyName}
@@ -94,23 +96,26 @@ export function ConsignmentsIndex(): ReactElement {
       {list.isLoading ? (
         <SkeletonRows rows={6} cols={6} />
       ) : list.isError ? (
-        <ErrorState message="Could not load consignments." retry={() => void list.refetch()} />
+        <ErrorState
+          message={t('warehouseConsignmentsConsignmentsIndex.couldNotLoadConsignments')}
+          retry={() => void list.refetch()}
+        />
       ) : (list.data?.items.length ?? 0) === 0 ? (
         <EmptyState
-          title="No consignments"
-          description="Clients announce these from their own dashboard before the stock travels."
+          title={t('warehouseConsignmentsConsignmentsIndex.noConsignments')}
+          description={t('warehouseConsignmentsConsignmentsIndex.clientsAnnounceTheseFromTheir')}
         />
       ) : (
         <>
           <Table>
             <THead>
               <Tr>
-                <Th>Consignment</Th>
-                <Th>Client</Th>
-                <Th>Route</Th>
-                <Th>Status</Th>
-                <Th align="right">Legs</Th>
-                <Th>Announced</Th>
+                <Th>{t('warehouseConsignmentsConsignmentsIndex.consignment')}</Th>
+                <Th>{t('warehouseConsignmentsConsignmentsIndex.client')}</Th>
+                <Th>{t('warehouseConsignmentsConsignmentsIndex.route')}</Th>
+                <Th>{t('warehouseConsignmentsConsignmentsIndex.status')}</Th>
+                <Th align="right">{t('warehouseConsignmentsConsignmentsIndex.legs')}</Th>
+                <Th>{t('warehouseConsignmentsConsignmentsIndex.announced')}</Th>
               </Tr>
             </THead>
             <TBody>

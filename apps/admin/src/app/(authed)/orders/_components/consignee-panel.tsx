@@ -13,6 +13,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { Notice, OoSection } from './order-ops-parts';
 import './order-shipping.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Correcting who the parcel is going to, while the courier still allows
@@ -29,6 +30,7 @@ import './order-shipping.css';
  * question; showing them as fixed answers it.
  */
 export function ConsigneePanel({ orderId }: { readonly orderId: string }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const info = useConsignee(orderId);
   const history = useConsigneeHistory(orderId);
@@ -81,9 +83,9 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
       // Sent is not landed. Saying "changed" here would be a claim we
       // have not checked — the portal confirms it within the hour.
       if (r.accepted) {
-        toast.success('Sent to the courier. We confirm it on their system shortly.');
+        toast.success(t('ordersConsigneePanel.sentToTheCourierWe'));
       } else {
-        toast.error(r.message ?? 'The courier would not take the change.');
+        toast.error(r.message ?? t('ordersConsigneePanel.theCourierWouldNotTake'));
         throw new Error('not accepted');
       }
     } catch (err) {
@@ -112,27 +114,45 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
         </span>
       ),
       label: [
-        r.nameBefore !== null ? `name: ${r.nameBefore} → ${r.nameAfter}` : null,
-        r.phoneBefore !== null ? `phone: ${r.phoneBefore} → ${r.phoneAfter}` : null,
-        r.addressBefore !== null ? `address: ${r.addressBefore} → ${r.addressAfter}` : null,
+        r.nameBefore !== null
+          ? t('ordersConsigneePanel.name', {
+              nameBefore: r.nameBefore,
+              nameAfter: String(r.nameAfter),
+            })
+          : null,
+        r.phoneBefore !== null
+          ? t('ordersConsigneePanel.phone', {
+              phoneBefore: r.phoneBefore,
+              phoneAfter: String(r.phoneAfter),
+            })
+          : null,
+        r.addressBefore !== null
+          ? t('ordersConsigneePanel.address', {
+              addressBefore: r.addressBefore,
+              addressAfter: String(r.addressAfter),
+            })
+          : null,
       ]
         .filter((x) => x !== null)
         .join(' · '),
       description:
         r.courierAcceptedAt === null ? (
-          <span className="oo-bad">the courier did not take it</span>
+          <span className="oo-bad">{t('ordersConsigneePanel.theCourierDidNotTake')}</span>
         ) : r.verifiedAt === null ? (
-          <span className="oo-muted">sent — confirming</span>
+          <span className="oo-muted">{t('ordersConsigneePanel.sentConfirming')}</span>
         ) : r.verifiedMatch === true ? (
-          <span className="oo-good">confirmed on their system</span>
+          <span className="oo-good">{t('ordersConsigneePanel.confirmedOnTheirSystem')}</span>
         ) : (
-          <span className="oo-bad">their system still shows the old value — we are on it</span>
+          <span className="oo-bad">{t('ordersConsigneePanel.theirSystemStillShowsThe')}</span>
         ),
     };
   });
 
   return (
-    <OoSection title="Customer details" note={d.editable ? d.reason : undefined}>
+    <OoSection
+      title={t('ordersConsigneePanel.customerDetails')}
+      note={d.editable ? d.reason : undefined}
+    >
       {/*
         The same warning the seller gets, without their raise-an-issue
         button: an operator's route to the courier is the escalation
@@ -142,19 +162,17 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
         <Notice
           tone="warn"
           icon={<TriangleAlert size={16} />}
-          title="These can no longer be changed through the courier"
+          title={t('ordersConsigneePanel.theseCanNoLongerBe')}
         >
           <p>{d.reason}</p>
-          <p className="oo-faint">
-            To chase it anyway, open a courier conversation on a ticket for this order.
-          </p>
+          <p className="oo-faint">{t('ordersConsigneePanel.toChaseItAnywayOpen')}</p>
         </Notice>
       )}
 
       <div className="os-fields" data-cols="2">
         <TextField
           id="admin-cons-name"
-          label="Name"
+          label={t('ordersConsigneePanel.name2')}
           icon={<UserRound size={15} />}
           value={name ?? d.currentName}
           disabled={!d.editable || !canWrite}
@@ -162,7 +180,7 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
         />
         <TextField
           id="admin-cons-phone"
-          label="Phone"
+          label={t('ordersConsigneePanel.phone2')}
           value={phone ?? d.currentPhone}
           disabled={!d.editable || !canWrite}
           onChange={(e) => setPhone(e.target.value)}
@@ -171,8 +189,8 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
 
       <TextField
         id="admin-cons-address"
-        label="Address"
-        hint="The street address only — see below for why the rest cannot move."
+        label={t('ordersConsigneePanel.address2')}
+        hint={t('ordersConsigneePanel.theStreetAddressOnlySee')}
         value={address ?? d.currentAddressLine1}
         disabled={!d.editable || !canWrite}
         onChange={(e) => setAddress(e.target.value)}
@@ -190,10 +208,10 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
             variant="primary"
             size="sm"
             labels={{
-              idle: 'Send to the courier',
-              busy: 'Sending…',
-              done: 'Sent',
-              error: 'Not taken, try again',
+              idle: t('ordersConsigneePanel.sendToTheCourier'),
+              busy: t('ordersConsigneePanel.sending'),
+              done: t('ordersConsigneePanel.sent'),
+              error: t('ordersConsigneePanel.notTakenTryAgain'),
             }}
             disabled={!dirty || change.isPending}
             onAction={submit}
@@ -203,8 +221,8 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
 
       {rows.length > 0 ? (
         <div className="os-panel__block">
-          <p className="oo-card__title">Changes made</p>
-          <Timeline steps={steps} label="Changes made" />
+          <p className="oo-card__title">{t('ordersConsigneePanel.changesMade')}</p>
+          <Timeline steps={steps} label={t('ordersConsigneePanel.changesMade')} />
         </div>
       ) : null}
     </OoSection>

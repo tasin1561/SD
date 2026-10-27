@@ -9,6 +9,7 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Package } from 'lucide-react';
 import '../../_components/benches.css';
 import { usePackQueue, type WaitingPack } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
 
 /**
  * What is waiting on the bench.
@@ -29,17 +30,27 @@ import { usePackQueue, type WaitingPack } from '@/lib/api-hooks';
  * exist.
  */
 export function PackQueueList(): ReactElement {
+  const t = useT();
   const q = usePackQueue();
 
   if (q.isLoading) {
     return (
       <section className="wh-card">
-        <SkeletonRows rows={4} cols={3} label="Loading the pack queue" />
+        <SkeletonRows
+          rows={4}
+          cols={3}
+          label={t('warehousePackPackQueueList.loadingThePackQueue')}
+        />
       </section>
     );
   }
   if (q.isError) {
-    return <ErrorState message="Could not load the pack queue." retry={() => void q.refetch()} />;
+    return (
+      <ErrorState
+        message={t('warehousePackPackQueueList.couldNotLoadThePack')}
+        retry={() => void q.refetch()}
+      />
+    );
   }
 
   const waiting = q.data ?? [];
@@ -47,8 +58,8 @@ export function PackQueueList(): ReactElement {
     return (
       <EmptyState
         tone="positive"
-        title="Nothing waiting to be packed"
-        description="Parcels appear here once they have been picked. Scan a shipping label to open a box."
+        title={t('warehousePackPackQueueList.nothingWaitingToBePacked')}
+        description={t('warehousePackPackQueueList.parcelsAppearHereOnceThey')}
       />
     );
   }
@@ -61,12 +72,15 @@ export function PackQueueList(): ReactElement {
         <h2 className="wh-card__title">
           <span className="sk-figure">{waiting.length}</span> waiting to be packed
         </h2>
-        <div className="wh-card__sub">Oldest first. Scan a label below to start on it.</div>
+        <div className="wh-card__sub">{t('warehousePackPackQueueList.oldestFirstScanALabel')}</div>
       </div>
       {unlabelled > 0 && (
         <p className="wh-card__note">
-          {unlabelled} {unlabelled === 1 ? 'parcel has' : 'parcels have'} no printed label yet — a
-          box is opened by scanning one, so print from{' '}
+          {unlabelled}{' '}
+          {unlabelled === 1
+            ? t('warehousePackPackQueueList.parcelHas')
+            : t('warehousePackPackQueueList.parcelsHave')}{' '}
+          no printed label yet — a box is opened by scanning one, so print from{' '}
           <Link href="/warehouse/printing" className="wh-link">
             printing
           </Link>{' '}
@@ -83,6 +97,7 @@ export function PackQueueList(): ReactElement {
 }
 
 function WaitingRow({ pack }: { pack: WaitingPack }): ReactElement {
+  const t = useT();
   const labelled = pack.labelPrintedAtIso !== null;
   return (
     <li>
@@ -102,12 +117,21 @@ function WaitingRow({ pack }: { pack: WaitingPack }): ReactElement {
         }
         status={
           labelled ? (
-            <StatusChip kind="confirmed" label="Label printed" size="sm" />
+            <StatusChip
+              kind="confirmed"
+              label={t('warehousePackPackQueueList.labelPrinted')}
+              size="sm"
+            />
           ) : (
-            <StatusChip kind="pending" label="No label" size="sm" />
+            <StatusChip kind="pending" label={t('warehousePackPackQueueList.noLabel')} size="sm" />
           )
         }
-        {...(labelled ? {} : { severity: 'medium' as const, severityLabel: 'Needs a label' })}
+        {...(labelled
+          ? {}
+          : {
+              severity: 'medium' as const,
+              severityLabel: t('warehousePackPackQueueList.needsALabel'),
+            })}
       />
     </li>
   );

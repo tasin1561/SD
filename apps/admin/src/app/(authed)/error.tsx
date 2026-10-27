@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, type ReactElement } from 'react';
+import { useT } from '@/i18n/client';
 
 /**
  * Authed route-group error boundary. The (authed) layout throws on
@@ -45,6 +46,7 @@ export default function AuthedError({
   error: Error & { digest?: string };
   reset: () => void;
 }): ReactElement {
+  const t = useT();
   // The API being unreachable is ONE reason to land here. Any thrown
   // error in this segment lands here too, and this page used to assert
   // the network cause without looking — which sent a real component
@@ -90,17 +92,17 @@ export default function AuthedError({
       <div className="w-full max-w-sm text-center">
         <div className="text-text-bright mb-1 text-lg font-semibold tracking-tight">
           {isStaleBuild
-            ? 'Updating…'
+            ? t('error.updating')
             : looksLikeOutage
-              ? 'Service unavailable'
-              : 'This page did not load'}
+              ? t('error.unavailable')
+              : t('error.didNotLoad')}
         </div>
         <p className="text-text-muted text-sm mb-4">
           {isStaleBuild
-            ? 'This tab was open while a new version shipped, so it asked for a file that no longer exists. Reloading to pick up the current one.'
+            ? t('error.staleBody')
             : looksLikeOutage
-              ? 'We couldn’t reach the API. Your session is intact — this is a temporary outage.'
-              : 'Your session is intact — something on this page failed to load.'}
+              ? t('error.outageBody')
+              : t('error.failedBody')}
         </p>
         {/* The actual fault, so it can be reported instead of guessed
             at. `digest` is what appears in the server log; the message
@@ -110,7 +112,9 @@ export default function AuthedError({
         !isStaleBuild &&
         (error.message !== '' || error.digest !== undefined) ? (
           <p className="text-text-faint mb-5 font-mono text-xs break-all">
-            {error.message !== '' ? error.message : `digest ${error.digest ?? 'unknown'}`}
+            {error.message !== ''
+              ? error.message
+              : t('error.digest', { digest: error.digest ?? t('error.unknown') })}
           </p>
         ) : null}
         <button
@@ -118,7 +122,7 @@ export default function AuthedError({
           onClick={isStaleBuild ? () => window.location.reload() : reset}
           className="px-3 py-1.5 rounded-[5px] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover transition-colors"
         >
-          {isStaleBuild ? 'Reload now' : 'Try again'}
+          {isStaleBuild ? t('error.reload') : t('common.tryAgain')}
         </button>
       </div>
     </div>

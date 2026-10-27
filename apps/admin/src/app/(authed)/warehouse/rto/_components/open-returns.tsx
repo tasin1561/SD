@@ -7,6 +7,7 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { Table, TBody, TableEmpty, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
 import '../../_components/benches.css';
 import { useOpenRtoShipments } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
 
 /**
  * What is sitting on the returns bench.
@@ -27,36 +28,34 @@ export function OpenReturns({
 }: {
   readonly onPick: (shipmentId: string) => void;
 }): ReactElement {
+  const t = useT();
   const open = useOpenRtoShipments();
 
   return (
     <>
       {open.isLoading ? (
         <section className="wh-card">
-          <SkeletonRows rows={3} cols={5} label="Reading the bench…" />
+          <SkeletonRows rows={3} cols={5} label={t('warehouseRtoOpenReturns.readingTheBench')} />
         </section>
       ) : open.isError || open.data === undefined ? (
         <section className="wh-card">
-          <p className="wh-note">
-            Could not read open returns. The station below still works if you have an AWB.
-          </p>
+          <p className="wh-note">{t('warehouseRtoOpenReturns.couldNotReadOpenReturns')}</p>
         </section>
       ) : (
-        <Table caption="Returns on the bench">
+        <Table caption={t('warehouseRtoOpenReturns.returnsOnTheBench')}>
           <THead>
             <Tr>
-              <Th>Parcel</Th>
-              <Th>Client</Th>
-              <Th>Received</Th>
-              <Th>Items</Th>
-              <Th align="right">Open</Th>
+              <Th>{t('warehouseRtoOpenReturns.parcel')}</Th>
+              <Th>{t('warehouseRtoOpenReturns.client')}</Th>
+              <Th>{t('warehouseRtoOpenReturns.received')}</Th>
+              <Th>{t('warehouseRtoOpenReturns.items')}</Th>
+              <Th align="right">{t('warehouseRtoOpenReturns.open')}</Th>
             </Tr>
           </THead>
           <TBody>
             {open.data.items.length === 0 ? (
               <TableEmpty colSpan={5}>
-                Nothing waiting. A return appears here once it has been received and until it is
-                finalised.
+                {t('warehouseRtoOpenReturns.nothingWaitingAReturnAppears')}
               </TableEmpty>
             ) : (
               open.data.items.map((r) => (
@@ -74,19 +73,26 @@ export function OpenReturns({
                   <Td>
                     <span className="sk-figure">{r.itemCount}</span>
                     {r.uninspectedCount > 0 && (
-                      <span className="wh-note"> · {r.uninspectedCount} uninspected</span>
+                      <span className="wh-note">
+                        {' '}
+                        {t('warehouseRtoOpenReturns.uninspected', {
+                          uninspectedCount: r.uninspectedCount,
+                        })}
+                      </span>
                     )}
                     {r.undecidedCount > 0 && (
                       <span className="wh-warn">
                         {' · '}
                         <AlertTriangle size={12} aria-hidden />
-                        {r.undecidedCount} undecided
+                        {t('warehouseRtoOpenReturns.undecided', {
+                          undecidedCount: r.undecidedCount,
+                        })}
                       </span>
                     )}
                   </Td>
                   <Td align="right">
                     <Button variant="secondary" size="sm" onClick={() => onPick(r.shipmentId)}>
-                      Work it
+                      {t('warehouseRtoOpenReturns.workIt')}
                     </Button>
                   </Td>
                 </Tr>
