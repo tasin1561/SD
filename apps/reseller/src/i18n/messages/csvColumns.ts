@@ -21,6 +21,6 @@ export const csvColumns = defineMessages({
   'csvcols.uat': ['(enabled in settings)', '(সেটিংসে চালু)'],
   'csvcols.landmarkNote': [
     'The landmark, e.g. "Near City Hospital". The courier address is line 1 + line 2, so this is required even though Delhivery’s own template leaves it blank — a blank here fails the row.',
-    'ল্যান্ডমার্ক, যেমন "Near City Hospital"। কুরিয়ারের ঠিকানা হলো লাইন ১ + লাইন ২, তাই এটি আবশ্যক — Delhivery-র নিজের টেমপ্লেটে এটি ফাঁকা থাকলেও। এখানে ফাঁকা থাকলে সারিটি ব্যর্থ হবে।',
+    'ল্যান্ডমার্ক, যেমন "Near City Hospital"। কুরিয়ারের ঠিকানা হলো লাইন 1 + লাইন 2, তাই এটি আবশ্যক — Delhivery-র নিজের টেমপ্লেটে এটি ফাঁকা থাকলেও। এখানে ফাঁকা থাকলে সারিটি ব্যর্থ হবে।',
   ],
 });
