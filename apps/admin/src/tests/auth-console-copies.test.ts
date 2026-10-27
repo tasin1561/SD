@@ -80,11 +80,23 @@ describe('apps/seller uses the ONE shared sign-in frame', () => {
     'src/app/password-reset/layout.tsx',
   ];
 
-  it.each(LAYOUTS)('%s renders SignInFrame from @skydrop/ui/app/sign-in', (relative) => {
+  // The layouts reach the shared frame through ONE thin per-app wrapper
+  // now (it injects the language and theme controls, which a package
+  // cannot know how to fetch). The invariant is unchanged — no layout
+  // hand-rolls its own chrome — so the spec follows the one hop rather
+  // than pinning where the import used to sit.
+  const WRAPPER = 'src/components/auth-frame.tsx';
+
+  it.each(LAYOUTS)('%s renders the one shared sign-in frame', (relative) => {
     const src = readFileSync(join(REPO, 'apps', 'seller', relative), 'utf8');
+    expect(src).toContain('SellerSignInFrame');
+    expect(src).not.toContain('auth-console');
+  });
+
+  it('and that wrapper is the shared SignInFrame, not a second copy of it', () => {
+    const src = readFileSync(join(REPO, 'apps', 'seller', WRAPPER), 'utf8');
     expect(src).toContain("from '@skydrop/ui/app/sign-in'");
     expect(src).toContain('<SignInFrame');
-    expect(src).not.toContain('auth-console');
   });
 
   it('carries no local copy of the old console', () => {
