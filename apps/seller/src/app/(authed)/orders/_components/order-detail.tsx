@@ -45,6 +45,7 @@ import { RequestReturnDialog } from './request-return-dialog';
 import { ReattemptRequestDialog } from './reattempt-request-dialog';
 import { OrderChargesSection } from './order-charges';
 import { OrderJourney } from './order-journey-parts';
+import { CsvExtrasSection } from './csv-extras';
 import { BackLink, Facts, LinkButton, MetaFact, Notice, OrdSection } from './orders-parts';
 import { verdict } from '@/i18n/verdict';
 import { packageWords } from '@/lib/package-type';
@@ -755,6 +756,8 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                   <p className="ord-body">{detail.data.sellerNotes}</p>
                 </OrdSection>
               )}
+
+              <CsvExtrasSection extras={detail.data.csvExtras} />
 
               {/* Hidden rather than shown-and-refused for a VIEWER: the
                   server rejects /charges for that role, and rendering its

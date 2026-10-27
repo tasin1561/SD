@@ -46,6 +46,8 @@ export interface StoreOrderCreateOptions {
   /** MANUAL (portal), BULK_UPLOAD (CSV) or API (a key). */
   readonly source: OrderSource;
   readonly bulkUploadId?: string;
+  /** Unused cells of the uploaded file, kept verbatim (ORD-6 snapshot). */
+  readonly csvExtras?: Prisma.InputJsonValue;
 }
 
 /**
@@ -410,6 +412,7 @@ export class ResellerOrderService {
       source: opts.source,
       initialStatus: OrderStatus.PENDING_CONFIRMATION,
       ...(opts.bulkUploadId === undefined ? {} : { bulkUploadId: opts.bulkUploadId }),
+      ...(opts.csvExtras === undefined ? {} : { csvExtras: opts.csvExtras }),
       reseller: {
         storeId,
         storeName: store.displayName ?? store.name,

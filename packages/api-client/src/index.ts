@@ -35,6 +35,7 @@ export type {
   OrderListResponse,
   OrderItemView,
   OrderView,
+  OrderCsvExtras,
   AdminCancelOrderRequest,
   TransitionStatusResult,
   ForceMutationFields,

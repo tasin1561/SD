@@ -3442,6 +3442,11 @@ model Order {
   /// running them side by side.
   createdVia              String?      @map("created_via")
   bulkUploadId            String?      @map("bulk_upload_id") @db.Uuid
+  /// The cells of the uploaded file we did NOT use, verbatim, per 1-based
+  /// file row (an order can span rows — ORD-9). Written once at import and
+  /// never edited (ORD-6); a record of the seller's file, read by nothing
+  /// that decides anything. Null for any order not placed by an upload.
+  csvExtras               Json?        @map("csv_extras")
   recipientName           String       @map("recipient_name")
   recipientPhoneE164      String       @map("recipient_phone_e164")
   recipientAltPhoneE164   String?      @map("recipient_alt_phone_e164")
