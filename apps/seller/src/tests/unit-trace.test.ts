@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readEnglish } from './english-source';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
  * dispatched, did it come back before, is it even ours.
  */
 
-const R = (p: string): string => readFileSync(join(__dirname, p), 'utf8');
+const R = (p: string): string => readEnglish(join(__dirname, p), 'utf8');
 
 /**
  * Source with runs of whitespace collapsed.

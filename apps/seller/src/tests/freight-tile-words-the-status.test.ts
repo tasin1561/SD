@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { CATALOGS } from '@/i18n/catalog';
+import { readEnglish } from './english-source';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { InboundFreightStatus } from '@skydrop/db';
@@ -51,10 +53,14 @@ function withoutComments(src: string): string {
 }
 
 describe('the consignment page’s inbound-freight tile', () => {
-  const src = withoutComments(readFileSync(DETAIL, 'utf8'));
+  const src = withoutComments(readEnglish(DETAIL, 'utf8'));
 
   it('words the bill’s status through statusLabel', () => {
-    expect(src).toMatch(/One bill · \$\{statusLabel\(/);
+    // The sentence is in the catalogue; the status word fed into it is the
+    // part this pins, and it must come from statusLabel.
+    expect(CATALOGS.en['inboundDetail.oneBill']).toBe('One bill · {pending}');
+    const raw = readFileSync(DETAIL, 'utf8');
+    expect(raw).toMatch(/t\(\s*'inboundDetail\.oneBill',\s*\{\s*pending:\s*statusLabel\(/);
   });
 
   it('never lower-cases a status enum into a sentence', () => {

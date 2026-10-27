@@ -44,7 +44,7 @@ export function VerifyEmailPanel({ token }: { readonly token: string }): ReactEl
         setState('failed');
       }
     })();
-  }, [token]);
+  }, [token, t]);
 
   if (state === 'working') {
     return <p className="text-text-muted text-xs">{t('authVerify.verifying')}</p>;

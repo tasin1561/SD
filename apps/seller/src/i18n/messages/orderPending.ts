@@ -86,6 +86,6 @@ export const orderPending = defineMessages({
   ],
   'orderPending.itIsRemovedFrom': [
     'It is removed from this list and no order is made from it.',
-    'It is removed from this list and no order is made from it.',
+    'এটি এই তালিকা থেকে সরে যায় এবং এর থেকে কোনো অর্ডার তৈরি হয় না।',
   ],
 });

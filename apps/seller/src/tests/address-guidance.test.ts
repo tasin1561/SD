@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readEnglish } from './english-source';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -82,7 +82,7 @@ describe('both order forms read the same copy', () => {
   ];
 
   it.each(forms)('%s imports the shared module rather than inlining strings', (rel) => {
-    const src = readFileSync(join(__dirname, '../', rel), 'utf8');
+    const src = readEnglish(join(__dirname, '../', rel), 'utf8');
     expect(src).toContain("from '@/lib/address-guidance'");
     expect(src).toContain('ADDRESS_LINE_1_HINT');
     expect(src).toContain('ADDRESS_LINE_2_HINT');
@@ -92,14 +92,14 @@ describe('both order forms read the same copy', () => {
   });
 
   it.each(forms)('%s no longer collects a separate landmark', (rel) => {
-    const src = readFileSync(join(__dirname, '../', rel), 'utf8');
+    const src = readEnglish(join(__dirname, '../', rel), 'utf8');
     expect(src).not.toContain('recipientLandmark');
     expect(src).not.toMatch(/label="Landmark"/);
   });
 
   it.each(forms)('%s no longer asks for city or state', (rel) => {
     // Delhivery routes on the PIN and resolves the locality itself.
-    const src = readFileSync(join(__dirname, '../', rel), 'utf8');
+    const src = readEnglish(join(__dirname, '../', rel), 'utf8');
     expect(src).not.toContain('recipientCity');
     expect(src).not.toContain('recipientStateProvince');
     expect(src).not.toContain('INDIAN_STATES');
@@ -108,14 +108,14 @@ describe('both order forms read the same copy', () => {
   it.each(forms)('%s requires the landmark before it will submit', (rel) => {
     // Marked required in the markup AND gated in code — a red asterisk
     // that nothing enforces is decoration.
-    const src = readFileSync(join(__dirname, '../', rel), 'utf8');
+    const src = readEnglish(join(__dirname, '../', rel), 'utf8');
     expect(src).toContain('the landmark) is required');
   });
 
   it('the edit form gates BOTH of its submit paths', () => {
     // "Save + submit" ran no validation at all, so it was a way around
     // the phone and address rules that "Save" enforces.
-    const src = readFileSync(join(__dirname, '../', forms[1]!), 'utf8');
+    const src = readEnglish(join(__dirname, '../', forms[1]!), 'utf8');
     const guards = src.match(/phoneProblem\(\) \?\? addressProblem\(\)/g) ?? [];
     expect(guards.length).toBe(2);
   });

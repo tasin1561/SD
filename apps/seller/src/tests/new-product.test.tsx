@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { CATALOGS } from '@/i18n/catalog';
+import { readEnglish } from './english-source';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { permissionForPath, canSeePath } from '@/lib/page-access';
@@ -25,7 +27,7 @@ const PRODUCT_DETAIL = join(
 );
 const DASHBOARD = join(__dirname, '../app/(authed)/dashboard/_components/dashboard-view.tsx');
 
-const read = (p: string): string => readFileSync(p, 'utf8');
+const read = (p: string): string => readEnglish(p, 'utf8');
 
 describe('the route is reachable and gated on what the server enforces', () => {
   it('/products/new needs catalog.manage, not merely catalog.view', () => {
@@ -85,7 +87,7 @@ describe('the two-call create is retry-safe', () => {
   it('surfaces the server verdict verbatim (FE-2)', () => {
     // Through the ONE formatter, so the code can never be dropped here
     // while every other screen keeps it.
-    expect(src).toContain('serverVerdict(');
+    expect(src).toContain('verdict(');
   });
 });
 
@@ -268,7 +270,8 @@ describe('an incomplete option says so instead of looking filled in', () => {
     // The whole misread. Naming it directly is cheaper than any amount
     // of restyling the placeholder.
     expect(src).toContain('an example, not something you have entered');
-    expect(src).toContain('placeholder="e.g. Colour"');
+    expect(CATALOGS.en['productNew.eGColour']).toBe('e.g. Colour');
+    expect(readFileSync(FORM, 'utf8')).toContain("placeholder={t('productNew.eGColour')}");
   });
 
   it('explains a count of one when options exist but none are usable', () => {

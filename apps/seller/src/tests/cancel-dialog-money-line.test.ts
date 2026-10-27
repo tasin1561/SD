@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readEnglish } from './english-source';
 import path from 'node:path';
 
 /**
@@ -25,7 +25,7 @@ import path from 'node:path';
  * somebody has to be supplying it, and only the call site knows.
  */
 const dir = path.join(__dirname, '..', 'app', '(authed)', 'orders', '_components');
-const read = (f: string): string => readFileSync(path.join(dir, f), 'utf8');
+const read = (f: string): string => readEnglish(path.join(dir, f), 'utf8');
 
 describe('the cancel dialog is told what the order has already cost', () => {
   it('renders its money line from a prop, on a figure above zero', () => {

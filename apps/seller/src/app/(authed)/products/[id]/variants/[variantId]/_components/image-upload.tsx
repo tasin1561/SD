@@ -177,7 +177,7 @@ export function VariantImageUpload({
         );
       }
     },
-    [variantId, presign, register],
+    [variantId, presign, register, t],
   );
 
   const total = images.data?.length ?? 0;

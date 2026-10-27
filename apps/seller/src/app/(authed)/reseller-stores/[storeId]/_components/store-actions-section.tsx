@@ -75,10 +75,7 @@ const capabilitiesOf = (
   {
     key: 'orderChange',
     label: t('resellerStoreDetail.changeTheOrder'),
-    what:
-      t('resellerStoreDetail.correctTheCustomerS') +
-      t('resellerStoreDetail.onceTheOrderIs') +
-      t('resellerStoreDetail.courierOnlyTheyCan'),
+    what: t('resellerStoreDetail.orderChangeWhat'),
     direct: t('resellerStoreDetail.directlyTheChangeIs'),
   },
   {

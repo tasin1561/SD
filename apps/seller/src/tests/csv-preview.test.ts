@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readEnglish } from './english-source';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
  */
 
 const PANEL = join(__dirname, '../app/(authed)/orders/_components/csv-import-panel.tsx');
-const src = readFileSync(PANEL, 'utf8');
+const src = readEnglish(PANEL, 'utf8');
 
 describe('the preview happens before the import', () => {
   it('calls /preview after the upload', () => {

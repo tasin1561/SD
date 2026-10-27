@@ -65,7 +65,7 @@ export function HandoffPanel(): ReactElement {
         setError(verdict(err, t, t('impersonation.theSupportSessionCould')));
       }
     })();
-  }, []);
+  }, [t]);
 
   if (error === null) {
     return (

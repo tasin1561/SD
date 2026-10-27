@@ -120,7 +120,7 @@ export function NotificationSettingsView(): ReactElement {
   const onCount = allTopics.filter((t) => !muted.has(t.topic)).length;
 
   const rows = prefs.data ?? [];
-  const quiet = useMemo(() => summariseQuietHours(t, rows), [rows]);
+  const quiet = useMemo(() => summariseQuietHours(t, rows), [t, rows]);
 
   return (
     <div className="set-page">

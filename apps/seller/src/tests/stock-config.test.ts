@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readEnglish } from './english-source';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
  * more importantly, on the wire.
  */
 
-const R = (p: string): string => readFileSync(join(__dirname, p), 'utf8');
+const R = (p: string): string => readEnglish(join(__dirname, p), 'utf8');
 
 const PANEL = R(
   '../app/(authed)/products/[id]/variants/[variantId]/_components/stock-config-panel.tsx',
@@ -120,6 +120,6 @@ describe('it gates on the permission the server enforces', () => {
   });
 
   it('surfaces the server verdict verbatim', () => {
-    expect(PANEL).toContain('serverVerdict(err)');
+    expect(PANEL).toContain('verdict(err, t)');
   });
 });
