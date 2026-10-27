@@ -771,9 +771,16 @@ export class OrderPostCommitHooksService {
           productName: i.productName,
           variantLabel: i.variantLabel,
           unitWeightGrams: i.unitWeightGrams,
-          unitLengthCm: i.unitLengthCm === null ? null : i.unitLengthCm.toNumber(),
-          unitWidthCm: i.unitWidthCm === null ? null : i.unitWidthCm.toNumber(),
-          unitHeightCm: i.unitHeightCm === null ? null : i.unitHeightCm.toNumber(),
+          // `== null`, not `=== null`: an order read by a caller whose
+          // select predates these columns hands them over as UNDEFINED,
+          // and `undefined.toNumber()` throws inside the post-commit
+          // hook — which does not fail loudly, it just means the
+          // shipment is never provisioned. A parcel silently not booked
+          // is the worst failure this file can have, so the narrow
+          // check is wrong here even though the type says it is enough.
+          unitLengthCm: i.unitLengthCm == null ? null : i.unitLengthCm.toNumber(),
+          unitWidthCm: i.unitWidthCm == null ? null : i.unitWidthCm.toNumber(),
+          unitHeightCm: i.unitHeightCm == null ? null : i.unitHeightCm.toNumber(),
           unitDeclaredValueInr: i.unitDeclaredValueInr,
           unitPriceInr: i.unitPriceInr,
         })),
