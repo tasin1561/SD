@@ -84,6 +84,22 @@ jobs:
             ServerAliveInterval 30
             ServerAliveCountMax 10
           EOF
+          # Start the master HERE, fully detached.
+          #
+          # Without this, the first `ssh` in a later step spawns the
+          # master as its own child, and that child inherits the step's
+          # stdout and stderr. The Actions runner will not finish a step
+          # until those descriptors close, so the step sits there while
+          # the master lives out its ControlPersist. "Which apps actually
+          # changed?" — an SSH read and a git diff — measured 72 SECONDS
+          # on 2026-10-28, longer than the entire droplet side of the
+          # deploy.
+          #
+          # `-f -N -M` with every descriptor redirected means the master
+          # belongs to no step, and each later ssh/scp just attaches to
+          # it.
+          ssh -f -N -M droplet </dev/null >/dev/null 2>&1 || true
+          ssh -O check droplet 2>&1 | head -1 || true
 
       - name: Which apps actually changed?
         id: affected
@@ -117,53 +133,53 @@ jobs:
           echo "apps=$APPS" >> "$GITHUB_OUTPUT"
           echo "Deploying: ${APPS:-<nothing>}"
 
-      - name: Build
-        if: steps.affected.outputs.apps != ''
+      # CI already built and uploaded these. Downloading beats
+      # rebuilding by whatever a cold Next build costs — about 106s on
+      # 2026-10-28 for one app, and far more when a shared package
+      # changes and all seven rebuild.
+      # PINNED TWO WAYS, deliberately.
+      #
+      # `run-id` is the CI run that triggered THIS deploy, so the search
+      # cannot wander to another run. `name` carries the commit SHA, so
+      # even within that run it cannot pick up a different commit's
+      # build. Neither alone is enough: without run-id the action takes
+      # the latest matching artifact in the repository, which during
+      # concurrent merges is somebody else's code; without the SHA in
+      # the name, a re-run of an older CI would serve an older build to
+      # a newer deploy.
+      #
+      # The `if` requires a run-id rather than letting an empty one fail
+      # — a guarantee that holds because it is checked is worth more
+      # than one that holds because a step happened to error.
+      - name: Download CI's build
+        id: artifact
+        if: steps.affected.outputs.apps != '' && github.event.workflow_run.id != ''
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: build-${{ env.SHA }}
+          path: out
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      # The fallback is not decoration. A manual re-deploy
+      # (workflow_dispatch) has no CI run to take an artifact from, and
+      # an artifact expires after three days. Without this, either case
+      # is a deploy that cannot run at all.
+      - name: Build (only if CI's artifact was unavailable)
+        if: steps.affected.outputs.apps != '' && steps.artifact.outcome != 'success'
         env:
-          # CI has carried this for its own build all along; the droplet
-          # had none, which is why a build verified here died there.
           NODE_OPTIONS: --max-old-space-size=4096
         run: |
           set -euo pipefail
-          # ONE turbo invocation, not a loop. Turbo resolves `^build` for
-          # itself, so db / api-client / ui are built once and the apps
-          # that depend on them fan out in parallel. The loop this
-          # replaced was serial, which in the worst case (a shared
-          # package changes, so all seven apps rebuild) is seven full
-          # Next builds end to end — the thing this whole change exists
-          # to stop paying for.
-          #
-          # --concurrency overrides turbo.json's "2". That 2 is there to
-          # keep a laptop usable while building; a disposable runner has
-          # no such constraint and every core idle is wall-clock spent.
+          echo "no artifact for ${SHA} — building here instead"
           FILTERS=""
           for A in ${{ steps.affected.outputs.apps }}; do
             FILTERS="$FILTERS --filter=@skydrop/$A"
           done
-          echo "turbo run build$FILTERS"
           pnpm turbo run build $FILTERS --concurrency=100%
-
-      - name: Package
-        if: steps.affected.outputs.apps != ''
-        run: |
-          set -euo pipefail
           mkdir -p out
-          # Shared packages go WHOLE every time: 3.6 MB, and the
-          # alternative is an app running against a sibling's older dist,
-          # which typechecks locally and only fails in production.
           tar -czf out/packages.tgz packages/*/dist
-          # Archive the CONTENTS of the output directory, never the
-          # directory itself. deploy.sh untars into `<live>.incoming` and
-          # then renames that to `<live>`, so a tarball carrying a
-          # top-level `.next/` lands as `.next/.next/` and `next start`
-          # finds no build. That shipped on 2026-10-28: the seller app
-          # crash-looped, the health check caught it, and the rollback
-          # put the previous build back — the safety net worked, the
-          # archive did not. `-C <dir> .` is why marketing survived the
-          # same deploy while the others did not.
-          # `.next/cache` is the INCREMENTAL BUILD cache — useless on the
-          # droplet, which never builds, and most of the bytes. The first
-          # seller archive was 421 MB and nearly all of it was cache.
           for A in ${{ steps.affected.outputs.apps }}; do
             case "$A" in
               api)       tar -czf out/api.tgz       -C apps/api/dist . ;;
@@ -172,40 +188,31 @@ jobs:
             esac
           done
 
-          # PROVE each archive before it leaves the runner.
-          #
-          # The 2026-10-28 failure shipped a well-formed tarball of the
-          # wrong shape; nothing noticed until the droplet had already
-          # swapped it in and `next start` crash-looped for ~30 seconds
-          # of real user traffic. deploy.sh now refuses such an archive,
-          # but the cheaper place to catch it is here, before upload —
-          # a failed job costs nobody a page view.
+      - name: Check what we are about to ship
+        if: steps.affected.outputs.apps != ''
+        run: |
+          set -euo pipefail
           echo "── archive check ──"
-          for A in ${{ steps.affected.outputs.apps }}; do
-            case "$A" in
+          for F in out/*.tgz; do
+            B="$(basename "$F" .tgz)"
+            case "$B" in
               api)       NEED='./main.js' ;;
+              packages)  NEED='' ;;
               marketing) NEED='./index.html' ;;
               *)         NEED='./BUILD_ID' ;;
             esac
-            # Read the listing ONCE into a variable, then search it.
-            #
-            # `tar -tzf … | grep -qx …` looks obvious and is wrong here:
-            # grep -q exits at the first match and closes the pipe, tar
-            # takes SIGPIPE and exits non-zero, and under `set -o
-            # pipefail` the pipeline reports THAT. The check then fails
-            # on a perfectly good archive — it did, on 2026-10-28, and
-            # printed "does not contain ./BUILD_ID" directly above a
-            # listing whose second entry was ./BUILD_ID.
-            #
-            # scripts/deploy.sh carries a comment about this same trap
-            # with `| head`. Same shell, same flag, same mistake.
-            LISTING="$(tar -tzf "out/$A.tgz")"
-            if ! printf '%s\n' "$LISTING" | grep -qx "$NEED"; then
-              echo "!! out/$A.tgz does not contain $NEED at its top level"
-              echo "   top level is: $(printf '%s\n' "$LISTING" | head -5 | tr '\n' ' ')"
-              exit 1
+            if [ -n "$NEED" ]; then
+              # Listing captured first: grep -q closes the pipe, tar takes
+              # SIGPIPE, and under pipefail the check fails on a good
+              # archive. That happened on 2026-10-28.
+              LISTING="$(tar -tzf "$F")"
+              if ! printf '%s\n' "$LISTING" | grep -qx "$NEED"; then
+                echo "!! $F does not contain $NEED"
+                printf '%s\n' "$LISTING" | head -5
+                exit 1
+              fi
             fi
-            printf '  %-12s %-7s %s\n' "$A" "$(du -h "out/$A.tgz" | cut -f1)" "$NEED ✓"
+            printf '  %-14s %-7s ok\n' "$B" "$(du -h "$F" | cut -f1)"
           done
           echo "── total shipped: $(du -ch out/*.tgz | tail -1 | cut -f1) ──"
 
