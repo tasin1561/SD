@@ -581,7 +581,21 @@ jobs:
   build:
     name: build artifacts
     needs: changes
-    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.api == 'true'
+    # ALWAYS on a push to main, even when nothing looks affected.
+    #
+    # Gating this on `changes` was false economy. c6df0243 was a
+    # docs-only merge, so `build` skipped, so no artifact existed, so
+    # Deploy's fallback rebuilt all seven apps — 279 SECONDS to deploy
+    # nothing. Skipping a cached ~70s job cost four times what it saved,
+    # and only because the saving and the cost sit in different
+    # workflows where neither can see the other.
+    #
+    # On a PR it still follows `changes`: there is no deploy to feed, so
+    # the artifact would be storage nobody collects.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      needs.changes.outputs.frontend == 'true' ||
+      needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
