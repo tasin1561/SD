@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, type ReactElement, type ReactNode } from 'react';
-import { Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { TooltipCard } from '@skydrop/ui/app/tooltip-card';
 import type { CsvColumnGuideColumn, CsvColumnLevel } from '@skydrop/ui/app/csv-column-guide';
 import './import-page.css';
@@ -138,13 +138,21 @@ export function CompactColumnGuide({
                           data-tone={g.tone}
                           data-warn={warn || undefined}
                         >
-                          <span className="imp-chip__text">{c.header}</span>
+                          {/* Icon LEADS the chip. Trailing, it read as a
+                              full stop; leading, the eye finds it before
+                              it has read the label. */}
                           {warn ? (
                             <>
-                              <span className="imp-chip__dot" aria-hidden />
+                              <AlertTriangle
+                                className="imp-chip__dot"
+                                size={14}
+                                strokeWidth={2.5}
+                                aria-hidden
+                              />
                               <span className="imp-sr">{labels.important}</span>
                             </>
                           ) : null}
+                          <span className="imp-chip__text">{c.header}</span>
                         </button>
                       </TooltipCard>
                     </li>

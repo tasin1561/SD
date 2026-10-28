@@ -300,13 +300,26 @@
 }
 .imp-chip__dot {
   flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--saffron-text);
+  color: var(--saffron-text);
 }
+
+/* The one chip that must not be skimmed past.
+   A blank Address Line2 fails EVERY row of a file, and it is blank in
+   the template most sellers arrive with (Delhivery's own leaves it
+   empty). A 7px dot and a hairline border lost that fight — it read as
+   decoration. Filled, bordered, bold and icon-led, it reads as a
+   warning, which is what it is. Tokens only (FE-6); the saffron set
+   carries its own light/dark pairs. */
 .imp-chip[data-warn] {
-  border-color: var(--saffron-line);
+  border-color: var(--saffron-fill);
+  border-width: 2px;
+  background: var(--saffron-surface);
+  color: var(--saffron-on-tint);
+  font-weight: var(--fw-semibold);
+  box-shadow: 0 0 0 3px var(--saffron-glow);
+}
+.imp-chip[data-warn]:hover {
+  border-color: var(--saffron-fill-hover);
 }
 .imp-chip__eg {
   display: block;

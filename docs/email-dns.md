@@ -64,7 +64,9 @@ copy the `.online` values across — DKIM keys are per domain.
 | TXT | root | `v=spf1 include:_spf.mx.cloudflare.net ~all` |
 | TXT | `cf2024-1._domainkey` | Cloudflare's DKIM, for mail it FORWARDS |
 
-Forwarding rule to create, to `chwhdev@gmail.com`:
+Forwarding rule to create, to the operator's personal inbox (held in the
+DigitalOcean / Cloudflare console, not written here — this repository is
+public and an address in a public file is scraped within hours):
 
 - `support@skydrop.global` — the `Reply-To` on every message we send
 
