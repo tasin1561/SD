@@ -255,6 +255,39 @@ export const orderImport = defineMessages({
     'This file cannot be imported yet.',
     'এই ফাইলটি এখনও ইম্পোর্ট করা যাবে না।',
   ],
+  // "being created", not "created". `/process` QUEUES the job — these
+  // counts come from the check, not from a finished import, and a queued
+  // job can still fail. Claiming a result we do not have yet is the kind
+  // of small untruth that makes a seller stop believing the whole screen
+  // the first time the number does not match Recent imports.
+  'orderImport.reviewDoneClean': [
+    '{created} being created. No rows were rejected.',
+    '{created} তৈরি হচ্ছে। কোনো সারি বাতিল হয়নি।',
+  ],
+  'orderImport.reviewDoneMixed': [
+    '{created} being created, {rejected} rejected.',
+    '{created} তৈরি হচ্ছে, {rejected} বাতিল।',
+  ],
+  'orderImport.autoQueuedNote': [
+    'Imported automatically — the check found nothing to decide. Final results are in Recent imports.',
+    'স্বয়ংক্রিয়ভাবে ইম্পোর্ট হয়েছে — যাচাইয়ে সিদ্ধান্ত নেওয়ার মতো কিছু পাওয়া যায়নি। চূড়ান্ত ফলাফল সাম্প্রতিক ইম্পোর্টে দেখুন।',
+  ],
+  'orderImport.autoStopMissing': [
+    'Not imported automatically: a required column was not found.',
+    'স্বয়ংক্রিয়ভাবে ইম্পোর্ট হয়নি: একটি আবশ্যক কলাম পাওয়া যায়নি।',
+  ],
+  'orderImport.autoStopBlocked': [
+    'Not imported automatically: the file has a problem that must be fixed first.',
+    'স্বয়ংক্রিয়ভাবে ইম্পোর্ট হয়নি: ফাইলে এমন সমস্যা আছে যা আগে ঠিক করতে হবে।',
+  ],
+  'orderImport.autoStopNone': [
+    'Not imported automatically: no order in this file can be created.',
+    'স্বয়ংক্রিয়ভাবে ইম্পোর্ট হয়নি: এই ফাইলের কোনো অর্ডার তৈরি করা যাবে না।',
+  ],
+  'orderImport.autoStopMostly': [
+    'Not imported automatically: most rows were rejected, so the file may have been read wrongly. Check it before importing.',
+    'স্বয়ংক্রিয়ভাবে ইম্পোর্ট হয়নি: বেশিরভাগ সারি বাতিল, তাই ফাইলটি ভুলভাবে পড়া হয়ে থাকতে পারে। ইম্পোর্টের আগে যাচাই করুন।',
+  ],
   'orderImport.reviewRejectedHeading': ['Rejected rows', 'বাতিল হওয়া সারি'],
   'orderImport.reviewRowNo': ['Row {rowNumber}', 'সারি {rowNumber}'],
   'orderImport.reviewMoreRejected': [
