@@ -17,7 +17,7 @@ export interface AutoImportPreview {
   readonly rowsWithProblems?: number;
 }
 
-export type AutoImportStop = 'missing' | 'blocked' | 'none' | 'mostly';
+export type AutoImportStop = 'missing' | 'blocked' | 'none';
 
 export type AutoImportDecision =
   | { readonly auto: true }
@@ -29,9 +29,18 @@ export type AutoImportDecision =
  * be evaluated for it; without that guard the shortcut would rest on column
  * mapping alone. It keeps the review click (reason `null`: not an auto stop).
  *
- * "Mostly rejected" means MORE rejected rows than importable orders. A file
- * that is nearly all rejections is the signature of a mis-read file — the
- * case the review step exists for. Zero importable orders is its own stop.
+ * A REJECTION RATIO IS NOT A STOP (2026-10-28). There used to be a fourth
+ * reason, `mostly`: more rejected rows than importable orders held the import
+ * back on the theory that a nearly-all-rejections file is a mis-read file. It
+ * is not, and the case that disproved it is the ordinary one — a sheet with
+ * eight genuinely bad rows and five good orders, every rejection carrying its
+ * own specific reason. A mis-read file does not look like that; it fails at
+ * the header, which `missing` already catches, and it does not go on to
+ * assemble five orders that each hold a valid ID, phone, pincode and SKU.
+ * The guard's real cost was making the good rows wait on a click to tell the
+ * person something the same dialog was already telling them.
+ *
+ * Zero importable orders remains its own stop: there is nothing to import.
  */
 export function decideAutoImport(
   kind: 'orders' | 'catalog',
@@ -41,8 +50,6 @@ export function decideAutoImport(
   if (preview.missingRequired.length > 0) return { auto: false, reason: 'missing' };
   if (preview.exceedsRowLimit) return { auto: false, reason: 'blocked' };
   const importable = preview.orderCount ?? preview.rowCount;
-  const rejected = preview.rowsWithProblems ?? 0;
   if (importable <= 0) return { auto: false, reason: 'none' };
-  if (rejected > importable) return { auto: false, reason: 'mostly' };
   return { auto: true };
 }

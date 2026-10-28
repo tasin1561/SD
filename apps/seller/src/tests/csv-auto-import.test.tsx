@@ -66,8 +66,12 @@ describe('decideAutoImport', () => {
       reason: 'blocked',
     });
     expect(decideAutoImport('orders', { ...ok, orderCount: 0 })).toMatchObject({ reason: 'none' });
-    expect(decideAutoImport('orders', { ...ok, rowsWithProblems: 4 })).toMatchObject({
-      reason: 'mostly',
+  });
+  // The ratio of rejected rows to good ones says nothing about whether the
+  // file was read correctly, so it no longer holds the good orders back.
+  it('imports the good orders however many rows were rejected', () => {
+    expect(decideAutoImport('orders', { ...ok, orderCount: 1, rowsWithProblems: 40 })).toEqual({
+      auto: true,
     });
   });
   it('never applies to the catalogue importer', () => {
@@ -103,7 +107,7 @@ describe('the panel', () => {
     expect(processCalls(f)).toBe(0);
   });
 
-  it('does not auto-import a mostly-rejected file', async () => {
+  it('imports the good orders of a mostly-rejected file, and still lists the rejections', async () => {
     const f = await uploadWith({
       ...base,
       orderCount: 2,
@@ -112,8 +116,12 @@ describe('the panel', () => {
       problems: [problem],
     });
     const dlg = await screen.findByRole('dialog');
-    expect(within(dlg).getByText(/most rows were rejected/)).toBeTruthy();
-    expect(processCalls(f)).toBe(0);
+    await waitFor(() =>
+      expect(dlg).toHaveAccessibleName('2 orders being created, 9 rows rejected.'),
+    );
+    expect(within(dlg).getByText('Row 4')).toBeTruthy();
+    expect(within(dlg).queryByRole('button', { name: /import/i })).toBeNull();
+    expect(processCalls(f)).toBe(1);
   });
 
   it('does not auto-import when zero orders are importable', async () => {

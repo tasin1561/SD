@@ -129,7 +129,6 @@ const STOP_KEYS: Record<AutoImportStop, MessageKey> = {
   missing: 'orderImport.autoStopMissing',
   blocked: 'orderImport.autoStopBlocked',
   none: 'orderImport.autoStopNone',
-  mostly: 'orderImport.autoStopMostly',
 };
 
 export function CsvImportPanel({

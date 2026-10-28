@@ -284,10 +284,6 @@ export const orderImport = defineMessages({
     'Not imported automatically: no order in this file can be created.',
     'স্বয়ংক্রিয়ভাবে ইম্পোর্ট হয়নি: এই ফাইলের কোনো অর্ডার তৈরি করা যাবে না।',
   ],
-  'orderImport.autoStopMostly': [
-    'Not imported automatically: most rows were rejected, so the file may have been read wrongly. Check it before importing.',
-    'স্বয়ংক্রিয়ভাবে ইম্পোর্ট হয়নি: বেশিরভাগ সারি বাতিল, তাই ফাইলটি ভুলভাবে পড়া হয়ে থাকতে পারে। ইম্পোর্টের আগে যাচাই করুন।',
-  ],
   'orderImport.reviewRejectedHeading': ['Rejected rows', 'বাতিল হওয়া সারি'],
   'orderImport.reviewRowNo': ['Row {rowNumber}', 'সারি {rowNumber}'],
   'orderImport.reviewMoreRejected': [
