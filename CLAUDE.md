@@ -137,6 +137,8 @@ Everything that used to live below this point was moved **verbatim** into `docs/
 - NEVER force push to main. NEVER reset main. NEVER rewrite published history.
 - Existing tests must stay green at every commit boundary. Update assertions in the same commit that flips behavior.
 - Lint stays green at every commit boundary (`--max-warnings 0`). Module 6 surfaced a regression here — a non-null assertion landed in one commit and tripped lint. Always run lint in the verification gates per commit.
+- **SHOW THE FILES BEFORE PUSHING TO `main`. No exceptions, and pipeline changes are not an exception** (2026-10-28). CI workflows and `scripts/deploy.sh` are the files whose blast radius is every deploy and whose failure mode is "production is stale and nothing says so" — they need MORE review than application code, not less. "It is only config" and "no test covers it" both argue for showing it, since neither the gate nor CI will catch a mistake there.
+- **Stage deliberately. `git add -A` is forbidden** (2026-10-28). It bundled a seller CSS change into a `docs(email):` commit the same day this rule was written, and earlier swept a stray generator script into the repo where the format check caught it. Both were invisible at commit time because nobody looked at what was staged. `git add <path>` the files the commit is about, `git status` before committing, and if the diff holds two concerns it is two commits. A history that misdescribes what changed is worse than a messy one: the next person bisecting trusts the subject line.
 
 ---
 
