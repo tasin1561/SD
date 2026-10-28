@@ -208,12 +208,31 @@ fi
 # The previous output is KEPT as `.prev` for exactly one deploy, which
 # is the whole rollback story until the release-directory scheme lands:
 #     mv .next .next.bad && mv .next.prev .next && pm2 restart ...
-swap_in() {           # $1 = live dir, $2 = tarball, $3 = label
-  local live="$1" tgz="$2" label="$3"
+swap_in() {           # $1 = live dir, $2 = tarball, $3 = label, $4 = proof file
+  local live="$1" tgz="$2" label="$3" proof="$4"
   local inc="${live}.incoming" prev="${live}.prev"
   rm -rf "$inc"
   mkdir -p "$inc"
   tar -xzf "$tgz" -C "$inc"
+
+  # PROVE the archive unpacked to the shape the app expects, BEFORE
+  # anything live is touched. On 2026-10-28 the workflow archived the
+  # output DIRECTORY instead of its contents, so `.next.incoming/.next/`
+  # was swapped in as `.next/.next/` — a valid directory containing no
+  # build. Nothing noticed until `next start` crash-looped and the
+  # health check timed out 30 seconds later, by which point the live
+  # build had already been replaced and had to be rolled back.
+  #
+  # One file is enough to tell a real build from a misshapen one, and
+  # checking it here turns a confusing restart failure into a refusal
+  # that never touches the running app.
+  if [ ! -e "$inc/$proof" ]; then
+    echo "  !! $label: archive has no $proof — refusing to swap"
+    echo "     unpacked top level: $(ls -A "$inc" | head -5 | tr '\n' ' ')"
+    rm -rf "$inc"
+    return 1
+  fi
+
   rm -rf "$prev"
   [ -e "$live" ] && mv "$live" "$prev"
   mv "$inc" "$live"
@@ -226,9 +245,9 @@ tar -xzf "$INCOMING/packages.tgz" -C "$ROOT"
 echo "── place app builds ──"
 for APP in "${APPS[@]}"; do
   case "$APP" in
-    api)       swap_in "$ROOT/apps/api/dist" "$INCOMING/api.tgz" "api/dist" ;;
+    api)       swap_in "$ROOT/apps/api/dist" "$INCOMING/api.tgz" "api/dist" "main.js" ;;
     marketing) : ;;  # static export, handled in 6b
-    *)         swap_in "$ROOT/apps/$APP/.next" "$INCOMING/$APP.tgz" "$APP/.next" ;;
+    *)         swap_in "$ROOT/apps/$APP/.next" "$INCOMING/$APP.tgz" "$APP/.next" "BUILD_ID" ;;
   esac
 done
 

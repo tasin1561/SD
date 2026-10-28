@@ -152,14 +152,49 @@ jobs:
           # alternative is an app running against a sibling's older dist,
           # which typechecks locally and only fails in production.
           tar -czf out/packages.tgz packages/*/dist
+          # Archive the CONTENTS of the output directory, never the
+          # directory itself. deploy.sh untars into `<live>.incoming` and
+          # then renames that to `<live>`, so a tarball carrying a
+          # top-level `.next/` lands as `.next/.next/` and `next start`
+          # finds no build. That shipped on 2026-10-28: the seller app
+          # crash-looped, the health check caught it, and the rollback
+          # put the previous build back — the safety net worked, the
+          # archive did not. `-C <dir> .` is why marketing survived the
+          # same deploy while the others did not.
+          # `.next/cache` is the INCREMENTAL BUILD cache — useless on the
+          # droplet, which never builds, and most of the bytes. The first
+          # seller archive was 421 MB and nearly all of it was cache.
           for A in ${{ steps.affected.outputs.apps }}; do
             case "$A" in
-              api)       tar -czf out/api.tgz       -C apps/api dist ;;
+              api)       tar -czf out/api.tgz       -C apps/api/dist . ;;
               marketing) tar -czf out/marketing.tgz -C apps/marketing/out . ;;
-              *)         tar -czf "out/$A.tgz"      -C "apps/$A" .next ;;
+              *)         tar -czf "out/$A.tgz" --exclude=./cache -C "apps/$A/.next" . ;;
             esac
           done
-          ls -lh out/
+
+          # PROVE each archive before it leaves the runner.
+          #
+          # The 2026-10-28 failure shipped a well-formed tarball of the
+          # wrong shape; nothing noticed until the droplet had already
+          # swapped it in and `next start` crash-looped for ~30 seconds
+          # of real user traffic. deploy.sh now refuses such an archive,
+          # but the cheaper place to catch it is here, before upload —
+          # a failed job costs nobody a page view.
+          echo "── archive check ──"
+          for A in ${{ steps.affected.outputs.apps }}; do
+            case "$A" in
+              api)       NEED='./main.js' ;;
+              marketing) NEED='./index.html' ;;
+              *)         NEED='./BUILD_ID' ;;
+            esac
+            if ! tar -tzf "out/$A.tgz" | grep -qx "$NEED"; then
+              echo "!! out/$A.tgz does not contain $NEED at its top level"
+              echo "   top level is: $(tar -tzf "out/$A.tgz" | head -5 | tr '\n' ' ')"
+              exit 1
+            fi
+            printf '  %-12s %-7s %s\n' "$A" "$(du -h "out/$A.tgz" | cut -f1)" "$NEED ✓"
+          done
+          echo "── total shipped: $(du -ch out/*.tgz | tail -1 | cut -f1) ──"
 
       - name: Ship and swap
         if: steps.affected.outputs.apps != ''
