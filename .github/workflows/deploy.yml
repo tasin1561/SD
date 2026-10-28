@@ -134,13 +134,17 @@ jobs:
               *)         NEED='./BUILD_ID' ;;
             esac
             if [ -n "$NEED" ]; then
-              # Listing captured first: grep -q closes the pipe, tar takes
-              # SIGPIPE, and under pipefail the check fails on a GOOD
-              # archive. That happened on 2026-10-28.
+              # HERESTRING, not a pipe. `grep -q` exits at the first
+              # match and closes its input; the writer takes SIGPIPE and
+              # under `set -o pipefail` the pipeline reports that, so the
+              # check fails on a GOOD archive. Capturing the listing into
+              # a variable first did NOT fix this — `printf | grep -q`
+              # has exactly the same shape as `tar | grep -q`. The pipe
+              # itself is the problem; a herestring has none.
               LISTING="$(tar -tzf "$F")"
-              if ! printf '%s\n' "$LISTING" | grep -qx "$NEED"; then
+              if ! grep -qx "$NEED" <<<"$LISTING"; then
                 echo "!! $F does not contain $NEED"
-                printf '%s\n' "$LISTING" | head -5
+                head -5 <<<"$LISTING"
                 exit 1
               fi
             fi

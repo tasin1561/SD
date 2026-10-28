@@ -93,7 +93,19 @@ jobs:
           fi
           FILES="$(git diff --name-only "$BASE" "${{ github.sha }}")"
           echo "$FILES" | sed 's/^/  /'
-          match() { echo "$FILES" | grep -qE "$1"; }
+          # HERESTRING, not a pipe — and this one is the dangerous
+          # instance. `grep -q` exits at the first match and closes its
+          # input; `echo` takes SIGPIPE, and under `set -o pipefail` the
+          # function returns NON-ZERO on a successful match.
+          #
+          # It only bites once $FILES outgrows the 64 KB pipe buffer, so
+          # it has been invisible on ordinary diffs and would appear on a
+          # large one — a refactor, a rename, a dependency bump. And it
+          # fails in the worst direction: `match` returning false means a
+          # change is judged NOT to affect the API or the frontends, so
+          # the suites that would have caught it are skipped and CI goes
+          # green. Loud failures are survivable; this one is silent.
+          match() { grep -qE "$1" <<<"$FILES"; }
           # packages/db and the workflow itself feed BOTH: a schema or type
           # change can break an API test and a frontend build equally.
           API=false; FE=false
@@ -630,9 +642,21 @@ jobs:
               *)         NEED='./BUILD_ID' ;;
             esac
             if [ -n "$NEED" ]; then
+              # HERESTRING, not a pipe. `grep -q` exits at the first
+              # match and closes its input; whatever was writing takes
+              # SIGPIPE, and under `set -o pipefail` the pipeline reports
+              # THAT — so the check fails on a perfectly good archive.
+              #
+              # Replacing `tar -tzf | grep -q` with `printf | grep -q`
+              # did not fix it, because the pipe was never the writer's
+              # fault: any producer feeding grep -q hits this. A
+              # herestring has no pipe and no second process to fail.
               LISTING="$(tar -tzf "$F")"
-              printf '%s\n' "$LISTING" | grep -qx "$NEED" || {
-                echo "!! $F has no $NEED"; printf '%s\n' "$LISTING" | head -5; exit 1; }
+              if ! grep -qx "$NEED" <<<"$LISTING"; then
+                echo "!! $F has no $NEED"
+                head -5 <<<"$LISTING"
+                exit 1
+              fi
             fi
             printf '  %-14s %s\n' "$B" "$(du -h "$F" | cut -f1)"
           done
