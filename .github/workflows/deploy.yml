@@ -187,9 +187,22 @@ jobs:
               marketing) NEED='./index.html' ;;
               *)         NEED='./BUILD_ID' ;;
             esac
-            if ! tar -tzf "out/$A.tgz" | grep -qx "$NEED"; then
+            # Read the listing ONCE into a variable, then search it.
+            #
+            # `tar -tzf … | grep -qx …` looks obvious and is wrong here:
+            # grep -q exits at the first match and closes the pipe, tar
+            # takes SIGPIPE and exits non-zero, and under `set -o
+            # pipefail` the pipeline reports THAT. The check then fails
+            # on a perfectly good archive — it did, on 2026-10-28, and
+            # printed "does not contain ./BUILD_ID" directly above a
+            # listing whose second entry was ./BUILD_ID.
+            #
+            # scripts/deploy.sh carries a comment about this same trap
+            # with `| head`. Same shell, same flag, same mistake.
+            LISTING="$(tar -tzf "out/$A.tgz")"
+            if ! printf '%s\n' "$LISTING" | grep -qx "$NEED"; then
               echo "!! out/$A.tgz does not contain $NEED at its top level"
-              echo "   top level is: $(tar -tzf "out/$A.tgz" | head -5 | tr '\n' ' ')"
+              echo "   top level is: $(printf '%s\n' "$LISTING" | head -5 | tr '\n' ' ')"
               exit 1
             fi
             printf '  %-12s %-7s %s\n' "$A" "$(du -h "out/$A.tgz" | cut -f1)" "$NEED ✓"
