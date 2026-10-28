@@ -42,6 +42,10 @@ export interface ImportReviewDialogProps {
   readonly importing: boolean;
   readonly importLabel: string;
   readonly onImport: () => void;
+  /** The import has been sent without a click; the verdict is past tense. */
+  readonly imported?: boolean;
+  /** One line saying why an upload was NOT imported automatically. */
+  readonly stopReason?: string | undefined;
 }
 
 function countText(t: Translate<MessageKey>, kind: 'orders' | 'catalogue', n: number): string {
@@ -57,20 +61,33 @@ export function importReviewVerdict(
   willCreate: number,
   rejected: number,
   blocked: boolean,
+  done = false,
 ): string {
   if (blocked) return t('orderImport.reviewVerdictBlocked');
   const created = countText(t, kind, willCreate);
-  if (rejected === 0) return t('orderImport.reviewVerdictClean', { created });
+  if (rejected === 0) {
+    return t(done ? 'orderImport.reviewDoneClean' : 'orderImport.reviewVerdictClean', { created });
+  }
   const rows = t(rejected === 1 ? 'orderImport.reviewRowsOne' : 'orderImport.reviewRowsMany', {
     count: rejected,
   });
   if (willCreate === 0) return t('orderImport.reviewVerdictNone', { rejected: rows });
-  return t('orderImport.reviewVerdictMixed', { created, rejected: rows });
+  return t(done ? 'orderImport.reviewDoneMixed' : 'orderImport.reviewVerdictMixed', {
+    created,
+    rejected: rows,
+  });
 }
 
 export function ImportReviewDialog(p: ImportReviewDialogProps): ReactElement {
   const { t } = p;
-  const verdict = importReviewVerdict(t, p.kind, p.willCreate, p.rejectedCount, p.blocked);
+  const verdict = importReviewVerdict(
+    t,
+    p.kind,
+    p.willCreate,
+    p.rejectedCount,
+    p.blocked,
+    p.imported,
+  );
   const unlisted = Math.max(0, p.rejectedCount - p.problems.length);
   return (
     <Dialog
@@ -91,7 +108,7 @@ export function ImportReviewDialog(p: ImportReviewDialogProps): ReactElement {
             count: p.rowCount,
           })}
           {' · '}
-          {t('orderImport.nothingHasBeenImported')}
+          {p.imported ? t('orderImport.autoQueuedNote') : t('orderImport.nothingHasBeenImported')}
         </>
       }
       footer={
@@ -99,18 +116,21 @@ export function ImportReviewDialog(p: ImportReviewDialogProps): ReactElement {
           <Button variant="secondary" disabled={p.busy} onClick={() => p.onOpenChange(false)}>
             {t('orderImport.reviewClose')}
           </Button>
-          <AsyncButton
-            variant="primary"
-            icon={<FileSpreadsheet size={15} />}
-            state={p.importing ? 'busy' : undefined}
-            labels={{ idle: p.importLabel, busy: t('orderImport.queuing') }}
-            disabled={p.busy || p.blocked}
-            onClick={p.onImport}
-          />
+          {p.imported ? null : (
+            <AsyncButton
+              variant="primary"
+              icon={<FileSpreadsheet size={15} />}
+              state={p.importing ? 'busy' : undefined}
+              labels={{ idle: p.importLabel, busy: t('orderImport.queuing') }}
+              disabled={p.busy || p.blocked}
+              onClick={p.onImport}
+            />
+          )}
         </DialogFooter>
       }
     >
       <div className="imp-review__body" aria-live="polite">
+        {p.stopReason !== undefined && !p.imported ? <p className="ord-p">{p.stopReason}</p> : null}
         {p.blockers}
         {p.rejectedCount > 0 ? (
           <section aria-label={t('orderImport.reviewRejectedHeading')}>
@@ -128,7 +148,9 @@ export function ImportReviewDialog(p: ImportReviewDialogProps): ReactElement {
             {unlisted > 0 ? (
               <p className="ord-p">{t('orderImport.reviewMoreRejected', { count: unlisted })}</p>
             ) : null}
-            {p.willCreate > 0 ? <p className="ord-p">{t('orderImport.reviewRestImport')}</p> : null}
+            {p.willCreate > 0 && !p.imported ? (
+              <p className="ord-p">{t('orderImport.reviewRestImport')}</p>
+            ) : null}
           </section>
         ) : null}
       </div>

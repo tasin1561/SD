@@ -28,6 +28,7 @@ import { CsvColumnGuide, type CsvColumnGuideColumn } from '@skydrop/ui/app/csv-c
 import { verdict } from '@/i18n/verdict';
 import { Notice, OrdSection } from './orders-parts';
 import { ImportReviewDialog } from './import-review-dialog';
+import { decideAutoImport, type AutoImportStop } from './import-auto';
 import {
   CompactColumnGuide,
   GuideDisclosure,
@@ -124,6 +125,13 @@ function importLabel(t: Translate<MessageKey>, kind: Kind, preview: CsvPreview):
   return t(n === 1 ? 'orderImport.importRowOne' : 'orderImport.importRowMany', { count: n });
 }
 
+const STOP_KEYS: Record<AutoImportStop, MessageKey> = {
+  missing: 'orderImport.autoStopMissing',
+  blocked: 'orderImport.autoStopBlocked',
+  none: 'orderImport.autoStopNone',
+  mostly: 'orderImport.autoStopMostly',
+};
+
 export function CsvImportPanel({
   kind,
   endpointBase,
@@ -187,6 +195,14 @@ export function CsvImportPanel({
   // section below, which carries the same facts and the same actions.
   const [reviewOpen, setReviewOpen] = useState(false);
   const reopenRef = useRef<HTMLButtonElement | null>(null);
+  // Set once the import was sent without a click; the dialog then reports
+  // past tense and offers no second import button.
+  const [autoImported, setAutoImported] = useState(false);
+  // Why an upload was held for review instead of imported (orders only).
+  const [stopReason, setStopReason] = useState<AutoImportStop | null>(null);
+  // Synchronous guard: state lags a render, so a double click could pass
+  // `busy` twice. Exactly one /process call per checked upload.
+  const processing = useRef(false);
 
   // Required/optional columns come from the API (the importer's own sets),
   // never from a list in this file; see CsvColumnGuide.
@@ -365,12 +381,19 @@ export function CsvImportPanel({
         method: 'POST',
         body: { spacesKey: presign.spacesKey },
       });
-      setPending({ spacesKey: presign.spacesKey, fileName: f.name, preview });
+      const checked = { spacesKey: presign.spacesKey, fileName: f.name, preview };
+      const decision = decideAutoImport(kind, preview);
+      setAutoImported(false);
+      setStopReason(decision.auto ? null : decision.reason);
+      setPending(checked);
       setReviewOpen(true);
       if (fileRef.current) fileRef.current.value = '';
       pickedFile.current = null;
       setZoneKey((k) => k + 1);
       setSelectedName('');
+      // The preview proved there is nothing to decide: import now. Kept
+      // inside this try so `busy` never drops between check and import.
+      if (decision.auto) await confirmImport(checked, true);
     } catch (err) {
       setError(fmtError(err));
     } finally {
@@ -378,23 +401,31 @@ export function CsvImportPanel({
     }
   }
 
-  async function confirmImport(): Promise<void> {
-    if (pending === null) return;
+  async function confirmImport(
+    target: { spacesKey: string; fileName: string } | null = pending,
+    auto = false,
+  ): Promise<void> {
+    if (target === null || processing.current) return;
+    processing.current = true;
     setError(null);
     setBusy('processing');
     try {
       await client.request<CsvUploadJob>(`${endpointBase}/process`, {
         method: 'POST',
-        body: { spacesKey: pending.spacesKey, fileName: pending.fileName },
+        body: { spacesKey: target.spacesKey, fileName: target.fileName },
       });
       toast.success(t('orderImport.importQueuedRefreshTo'));
-      setPending(null);
+      // After an automatic import the dialog stays up with the past-tense
+      // result; closing it clears the pending file.
+      if (auto) setAutoImported(true);
+      else setPending(null);
       void queryClient.invalidateQueries({
         queryKey: ['seller-csv-uploads', kind],
       });
     } catch (err) {
       setError(fmtError(err));
     } finally {
+      processing.current = false;
       setBusy(null);
     }
   }
@@ -875,6 +906,11 @@ export function CsvImportPanel({
           open={reviewOpen}
           onOpenChange={(open) => {
             setReviewOpen(open);
+            if (!open && autoImported) {
+              setAutoImported(false);
+              setPending(null);
+              return;
+            }
             // Focus goes back to the inline "open the check result" button
             // (the trigger); the upload button is disabled by now.
             if (!open) requestAnimationFrame(() => reopenRef.current?.focus());
@@ -895,6 +931,8 @@ export function CsvImportPanel({
           importing={busy === 'processing'}
           importLabel={importLabel(t, kind, pending.preview)}
           onImport={() => void confirmImport()}
+          imported={autoImported}
+          stopReason={stopReason === null ? undefined : t(STOP_KEYS[stopReason])}
           blockers={
             <>
               {pending.preview.missingRequired.length > 0 && (

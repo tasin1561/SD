@@ -99,9 +99,7 @@ describe('the check result modal', () => {
 describe('the panel wiring', () => {
   const src = readEnglish(PANEL);
   it('opens the modal when the preview returns', () => {
-    expect(src).toMatch(
-      /setPending\(\{ spacesKey: presign\.spacesKey[^}]*\}\);\s*setReviewOpen\(true\)/,
-    );
+    expect(src).toMatch(/setPending\(checked\);\s*setReviewOpen\(true\)/);
   });
   it('keeps the inline section and its discard action', () => {
     expect(src).toContain('Check before importing');
