@@ -647,8 +647,25 @@ jobs:
           set -euo pipefail
           # One turbo invocation: it resolves ^build itself, so the
           # shared packages build once and the apps fan out in parallel.
-          APPS="${{ needs.changes.outputs.apps }}"
-          [ -n "$APPS" ] || APPS="admin seller track reseller associate marketing"
+          #
+          # ALL SIX, ALWAYS — deliberately NOT needs.changes.outputs.apps
+          # (2026-10-28). Two things rest on this and both were broken
+          # while it filtered:
+          #
+          #  - playwright's `webServer` array is STATIC: it starts admin,
+          #    seller, track, reseller, associate and marketing on every
+          #    run whatever `--project` says. An app missing from the
+          #    artifact has no build for `next start` to serve, so a
+          #    change touching one app took the whole browser job down.
+          #  - the browser job's own comment claims "every app's build is
+          #    still CHECKED — the `build` job builds all of them". With
+          #    the filter in place that was false: an app left off the
+          #    list was an app whose build was verified nowhere.
+          #
+          # It is nearly free. Turbo replays the unchanged apps from
+          # cache, which is why this job lands in the 50-70s range on a
+          # warm cache whether one app changed or all six.
+          APPS="admin seller track reseller associate marketing"
           FILTERS="--filter=@skydrop/api"
           for A in $APPS; do FILTERS="$FILTERS --filter=@skydrop/$A"; done
           echo "building: api $APPS"
@@ -658,8 +675,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          APPS="${{ needs.changes.outputs.apps }}"
-          [ -n "$APPS" ] || APPS="admin seller track reseller associate marketing"
+          # All six, matching the build step above. The browser job needs
+          # every app's output on disk, and deploy.sh chooses what to
+          # RESTART from its own git diff rather than from what happens to
+          # be in the archive — so shipping more than changed costs upload
+          # bytes and nothing else.
+          APPS="admin seller track reseller associate marketing"
           # Shared packages whole — 3.6 MB, and the alternative is an app
           # running against a sibling's older dist.
           tar -czf artifacts/packages.tgz packages/*/dist
@@ -886,7 +907,16 @@ jobs:
             mkdir -p apps/marketing/out
             tar -xzf /tmp/build/marketing.tgz -C apps/marketing/out
           fi
-          echo "placed:"; ls -d apps/*/.next apps/*/out apps/api/dist 2>/dev/null | sed 's/^/  /'
+          # `|| true` is not defensive padding. A glob that matches
+          # nothing is passed through LITERALLY, `ls` exits 2 on the
+          # unmatched operand, and under `pipefail` that turns a progress
+          # LISTING into a failed step — which is exactly how this job
+          # died on 079359fe, with `apps/*/out` matching nothing because
+          # marketing was not in that change set's artifact. `2>/dev/null`
+          # hid the message and not the status. An echo must never be able
+          # to fail the thing it is reporting on.
+          echo "placed:"
+          ls -d apps/*/.next apps/*/out apps/api/dist 2>/dev/null | sed 's/^/  /' || true
 
       # Cache the browser binary. The download is ~120MB and identical
       # between runs; keyed on the lockfile so a Playwright bump busts it.
