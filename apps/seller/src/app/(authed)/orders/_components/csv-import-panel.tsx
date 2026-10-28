@@ -27,6 +27,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CsvColumnGuide, type CsvColumnGuideColumn } from '@skydrop/ui/app/csv-column-guide';
 import { verdict } from '@/i18n/verdict';
 import { Notice, OrdSection } from './orders-parts';
+import { ImportReviewDialog } from './import-review-dialog';
 import {
   CompactColumnGuide,
   GuideDisclosure,
@@ -182,6 +183,10 @@ export function CsvImportPanel({
     fileName: string;
     preview: CsvPreview;
   } | null>(null);
+  // The check result opens in a modal; closing it leaves the inline
+  // section below, which carries the same facts and the same actions.
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const reopenRef = useRef<HTMLButtonElement | null>(null);
 
   // Required/optional columns come from the API (the importer's own sets),
   // never from a list in this file; see CsvColumnGuide.
@@ -361,6 +366,7 @@ export function CsvImportPanel({
         body: { spacesKey: presign.spacesKey },
       });
       setPending({ spacesKey: presign.spacesKey, fileName: f.name, preview });
+      setReviewOpen(true);
       if (fileRef.current) fileRef.current.value = '';
       pickedFile.current = null;
       setZoneKey((k) => k + 1);
@@ -707,7 +713,13 @@ export function CsvImportPanel({
           missing: the file went straight to process, so a column we
           could not map became rows that failed one at a time into an
           error report read afterwards. */}
-      {pending !== null && (
+      {/* Only while the dialog is CLOSED (owner, 2026-10-28). Rendering
+          both at once put the same verdict, the same rejected rows and
+          the same import button on screen twice — the second copy
+          visible behind the overlay, which reads as the page having
+          duplicated itself. This section is the fallback for a DISMISSED
+          dialog, not its companion. */}
+      {pending !== null && !reviewOpen && (
         <OrdSection
           title={t('orderImport.checkBeforeImporting')}
           note={
@@ -726,6 +738,16 @@ export function CsvImportPanel({
         >
           <div className="ord-stack ord-stack--tight">
             <p className="ord-p">{t('orderImport.nothingHasBeenImported')}</p>
+            <div className="ord-row">
+              <Button
+                ref={reopenRef}
+                variant="secondary"
+                disabled={busy !== null}
+                onClick={() => setReviewOpen(true)}
+              >
+                {t('orderImport.reviewOpen')}
+              </Button>
+            </div>
 
             {pending.preview.missingRequired.length > 0 && (
               <Notice
@@ -846,6 +868,65 @@ export function CsvImportPanel({
             </div>
           </div>
         </OrdSection>
+      )}
+
+      {pending !== null && (
+        <ImportReviewDialog
+          open={reviewOpen}
+          onOpenChange={(open) => {
+            setReviewOpen(open);
+            // Focus goes back to the inline "open the check result" button
+            // (the trigger); the upload button is disabled by now.
+            if (!open) requestAnimationFrame(() => reopenRef.current?.focus());
+          }}
+          t={t}
+          kind={isOrders ? 'orders' : 'catalogue'}
+          fileName={pending.fileName}
+          rowCount={pending.preview.rowCount}
+          willCreate={
+            isOrders
+              ? (pending.preview.orderCount ?? pending.preview.rowCount)
+              : pending.preview.rowCount
+          }
+          rejectedCount={pending.preview.rowsWithProblems ?? 0}
+          problems={pending.preview.problems ?? []}
+          blocked={pending.preview.missingRequired.length > 0 || pending.preview.exceedsRowLimit}
+          busy={busy !== null}
+          importing={busy === 'processing'}
+          importLabel={importLabel(t, kind, pending.preview)}
+          onImport={() => void confirmImport()}
+          blockers={
+            <>
+              {pending.preview.missingRequired.length > 0 && (
+                <Notice
+                  tone="bad"
+                  icon={<FileWarning size={16} />}
+                  title={t('orderImport.missingColumns')}
+                >
+                  <span>
+                    {richMessage(t('orderImport.addThemToYour'), {
+                      missingRequired: pending.preview.missingRequired.join(', '),
+                    })}
+                  </span>
+                </Notice>
+              )}
+              {pending.preview.exceedsRowLimit && (
+                <Notice tone="bad" icon={<FileWarning size={16} />}>
+                  <span>
+                    {richMessage(t('orderImport.tooManyRowsThe'), {
+                      rowLimit: pending.preview.rowLimit,
+                    })}
+                  </span>
+                </Notice>
+              )}
+              {error && (
+                <Notice tone="bad" role="alert" icon={<FileWarning size={16} />}>
+                  <span>{error}</span>
+                </Notice>
+              )}
+            </>
+          }
+        />
       )}
 
       {latest !== undefined && watching === latest.id && (

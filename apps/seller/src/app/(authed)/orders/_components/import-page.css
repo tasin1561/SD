@@ -468,3 +468,49 @@
     transform: none;
   }
 }
+
+/* Check-result modal. Layout only; enter/exit motion is the shared Dialog's
+   (transform + opacity, disabled under prefers-reduced-motion there). */
+.imp-review__body {
+  display: grid;
+  gap: var(--s-3, 0.75rem);
+  overflow-wrap: anywhere;
+}
+.imp-review__h {
+  margin: 0 0 var(--s-2, 0.5rem);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--fg-strong, var(--fg-body));
+}
+.imp-review__list {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.imp-review__item {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md, 0.5rem);
+  background: var(--surface-1, transparent);
+}
+.imp-review__row {
+  font-weight: 600;
+  white-space: nowrap;
+}
+@media (max-width: 639px) {
+  .sk-dialog.imp-review {
+    inset: 0;
+    max-height: none;
+    height: 100dvh;
+    border-radius: 0;
+  }
+  .imp-review__item {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.125rem;
+  }
+}

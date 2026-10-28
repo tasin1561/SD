@@ -233,4 +233,38 @@ export const orderImport = defineMessages({
   ],
   'orderImport.breadcrumbLabel': ['Breadcrumb', 'ব্রেডক্রাম্ব'],
   'orderImport.pickAFile': ['Pick a file first.', 'আগে একটি ফাইল বেছে নিন।'],
+  'orderImport.reviewOrderOne': ['1 order', '1টি অর্ডার'],
+  'orderImport.reviewOrderMany': ['{count} orders', '{count}টি অর্ডার'],
+  'orderImport.reviewRowOne': ['1 row', '1টি সারি'],
+  'orderImport.reviewRowMany': ['{count} rows', '{count}টি সারি'],
+  'orderImport.reviewRowsOne': ['1 row', '1টি সারি'],
+  'orderImport.reviewRowsMany': ['{count} rows', '{count}টি সারি'],
+  'orderImport.reviewVerdictClean': [
+    '{created} will be created. No rows were rejected.',
+    '{created} তৈরি হবে। কোনো সারি বাতিল হয়নি।',
+  ],
+  'orderImport.reviewVerdictMixed': [
+    '{created} will be created, {rejected} rejected.',
+    '{created} তৈরি হবে, {rejected} বাতিল।',
+  ],
+  'orderImport.reviewVerdictNone': [
+    'Nothing can be created: {rejected} rejected.',
+    'কিছুই তৈরি করা যাবে না: {rejected} বাতিল।',
+  ],
+  'orderImport.reviewVerdictBlocked': [
+    'This file cannot be imported yet.',
+    'এই ফাইলটি এখনও ইম্পোর্ট করা যাবে না।',
+  ],
+  'orderImport.reviewRejectedHeading': ['Rejected rows', 'বাতিল হওয়া সারি'],
+  'orderImport.reviewRowNo': ['Row {rowNumber}', 'সারি {rowNumber}'],
+  'orderImport.reviewMoreRejected': [
+    '{count} more rejected rows are not listed here.',
+    'আরও {count}টি বাতিল সারি এখানে তালিকাভুক্ত নয়।',
+  ],
+  'orderImport.reviewRestImport': [
+    'Every other row will import. You can fix the rejected ones afterwards from the import’s own page.',
+    'বাকি সব সারি ইম্পোর্ট হবে। বাতিল সারিগুলো পরে ইম্পোর্টের নিজস্ব পেজ থেকে ঠিক করতে পারবেন।',
+  ],
+  'orderImport.reviewClose': ['Close', 'বন্ধ করুন'],
+  'orderImport.reviewOpen': ['Open the check result', 'যাচাইয়ের ফলাফল খুলুন'],
 });
