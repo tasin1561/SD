@@ -612,22 +612,30 @@ export function CsvImportPanel({
                 onFiles={onPickFiles}
                 disabled={busy !== null}
               />
-              <div className="imp-upload__foot">
+              <div
+                className="imp-upload__foot"
+                data-ready={selectedName && busy === null ? '' : undefined}
+              >
                 <span className="imp-upload__note">
                   <ShieldCheck size={16} aria-hidden />
                   {t('orderImport.reviewFirst')}
                 </span>
-                <AsyncButton
-                  variant="primary"
-                  icon={<Upload size={15} />}
-                  state={busy === 'uploading' ? 'busy' : undefined}
-                  labels={{
-                    idle: t('orderImport.uploadAndCheck'),
-                    busy: t('orderImport.checking'),
-                  }}
-                  onClick={() => void upload()}
-                  disabled={busy !== null || !selectedName}
-                />
+                {/* The attention ring lives on a wrapper, not on the button:
+                    .sk-btn's ::before and ::after are both already spoken for
+                    (sweep and tap-target), and @skydrop/ui is shared. */}
+                <span className="imp-upload__go">
+                  <AsyncButton
+                    variant="primary"
+                    icon={<Upload size={15} />}
+                    state={busy === 'uploading' ? 'busy' : undefined}
+                    labels={{
+                      idle: t('orderImport.uploadAndCheck'),
+                      busy: t('orderImport.checking'),
+                    }}
+                    onClick={() => void upload()}
+                    disabled={busy !== null || !selectedName}
+                  />
+                </span>
               </div>
               {error && (
                 <Notice tone="bad" role="alert" icon={<FileWarning size={16} />}>
