@@ -155,9 +155,34 @@ did_change '^packages/db/prisma/seed\.ts$|^packages/db/prisma/schema\.prisma$|^p
 INCOMING="$ROOT/.deploy-incoming/$EXPECTED_SHA"
 APPS=("${@:2}")
 
+# WORK IT OUT HERE when the caller did not say.
+#
+# The workflow used to compute this, which meant an SSH just to read the
+# marker above — and connections are the scarce resource: `ufw limit`
+# drops the 6th from one IP inside 30 seconds. Everything this needs is
+# already in hand: the marker, the diff against it, and CHANGED_FILES.
+# Asking the far end for a fact it is standing on was the wasteful part.
+#
+# The runner ships every app it built; this picks which to place. Over-
+# shipping a few megabytes is cheaper than a second round trip, and far
+# cheaper than getting the set wrong.
 if [ ${#APPS[@]} -eq 0 ]; then
-  echo "── nothing to deploy (no apps named) ──"
+  for A in api admin seller track reseller associate marketing; do
+    did_change "^apps/$A/" && APPS+=("$A")
+  done
+  # A shared surface reaches every app: packages, the lockfile, the root
+  # configs. Erring wide costs seconds; erring narrow serves HTML naming
+  # chunks that the build it was never given had deleted.
+  if did_change '^(packages/|pnpm-lock\.yaml|pnpm-workspace\.yaml|package\.json|turbo\.json|tsconfig)'; then
+    APPS=(api admin seller track reseller associate marketing)
+    echo "── shared surface changed — every app ──"
+  fi
+fi
+
+if [ ${#APPS[@]} -eq 0 ]; then
+  echo "── nothing to deploy (no app changed since ${LAST_DEPLOYED:-<unknown>}) ──"
   echo "$NEW_SHA" > "$DEPLOYED_MARKER"
+  rm -rf "$INCOMING"
   exit 0
 fi
 echo "── apps this deploy touches: ${APPS[*]} ──"

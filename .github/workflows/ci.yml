@@ -93,7 +93,19 @@ jobs:
           fi
           FILES="$(git diff --name-only "$BASE" "${{ github.sha }}")"
           echo "$FILES" | sed 's/^/  /'
-          match() { echo "$FILES" | grep -qE "$1"; }
+          # HERESTRING, not a pipe — and this one is the dangerous
+          # instance. `grep -q` exits at the first match and closes its
+          # input; `echo` takes SIGPIPE, and under `set -o pipefail` the
+          # function returns NON-ZERO on a successful match.
+          #
+          # It only bites once $FILES outgrows the 64 KB pipe buffer, so
+          # it has been invisible on ordinary diffs and would appear on a
+          # large one — a refactor, a rename, a dependency bump. And it
+          # fails in the worst direction: `match` returning false means a
+          # change is judged NOT to affect the API or the frontends, so
+          # the suites that would have caught it are skipped and CI goes
+          # green. Loud failures are survivable; this one is silent.
+          match() { grep -qE "$1" <<<"$FILES"; }
           # packages/db and the workflow itself feed BOTH: a schema or type
           # change can break an API test and a frontend build equally.
           API=false; FE=false
@@ -561,12 +573,15 @@ jobs:
   # the affected apps and UPLOADS them, so Deploy downloads instead of
   # rebuilding — the last duplicated build in the pipeline.
   #
-  # It runs on push-to-main only. On a pull request there is nothing to
-  # deploy, and the artifact would be storage nobody collects.
+  # It runs on PRs too, not just push-to-main, because the browser shards
+  # now consume this artifact. Measured 2026-10-28: a browser shard spent
+  # 293 of its 453 seconds building the seven apps, and there are FOUR
+  # shards — the same build, four times over, beside this job doing it a
+  # fifth. The tests themselves took 42s.
   build:
     name: build artifacts
     needs: changes
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -627,9 +642,21 @@ jobs:
               *)         NEED='./BUILD_ID' ;;
             esac
             if [ -n "$NEED" ]; then
+              # HERESTRING, not a pipe. `grep -q` exits at the first
+              # match and closes its input; whatever was writing takes
+              # SIGPIPE, and under `set -o pipefail` the pipeline reports
+              # THAT — so the check fails on a perfectly good archive.
+              #
+              # Replacing `tar -tzf | grep -q` with `printf | grep -q`
+              # did not fix it, because the pipe was never the writer's
+              # fault: any producer feeding grep -q hits this. A
+              # herestring has no pipe and no second process to fail.
               LISTING="$(tar -tzf "$F")"
-              printf '%s\n' "$LISTING" | grep -qx "$NEED" || {
-                echo "!! $F has no $NEED"; printf '%s\n' "$LISTING" | head -5; exit 1; }
+              if ! grep -qx "$NEED" <<<"$LISTING"; then
+                echo "!! $F has no $NEED"
+                head -5 <<<"$LISTING"
+                exit 1
+              fi
             fi
             printf '  %-14s %s\n' "$B" "$(du -h "$F" | cut -f1)"
           done
@@ -655,7 +682,12 @@ jobs:
   # build is caught.
   browser:
     name: browser (${{ matrix.shard }}/4)
-    needs: changes
+    # Waits for `build`, and that is a deliberate trade. Serially it is
+    # build + shard; in parallel it was four shards each repeating the
+    # build. On a cold cache the two are within seconds of each other; on
+    # a warm one the build collapses and this wins outright — and it
+    # stops burning four duplicate builds either way.
+    needs: [changes, build]
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -774,23 +806,41 @@ jobs:
             next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
             next-${{ runner.os }}-
 
-      - name: Build the API and the six frontends
+      # DOWNLOAD what `build artifacts` already built, rather than
+      # building it a fifth time.
+      #
+      # Measured 2026-10-28: this step was 293s of a 453s job, and it ran
+      # in all four shards. The specs themselves were 42s. Every app's
+      # build is still CHECKED — the `build` job builds all of them and
+      # fails if any does — so RS-2 and ASSOC-1 keep the guarantee the
+      # old comments here were protecting: an app left off that list is
+      # an app whose build is verified nowhere.
+      - name: Download the build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ github.sha }}
+          path: /tmp/build
+
+      - name: Put it where the servers expect it
         run: |
-          pnpm --filter @skydrop/api build
-          pnpm --filter @skydrop/admin build
-          pnpm --filter @skydrop/seller build
-          pnpm --filter @skydrop/track build
-          # RS-2 — the reseller store portal. This build IS its build
-          # check; nothing else in CI builds it.
-          pnpm --filter @skydrop/reseller build
-          # ASSOC-1 — the associate portal. Same rule: an app left off
-          # this list is an app whose build is checked NOWHERE, and the
-          # first sign would be a deploy failing on the droplet.
-          pnpm --filter @skydrop/associate build
-          # Marketing is a static export; its `start` serves out/ via
-          # scripts/serve-static.mjs, so the build must run first here
-          # even though nothing else in this job consumes it.
-          pnpm --filter @skydrop/marketing build
+          set -euo pipefail
+          # Mirrors scripts/deploy.sh: archives carry CONTENTS, so each
+          # unpacks into the directory itself, not a nested copy.
+          tar -xzf /tmp/build/packages.tgz -C .
+          mkdir -p apps/api/dist && tar -xzf /tmp/build/api.tgz -C apps/api/dist
+          for A in admin seller track reseller associate; do
+            [ -f "/tmp/build/$A.tgz" ] || continue
+            mkdir -p "apps/$A/.next"
+            tar -xzf "/tmp/build/$A.tgz" -C "apps/$A/.next"
+          done
+          # Marketing is `output: 'export'`; its `start` serves out/ via
+          # scripts/serve-static.mjs, so playwright's webServer needs the
+          # directory present even though no spec imports from it.
+          if [ -f /tmp/build/marketing.tgz ]; then
+            mkdir -p apps/marketing/out
+            tar -xzf /tmp/build/marketing.tgz -C apps/marketing/out
+          fi
+          echo "placed:"; ls -d apps/*/.next apps/*/out apps/api/dist 2>/dev/null | sed 's/^/  /'
 
       # Cache the browser binary. The download is ~120MB and identical
       # between runs; keyed on the lockfile so a Playwright bump busts it.
