@@ -65,6 +65,10 @@ jobs:
     outputs:
       api: ${{ steps.f.outputs.api }}
       frontend: ${{ steps.f.outputs.frontend }}
+      # Which frontends to run browser specs for, and whether the change
+      # is one where "affected only" must not apply.
+      apps: ${{ steps.f.outputs.apps }}
+      full: ${{ steps.f.outputs.full }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -94,7 +98,12 @@ jobs:
           # change can break an API test and a frontend build equally.
           API=false; FE=false
           match '^(apps/api/|packages/db/|\.github/)' && API=true
-          match '^(apps/(admin|seller|track|marketing|reseller|associate)/|packages/(ui|api-client|auth|db)/|e2e-shared/|playwright\.config|\.github/)' && FE=true
+          # apps/api IS a frontend trigger. Every console talks to it
+          # through the same-origin proxy, so a route, DTO or guard
+          # change there breaks the browser specs without touching a
+          # single frontend file — and those specs are the only thing
+          # that exercises the seam.
+          match '^(apps/(api|admin|seller|track|marketing|reseller|associate)/|packages/(ui|api-client|auth|db)/|e2e-shared/|playwright\.config|\.github/)' && FE=true
           # The dependency graph feeds BOTH, and is the riskiest change of
           # all: a lockfile or override edit swaps the code every app runs
           # without touching one app's source. 029584ec (sharp/multer/qs/
@@ -102,34 +111,105 @@ jobs:
           # were skipped on exactly the change they exist to catch.
           DEPS='^(pnpm-lock\.yaml|pnpm-workspace\.yaml|package\.json|turbo\.json|\.npmrc|\.nvmrc)$'
           match "$DEPS" && { API=true; FE=true; }
+
+          # ── FULL GATE ──────────────────────────────────────────────
+          # Affected-only is an optimisation, and these are the paths
+          # where being wrong is most expensive. A change here runs
+          # EVERYTHING, regardless of which app's folder it sits in.
+          #
+          # Money: a wallet or ledger edit can only be judged against the
+          # whole suite, because the thing that breaks is an invariant
+          # two modules away. Couriers: a payload change is read by the
+          # courier, not by us, and the proof is e2e. Auth: a guard
+          # change is cross-cutting by definition. Migrations: the schema
+          # is the one thing every package compiles against.
+          FULL='^(apps/api/|packages/|pnpm-lock\.yaml|pnpm-workspace\.yaml|package\.json|turbo\.json|tsconfig|\.github/|apps/api/src/(modules/(wallet|seller-wallet|ledger|remittance|treasury|courier-[a-z-]+|order-money|reseller-order-money|inbound-freight|pnl)|common/auth)/|apps/api/src/common/guards/|packages/db/prisma/(migrations|schema))'
+          FULLGATE=false
+          match "$FULL" && FULLGATE=true
+
+          # Which FRONTENDS changed, for the browser matrix. On a full
+          # gate every app is named, so nothing is skipped.
+          APPS=""
+          if [ "$FULLGATE" = true ]; then
+            APPS="admin seller track reseller associate marketing"
+          else
+            for A in admin seller track reseller associate marketing; do
+              match "^apps/$A/" && APPS="$APPS $A"
+            done
+            APPS="$(echo "$APPS" | xargs || true)"
+          fi
+
           echo "api=$API"      >> "$GITHUB_OUTPUT"
           echo "frontend=$FE"  >> "$GITHUB_OUTPUT"
-          echo "→ api=$API frontend=$FE"
+          echo "apps=$APPS"    >> "$GITHUB_OUTPUT"
+          echo "full=$FULLGATE" >> "$GITHUB_OUTPUT"
+          echo "→ api=$API frontend=$FE full=$FULLGATE apps=[${APPS:-none}]"
 
   # ── Static analysis ──────────────────────────────────────────────────
   # No database, no Redis: tsc and eslint never run the app, and skipping
   # the service containers takes ~30s off this job's startup.
+  # Six GROUPS, not fifteen packages.
+  #
+  # One job per package would be ~15 typecheck + ~15 lint jobs, and on
+  # top of unit, e2e, browser and build that is well past GitHub's
+  # concurrent-job cap (20 on Free). Past the cap jobs queue in waves and
+  # the wall clock gets WORSE, not better — the parallelism is imaginary.
+  # Grouping keeps every heavy package on its own runner while the whole
+  # matrix still fits.
+  #
+  # Typecheck and lint run together per group because they share the
+  # expensive part: the workspace install and the ^build of the packages
+  # the group depends on. Splitting them doubles that cost to save
+  # nothing.
   static:
-    name: typecheck + lint + format
+    name: static (${{ matrix.group.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # FOUR groups, and the repo-wide checks ride with `packages`.
+        #
+        # The cap is 20 concurrent jobs for the whole ACCOUNT — CodeQL,
+        # Dependabot and Deploy draw on it too — so this pipeline budgets
+        # 18: changes 1 + static 4 + unit 4 + e2e 4 + browser 4 + build 1.
+        # Past the cap jobs queue in waves and the wall clock gets worse,
+        # which is the opposite of the point.
+        group:
+          - { name: api, filter: '@skydrop/api' }
+          - { name: consoles, filter: '@skydrop/admin --filter @skydrop/seller' }
+          - {
+              name: stores-public,
+              filter: '@skydrop/reseller --filter @skydrop/associate --filter @skydrop/track --filter @skydrop/marketing',
+            }
+          - { name: packages, filter: './packages/*' }
 
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-workspace
 
-      - name: Typecheck — all workspaces
-        run: pnpm -r typecheck
+      # tsc --build is incremental, and .tsbuildinfo is what makes it so.
+      # Keyed on the lockfile plus the group, restored loosely so a
+      # near-miss still saves most of the work.
+      - name: Restore tsbuildinfo
+        uses: actions/cache@v4
+        with:
+          path: |
+            **/*.tsbuildinfo
+            **/.eslintcache
+          key: static-${{ matrix.group.name }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            static-${{ matrix.group.name }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            static-${{ matrix.group.name }}-${{ runner.os }}-
 
-      - name: Lint — all workspaces that have lint
-        run: pnpm -r --if-present lint
+      - name: Typecheck
+        run: pnpm --filter ${{ matrix.group.filter }} typecheck
 
-      # The repo has shipped a .prettierrc since M0 that nothing enforced,
-      # and ~600 files had drifted from it. Normalised 2026-07-27; this
-      # step is what stops it happening again. `.prettierignore` is the
-      # single source of what is excluded (notably *.md — prose keeps its
-      # author's formatting).
+      - name: Lint
+        run: pnpm --filter ${{ matrix.group.filter }} --if-present lint
+
       - name: Format check
+        if: matrix.group.name == 'packages'
         run: pnpm format:check
 
       # packages/ui/src/brand/{scales,theme}.css are byte-identical copies
@@ -137,17 +217,20 @@ jobs:
       # five apps read one palette while marketing stays untouched. A copy
       # is only safe while it is identical; this fails on any drift.
       - name: Brand tokens match marketing
+        if: matrix.group.name == 'packages'
         run: node packages/ui/scripts/check-brand-tokens.mjs
 
       # Every text/surface and chip pairing of the apps' brand skin, in
       # both themes, computed from the real tokens (4.5:1 text, 3:1 UI).
       - name: Brand contrast
+        if: matrix.group.name == 'packages'
         run: node packages/ui/scripts/contrast.mjs
 
       # The seam between the two halves. Each side's own tests pass while
       # the path joining them is wrong — three bugs in one day were this
       # exact shape, and none of them were caught by a unit test.
       - name: Frontend calls resolve to real API routes
+        if: matrix.group.name == 'packages'
         run: python3 scripts/check-frontend-routes.py
 
       # The OTHER seam: a page reachable by one permission that fetches
@@ -156,16 +239,43 @@ jobs:
       # call agent on the admin dashboard and a viewer on the seller one,
       # and neither was caught by a test that only opens the page.
       - name: Pages ask only for what their gate allows
+        if: matrix.group.name == 'packages'
         run: python3 scripts/check-page-permissions.py
 
   # ── Unit tests ───────────────────────────────────────────────────────
   # Mocked-Prisma suites, so the service containers are insurance rather
   # than a requirement — a job that fails on a missing socket instead of a
   # real assertion is a slow and confusing way to learn that.
+  # FOUR groups, balanced by measured time rather than by package count.
+  #
+  # Measured 2026-10-28: api 135s (491 suites), admin 69s, seller 37s,
+  # reseller 32s, auth 15s, associate 10s, api-client 1s. The API is
+  # jest and splits with --shard; the frontends are vitest and are
+  # cheaper to group whole than to shard.
+  #
+  # app-module-boots.spec.ts lives in the API half and therefore runs on
+  # every CI run. It is 54s on its own — the single slowest suite in the
+  # repo — and it is the only thing that proves the app starts, so it is
+  # never filtered out, only placed.
+
+  # The repo-wide checks. Seconds each, and all of them read the whole
+  # tree, so they belong in one job rather than repeated per group.
   unit:
-    name: unit tests
+    name: unit (${{ matrix.part.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        part:
+          - { name: api-1, kind: api, shard: '1/2' }
+          - { name: api-2, kind: api, shard: '2/2' }
+          - { name: consoles, kind: fe, filter: '@skydrop/admin --filter @skydrop/seller' }
+          - {
+              name: stores-pkgs,
+              kind: fe,
+              filter: '@skydrop/reseller --filter @skydrop/associate --filter ./packages/*',
+            }
 
     env:
       DATABASE_URL: postgresql://skydrop:skydrop@localhost:5432/skydrop_test?schema=public
@@ -195,7 +305,8 @@ jobs:
       # connection — the same ~7,600 tests (472 files) run locally on a
       # machine with no Docker at all. DATABASE_URL stays set because the
       # Prisma client is constructed at import time; it is never dialled.
-      - name: Unit tests — API (jest)
+      - name: Unit tests — API (jest, ${{ matrix.part.shard }})
+        if: matrix.part.kind == 'api'
         # HEADROOM, beside the per-worker recycling in jest.config.ts.
         #
         # Node's default old-space is ~2 GB and this suite died exactly
@@ -211,25 +322,15 @@ jobs:
         # the belt to that pair of braces.
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-        run: pnpm --filter @skydrop/api test
+        run: pnpm --filter @skydrop/api test -- --passWithNoTests --shard=${{ matrix.part.shard }}
 
-      - name: Unit tests — admin (vitest)
-        run: pnpm --filter @skydrop/admin test
-
-      - name: Unit tests — seller (vitest)
-        run: pnpm --filter @skydrop/seller test
-
-      - name: Unit tests — reseller (vitest)
-        run: pnpm --filter @skydrop/reseller test
-
-      # ASSOC-1 — the associate portal. An app missing from this list is
-      # an app whose unit tests never run, which looks exactly like an
-      # app that has none.
-      - name: Unit tests — associate (vitest)
-        run: pnpm --filter @skydrop/associate test
-
-      - name: Unit tests — packages
-        run: pnpm --filter './packages/*' --if-present test
+      # The frontends are vitest. An app missing from a filter here is an
+      # app whose unit tests never run, which looks exactly like an app
+      # that has none — so the two frontend groups between them must name
+      # every one: admin, seller, reseller, associate, and ./packages/*.
+      - name: Unit tests — frontends (vitest)
+        if: matrix.part.kind == 'fe'
+        run: pnpm --filter ${{ matrix.part.filter }} --if-present test
 
   # ── API e2e ──────────────────────────────────────────────────────────
   # The long pole, and therefore the critical path. It stays a single
@@ -444,6 +545,93 @@ jobs:
         # perfectly fine. Verified locally with --listTests (10/10/9).
         run: pnpm --filter @skydrop/api test:e2e --shard=${{ matrix.shard }}/4
 
+  # ── Build once, for the deploy to reuse ─────────────────────────────
+  # CI already builds every app for the browser specs and throws it away;
+  # the Deploy workflow then built the same thing again. This job builds
+  # the affected apps and UPLOADS them, so Deploy downloads instead of
+  # rebuilding — the last duplicated build in the pipeline.
+  #
+  # It runs on push-to-main only. On a pull request there is nothing to
+  # deploy, and the artifact would be storage nobody collects.
+  build:
+    name: build artifacts
+    needs: changes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+
+      - name: Restore turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-
+
+      - name: Build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          set -euo pipefail
+          # One turbo invocation: it resolves ^build itself, so the
+          # shared packages build once and the apps fan out in parallel.
+          APPS="${{ needs.changes.outputs.apps }}"
+          [ -n "$APPS" ] || APPS="admin seller track reseller associate marketing"
+          FILTERS="--filter=@skydrop/api"
+          for A in $APPS; do FILTERS="$FILTERS --filter=@skydrop/$A"; done
+          echo "building: api $APPS"
+          pnpm turbo run build $FILTERS --concurrency=100%
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          APPS="${{ needs.changes.outputs.apps }}"
+          [ -n "$APPS" ] || APPS="admin seller track reseller associate marketing"
+          # Shared packages whole — 3.6 MB, and the alternative is an app
+          # running against a sibling's older dist.
+          tar -czf artifacts/packages.tgz packages/*/dist
+          tar -czf artifacts/api.tgz -C apps/api/dist .
+          for A in $APPS; do
+            if [ "$A" = "marketing" ]; then
+              tar -czf artifacts/marketing.tgz -C apps/marketing/out .
+            else
+              # --exclude=./cache: the incremental build cache is useless
+              # to a box that never builds, and nearly all of the bytes.
+              tar -czf "artifacts/$A.tgz" --exclude=./cache -C "apps/$A/.next" .
+            fi
+          done
+          # Prove each archive BEFORE it is uploaded. Read the listing
+          # once into a variable: `tar -tzf … | grep -q …` makes tar take
+          # SIGPIPE, and under pipefail the check fails on a good
+          # archive.
+          for F in artifacts/*.tgz; do
+            B="$(basename "$F" .tgz)"
+            case "$B" in
+              api)       NEED='./main.js' ;;
+              packages)  NEED='' ;;
+              marketing) NEED='./index.html' ;;
+              *)         NEED='./BUILD_ID' ;;
+            esac
+            if [ -n "$NEED" ]; then
+              LISTING="$(tar -tzf "$F")"
+              printf '%s\n' "$LISTING" | grep -qx "$NEED" || {
+                echo "!! $F has no $NEED"; printf '%s\n' "$LISTING" | head -5; exit 1; }
+            fi
+            printf '  %-14s %s\n' "$B" "$(du -h "$F" | cut -f1)"
+          done
+          echo "total: $(du -ch artifacts/*.tgz | tail -1 | cut -f1)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ github.sha }}
+          path: artifacts/
+          retention-days: 3
+          compression-level: 0
+
   # ── Browser specs ────────────────────────────────────────────────────
   # Its own job, not a step alongside the API e2e, for one concrete
   # reason: that suite's global teardown DROPS the test database, and
@@ -456,11 +644,15 @@ jobs:
   # this file, where the Next apps get built and therefore where a broken
   # build is caught.
   browser:
-    name: browser specs (playwright)
+    name: browser (${{ matrix.shard }}/4)
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     services:
       postgres:
@@ -645,7 +837,35 @@ jobs:
         # The admin + seller + track + marketing servers are auto-spawned
         # by playwright's webServer config (built output in CI, not
         # `dev`).
-        run: pnpm e2e:fe
+        #
+        # --shard splits the spec list four ways. Playwright balances by
+        # spec count, not by duration, so the shards are approximate —
+        # good enough while the suite is ~13 minutes serial.
+        #
+        # PROJECT FILTERING: on an ordinary change only the frontends
+        # that changed are exercised. On a FULL-GATE change — shared
+        # packages, auth, money, couriers, migrations — `changes` names
+        # every app, so the filter is the whole set and nothing is
+        # skipped on exactly the changes these specs exist to catch.
+        env:
+          AFFECTED_APPS: ${{ needs.changes.outputs.apps }}
+        run: |
+          set -euo pipefail
+          ARGS=""
+          if [ -n "${AFFECTED_APPS:-}" ]; then
+            for A in $AFFECTED_APPS; do ARGS="$ARGS --project=$A"; done
+            echo "browser projects: $AFFECTED_APPS"
+          else
+            echo "browser projects: all (no affected list)"
+          fi
+          # `pnpm exec playwright`, not `pnpm e2e:fe`: pnpm can claim a
+          # leading --flag as its own rather than forwarding it, and a
+          # swallowed --shard means four jobs each running the FULL suite
+          # while the log still says "shard".
+          # --pass-with-no-tests: with project filtering, a shard can
+          # legitimately receive zero specs. Without this it exits
+          # non-zero and reds a CI run in which nothing is wrong.
+          pnpm exec playwright test --pass-with-no-tests --shard=${{ matrix.shard }}/4 $ARGS
 
       - name: API log on failure
         if: failure()
@@ -655,7 +875,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-traces
+          name: playwright-traces-${{ matrix.shard }}
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
