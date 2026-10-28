@@ -306,6 +306,10 @@
 .imp-chip__dot {
   flex: none;
   color: var(--saffron-text);
+  /* The warning icon sets the chip's line box, so without this the
+     Address Line2 chip sits a pixel proud of its neighbours and the row
+     of chips reads as slightly crooked. */
+  align-self: center;
 }
 
 /* The one chip that must not be skimmed past.

@@ -105,12 +105,20 @@ jobs:
       # A manual workflow_dispatch has no CI run to take an artifact
       # from, and artifacts expire after three days. Without this, both
       # cases are a deploy that cannot run at all.
+      #
+      # It should otherwise NEVER run, so it says so loudly. On
+      # c6df0243 it ran unnoticed — `continue-on-error` had reported the
+      # failed download as "success" in the step list — and spent 279s
+      # rebuilding seven apps to deploy nothing. A fallback that is
+      # indistinguishable from the happy path is a fallback that hides
+      # the bug it is compensating for.
       - name: Build (only if CI's artifact was unavailable)
         if: steps.artifact.outcome != 'success'
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: |
           set -euo pipefail
+          echo "::warning title=Deploy fell back to building::No artifact build-${SHA} from CI run ${{ github.event.workflow_run.id }}. Expected on a manual dispatch or an expired artifact; on a normal push it means CI's build job did not upload."
           echo "no artifact for ${SHA} — building here instead"
           pnpm turbo run build --filter='@skydrop/*' --concurrency=100%
           mkdir -p out
