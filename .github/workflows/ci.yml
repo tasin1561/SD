@@ -175,14 +175,19 @@ jobs:
         # 18: changes 1 + static 4 + unit 4 + e2e 4 + browser 4 + build 1.
         # Past the cap jobs queue in waves and the wall clock gets worse,
         # which is the opposite of the point.
+        # The value is the WHOLE --filter expression, quotes included.
+        # `./packages/*` must stay quoted: unquoted, the shell expands it
+        # before pnpm sees it and pnpm reads the second path as the
+        # SCRIPT NAME ("None of the selected packages has a
+        # './packages/auth' script").
         group:
-          - { name: api, filter: '@skydrop/api' }
-          - { name: consoles, filter: '@skydrop/admin --filter @skydrop/seller' }
+          - { name: api, filter: '--filter @skydrop/api' }
+          - { name: consoles, filter: '--filter @skydrop/admin --filter @skydrop/seller' }
           - {
               name: stores-public,
-              filter: '@skydrop/reseller --filter @skydrop/associate --filter @skydrop/track --filter @skydrop/marketing',
+              filter: '--filter @skydrop/reseller --filter @skydrop/associate --filter @skydrop/track --filter @skydrop/marketing',
             }
-          - { name: packages, filter: './packages/*' }
+          - { name: packages, filter: "--filter './packages/*'" }
 
     steps:
       - uses: actions/checkout@v4
@@ -203,10 +208,10 @@ jobs:
             static-${{ matrix.group.name }}-${{ runner.os }}-
 
       - name: Typecheck
-        run: pnpm --filter ${{ matrix.group.filter }} typecheck
+        run: pnpm ${{ matrix.group.filter }} typecheck
 
       - name: Lint
-        run: pnpm --filter ${{ matrix.group.filter }} --if-present lint
+        run: pnpm ${{ matrix.group.filter }} --if-present lint
 
       - name: Format check
         if: matrix.group.name == 'packages'
@@ -270,7 +275,7 @@ jobs:
         part:
           - { name: api-1, kind: api, shard: '1/2' }
           - { name: api-2, kind: api, shard: '2/2' }
-          - { name: consoles, kind: fe, filter: '@skydrop/admin --filter @skydrop/seller' }
+          - { name: consoles, kind: fe, filter: '--filter @skydrop/admin --filter @skydrop/seller' }
           - {
               name: stores-pkgs,
               kind: fe,
@@ -322,7 +327,12 @@ jobs:
         # the belt to that pair of braces.
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-        run: pnpm --filter @skydrop/api test -- --passWithNoTests --shard=${{ matrix.part.shard }}
+        # `exec jest`, not `test -- …`. The package script is
+        # `jest --config jest.config.ts`, and `pnpm … test -- args`
+        # appends a bare `--`, which jest reads as "positional args
+        # follow" — so --shard became a TEST PATH PATTERN and matched
+        # nothing: "Pattern: --passWithNoTests|--shard=1/2 - 0 matches".
+        run: pnpm --filter @skydrop/api exec jest --config jest.config.ts --passWithNoTests --shard=${{ matrix.part.shard }}
 
       # The frontends are vitest. An app missing from a filter here is an
       # app whose unit tests never run, which looks exactly like an app
@@ -330,7 +340,7 @@ jobs:
       # every one: admin, seller, reseller, associate, and ./packages/*.
       - name: Unit tests — frontends (vitest)
         if: matrix.part.kind == 'fe'
-        run: pnpm --filter ${{ matrix.part.filter }} --if-present test
+        run: pnpm ${{ matrix.part.filter }} --if-present test
 
   # ── API e2e ──────────────────────────────────────────────────────────
   # The long pole, and therefore the critical path. It stays a single
