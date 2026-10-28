@@ -713,7 +713,13 @@ export function CsvImportPanel({
           missing: the file went straight to process, so a column we
           could not map became rows that failed one at a time into an
           error report read afterwards. */}
-      {pending !== null && (
+      {/* Only while the dialog is CLOSED (owner, 2026-10-28). Rendering
+          both at once put the same verdict, the same rejected rows and
+          the same import button on screen twice — the second copy
+          visible behind the overlay, which reads as the page having
+          duplicated itself. This section is the fallback for a DISMISSED
+          dialog, not its companion. */}
+      {pending !== null && !reviewOpen && (
         <OrdSection
           title={t('orderImport.checkBeforeImporting')}
           note={
