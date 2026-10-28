@@ -59,101 +59,41 @@ jobs:
           printf '%s\n' "${{ secrets.DROPLET_SSH_KEY }}" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
           ssh-keyscan -H "${{ secrets.DROPLET_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
-          # MULTIPLEXING IS LOAD-BEARING, not a tidy-up.
+          # NO ControlMaster. It cost more than it saved.
           #
-          # The droplet runs `ufw limit OpenSSH`, which drops the 6th
-          # connection from one IP inside 30 seconds. This job opens five
-          # (keyscan, the affected-base read, mkdir, scp, deploy) — one
-          # retry anywhere and the deploy trips the firewall rule it is
-          # protected by, which surfaces as a connection timeout with
-          # nothing in the logs explaining it.
+          # The droplet runs `ufw limit OpenSSH`, dropping the 6th
+          # connection from one IP inside 30 seconds, and this job used
+          # to open five — so multiplexing looked like the answer. It was
+          # not: the master is a background process that inherits a
+          # step's stdout and stderr, and the Actions runner will not end
+          # a step until those close. The wait simply MOVED. "Which apps
+          # changed?" went 72s → 1s and "Open the SSH channel" went 4s →
+          # 73s, which is the same 72 seconds wearing a different label.
           #
-          # With ControlMaster every ssh/scp after the first rides the
-          # SAME TCP connection, so the run costs one. ControlPersist
-          # keeps the master alive across steps; 5m comfortably covers a
-          # deploy that is now expected to take about one.
+          # The real fix is to need fewer connections, not to pool them.
+          # This deploy now opens TWO in total: the keyscan above, and
+          # one pipeline that streams the artifacts in and runs the
+          # deploy on the far end. Nothing to persist, nothing to detach,
+          # nothing to wait on.
           cat >> ~/.ssh/config <<EOF
           Host droplet
             HostName ${{ secrets.DROPLET_HOST }}
             User ${{ secrets.DROPLET_USER }}
             IdentityFile ~/.ssh/id_deploy
             StrictHostKeyChecking yes
-            ControlMaster auto
-            ControlPath ~/.ssh/cm-%r@%h:%p
-            ControlPersist 5m
             ServerAliveInterval 30
             ServerAliveCountMax 10
           EOF
-          # Start the master HERE, fully detached.
-          #
-          # Without this, the first `ssh` in a later step spawns the
-          # master as its own child, and that child inherits the step's
-          # stdout and stderr. The Actions runner will not finish a step
-          # until those descriptors close, so the step sits there while
-          # the master lives out its ControlPersist. "Which apps actually
-          # changed?" — an SSH read and a git diff — measured 72 SECONDS
-          # on 2026-10-28, longer than the entire droplet side of the
-          # deploy.
-          #
-          # `-f -N -M` with every descriptor redirected means the master
-          # belongs to no step, and each later ssh/scp just attaches to
-          # it.
-          ssh -f -N -M droplet </dev/null >/dev/null 2>&1 || true
-          ssh -O check droplet 2>&1 | head -1 || true
 
-      - name: Which apps actually changed?
-        id: affected
-        run: |
-          set -euo pipefail
-          # Diff against what the droplet is RUNNING, never against HEAD~1.
-          # After a failed deploy those differ, and HEAD~1 would ship one
-          # commit's worth of apps while the box is several behind.
-          BASE="$(ssh droplet 'cat ~/app/.last-deployed-sha 2>/dev/null' || true)"
-          if [ -z "$BASE" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
-            echo "no usable base ('${BASE:-empty}') — deploying everything"
-            APPS="api admin seller track reseller associate marketing"
-          else
-            echo "base = $BASE"
-            CHANGED="$(git diff --name-only "$BASE" "$SHA")"
-            # A shared package fans out to every app that consumes it.
-            # Erring wide is the cheap direction: a needless rebuild
-            # costs seconds, a missed one serves HTML naming chunks the
-            # build it never got had deleted.
-            if echo "$CHANGED" | grep -qE '^(packages/|pnpm-lock\.yaml|package\.json|turbo\.json|tsconfig)'; then
-              echo "shared surface changed — deploying everything"
-              APPS="api admin seller track reseller associate marketing"
-            else
-              APPS=""
-              for A in api admin seller track reseller associate marketing; do
-                echo "$CHANGED" | grep -qE "^apps/$A/" && APPS="$APPS $A"
-              done
-              APPS="$(echo "$APPS" | xargs || true)"
-            fi
-          fi
-          echo "apps=$APPS" >> "$GITHUB_OUTPUT"
-          echo "Deploying: ${APPS:-<nothing>}"
-
-      # CI already built and uploaded these. Downloading beats
-      # rebuilding by whatever a cold Next build costs — about 106s on
-      # 2026-10-28 for one app, and far more when a shared package
-      # changes and all seven rebuild.
-      # PINNED TWO WAYS, deliberately.
-      #
-      # `run-id` is the CI run that triggered THIS deploy, so the search
-      # cannot wander to another run. `name` carries the commit SHA, so
-      # even within that run it cannot pick up a different commit's
-      # build. Neither alone is enough: without run-id the action takes
-      # the latest matching artifact in the repository, which during
-      # concurrent merges is somebody else's code; without the SHA in
-      # the name, a re-run of an older CI would serve an older build to
-      # a newer deploy.
-      #
-      # The `if` requires a run-id rather than letting an empty one fail
-      # — a guarantee that holds because it is checked is worth more
-      # than one that holds because a step happened to error.
+      # PINNED TWO WAYS. `run-id` is the CI run that triggered this
+      # deploy, so the search cannot wander to another run; the commit
+      # SHA in the name means it cannot pick up a different commit's
+      # build even within that run. Without run-id the action takes the
+      # newest matching artifact in the repository, which during
+      # concurrent merges is somebody else's code.
       - name: Download CI's build
         id: artifact
-        if: steps.affected.outputs.apps != '' && github.event.workflow_run.id != ''
+        if: github.event.workflow_run.id != ''
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
@@ -162,34 +102,26 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id }}
 
-      # The fallback is not decoration. A manual re-deploy
-      # (workflow_dispatch) has no CI run to take an artifact from, and
-      # an artifact expires after three days. Without this, either case
-      # is a deploy that cannot run at all.
+      # A manual workflow_dispatch has no CI run to take an artifact
+      # from, and artifacts expire after three days. Without this, both
+      # cases are a deploy that cannot run at all.
       - name: Build (only if CI's artifact was unavailable)
-        if: steps.affected.outputs.apps != '' && steps.artifact.outcome != 'success'
+        if: steps.artifact.outcome != 'success'
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: |
           set -euo pipefail
           echo "no artifact for ${SHA} — building here instead"
-          FILTERS=""
-          for A in ${{ steps.affected.outputs.apps }}; do
-            FILTERS="$FILTERS --filter=@skydrop/$A"
-          done
-          pnpm turbo run build $FILTERS --concurrency=100%
+          pnpm turbo run build --filter='@skydrop/*' --concurrency=100%
           mkdir -p out
           tar -czf out/packages.tgz packages/*/dist
-          for A in ${{ steps.affected.outputs.apps }}; do
-            case "$A" in
-              api)       tar -czf out/api.tgz       -C apps/api/dist . ;;
-              marketing) tar -czf out/marketing.tgz -C apps/marketing/out . ;;
-              *)         tar -czf "out/$A.tgz" --exclude=./cache -C "apps/$A/.next" . ;;
-            esac
+          tar -czf out/api.tgz -C apps/api/dist .
+          tar -czf out/marketing.tgz -C apps/marketing/out .
+          for A in admin seller track reseller associate; do
+            tar -czf "out/$A.tgz" --exclude=./cache -C "apps/$A/.next" .
           done
 
       - name: Check what we are about to ship
-        if: steps.affected.outputs.apps != ''
         run: |
           set -euo pipefail
           echo "── archive check ──"
@@ -203,7 +135,7 @@ jobs:
             esac
             if [ -n "$NEED" ]; then
               # Listing captured first: grep -q closes the pipe, tar takes
-              # SIGPIPE, and under pipefail the check fails on a good
+              # SIGPIPE, and under pipefail the check fails on a GOOD
               # archive. That happened on 2026-10-28.
               LISTING="$(tar -tzf "$F")"
               if ! printf '%s\n' "$LISTING" | grep -qx "$NEED"; then
@@ -214,18 +146,28 @@ jobs:
             fi
             printf '  %-14s %-7s ok\n' "$B" "$(du -h "$F" | cut -f1)"
           done
-          echo "── total shipped: $(du -ch out/*.tgz | tail -1 | cut -f1) ──"
+          echo "── total: $(du -ch out/*.tgz | tail -1 | cut -f1) ──"
 
-      - name: Ship and swap
-        if: steps.affected.outputs.apps != ''
+      # ONE connection. Keyscan above plus this is the whole deploy.
+      #
+      # `ufw limit OpenSSH` drops the 6th connection from one IP inside
+      # 30 seconds, and the old shape opened five — mkdir, scp, deploy,
+      # plus a marker read, plus the keyscan. ControlMaster pooled them
+      # and cost 72 seconds of a step waiting on a background process it
+      # could not see.
+      #
+      # So the archives are streamed INTO the far end's tar over stdin,
+      # and the same command runs the deploy. Nothing is persisted, and
+      # which apps to place is decided on the droplet — it already holds
+      # the marker and the diff, so asking it for that over a second
+      # connection was always the wasteful part.
+      - name: Ship and deploy (one connection)
         run: |
           set -euo pipefail
-          ssh droplet "rm -rf ~/app/.deploy-incoming/$SHA && mkdir -p ~/app/.deploy-incoming/$SHA"
-          scp out/*.tgz "droplet:~/app/.deploy-incoming/$SHA/"
-          # deploy.sh still git-pulls: it is itself versioned, and so are
-          # ecosystem.config.cjs, the prisma migrations and the seed.
-          ssh droplet "cd ~/app && bash scripts/deploy.sh $SHA ${{ steps.affected.outputs.apps }}"
-
-      - name: Nothing to do
-        if: steps.affected.outputs.apps == ''
-        run: echo "No app changed since the droplet's last deploy — nothing shipped."
+          tar -cz -C out . | ssh droplet "
+            set -e
+            D=~/app/.deploy-incoming/${SHA}
+            rm -rf \$D && mkdir -p \$D
+            tar -xz -C \$D
+            cd ~/app && bash scripts/deploy.sh ${SHA}
+          "
