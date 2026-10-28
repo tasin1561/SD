@@ -255,13 +255,18 @@ export const orderImport = defineMessages({
     'This file cannot be imported yet.',
     'এই ফাইলটি এখনও ইম্পোর্ট করা যাবে না।',
   ],
+  // "being created", not "created". `/process` QUEUES the job — these
+  // counts come from the check, not from a finished import, and a queued
+  // job can still fail. Claiming a result we do not have yet is the kind
+  // of small untruth that makes a seller stop believing the whole screen
+  // the first time the number does not match Recent imports.
   'orderImport.reviewDoneClean': [
-    '{created} created. No rows were rejected.',
-    '{created} তৈরি হয়েছে। কোনো সারি বাতিল হয়নি।',
+    '{created} being created. No rows were rejected.',
+    '{created} তৈরি হচ্ছে। কোনো সারি বাতিল হয়নি।',
   ],
   'orderImport.reviewDoneMixed': [
-    '{created} created, {rejected} rejected.',
-    '{created} তৈরি হয়েছে, {rejected} বাতিল।',
+    '{created} being created, {rejected} rejected.',
+    '{created} তৈরি হচ্ছে, {rejected} বাতিল।',
   ],
   'orderImport.autoQueuedNote': [
     'Imported automatically — the check found nothing to decide. Final results are in Recent imports.',

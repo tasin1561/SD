@@ -76,7 +76,7 @@ describe('decideAutoImport', () => {
 });
 
 describe('the panel', () => {
-  it('imports a clean mapping with no click, past tense, exactly once', async () => {
+  it('imports a clean mapping with no click, in progress, exactly once', async () => {
     const f = await uploadWith({
       ...base,
       orderCount: 5,
@@ -85,7 +85,11 @@ describe('the panel', () => {
       problems: [problem],
     });
     const dlg = await screen.findByRole('dialog');
-    await waitFor(() => expect(dlg).toHaveAccessibleName('5 orders created, 2 rows rejected.'));
+    // "being created", not "created": /process queues the job, so this
+    // count is the check's, not a finished import's.
+    await waitFor(() =>
+      expect(dlg).toHaveAccessibleName('5 orders being created, 2 rows rejected.'),
+    );
     expect(within(dlg).getByText('Row 4')).toBeTruthy();
     expect(within(dlg).queryByRole('button', { name: /import/i })).toBeNull();
     expect(processCalls(f)).toBe(1);
