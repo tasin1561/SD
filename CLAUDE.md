@@ -140,6 +140,14 @@ Everything that used to live below this point was moved **verbatim** into `docs/
 - **SHOW THE FILES BEFORE PUSHING TO `main`. No exceptions, and pipeline changes are not an exception** (2026-10-28). CI workflows and `scripts/deploy.sh` are the files whose blast radius is every deploy and whose failure mode is "production is stale and nothing says so" — they need MORE review than application code, not less. "It is only config" and "no test covers it" both argue for showing it, since neither the gate nor CI will catch a mistake there.
 - **Stage deliberately. `git add -A` is forbidden** (2026-10-28). It bundled a seller CSS change into a `docs(email):` commit the same day this rule was written, and earlier swept a stray generator script into the repo where the format check caught it. Both were invisible at commit time because nobody looked at what was staged. `git add <path>` the files the commit is about, `git status` before committing, and if the diff holds two concerns it is two commits. A history that misdescribes what changed is worse than a messy one: the next person bisecting trusts the subject line.
 
+### Pipeline work: `.github/workflows/**`, `turbo.json`, `scripts/deploy.sh` (2026-10-28)
+
+Three rules, each written against a failure from the day they were added — three consecutive red CI runs on `main` from one afternoon's pipeline change.
+
+- **Branch and PR, never straight to `main`. CI must be green on the PR before it merges.** `main` is the branch Deploy builds from, so a red `main` is not an inconvenience, it is a window where nothing can ship — and a pipeline change is exactly the kind that cannot be verified any other way than by running it. Pushing these straight to `main` three times in a row is what made the lesson concrete.
+- **Run every changed command locally before pushing.** Not read it — run it. `--listTests` for a jest filter, `--dry` for turbo, `exec pwd` to prove a pnpm `--filter` resolves to the packages you meant, a tar round-trip for an archive. Every one of those failures was a command assembled by string interpolation where quoting or an argument boundary was lost in transit, and **none of them was visible in the diff**. Each took under a minute to catch this way and a full CI cycle to catch the other way.
+- **Use `Edit` for these files, never a scripted string replacement.** A `sed`/python `.replace()` that does not match is not an error — it is a no-op that reports success. Half of one fix silently did nothing because prettier had already reformatted the target across four lines, and the commit, the diff and the push all looked fine. `Edit` fails loudly when its anchor is missing, which is the only honest outcome.
+
 ---
 
 > MUST items 19–25 live in their topic docs under `docs/invariants/` (see the list above).
