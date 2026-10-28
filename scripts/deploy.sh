@@ -132,40 +132,61 @@ did_change '^apps/marketing/|^packages/ui/' && MARKETING_TOUCHED=true
 SEED_TOUCHED=false
 did_change '^packages/db/prisma/seed\.ts$|^packages/db/prisma/schema\.prisma$|^packages/db/prisma/[a-z-]+\.ts$' && SEED_TOUCHED=true
 
-# ── 2. Install ───────────────────────────────────────────────────────
-echo "── pnpm install ──"
-pnpm install --frozen-lockfile
-
-# Node's default heap cap is derived from the box, and on a 4 GB droplet
-# that lands near 2 GB — which is where `next build` for apps/admin died
-# on 2026-10-27, at 1.93 GB, with "Reached heap limit" and a build worker
-# killed by SIGABRT. The console had just gained its Bangla catalogue:
-# 262 translated files and 6,372 message lookups, all of which the type
-# checker holds at once.
+# ── 2. What was shipped ──────────────────────────────────────────────
 #
-# CI has carried --max-old-space-size=4096 for its own build the whole
-# time (.github/workflows/ci.yml), which is precisely why this passed
-# every check and then failed here. A build that is verified under one
-# heap and run under another is not the same build.
+# THE DROPLET NO LONGER BUILDS ANYTHING (2026-10-28).
 #
-# 3072 rather than CI's 4096: this box has ~2.5 GB free beside 4 GB of
-# swap, and the ceiling is a promise to V8 that it may grow that far, not
-# a reservation. Too high simply moves the failure from a clean V8 abort
-# to the kernel's OOM killer, which takes whichever process it likes —
-# possibly the API serving traffic. The builds are sequential, so one cap
-# covers them all.
-export NODE_OPTIONS="--max-old-space-size=3072"
+# It used to: `pnpm install` then ten `pnpm --filter ... build` calls,
+# 12m35s on a 2-vCPU box, duplicating a build CI had already done and
+# thrown away. It is also where apps/admin ran out of heap twice on
+# 2026-10-27 and stopped the deploy dead.
+#
+# Now GitHub Actions builds, tars and uploads the outputs, and this
+# script places them. What arrives:
+#
+#   $INCOMING/packages.tgz   every packages/*/dist (3.6 MB, always sent)
+#   $INCOMING/<app>.tgz      that app's .next, or apps/api/dist
+#   $INCOMING/marketing.tgz  apps/marketing/out, only when it changed
+#
+# Packages are sent WHOLE every time rather than per-affected. They are
+# small, and the alternative is a shipped app running against a sibling
+# package's older dist — a skew that typechecks locally and fails only
+# in production.
+INCOMING="$ROOT/.deploy-incoming/$EXPECTED_SHA"
+APPS=("${@:2}")
 
-# ── 3. Build packages ────────────────────────────────────────────────
-echo "── build packages ──"
-echo "   NODE_OPTIONS=$NODE_OPTIONS"
-pnpm --filter @skydrop/db build
-pnpm --filter @skydrop/api-client build
-pnpm --filter @skydrop/ui build
+if [ ${#APPS[@]} -eq 0 ]; then
+  echo "── nothing to deploy (no apps named) ──"
+  echo "$NEW_SHA" > "$DEPLOYED_MARKER"
+  exit 0
+fi
+echo "── apps this deploy touches: ${APPS[*]} ──"
 
-# ── 4. Migrations ────────────────────────────────────────────────────
-echo "── prisma migrate deploy ──"
-pnpm --filter @skydrop/db exec prisma migrate deploy
+[ -d "$INCOMING" ] || { echo "no artifacts at $INCOMING"; exit 1; }
+
+# ── 3. Install — ONLY when the lockfile moved ────────────────────────
+#
+# node_modules stays on the box. The shipped `.next` needs it at runtime
+# (`next start` resolves from it) and so does apps/api/dist. Reinstalling
+# when nothing moved cost ~90s for no change.
+if did_change '^pnpm-lock\.yaml$'; then
+  echo "── pnpm install (lockfile changed) ──"
+  pnpm install --frozen-lockfile --prefer-offline
+else
+  echo "── lockfile unchanged — skipping install ──"
+fi
+
+# ── 4. Migrations — ONLY when a migration arrived ────────────────────
+#
+# `migrate deploy` is idempotent and costs ~2s, so this gate saves
+# little. It is here because a deploy that does not touch the schema
+# should not open a transaction against production at all.
+if did_change '^packages/db/prisma/migrations/'; then
+  echo "── prisma migrate deploy (migrations changed) ──"
+  pnpm --filter @skydrop/db exec prisma migrate deploy
+else
+  echo "── no migrations in this change — skipping ──"
+fi
 
 # ── 5. Seed (idempotent, only when seed changed) ─────────────────────
 if [ "$SEED_TOUCHED" = true ]; then
@@ -175,213 +196,158 @@ else
   echo "── seed unchanged — skipping ──"
 fi
 
-# ── 6. Build apps ────────────────────────────────────────────────────
-echo "── build apps ──"
-pnpm --filter @skydrop/api build
-pnpm --filter @skydrop/admin build
-pnpm --filter @skydrop/seller build
-pnpm --filter @skydrop/track build
-pnpm --filter @skydrop/reseller build
-# ASSOC-1 — the associate portal. In the build list EVERY deploy, like
-# every other app: step 7 restarts all of them unconditionally, and the
-# two halves have to agree or a restarted process serves HTML naming
-# chunks the build it was not given deleted.
-pnpm --filter @skydrop/associate build
-pnpm --filter @skydrop/marketing build
+# ── 6. Place the artifacts: unpack beside, then swap ─────────────────
+#
+# NEVER unpack over a live directory. A half-written `.next` is served
+# to whoever is on the site at that moment, and the failure looks like a
+# corrupt build rather than a deploy in progress. Each output lands in a
+# sibling `.incoming`, and the swap is two renames on the same
+# filesystem — atomic enough that the window is sub-millisecond, and
+# pm2 reload follows immediately.
+#
+# The previous output is KEPT as `.prev` for exactly one deploy, which
+# is the whole rollback story until the release-directory scheme lands:
+#     mv .next .next.bad && mv .next.prev .next && pm2 restart ...
+swap_in() {           # $1 = live dir, $2 = tarball, $3 = label
+  local live="$1" tgz="$2" label="$3"
+  local inc="${live}.incoming" prev="${live}.prev"
+  rm -rf "$inc"
+  mkdir -p "$inc"
+  tar -xzf "$tgz" -C "$inc"
+  rm -rf "$prev"
+  [ -e "$live" ] && mv "$live" "$prev"
+  mv "$inc" "$live"
+  echo "  placed $label (previous kept at $(basename "$prev"))"
+}
+
+echo "── place shared package builds ──"
+tar -xzf "$INCOMING/packages.tgz" -C "$ROOT"
+
+echo "── place app builds ──"
+for APP in "${APPS[@]}"; do
+  case "$APP" in
+    api)       swap_in "$ROOT/apps/api/dist" "$INCOMING/api.tgz" "api/dist" ;;
+    marketing) : ;;  # static export, handled in 6b
+    *)         swap_in "$ROOT/apps/$APP/.next" "$INCOMING/$APP.tgz" "$APP/.next" ;;
+  esac
+done
 
 # ── 6b. Publish marketing static export ─────────────────────────────
-if [ "$MARKETING_TOUCHED" = true ]; then
+#
+# apps/marketing is `output: 'export'` — no pm2 process, Caddy
+# file-serves it. It is published only when its tarball was sent.
+if [ -f "$INCOMING/marketing.tgz" ]; then
   echo "── publish marketing static ──"
-  sudo rsync -a --delete apps/marketing/out/ /var/www/skydrop-marketing/
+  rm -rf "$ROOT/.marketing-out"
+  mkdir -p "$ROOT/.marketing-out"
+  tar -xzf "$INCOMING/marketing.tgz" -C "$ROOT/.marketing-out"
+  sudo rsync -a --delete "$ROOT/.marketing-out/" /var/www/skydrop-marketing/
   sudo chown -R caddy:caddy /var/www/skydrop-marketing
   sudo chmod -R u=rwX,go=rX /var/www/skydrop-marketing
+  rm -rf "$ROOT/.marketing-out"
 else
   echo "── marketing unchanged — skipping publish ──"
 fi
 
-# ── 7. Restart pm2 ───────────────────────────────────────────────────
-# EVERY app, EVERY deploy — because step 6 BUILDS every app, every
-# deploy. The two halves have to agree.
+# ── 7. Restart — ONLY the apps this deploy touched ───────────────────
 #
-# `next build` wipes and regenerates `.next`, and Next names its chunks
-# by content hash. So any rebuild whose output differs — a change to
-# code the app imports from packages/*, a dependency bump, anything at
-# all — writes NEW chunk filenames and DELETES the old ones. A running
-# `next start` holds the old build's manifests in memory and carries on
-# serving HTML that names files no longer on disk: every script tag
-# 400s, nothing hydrates, and the person looking at it sees a skeleton
-# that never resolves.
+# TWO THINGS THAT LOOK OPTIONAL AND ARE NOT.
 #
-# And it is SILENT. The deploy reports success, pm2 says `online`, and
-# the health smoke passes, because the server really is serving its HTML
-# perfectly well. Measured on 2026-09-27: skydrop-reseller was last
-# started 10:09 UTC, every app was rebuilt 14:48–14:52 UTC, and
-# reseller.skydrop.global served HTML referencing
-# webpack-9a474f8fde7c98c0.js while the disk held
-# webpack-ad10e0c6e958d305.js. The store portal had been unusable for
-# about five hours; a manual restart fixed it, which is what confirmed
-# the mechanism. The same sweep found skydrop-admin broken the same way
-# on the same afternoon — so it is not a one-off, and nobody had noticed
-# either of them.
+# (a) pm2 is handed the ECOSYSTEM FILE, never a bare process name.
+#     `pm2 restart skydrop-api --update-env` refreshes a process from the
+#     env of the pm2 CLI that invoked it, NOT from ~/app/.env — so a
+#     newly added variable reaches nobody and the symptom is a feature
+#     silently reading undefined. Naming the config file makes pm2
+#     re-read it, and therefore the .env it loads. `--only` narrows WHICH
+#     app restarts without giving up that re-read.
 #
-# What this replaced was a per-app restart list (APPS_CHANGED /
-# PKG_TOUCHED) that restarted only the apps whose own tree had changed,
-# with a hand-maintained table of which package fans out to which app.
-# That table is the thing that rots, and its failure mode is exactly the
-# silent breakage above. Teaching the RESTART about the dependency graph
-# is a harder problem than the one it solves; making it match the BUILD
-# is one line. If selective restarts are ever wanted back, make the
-# BUILD selective first — step 6 is what decides which apps are at risk.
-#
-# Step 8 now also fetches one `/_next/static/*.js` per app off the page
-# that names it, so a recurrence of this fails the deploy instead of
-# waiting for somebody to notice a dead screen.
-#
-# RESTART THROUGH THE ECOSYSTEM FILE, not by process name. `--update-env`
-# refreshes a process from the env of the pm2 CLI that invoked it; it
-# does NOT re-evaluate ecosystem.config.cjs, and that file is the thing
-# that reads ~/app/.env. So `pm2 restart skydrop-api --update-env`
-# delivers a new .env variable to nobody — the process keeps the env it
-# was originally started with, and the symptom is a feature that behaves
-# as if its secret were empty while the secret is plainly there in the
-# file. Verified on 2026-09-09: TRACKING_WEBHOOK_SECRET_SHIPROCKET was
-# appended to .env and was still ABSENT from the running process after a
-# deploy.
-#
-# Naming the config file makes pm2 re-read it (and therefore .env) and
-# apply the result.
+# (b) apps/api backs TWO processes: skydrop-api and skydrop-portal (the
+#     courier-portal worker, same dist, different entrypoint). Restarting
+#     one and not the other leaves the worker running yesterday's code
+#     against today's database.
 ECOSYSTEM="$ROOT/ecosystem.config.cjs"
-echo "── pm2 restart all (ecosystem re-read) ──"
-pm2 restart "$ECOSYSTEM" --update-env
 
-pm2 save
+pm2_names_for() {     # $1 = app key -> pm2 process name(s)
+  case "$1" in
+    api)       echo "skydrop-api skydrop-portal" ;;
+    marketing) echo "" ;;                       # Caddy serves it; no process
+    *)         echo "skydrop-$1" ;;
+  esac
+}
 
-# ── 8. Health smoke ──────────────────────────────────────────────────
-# pm2 restart returns the moment the new process is spawned, but the
-# Next.js servers take ~3-10s to actually bind their port. Poll each
-# URL up to ~30s before giving up.
+RESTART=()
+for APP in "${APPS[@]}"; do
+  for N in $(pm2_names_for "$APP"); do RESTART+=("$N"); done
+done
+
+if [ ${#RESTART[@]} -gt 0 ]; then
+  ONLY=$(IFS=,; echo "${RESTART[*]}")
+  echo "── pm2 restart (ecosystem re-read): $ONLY ──"
+  pm2 restart "$ECOSYSTEM" --only "$ONLY" --update-env
+  pm2 save
+else
+  echo "── no pm2 process to restart (marketing only) ──"
+fi
+
+# ── 8. Health smoke — the apps we just moved ─────────────────────────
 #
-# `/health` answers 503 — not 200 with a "degraded" body — when the API
-# cannot reach Postgres or Redis. So this smoke now FAILS the deploy on
-# an API that came up but cannot serve a request, instead of reporting
-# success and writing .last-deployed-sha. That is deliberate: the 30s of
-# retries cover a slow first connection, and anything still degraded
-# after them is a broken deploy, not a slow one.
-echo "── health smoke ──"
+# pm2 returns the moment the process is SPAWNED, which is well before
+# Next has compiled its first route. The retry loop is the difference
+# between "restarted" and "serving".
+declare -A PORT=( [admin]=3002 [seller]=3003 [track]=3004 [reseller]=3005 [associate]=3007 )
+
 check_url() {
-  local url="$1"
-  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-    local code
+  local url="$1" code
+  for _ in $(seq 1 15); do
     code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "$url" 2>/dev/null || echo "000")
-    if [[ "$code" == 2* || "$code" == 3* ]]; then
-      echo "  $url → $code"
-      return 0
-    fi
+    if [[ "$code" == 2* || "$code" == 3* ]]; then echo "  $url → $code"; return 0; fi
     sleep 2
   done
   echo "  ✗ $url unhealthy after 30s (last status: $code)"
   return 1
 }
 
-# A Next app serves its HTML perfectly while every script tag on it 400s
-# — that is the stale-process failure step 7 describes, and `check_url`
-# is structurally unable to see it, because the HTML is fine. It is the
-# chunks the HTML NAMES that are gone. So: read the page, pull one
-# `/_next/static/*.js` URL out of it, and fetch that too.
-#
-# Deliberately NOT a timestamp comparison (process start vs `.next`
-# mtime). Measured 2026-09-27: skydrop-track's process was 4.7 hours
-# older than its own build and was serving perfectly, because that
-# rebuild happened to produce identical chunk names — so the age test
-# reports false alarms, and a check that cries wolf is one
-# people route around. Ask the bytes: does the file this page names
-# actually load?
-check_next_chunk() {
-  local base="$1" page="$2"
-  local asset code ctype
-  # `|| true`: grep exits 1 on no match and would sink the whole pipeline
-  # under `set -o pipefail`. `sed -n 1p` rather than `head -1`, which
-  # SIGPIPEs the grep feeding it (141) — same trap as the diff preview.
-  asset=$(curl -s --max-time 5 "$base$page" 2>/dev/null \
-    | grep -o '/_next/static/[A-Za-z0-9._/-]*\.js' \
-    | sed -n '1p' || true)
-  if [ -z "$asset" ]; then
-    # Not the failure we are looking for — a page that names no chunk is
-    # odd, not broken. Say so and move on rather than block the deploy.
-    echo "  ? $base$page names no /_next/static/*.js — chunk check skipped"
-    return 0
-  fi
-  code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$base$asset" 2>/dev/null || echo "000")
-  ctype=$(curl -s -o /dev/null -w "%{content_type}" --max-time 5 "$base$asset" 2>/dev/null || echo "")
-  if [[ "$code" == 2* ]] && [[ "$ctype" == *javascript* ]]; then
-    echo "  $base$asset → $code"
-    return 0
-  fi
-  echo "  ✗ $base$page is serving STALE HTML."
-  echo "    It names $asset, which answers $code${ctype:+ ($ctype)}."
-  echo "    The running process is older than the build on disk: the chunk"
-  echo "    filenames it hands out no longer exist, so the page loads and"
-  echo "    then never hydrates. Restart it —"
-  echo "      pm2 restart $ECOSYSTEM --update-env"
-  return 1
-}
-
-for url in \
-  http://127.0.0.1:4000/health \
-  http://127.0.0.1:3002/login \
-  http://127.0.0.1:3003/login \
-  http://127.0.0.1:3004/; do
-  check_url "$url" || exit 1
+echo "── health smoke ──"
+FAILED=()
+for APP in "${APPS[@]}"; do
+  case "$APP" in
+    api)
+      check_url "http://127.0.0.1:4000/health" || FAILED+=("api")
+      ;;
+    marketing)
+      check_url "http://127.0.0.1/" || true   # Caddy, not pm2
+      ;;
+    *)
+      P="${PORT[$APP]:-}"
+      [ -n "$P" ] && { check_url "http://127.0.0.1:$P/login" || FAILED+=("$APP"); }
+      ;;
+  esac
 done
 
-# Next apps only — the API serves no chunks.
-check_next_chunk http://127.0.0.1:3002 /login || exit 1
-check_next_chunk http://127.0.0.1:3003 /login || exit 1
-check_next_chunk http://127.0.0.1:3004 / || exit 1
-
-# ASSOC-1 — the associate portal, polled only once pm2 knows it, for the
-# same reason as the reseller one below: its first start is a manual
-# `pm2 start ecosystem.config.cjs --only skydrop-associate && pm2 save`,
-# and until that has happened a missing process must not fail the deploy
-# that is building the app it needs.
-if pm2 jlist 2>/dev/null | grep -q '"name":"skydrop-associate"'; then
-  check_url http://127.0.0.1:3007/login || exit 1
-  check_next_chunk http://127.0.0.1:3007 /login || exit 1
-else
-  echo "  skydrop-associate not registered with pm2 yet — skipping its health check"
+# ── 9. Roll back anything that did not come up ───────────────────────
+if [ ${#FAILED[@]} -gt 0 ]; then
+  echo "!! unhealthy after deploy: ${FAILED[*]} — rolling those back"
+  for APP in "${FAILED[@]}"; do
+    LIVE="$ROOT/apps/$APP/.next"; [ "$APP" = "api" ] && LIVE="$ROOT/apps/api/dist"
+    if [ -d "${LIVE}.prev" ]; then
+      rm -rf "${LIVE}.bad"; mv "$LIVE" "${LIVE}.bad"; mv "${LIVE}.prev" "$LIVE"
+      echo "  rolled $APP back to its previous build"
+    else
+      echo "  !! no previous build kept for $APP — cannot roll back"
+    fi
+    for N in $(pm2_names_for "$APP"); do
+      pm2 restart "$ECOSYSTEM" --only "$N" --update-env || true
+    done
+  done
+  echo "!! deploy FAILED; the marker is NOT advanced."
+  exit 1
 fi
 
-# RS-12 — the reseller portal is polled only once pm2 knows it. Its first
-# start is an owner step on the droplet (`pm2 start ecosystem.config.cjs
-# --only skydrop-reseller && pm2 save`); until then a missing process
-# must not fail every deploy for a reason the deploy did not cause.
-if pm2 jlist 2>/dev/null | grep -q '"name":"skydrop-reseller"'; then
-  check_url http://127.0.0.1:3005/login || exit 1
-  check_next_chunk http://127.0.0.1:3005 /login || exit 1
-else
-  echo "  skydrop-reseller not registered with pm2 yet — skipping its health check"
-fi
-
-# The portal worker has no port to poll — it is a browser, not a server.
-# So it is checked the only way it can be: pm2 says it is online and has
-# stayed that way. Without this a crash-loop would be invisible, since
-# nothing ever talks to it and its whole job happens at 02:40.
-if pm2 jlist 2>/dev/null | grep -q '"name":"skydrop-portal"'; then
-  sleep 5
-  PORTAL_STATUS=$(pm2 jlist 2>/dev/null \
-    | python3 -c "import sys,json;print(next((p['pm2_env']['status'] for p in json.load(sys.stdin) if p['name']=='skydrop-portal'),'missing'))" 2>/dev/null || echo unknown)
-  if [ "$PORTAL_STATUS" = "online" ]; then
-    echo "  skydrop-portal → online"
-  else
-    echo "  ✗ skydrop-portal is $PORTAL_STATUS"
-    exit 1
-  fi
-fi
-
-# Only NOW is this commit genuinely deployed: built, restarted, and
-# answering on every port. Written last on purpose — a marker written
-# earlier would claim a deploy that a later step could still fail.
+# ── 10. The marker, written LAST ─────────────────────────────────────
+#
+# It means "this SHA built, placed, restarted AND answered". Written any
+# earlier it would mean "git reached this SHA", which on 2026-08-31 let a
+# crashed deploy report success and every re-run skip the work.
 echo "$NEW_SHA" > "$DEPLOYED_MARKER"
-
-echo
-echo "=== Deploy OK: ${DIFF_BASE:-<full rebuild>} → $NEW_SHA ==="
+rm -rf "$INCOMING"
+echo "=== Deploy OK: ${LAST_DEPLOYED:-<unknown>} → $NEW_SHA (${APPS[*]}) ==="

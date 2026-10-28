@@ -1,0 +1,58 @@
+# gitleaks configuration.
+#
+# The repository went public on 2026-10-28. A full-history scan that day
+# returned 89 findings and every one was a test fixture — invented
+# passwords in specs, a throwaway courier key used only by CI against the
+# simulator, and the demo seed's logins. Verified separately: the
+# production .env does not use the CI courier key, no production account
+# uses any password that appears in this repo (12 accounts, 60 argon2
+# verifications, zero matches), and the demo seed has never run against
+# the production database.
+#
+# The point of this file is that the NEXT scan shows only real problems.
+# A scanner that always returns 89 known-safe findings is a scanner
+# nobody reads, and the one real secret arrives as finding number 90.
+#
+# Allowlist by PATH, never by rule-off. Switching a rule off hides it
+# everywhere, including in the places that matter; a path exemption says
+# "this file is fixtures" and keeps the rule live in src/ and in config.
+
+title = "Skydrop"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures, CI-only credentials, and the demo seed."
+
+paths = [
+  # Unit and e2e specs: invented logins ('Seller-Secret-123'), fake
+  # bearer tokens, redaction fixtures that must contain realistic-looking
+  # secrets to prove they get redacted.
+  '''apps/[^/]+/test/.*''',
+  '''apps/[^/]+/src/tests/.*''',
+  '''apps/[^/]+/e2e/.*''',
+  '''packages/[^/]+/test/.*''',
+  '''e2e-shared/.*''',
+
+  # The CI courier key. It authenticates against apps/delhivery-sim, our
+  # own simulator, and is not the production credential — that lives in
+  # the droplet's .env and was confirmed different.
+  '''\.github/workflows/ci\.yml''',
+
+  # The tutorial demo seed. Its logins exist only in a local tutorial
+  # stack; confirmed never run against production.
+  '''scripts/tutorials/.*''',
+
+  # Templates: placeholders by definition. A real value landing in one of
+  # these is a different problem, caught by review rather than by regex.
+  '''.*\.env\.example''',
+]
+
+regexes = [
+  # Documentation that NAMES a key format rather than containing one —
+  # e.g. docs/cicd.md describing the GitHub secret as "the whole thing
+  # including -----BEGIN OPENSSH PRIVATE KEY-----". The 2026-10-28 scan
+  # flagged exactly this and it is prose, not a key.
+  '''the whole thing including''',
+]

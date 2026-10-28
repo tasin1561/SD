@@ -1,14 +1,17 @@
 name: Deploy
 
-# Runs ONLY after `main` advances. Requires CI to have passed (the CI
-# workflow runs on push-to-main; this workflow waits for it and exits
-# early if CI didn't succeed).
+# Runs ONLY after `main` advances and CI passed.
+#
+# WHAT CHANGED (2026-10-28): the droplet no longer builds. It used to
+# `pnpm install` and run ten builds — 12m35s on a 2-vCPU box, repeating
+# work this runner had already done and discarded, and the place where
+# apps/admin ran out of heap twice on 2026-10-27. Now the runner builds,
+# tars and uploads; `scripts/deploy.sh` only places and restarts.
 on:
   workflow_run:
     workflows: ['CI']
     types: [completed]
     branches: [main]
-  # Allows a manual re-deploy from the Actions tab without a new push.
   workflow_dispatch: {}
 
 concurrency:
@@ -17,51 +20,157 @@ concurrency:
 
 jobs:
   deploy:
-    name: ssh → pull → build → restart
+    name: build → ship → swap
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
-    # Skip if CI didn't pass (a failed CI also triggers workflow_run with
-    # conclusion='failure'; we only proceed on 'success' OR manual dispatch).
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'main')
 
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
     steps:
-      - name: Trigger deploy on droplet
-        # PINNED TO A COMMIT, NOT A TAG — this step is handed the droplet's
-        # SSH private key, and a git tag is MOVABLE by the upstream repo's
-        # owner. `@v1.2.0` is resolved fresh on every run, so whoever
-        # controls that tag controls what reads `secrets.DROPLET_SSH_KEY`.
-        # The replacement would exfiltrate the key and run as our deploy
-        # user, which holds passwordless sudo for the marketing rsync and
-        # can pm2-restart every process on a box that also holds
-        # `~/app/.env` — every courier credential, the JWT signing key and
-        # the Spaces keys. The deploy would still go green, so nothing
-        # would point at it.
-        #
-        # This is the ONLY action in the estate that receives a secret
-        # (ci.yml references none), which is why it is the one pinned.
-        # 7eaf766 IS v1.2.0 as of 2026-10-13 — resolved through the git
-        # refs API, not copied from a README. To upgrade, resolve the new
-        # tag the same way rather than moving back to a tag.
-        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
-        env:
-          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/checkout@v4
         with:
-          host: ${{ secrets.DROPLET_HOST }}
-          username: ${{ secrets.DROPLET_USER }}
-          key: ${{ secrets.DROPLET_SSH_KEY }}
-          port: 22
-          # The action's own default is 10m, below the job's 15m budget; a
-          # full build (seven apps) passed 10m on 2026-09-27 and was killed
-          # mid-build. Keep this just under timeout-minutes.
-          command_timeout: 14m
-          envs: SHA
-          # Single shell session. The droplet has scripts/deploy.sh
-          # checked in — it's the source of truth for build/seed/restart.
-          script: |
-            set -e
-            cd ~/app
-            bash scripts/deploy.sh "$SHA"
+          # The SHA CI GREEN-LIT, not whatever main points at now. Those
+          # differ the moment a second push lands while this one runs,
+          # and deploying the newer one would ship code no CI approved.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # Full history: the affected-app calculation diffs against the
+          # SHA the droplet is actually running, which may be many
+          # commits back.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Open the SSH channel
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DROPLET_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "${{ secrets.DROPLET_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          # MULTIPLEXING IS LOAD-BEARING, not a tidy-up.
+          #
+          # The droplet runs `ufw limit OpenSSH`, which drops the 6th
+          # connection from one IP inside 30 seconds. This job opens five
+          # (keyscan, the affected-base read, mkdir, scp, deploy) — one
+          # retry anywhere and the deploy trips the firewall rule it is
+          # protected by, which surfaces as a connection timeout with
+          # nothing in the logs explaining it.
+          #
+          # With ControlMaster every ssh/scp after the first rides the
+          # SAME TCP connection, so the run costs one. ControlPersist
+          # keeps the master alive across steps; 5m comfortably covers a
+          # deploy that is now expected to take about one.
+          cat >> ~/.ssh/config <<EOF
+          Host droplet
+            HostName ${{ secrets.DROPLET_HOST }}
+            User ${{ secrets.DROPLET_USER }}
+            IdentityFile ~/.ssh/id_deploy
+            StrictHostKeyChecking yes
+            ControlMaster auto
+            ControlPath ~/.ssh/cm-%r@%h:%p
+            ControlPersist 5m
+            ServerAliveInterval 30
+            ServerAliveCountMax 10
+          EOF
+
+      - name: Which apps actually changed?
+        id: affected
+        run: |
+          set -euo pipefail
+          # Diff against what the droplet is RUNNING, never against HEAD~1.
+          # After a failed deploy those differ, and HEAD~1 would ship one
+          # commit's worth of apps while the box is several behind.
+          BASE="$(ssh droplet 'cat ~/app/.last-deployed-sha 2>/dev/null' || true)"
+          if [ -z "$BASE" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "no usable base ('${BASE:-empty}') — deploying everything"
+            APPS="api admin seller track reseller associate marketing"
+          else
+            echo "base = $BASE"
+            CHANGED="$(git diff --name-only "$BASE" "$SHA")"
+            # A shared package fans out to every app that consumes it.
+            # Erring wide is the cheap direction: a needless rebuild
+            # costs seconds, a missed one serves HTML naming chunks the
+            # build it never got had deleted.
+            if echo "$CHANGED" | grep -qE '^(packages/|pnpm-lock\.yaml|package\.json|turbo\.json|tsconfig)'; then
+              echo "shared surface changed — deploying everything"
+              APPS="api admin seller track reseller associate marketing"
+            else
+              APPS=""
+              for A in api admin seller track reseller associate marketing; do
+                echo "$CHANGED" | grep -qE "^apps/$A/" && APPS="$APPS $A"
+              done
+              APPS="$(echo "$APPS" | xargs || true)"
+            fi
+          fi
+          echo "apps=$APPS" >> "$GITHUB_OUTPUT"
+          echo "Deploying: ${APPS:-<nothing>}"
+
+      - name: Build
+        if: steps.affected.outputs.apps != ''
+        env:
+          # CI has carried this for its own build all along; the droplet
+          # had none, which is why a build verified here died there.
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          set -euo pipefail
+          # ONE turbo invocation, not a loop. Turbo resolves `^build` for
+          # itself, so db / api-client / ui are built once and the apps
+          # that depend on them fan out in parallel. The loop this
+          # replaced was serial, which in the worst case (a shared
+          # package changes, so all seven apps rebuild) is seven full
+          # Next builds end to end — the thing this whole change exists
+          # to stop paying for.
+          #
+          # --concurrency overrides turbo.json's "2". That 2 is there to
+          # keep a laptop usable while building; a disposable runner has
+          # no such constraint and every core idle is wall-clock spent.
+          FILTERS=""
+          for A in ${{ steps.affected.outputs.apps }}; do
+            FILTERS="$FILTERS --filter=@skydrop/$A"
+          done
+          echo "turbo run build$FILTERS"
+          pnpm turbo run build $FILTERS --concurrency=100%
+
+      - name: Package
+        if: steps.affected.outputs.apps != ''
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          # Shared packages go WHOLE every time: 3.6 MB, and the
+          # alternative is an app running against a sibling's older dist,
+          # which typechecks locally and only fails in production.
+          tar -czf out/packages.tgz packages/*/dist
+          for A in ${{ steps.affected.outputs.apps }}; do
+            case "$A" in
+              api)       tar -czf out/api.tgz       -C apps/api dist ;;
+              marketing) tar -czf out/marketing.tgz -C apps/marketing/out . ;;
+              *)         tar -czf "out/$A.tgz"      -C "apps/$A" .next ;;
+            esac
+          done
+          ls -lh out/
+
+      - name: Ship and swap
+        if: steps.affected.outputs.apps != ''
+        run: |
+          set -euo pipefail
+          ssh droplet "rm -rf ~/app/.deploy-incoming/$SHA && mkdir -p ~/app/.deploy-incoming/$SHA"
+          scp out/*.tgz "droplet:~/app/.deploy-incoming/$SHA/"
+          # deploy.sh still git-pulls: it is itself versioned, and so are
+          # ecosystem.config.cjs, the prisma migrations and the seed.
+          ssh droplet "cd ~/app && bash scripts/deploy.sh $SHA ${{ steps.affected.outputs.apps }}"
+
+      - name: Nothing to do
+        if: steps.affected.outputs.apps == ''
+        run: echo "No app changed since the droplet's last deploy — nothing shipped."
