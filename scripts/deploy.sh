@@ -279,8 +279,20 @@ done
 # ── 6b. Publish marketing static export ─────────────────────────────
 #
 # apps/marketing is `output: 'export'` — no pm2 process, Caddy
-# file-serves it. It is published only when its tarball was sent.
-if [ -f "$INCOMING/marketing.tgz" ]; then
+# file-serves it.
+#
+# GATED ON THE DIFF, NOT ON THE TARBALL (2026-10-28). CI now packages
+# all six apps on every run, because the browser job needs every app's
+# output present to start its servers. So "the tarball was sent" stopped
+# meaning "marketing changed" — and the publish below is an
+# `rsync --delete` straight into the live directory, not an atomic
+# swap. Running it on every unrelated deploy is a write window over the
+# served site in exchange for nothing.
+case " ${APPS[*]} " in
+  *" marketing "*) MARKETING_CHANGED=true ;;
+  *) MARKETING_CHANGED=false ;;
+esac
+if [ -f "$INCOMING/marketing.tgz" ] && [ "$MARKETING_CHANGED" = true ]; then
   echo "── publish marketing static ──"
   rm -rf "$ROOT/.marketing-out"
   mkdir -p "$ROOT/.marketing-out"
