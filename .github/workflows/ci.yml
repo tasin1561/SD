@@ -69,6 +69,10 @@ jobs:
       # is one where "affected only" must not apply.
       apps: ${{ steps.f.outputs.apps }}
       full: ${{ steps.f.outputs.full }}
+      # How many browser shards are worth starting, as a JSON array for
+      # the matrix plus the denominator for --shard=N/TOTAL.
+      browser_shards: ${{ steps.f.outputs.browser_shards }}
+      browser_total: ${{ steps.f.outputs.browser_total }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -155,7 +159,33 @@ jobs:
           echo "frontend=$FE"  >> "$GITHUB_OUTPUT"
           echo "apps=$APPS"    >> "$GITHUB_OUTPUT"
           echo "full=$FULLGATE" >> "$GITHUB_OUTPUT"
-          echo "→ api=$API frontend=$FE full=$FULLGATE apps=[${APPS:-none}]"
+
+          # SHARD COUNT FOLLOWS THE WORK.
+          #
+          # Four shards made sense when every run exercised every
+          # frontend. Once a shard only runs the affected projects, a
+          # one-app change splits a handful of specs four ways and pays
+          # four times the fixed cost — containers, workspace setup and
+          # the artifact download, measured at roughly 90s before a
+          # single test runs. Four slots to save a minute of testing is a
+          # bad trade, and those slots come out of an account-wide cap of
+          # 20 that CodeQL and Deploy also draw on.
+          #
+          # So: one shard for one or two apps, two for three or four,
+          # four for a full gate. The full gate keeps all four because
+          # that is the run where every project is in play.
+          N_APPS=$(wc -w <<<"$APPS")
+          if [ "$FULLGATE" = true ] || [ "$N_APPS" -ge 5 ]; then
+            SHARDS='[1, 2, 3, 4]'; TOTAL=4
+          elif [ "$N_APPS" -ge 3 ]; then
+            SHARDS='[1, 2]'; TOTAL=2
+          else
+            SHARDS='[1]'; TOTAL=1
+          fi
+          echo "browser_shards=$SHARDS" >> "$GITHUB_OUTPUT"
+          echo "browser_total=$TOTAL"   >> "$GITHUB_OUTPUT"
+
+          echo "→ api=$API frontend=$FE full=$FULLGATE apps=[${APPS:-none}] browser=${TOTAL} shard(s)"
 
   # ── Static analysis ──────────────────────────────────────────────────
   # No database, no Redis: tsc and eslint never run the app, and skipping
@@ -695,7 +725,7 @@ jobs:
   # this file, where the Next apps get built and therefore where a broken
   # build is caught.
   browser:
-    name: browser (${{ matrix.shard }}/4)
+    name: browser (${{ matrix.shard }}/${{ needs.changes.outputs.browser_total }})
     # Waits for `build`, and that is a deliberate trade. Serially it is
     # build + shard; in parallel it was four shards each repeating the
     # build. On a cold cache the two are within seconds of each other; on
@@ -708,7 +738,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        # Set by `changes`: 1 shard for one or two apps, 2 for three
+        # or four, 4 for a full gate.
+        shard: ${{ fromJSON(needs.changes.outputs.browser_shards) }}
 
     services:
       postgres:
@@ -939,7 +971,8 @@ jobs:
           # --pass-with-no-tests: with project filtering, a shard can
           # legitimately receive zero specs. Without this it exits
           # non-zero and reds a CI run in which nothing is wrong.
-          pnpm exec playwright test --pass-with-no-tests --shard=${{ matrix.shard }}/4 $ARGS
+          pnpm exec playwright test --pass-with-no-tests \
+            --shard=${{ matrix.shard }}/${{ needs.changes.outputs.browser_total }} $ARGS
 
       - name: API log on failure
         if: failure()
