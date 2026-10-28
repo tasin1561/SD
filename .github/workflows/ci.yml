@@ -279,7 +279,7 @@ jobs:
           - {
               name: stores-pkgs,
               kind: fe,
-              filter: '@skydrop/reseller --filter @skydrop/associate --filter ./packages/*',
+              filter: "--filter @skydrop/reseller --filter @skydrop/associate --filter './packages/*'",
             }
 
     env:
