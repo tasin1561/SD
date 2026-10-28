@@ -1,6 +1,11 @@
 /* Bulk import page (orders). Tokens only; transform/opacity animation only. */
 .imp-root {
   gap: var(--sp-3);
+  /* The check result sits below a sticky top bar, so anything that
+     scrolls to it — a jump link, or the browser restoring position —
+     lands with the heading hidden underneath. The result is the whole
+     point of the page; it should not arrive already cut off. */
+  scroll-margin-top: calc(var(--sp-6) + env(safe-area-inset-top, 0px));
 }
 .imp-head {
   display: grid;
