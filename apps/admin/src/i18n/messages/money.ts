@@ -302,8 +302,8 @@ export const money = defineMessages({
     'বাদ পড়েছে — সাইন-ইন চ্যালেঞ্জ খোলা',
   ],
   'costSyncCostSyncIndex.skippedChallengeDetail': [
-    'Not read: a sign-in challenge is open for this account, so no browser was opened. Sign in to the portal by hand once, then resolve the issue on Needs attention.',
-    'পড়া হয়নি: এই অ্যাকাউন্টে একটি সাইন-ইন চ্যালেঞ্জ খোলা আছে, তাই ব্রাউজার খোলা হয়নি। একবার নিজে পোর্টালে সাইন ইন করুন, তারপর Needs attention-এ সমস্যাটি সমাধান করুন।',
+    'Not read: a sign-in challenge is open for this account, so no browser was opened. Sign in to the portal by hand once, then close the issue on Needs a person.',
+    'পড়া হয়নি: এই অ্যাকাউন্টে একটি সাইন-ইন চ্যালেঞ্জ খোলা আছে, তাই ব্রাউজার খোলা হয়নি। একবার নিজে পোর্টালে সাইন ইন করুন, তারপর "মানুষের হস্তক্ষেপ দরকার" পেজে ইস্যুটি বন্ধ করুন।',
   ],
   'costSyncCostSyncIndex.ourParcels': ['Our parcels', 'আমাদের পার্সেল'],
   'costSyncCostSyncIndex.revised': ['Revised', 'সংশোধিত'],
