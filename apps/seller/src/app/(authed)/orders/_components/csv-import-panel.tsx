@@ -1070,14 +1070,24 @@ export function CsvImportPanel({
                                     {t('orderImport.errorsXlsx')}
                                   </button>
                                 ) : null}
-                                <button
-                                  type="button"
-                                  onClick={() => void downloadErrorReport(u.id)}
-                                  className="ord-expand"
-                                >
-                                  <Download size={14} aria-hidden />
-                                  {t('orderImport.errorsCsv')}
-                                </button>
+                                {/* Orders: failed rows are staged on the pending
+                                    page, where each one is fixed and imported, so
+                                    that replaces the CSV report. Catalog keeps it. */}
+                                {kind === 'orders' ? (
+                                  <Link href="/orders/pending" className="ord-expand">
+                                    <FileWarning size={14} aria-hidden />
+                                    {t('orderImport.viewErrors')}
+                                  </Link>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => void downloadErrorReport(u.id)}
+                                    className="ord-expand"
+                                  >
+                                    <Download size={14} aria-hidden />
+                                    {t('orderImport.errorsCsv')}
+                                  </button>
+                                )}
                               </div>
                             )}
                           </Td>
