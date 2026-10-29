@@ -270,10 +270,11 @@ export interface ShiprocketPortalHandle {
 /**
  * A signed-in page on Shiprocket's seller panel.
  *
- * ── ITS OWN BROWSER, THROUGH BANGALORE, AND CLOSED AFTER EVERY RUN ───
+ * ── ITS OWN BROWSER, THROUGH THE INDIA VPN, AND CLOSED AFTER EVERY RUN ─
  * Their panel is India-only. The browser is launched with the proxy in
- * `courier.shiprocket_portal_proxy` — the self-restarting SSH tunnel to
- * the Bangalore droplet — and REFUSES to start without one rather than
+ * `courier.shiprocket_portal_proxy` — the NordVPN container since
+ * 2026-09-28 (the SSH tunnel to the Bangalore droplet it replaced was
+ * retired on 2026-10-24) — and REFUSES to start without one rather than
  * connecting directly. It is a separate browser from Delhivery's, not a
  * second context in it, because a proxy is fixed at launch; and it is
  * closed at the end of each run so a nightly job does not hold a
@@ -483,7 +484,16 @@ export class ShiprocketPortalSessionService {
     if (!isShiprocketLoginUrl(page.url())) {
       await gotoPortal(page, `${SR_PORTAL_ORIGIN}/newlogin`);
     }
-    const early = await this.detectChallenge(page);
+    /*
+      ONLY A CAPTCHA CAN STOP US HERE. Their login opens on the PHONE
+      tab, whose "login with OTP" box is an OTP-shaped input sitting on
+      the page before anything has been typed or sent. Counting it as a
+      challenge stopped every run on 29 October 2026 — "Shiprocket
+      presented a OTP challenge at /newlogin" — while no OTP was ever
+      requested, so none ever arrived, and a hand sign-in could not clear
+      it. An OTP is only a challenge once credentials have been submitted.
+    */
+    const early = await this.detectChallenge(page, { otp: false });
     if (early !== null) throw await this.challenge(page, early);
 
     // Their login opens on a PHONE field; email is its own button.
@@ -570,16 +580,22 @@ export class ShiprocketPortalSessionService {
    *  is a visible checkbox or the visible picture popup. If the invisible
    *  one silently refuses us, the login simply does not reach the panel,
    *  which is reported as UNKNOWN with a screenshot. */
-  private async detectChallenge(page: Page): Promise<'OTP' | 'CAPTCHA' | null> {
+  private async detectChallenge(
+    page: Page,
+    opts: { readonly otp: boolean } = { otp: true },
+  ): Promise<'OTP' | 'CAPTCHA' | null> {
     const captcha = await page
       .locator(
         'iframe[src*="recaptcha"]:visible, iframe[src*="hcaptcha"]:visible, .g-recaptcha:visible, [data-sitekey]:visible',
       )
       .count();
     if (captcha > 0) return 'CAPTCHA';
+    if (!opts.otp) return null;
+    // `:visible` for the same reason as the captcha: the phone tab's OTP
+    // box stays in the DOM, hidden, after switching to email.
     const otp = await page
       .locator(
-        'input[autocomplete="one-time-code"], input[name*="otp" i], input[id*="otp" i], input[placeholder*="otp" i]',
+        'input[autocomplete="one-time-code"]:visible, input[name*="otp" i]:visible, input[id*="otp" i]:visible, input[placeholder*="otp" i]:visible',
       )
       .count();
     return otp > 0 ? 'OTP' : null;

@@ -1,3 +1,4 @@
+import { PortalChallengeError } from '../../src/modules/courier-portal/services/portal-session.service';
 import { WalletSyncService } from '../../src/modules/courier-portal/services/wallet-sync.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
@@ -297,11 +298,28 @@ describe('WalletSyncService — it says when it needs a person', () => {
   it('calls an OTP what it is, and raises it higher', async () => {
     // A transient failure retries tonight. A challenge does not: nothing
     // runs again until a human answers it.
-    const { svc, raise } = make({ pageThrows: new Error('OTP challenge presented') });
+    const { svc, raise } = make({ pageThrows: new PortalChallengeError('OTP') });
     await svc.sync();
     const arg = (raise.mock.calls as unknown as AnyArgs[][])[0]?.[0] as AnyArgs;
     expect(arg['kind']).toBe('COURIER_PORTAL_CHALLENGE');
     expect(arg['severity']).toBe('HIGH');
+  });
+
+  it('does not call a failure a challenge because its WORDING says challenge', async () => {
+    // 29 October 2026: this exact message was filed as a challenge, and
+    // the account was then skipped on every run while the page said
+    // "Worked".
+    const { svc, raise } = make({
+      pageThrows: new Error(
+        'The password step never appeared, and we are still not signed in. Their login flow ' +
+          'has moved, or this landed on a challenge rather than the password.',
+      ),
+    });
+    const out = await svc.sync();
+    const arg = (raise.mock.calls as unknown as AnyArgs[][])[0]?.[0] as AnyArgs;
+    expect(arg['kind']).not.toBe('COURIER_PORTAL_CHALLENGE');
+    expect(arg['dedupeKey']).toBe('wallet-sync:acct-1');
+    expect(out.accounts[0]?.outcome).toBe('FAILED');
   });
 
   it('clears its own alarm when it works again', async () => {
@@ -558,7 +576,7 @@ describe('an open sign-in challenge', () => {
  */
 describe('the two failure diagnoses have a key each', () => {
   it('a challenge gets the challenge key, HIGH', async () => {
-    const { svc, raise } = make({ pageThrows: new Error('Portal presented a CAPTCHA challenge') });
+    const { svc, raise } = make({ pageThrows: new PortalChallengeError('CAPTCHA') });
     await svc.sync();
     expect(raisedUnder(raise, 'wallet-sync-challenge:acct-1').severity).toBe('HIGH');
     expect(raisedKeys(raise)).not.toContain('wallet-sync:acct-1');

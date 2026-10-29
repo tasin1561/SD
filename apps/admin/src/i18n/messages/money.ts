@@ -297,6 +297,14 @@ export const money = defineMessages({
   ],
   'costSyncCostSyncIndex.days': [' · {coveredDays} days', ' · {coveredDays} দিন'],
   'costSyncCostSyncIndex.rowsRead': ['Rows read', 'পড়া সারি'],
+  'costSyncCostSyncIndex.skippedChallenge': [
+    'Skipped — sign-in challenge open',
+    'বাদ পড়েছে — সাইন-ইন চ্যালেঞ্জ খোলা',
+  ],
+  'costSyncCostSyncIndex.skippedChallengeDetail': [
+    'Not read: a sign-in challenge is open for this account, so no browser was opened. Sign in to the portal by hand once, then close the issue on Needs a person.',
+    'পড়া হয়নি: এই অ্যাকাউন্টে একটি সাইন-ইন চ্যালেঞ্জ খোলা আছে, তাই ব্রাউজার খোলা হয়নি। একবার নিজে পোর্টালে সাইন ইন করুন, তারপর "মানুষের হস্তক্ষেপ দরকার" পেজে ইস্যুটি বন্ধ করুন।',
+  ],
   'costSyncCostSyncIndex.ourParcels': ['Our parcels', 'আমাদের পার্সেল'],
   'costSyncCostSyncIndex.revised': ['Revised', 'সংশোধিত'],
   'costSyncCostSyncIndex.theirStatedTotalDoesNot': [
@@ -493,8 +501,8 @@ export const money = defineMessages({
     'ওয়েবসাইট অ্যাক্সেস পরীক্ষা করুন',
   ],
   'costSyncShiprocketCostSection.queuedItSignsInThrough': [
-    'Queued. It signs in through Bangalore and reads three pages — refresh in two minutes.',
-    'কিউতে দেওয়া হয়েছে। এটি ব্যাঙ্গালোর দিয়ে সাইন ইন করে তিনটি পেজ পড়ে — দুই মিনিট পর রিফ্রেশ করুন।',
+    'Queued. It signs in through the India VPN and reads three pages — refresh in two minutes.',
+    'কিউতে দেওয়া হয়েছে। এটি ইন্ডিয়া VPN দিয়ে সাইন ইন করে তিনটি পেজ পড়ে — দুই মিনিট পর রিফ্রেশ করুন।',
   ],
   'costSyncShiprocketCostSection.invoiceSRead': [
     '{invoicesRead} invoice(s) read',

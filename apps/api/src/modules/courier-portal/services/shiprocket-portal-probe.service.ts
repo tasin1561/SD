@@ -71,7 +71,7 @@ export interface ShiprocketProbeAccount {
  *
  * ── A CHALLENGE IS FINAL UNTIL A PERSON SAYS OTHERWISE ───────────────
  * An open challenge issue for the account means no run starts. Resolving
- * that issue (after signing in by hand from a browser on the Bangalore
+ * that issue (after signing in by hand from a browser on the India VPN, not the retired Bangalore
  * tunnel) is what re-enables it.
  */
 @Injectable()

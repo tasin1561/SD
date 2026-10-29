@@ -4491,6 +4491,8 @@ export function useAdminSetStoreActive(): UseMutationResult<
 export interface WalletSyncRunAccount {
   readonly label: string;
   readonly courierAccountId: string;
+  /** READ, FAILED or CHALLENGE (skipped: a sign-in challenge is open). */
+  readonly outcome: string | null;
   readonly error: string | null;
   readonly fileBytes: number | null;
   readonly rowsRead: number | null;
@@ -4837,8 +4839,8 @@ export function useRunShiprocketCost(): UseMutationResult<unknown, Error, void> 
 }
 
 /**
- * Run the Shiprocket wallet sync now: a real sign-in through the Bangalore
- * tunnel that reads their passbook and writes parcel costs. Queued.
+ * Run the Shiprocket wallet sync now: a real sign-in through the India VPN
+ * that reads their passbook and writes parcel costs. Queued.
  */
 export function useRunShiprocketWalletSync(): UseMutationResult<unknown, Error, void> {
   const client = useApiClient();
@@ -4856,7 +4858,7 @@ export function useRunShiprocketWalletSync(): UseMutationResult<unknown, Error, 
 
 /**
  * Check Shiprocket's invoices against the wallet now: a real sign-in
- * through the Bangalore tunnel that reads only. Queued.
+ * through the India VPN that reads only. Queued.
  */
 export function useRunShiprocketInvoiceCheck(): UseMutationResult<unknown, Error, void> {
   const client = useApiClient();

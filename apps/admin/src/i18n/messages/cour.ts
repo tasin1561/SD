@@ -256,8 +256,8 @@ export const cour = defineMessages({
     'Delhivery-র কোনো বিলিং API নেই, তাই রাতের খরচ সিঙ্ক তাদের প্যানেলে সাইন ইন করে। এনক্রিপ্ট করে রাখা হয়; আর কখনো দেখানো হয় না।',
   ],
   'courierAccountsPortalLoginModal.shiprocketHasNoApiFor': [
-    'Shiprocket has no API for its passbook, ledger or recharges, so the automation signs into app.shiprocket.in through the Bangalore tunnel. Stored encrypted; never shown again.',
-    'Shiprocket-এর পাসবুক, লেজার বা রিচার্জের কোনো API নেই, তাই অটোমেশন ব্যাঙ্গালোর টানেল দিয়ে app.shiprocket.in-এ সাইন ইন করে। এনক্রিপ্ট করে রাখা হয়; আর কখনো দেখানো হয় না।',
+    'Shiprocket has no API for its passbook, ledger or recharges, so the automation signs into app.shiprocket.in through the India VPN. Stored encrypted; never shown again.',
+    'Shiprocket-এর পাসবুক, লেজার বা রিচার্জের কোনো API নেই, তাই অটোমেশন ইন্ডিয়া VPN দিয়ে app.shiprocket.in-এ সাইন ইন করে। এনক্রিপ্ট করে রাখা হয়; আর কখনো দেখানো হয় না।',
   ],
   'courierAccountsPortalLoginModal.email': ['Email', 'ইমেইল'],
   'courierAccountsPortalLoginModal.theAddressYouUseAt': [
