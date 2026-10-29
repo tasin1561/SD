@@ -26,7 +26,7 @@ import { useApiClient } from '@skydrop/auth/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CsvColumnGuide, type CsvColumnGuideColumn } from '@skydrop/ui/app/csv-column-guide';
 import { verdict } from '@/i18n/verdict';
-import { Notice, OrdSection } from './orders-parts';
+import { LinkButton, Notice, OrdSection } from './orders-parts';
 import { ImportReviewDialog } from './import-review-dialog';
 import { decideAutoImport, type AutoImportStop } from './import-auto';
 import {
@@ -197,6 +197,9 @@ export function CsvImportPanel({
   // Set once the import was sent without a click; the dialog then reports
   // past tense and offers no second import button.
   const [autoImported, setAutoImported] = useState(false);
+  // The run that automatic import queued, so the dialog can offer its error
+  // report once the worker has written it (the list poll picks that up).
+  const [autoImportedJobId, setAutoImportedJobId] = useState<string | null>(null);
   // Why an upload was held for review instead of imported (orders only).
   const [stopReason, setStopReason] = useState<AutoImportStop | null>(null);
   // Synchronous guard: state lags a render, so a double click could pass
@@ -383,6 +386,7 @@ export function CsvImportPanel({
       const checked = { spacesKey: presign.spacesKey, fileName: f.name, preview };
       const decision = decideAutoImport(kind, preview);
       setAutoImported(false);
+      setAutoImportedJobId(null);
       setStopReason(decision.auto ? null : decision.reason);
       setPending(checked);
       setReviewOpen(true);
@@ -409,15 +413,17 @@ export function CsvImportPanel({
     setError(null);
     setBusy('processing');
     try {
-      await client.request<CsvUploadJob>(`${endpointBase}/process`, {
+      const job = await client.request<CsvUploadJob>(`${endpointBase}/process`, {
         method: 'POST',
         body: { spacesKey: target.spacesKey, fileName: target.fileName },
       });
       toast.success(t('orderImport.importQueuedRefreshTo'));
       // After an automatic import the dialog stays up with the past-tense
       // result; closing it clears the pending file.
-      if (auto) setAutoImported(true);
-      else setPending(null);
+      if (auto) {
+        setAutoImported(true);
+        setAutoImportedJobId(job.id);
+      } else setPending(null);
       void queryClient.invalidateQueries({
         queryKey: ['seller-csv-uploads', kind],
       });
@@ -915,6 +921,7 @@ export function CsvImportPanel({
             setReviewOpen(open);
             if (!open && autoImported) {
               setAutoImported(false);
+              setAutoImportedJobId(null);
               setPending(null);
               return;
             }
@@ -939,6 +946,15 @@ export function CsvImportPanel({
           importLabel={importLabel(t, kind, pending.preview)}
           onImport={() => void confirmImport()}
           imported={autoImported}
+          errorActions={
+            isOrders && autoImported && (pending.preview.rowsWithProblems ?? 0) > 0 ? (
+              <AutoImportErrorActions
+                t={t}
+                job={items.find((it) => it.id === autoImportedJobId)}
+                onDownload={(id) => void downloadErrorReportXlsx(id)}
+              />
+            ) : undefined
+          }
           stopReason={stopReason === null ? undefined : t(STOP_KEYS[stopReason])}
           blockers={
             <>
@@ -1070,14 +1086,24 @@ export function CsvImportPanel({
                                     {t('orderImport.errorsXlsx')}
                                   </button>
                                 ) : null}
-                                <button
-                                  type="button"
-                                  onClick={() => void downloadErrorReport(u.id)}
-                                  className="ord-expand"
-                                >
-                                  <Download size={14} aria-hidden />
-                                  {t('orderImport.errorsCsv')}
-                                </button>
+                                {/* Orders: failed rows are staged on the pending
+                                    page, where each one is fixed and imported, so
+                                    that replaces the CSV report. Catalog keeps it. */}
+                                {kind === 'orders' ? (
+                                  <Link href="/orders/pending" className="ord-expand">
+                                    <FileWarning size={14} aria-hidden />
+                                    {t('orderImport.viewErrors')}
+                                  </Link>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => void downloadErrorReport(u.id)}
+                                    className="ord-expand"
+                                  >
+                                    <Download size={14} aria-hidden />
+                                    {t('orderImport.errorsCsv')}
+                                  </button>
+                                )}
                               </div>
                             )}
                           </Td>
@@ -1188,6 +1214,44 @@ export function CsvImportPanel({
         </OrdSection>
       )}
     </div>
+  );
+}
+
+/**
+ * The check dialog's error actions after an automatic import: the Excel
+ * report (waits on the worker — the run's errorReportKey arrives via the
+ * list poll) and the pending page, where each failed row is fixed.
+ */
+function AutoImportErrorActions({
+  t,
+  job,
+  onDownload,
+}: {
+  readonly t: Translate<MessageKey>;
+  readonly job: CsvUploadJob | undefined;
+  readonly onDownload: (uploadId: string) => void;
+}): ReactElement {
+  const ready = job !== undefined && Boolean(job.errorReportKey);
+  const running = job === undefined || RUNNING.has(job.status);
+  return (
+    <>
+      {ready || running ? (
+        <Button
+          variant="secondary"
+          icon={<Download size={15} />}
+          loading={!ready}
+          disabled={!ready}
+          onClick={() => {
+            if (job !== undefined) onDownload(job.id);
+          }}
+        >
+          {ready ? t('orderImport.errorsXlsx') : t('orderImport.errorReportPreparing')}
+        </Button>
+      ) : null}
+      <LinkButton href="/orders/pending" icon={<FileWarning size={15} />}>
+        {t('orderImport.viewErrors')}
+      </LinkButton>
+    </>
   );
 }
 
