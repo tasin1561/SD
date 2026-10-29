@@ -487,3 +487,55 @@ describe('a Shiprocket panel that opens clears what said it could not', () => {
     }
   });
 });
+
+/**
+ * An OTP is a challenge only once credentials have been sent.
+ *
+ * 29 October 2026: every Shiprocket run stopped with "Shiprocket
+ * presented a OTP challenge at /newlogin" and no OTP ever arrived — the
+ * check ran on the untouched login page, which opens on the PHONE tab
+ * with its "login with OTP" box, and it counted hidden inputs too.
+ */
+describe('Shiprocket challenge detection', () => {
+  type Detect = (page: unknown, opts?: { otp: boolean }) => Promise<'OTP' | 'CAPTCHA' | null>;
+
+  function pageWith(counts: { otpVisible: number; otpHidden: number; captcha: number }) {
+    return {
+      locator: (selector: string) => ({
+        count: async () => {
+          if (/recaptcha|hcaptcha|sitekey/.test(selector)) return counts.captcha;
+          // Only a `:visible` selector sees the visible ones; a bare one would
+          // also count the hidden phone-tab box.
+          return selector.includes(':visible')
+            ? counts.otpVisible
+            : counts.otpVisible + counts.otpHidden;
+        },
+      }),
+    };
+  }
+
+  const detect = (): Detect => {
+    const svc = sessionWith({}) as unknown as { detectChallenge: Detect };
+    return svc.detectChallenge.bind(svc);
+  };
+
+  it('does not call the login page’s own OTP box a challenge before anything is sent', async () => {
+    const page = pageWith({ otpVisible: 1, otpHidden: 0, captcha: 0 });
+    expect(await detect()(page, { otp: false })).toBeNull();
+  });
+
+  it('ignores a hidden OTP input after submitting', async () => {
+    const page = pageWith({ otpVisible: 0, otpHidden: 1, captcha: 0 });
+    expect(await detect()(page)).toBeNull();
+  });
+
+  it('still reports a visible OTP after submitting', async () => {
+    const page = pageWith({ otpVisible: 1, otpHidden: 0, captcha: 0 });
+    expect(await detect()(page)).toBe('OTP');
+  });
+
+  it('still stops on a visible captcha before anything is sent', async () => {
+    const page = pageWith({ otpVisible: 0, otpHidden: 0, captcha: 1 });
+    expect(await detect()(page, { otp: false })).toBe('CAPTCHA');
+  });
+});

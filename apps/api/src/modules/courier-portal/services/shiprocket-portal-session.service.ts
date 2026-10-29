@@ -484,7 +484,16 @@ export class ShiprocketPortalSessionService {
     if (!isShiprocketLoginUrl(page.url())) {
       await gotoPortal(page, `${SR_PORTAL_ORIGIN}/newlogin`);
     }
-    const early = await this.detectChallenge(page);
+    /*
+      ONLY A CAPTCHA CAN STOP US HERE. Their login opens on the PHONE
+      tab, whose "login with OTP" box is an OTP-shaped input sitting on
+      the page before anything has been typed or sent. Counting it as a
+      challenge stopped every run on 29 October 2026 — "Shiprocket
+      presented a OTP challenge at /newlogin" — while no OTP was ever
+      requested, so none ever arrived, and a hand sign-in could not clear
+      it. An OTP is only a challenge once credentials have been submitted.
+    */
+    const early = await this.detectChallenge(page, { otp: false });
     if (early !== null) throw await this.challenge(page, early);
 
     // Their login opens on a PHONE field; email is its own button.
@@ -571,16 +580,22 @@ export class ShiprocketPortalSessionService {
    *  is a visible checkbox or the visible picture popup. If the invisible
    *  one silently refuses us, the login simply does not reach the panel,
    *  which is reported as UNKNOWN with a screenshot. */
-  private async detectChallenge(page: Page): Promise<'OTP' | 'CAPTCHA' | null> {
+  private async detectChallenge(
+    page: Page,
+    opts: { readonly otp: boolean } = { otp: true },
+  ): Promise<'OTP' | 'CAPTCHA' | null> {
     const captcha = await page
       .locator(
         'iframe[src*="recaptcha"]:visible, iframe[src*="hcaptcha"]:visible, .g-recaptcha:visible, [data-sitekey]:visible',
       )
       .count();
     if (captcha > 0) return 'CAPTCHA';
+    if (!opts.otp) return null;
+    // `:visible` for the same reason as the captcha: the phone tab's OTP
+    // box stays in the DOM, hidden, after switching to email.
     const otp = await page
       .locator(
-        'input[autocomplete="one-time-code"], input[name*="otp" i], input[id*="otp" i], input[placeholder*="otp" i]',
+        'input[autocomplete="one-time-code"]:visible, input[name*="otp" i]:visible, input[id*="otp" i]:visible, input[placeholder*="otp" i]:visible',
       )
       .count();
     return otp > 0 ? 'OTP' : null;
