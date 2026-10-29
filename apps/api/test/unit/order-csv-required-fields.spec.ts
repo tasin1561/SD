@@ -133,3 +133,43 @@ describe('OrderCsvParserService.coerceRow', () => {
     expect(errors.filter((e) => e.field === 'quantity')).toHaveLength(1);
   });
 });
+
+/**
+ * One unreadable value must read as ONE problem.
+ *
+ * A row with an Excel-mangled phone (or a quantity of 0) fails coercion,
+ * so none of its values reach the assembled order — and the order-level
+ * check then reported its name, address lines and PIN as "required" on
+ * a row that plainly carried them. Seen on the Pending page as
+ * "6 values to fix" for a single bad cell.
+ */
+describe('an unreadable row is not reported as missing what it states', () => {
+  const parser = new OrderCsvParserService();
+
+  it.each([
+    ['a quantity of 0', { Quantity: '0' }, 'quantity'],
+    ['a blank SKU', { 'Product SKU': '' }, 'productSku'],
+  ])('%s yields only its own error', (_name, override, field) => {
+    const { groups, rowErrors } = parser.groupRows([{ ...fullRow(), ...override }], MAPPING);
+    expect(groups).toHaveLength(0);
+    expect(rowErrors).toHaveLength(1);
+    expect(rowErrors[0]?.errors.map((e) => e.field)).toEqual([field]);
+  });
+
+  it('still reports an order-level field that NO row states', () => {
+    const { rowErrors } = parser.groupRows(
+      [{ ...fullRow(), Quantity: '0', 'Customer Name': '' }],
+      MAPPING,
+    );
+    expect(rowErrors[0]?.errors.map((e) => e.field).sort()).toEqual(['customerName', 'quantity']);
+  });
+
+  it('names the broken row on the sibling rows of the same order', () => {
+    const { rowErrors } = parser.groupRows(
+      [fullRow(), { ...fullRow(), 'Product SKU': 'SKU-2', Quantity: '0' }],
+      MAPPING,
+    );
+    const sibling = rowErrors.find((r) => r.rowNumber === 2);
+    expect(sibling?.errors[0]?.reason).toContain('(row 3)');
+  });
+});
