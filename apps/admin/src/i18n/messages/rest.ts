@@ -65,8 +65,8 @@ export const rest = defineMessages({
     'লেজার: {checked}-এর মধ্যে {value}টি ক্রেডিট পাসবুকে পাওয়া গেছে{value2} · {documents}টি ইনভয়েস, পাসবুকের মাধ্যমে ইতিমধ্যে গোনা',
   ],
   'costSyncShiprocketCostSection.everyNightAt0350': [
-    'Every night at 03:50 IST · their Passbook, Recharge History and Ledger, read from app.shiprocket.in through Bangalore. Each movement is stored once and each parcel’s cost netted from them, the way Delhivery’s are.{value}',
-    'প্রতি রাত 03:50 IST-এ · তাদের পাসবুক, রিচার্জ ইতিহাস ও লেজার, ব্যাঙ্গালোর দিয়ে app.shiprocket.in থেকে পড়া। প্রতিটি মুভমেন্ট একবার সংরক্ষিত হয় এবং প্রতিটি পার্সেলের খরচ তা থেকে নিট করা হয়, Delhivery-র মতোই।{value}',
+    'Every night at 03:50 IST · their Passbook, Recharge History and Ledger, read from app.shiprocket.in through the India VPN. Each movement is stored once and each parcel’s cost netted from them, the way Delhivery’s are.{value}',
+    'প্রতি রাত 03:50 IST-এ · তাদের পাসবুক, রিচার্জ ইতিহাস ও লেজার, ইন্ডিয়া VPN দিয়ে app.shiprocket.in থেকে পড়া। প্রতিটি মুভমেন্ট একবার সংরক্ষিত হয় এবং প্রতিটি পার্সেলের খরচ তা থেকে নিট করা হয়, Delhivery-র মতোই।{value}',
   ],
   'costSyncShiprocketCostSection.noRouteIsSetSo': [
     'No route is set, so the website reads are stopped.',

@@ -1529,14 +1529,13 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'courier.shiprocket_portal_proxy': {
     name: 'Route to the Shiprocket panel',
     group: 'Courier connection',
-    what: 'The connection our browser uses to reach the Shiprocket panel. Two exist on the app server: the tunnel to our Bangalore machine, and a NordVPN container that comes out in Mumbai. Empty stops the panel automation; it never connects directly.',
-    example:
-      'socks5://127.0.0.1:1081 is the Bangalore tunnel; http://127.0.0.1:1082 is the NordVPN container.',
+    what: 'The connection our browser uses to reach the Shiprocket panel. It is the NordVPN container on the app server, which comes out in Mumbai (the Bangalore tunnel it replaced was retired on 24 October 2026). Empty stops the panel automation; it never connects directly.',
+    example: 'http://127.0.0.1:1082 is the NordVPN container.',
   },
   'courier.shiprocket_portal_egress_check_url': {
     name: 'Check where the Shiprocket browser comes out',
     group: 'Courier connection',
-    what: 'Asked before every Shiprocket panel run: is the VPN it goes through up, and where is it? Empty means no check — which is right for the Bangalore tunnel, because that route has nothing to ask. Set it only when the route above is that VPN.',
+    what: 'Asked before every Shiprocket panel run: is the VPN it goes through up, and where is it? Empty means no check. Keep it set while the route above is the VPN.',
     example:
       'Set to http://127.0.0.1:8001/v1/publicip/ip: a run refuses to start while the VPN is down.',
   },
@@ -1620,8 +1619,7 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     name: 'Read the Shiprocket wallet nightly',
     group: 'Courier costs & invoices',
     what: 'Each night, sign in to the Shiprocket panel and read every wallet movement, the recharge history and the ledger, working out each parcel’s cost from them.',
-    example:
-      'On: at 3:50 am India time the Shiprocket passbook is read through the Bangalore tunnel.',
+    example: 'On: at 3:50 am India time the Shiprocket passbook is read through the India VPN.',
     values: onOff(
       [
         'Each night at 3:50 am India time the Shiprocket passbook, recharges and ledger are read.',
@@ -1907,7 +1905,7 @@ export const FREE_TEXT_SETTINGS: Readonly<Record<string, string>> = {
   'invoice.gstin': 'A registration number issued by the tax office.',
   'invoice.address': 'A postal address, free text over several lines.',
   'inventory.strict_unit_serial_prefix': 'A label prefix; any short text is valid.',
-  'courier.shiprocket_portal_proxy': 'A proxy URL for the Bangalore tunnel.',
+  'courier.shiprocket_portal_proxy': 'A proxy URL for the India VPN (NordVPN container).',
   'courier.shiprocket_portal_egress_check_url': 'A URL on the app server, or empty.',
   'courier.shiprocket_portal_egress_country': 'A country name, or empty for anywhere.',
   'courier.delhivery_support_email': 'An email address copied from Delhivery’s panel.',

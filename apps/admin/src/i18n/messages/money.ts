@@ -501,8 +501,8 @@ export const money = defineMessages({
     'ওয়েবসাইট অ্যাক্সেস পরীক্ষা করুন',
   ],
   'costSyncShiprocketCostSection.queuedItSignsInThrough': [
-    'Queued. It signs in through Bangalore and reads three pages — refresh in two minutes.',
-    'কিউতে দেওয়া হয়েছে। এটি ব্যাঙ্গালোর দিয়ে সাইন ইন করে তিনটি পেজ পড়ে — দুই মিনিট পর রিফ্রেশ করুন।',
+    'Queued. It signs in through the India VPN and reads three pages — refresh in two minutes.',
+    'কিউতে দেওয়া হয়েছে। এটি ইন্ডিয়া VPN দিয়ে সাইন ইন করে তিনটি পেজ পড়ে — দুই মিনিট পর রিফ্রেশ করুন।',
   ],
   'costSyncShiprocketCostSection.invoiceSRead': [
     '{invoicesRead} invoice(s) read',

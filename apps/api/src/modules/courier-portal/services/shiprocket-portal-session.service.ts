@@ -270,10 +270,11 @@ export interface ShiprocketPortalHandle {
 /**
  * A signed-in page on Shiprocket's seller panel.
  *
- * ── ITS OWN BROWSER, THROUGH BANGALORE, AND CLOSED AFTER EVERY RUN ───
+ * ── ITS OWN BROWSER, THROUGH THE INDIA VPN, AND CLOSED AFTER EVERY RUN ─
  * Their panel is India-only. The browser is launched with the proxy in
- * `courier.shiprocket_portal_proxy` — the self-restarting SSH tunnel to
- * the Bangalore droplet — and REFUSES to start without one rather than
+ * `courier.shiprocket_portal_proxy` — the NordVPN container since
+ * 2026-09-28 (the SSH tunnel to the Bangalore droplet it replaced was
+ * retired on 2026-10-24) — and REFUSES to start without one rather than
  * connecting directly. It is a separate browser from Delhivery's, not a
  * second context in it, because a proxy is fixed at launch; and it is
  * closed at the end of each run so a nightly job does not hold a
