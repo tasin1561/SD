@@ -279,6 +279,14 @@ interface PendingGroup {
   order: Partial<Record<GroupedField, string | number | PaymentMode>>;
   /** Keyed by the row that broke it, so the report names the right one. */
   failures: Map<number, CoerceError[]>;
+  /**
+   * Order-level fields an UNREADABLE row of this order did state. Its
+   * values never reach `order` (the row could not be coerced), so without
+   * this the completeness check below reported every one of them as
+   * "required" — a bad phone or a quantity of 0 read as six missing
+   * values, on a row whose name, address and PIN were all there.
+   */
+  stated: Set<GroupedField>;
 }
 
 @Injectable()
@@ -534,6 +542,10 @@ export class OrderCsvParserService {
         g.rowNumbers.push(rowNumber);
         g.raws.push(raw);
         g.failures.set(rowNumber, errors);
+        for (const field of GROUPED_FIELDS) {
+          const header = mapping[field as OrderCsvField];
+          if (header !== undefined && (raw[header] ?? '').trim() !== '') g.stated.add(field);
+        }
         continue;
       }
 
@@ -572,7 +584,7 @@ export class OrderCsvParserService {
       // Completeness is judged HERE, on the assembled order.
       const missing: CoerceError[] = [];
       for (const f of ORDER_REQUIRED_FIELDS) {
-        if (g.order[f as GroupedField] === undefined) {
+        if (g.order[f as GroupedField] === undefined && !g.stated.has(f as GroupedField)) {
           missing.push({
             field: f,
             reason:
@@ -627,6 +639,8 @@ export class OrderCsvParserService {
       }
 
       if (problems.size > 0) {
+        // The rows a seller has to fix, so a sibling is told WHICH row.
+        const broken = [...problems.keys()].sort((a, b) => a - b).join(', ');
         for (let i = 0; i < g.rowNumbers.length; i++) {
           const rowNumber = g.rowNumbers[i] ?? 0;
           const raw = g.raws[i] ?? {};
@@ -640,7 +654,7 @@ export class OrderCsvParserService {
                 : [
                     {
                       field: 'externalRef',
-                      reason: `not imported: another row of order "${g.ref}" could not be read, and half an order is worse than none`,
+                      reason: `not imported: another row of order "${g.ref}" (row${problems.size === 1 ? '' : 's'} ${broken}) has a problem to fix, and half an order is worse than none`,
                     },
                   ],
           });
@@ -684,6 +698,7 @@ export class OrderCsvParserService {
       lines: [],
       order: {},
       failures: new Map(),
+      stated: new Set(),
     };
     byRef.set(ref, created);
     return created;

@@ -81,6 +81,11 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
 
   const problemFor = (key: string): string | undefined =>
     row.problems.find((p) => p.field === key)?.reason;
+  // Problems no box on this card can carry: a failure from placing the
+  // order (unknown SKU, an undeliverable PIN — stored with no field) or
+  // one about a column the form does not show (payment mode). Without
+  // this the card said "1 value to fix" and marked nothing.
+  const unplaced = row.problems.filter((p) => !FIELDS.some((f) => f.key === p.field));
   const isDuplicate = row.status === 'DUPLICATE_SUSPECTED';
   const dirty = FIELDS.some((f) => draft[f.key] !== String(row.data[f.key] ?? ''));
 
@@ -153,6 +158,20 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
                 </li>
               ))}
             </ul>
+          </Notice>
+        )}
+
+        {unplaced.length > 0 && (
+          <Notice tone="bad" icon={<FileWarning size={16} />}>
+            {unplaced.length === 1 ? (
+              <span>{unplaced[0]?.reason}</span>
+            ) : (
+              <ul className="ord-mini-list">
+                {unplaced.map((p, i) => (
+                  <li key={`${p.field}-${i}`}>{p.reason}</li>
+                ))}
+              </ul>
+            )}
           </Notice>
         )}
 
