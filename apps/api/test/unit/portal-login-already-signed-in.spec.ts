@@ -1,4 +1,7 @@
-import { PortalSessionService } from '../../src/modules/courier-portal/services/portal-session.service';
+import {
+  formatLoginForm,
+  PortalSessionService,
+} from '../../src/modules/courier-portal/services/portal-session.service';
 
 /**
  * The password step is allowed to not happen.
@@ -118,5 +121,27 @@ describe('no password was asked for — is that a failure?', () => {
     await expect(
       verdict('https://one.delhivery.com/somewhere', { passwordInputs: 1 }),
     ).resolves.toBe('NOT_SIGNED_IN');
+  });
+});
+
+/**
+ * What the login form held when the password never came — 29 October
+ * 2026, when the page text alone ("Log in with Google or Email
+ * Continue") could not say whether the email had registered.
+ */
+describe('formatLoginForm', () => {
+  it('says filled or empty and never carries a value', () => {
+    const line = formatLoginForm([
+      { kind: 'input', label: 'email name=email', filled: true, disabled: false },
+      { kind: 'button', label: 'Continue', disabled: true },
+      { kind: 'frame', label: 'accounts.google.com' },
+    ]);
+    expect(line).toBe(
+      'input email name=email (filled); button Continue (disabled); frame accounts.google.com',
+    );
+  });
+
+  it('says so when nothing could be read', () => {
+    expect(formatLoginForm([])).toBe('nothing readable');
   });
 });
