@@ -8,7 +8,7 @@ import {
 } from '@skydrop/db';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Browser, BrowserContext, Page } from 'playwright';
+import type { Browser, BrowserContext, Locator, Page } from 'playwright';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import {
@@ -434,11 +434,7 @@ export class PortalSessionService {
       .locator('input[type="email"], input[name="username"], input[name="email"]')
       .first();
     await emailBox.waitFor({ state: 'visible', timeout: 30_000 });
-    await emailBox.fill(username);
-    await page
-      .getByRole('button', { name: /^continue$/i })
-      .first()
-      .click();
+    await this.submitEmailStep(page, emailBox, username);
     /*
       THEIR FLOW GOT SHORTER, AND THE OLD ONE STILL WORKS.
 
@@ -551,10 +547,15 @@ export class PortalSessionService {
       )
         .replace(/\s+/g, ' ')
         .slice(0, 200);
+      // What the FORM held, not just what it said. On 29 October 2026 the
+      // page text alone ("Log in with Google or Email Continue") could not
+      // tell an email the page never registered from a Continue it
+      // ignored, and the next fix depends on which.
+      const form = formatLoginForm(await readLoginForm(page));
       throw new Error(
         `The password step never appeared, and we are still not signed in. Ended on ${where} — ` +
-          `page reads: "${seen}". Their login flow has moved, or this landed on a challenge ` +
-          'rather than the password.',
+          `page reads: "${seen}". Form: ${form}. Their login flow has moved, or this landed on ` +
+          'a challenge rather than the password.',
       );
     }
     await passwordBox.fill(password);
@@ -584,6 +585,80 @@ export class PortalSessionService {
       // NOT retried — a second attempt with the same wrong password is
       // how an account gets locked.
       throw new Error('Portal login failed and no challenge was presented — check the credential.');
+    }
+  }
+
+  /**
+   * Email, then Continue — and make sure the page actually TOOK it.
+   *
+   * ── WHY ──────────────────────────────────────────────────────────────
+   * On 29 October 2026 the run ended where it started: still on
+   * /v2/login, now headed "Log in with Google or Email", with no password
+   * step, no company step and no challenge. The click had landed and the
+   * page did nothing with it, and the old flow could not notice — it
+   * clicked once and then spent ninety seconds waiting for pages that
+   * were never coming.
+   *
+   * So this checks for PROGRESS after the click and, if there is none,
+   * submits once more the way a person would: the address typed key by
+   * key (a framework input can ignore a programmatic `fill`), then
+   * Enter. One retry, never a loop — and the email step is the only one
+   * this applies to; nothing here re-submits a password, which is how an
+   * account gets locked.
+   *
+   * NEVER while the reset-password prompt is up: that dialog's only
+   * button mails a reset link and invalidates the password we hold, so
+   * its appearance counts as progress and ends the retry.
+   */
+  private async submitEmailStep(page: Page, emailBox: Locator, username: string): Promise<void> {
+    await emailBox.fill(username);
+    if ((await emailBox.inputValue().catch(() => '')) !== username) {
+      await emailBox.fill('');
+      await emailBox.pressSequentially(username, { delay: 40 });
+    }
+    const proceed = page.getByRole('button', { name: /^continue$/i }).first();
+    if (await proceed.isVisible().catch(() => false)) {
+      await proceed.click();
+    } else {
+      await emailBox.press('Enter');
+    }
+    if (await this.emailStepAdvanced(page, emailBox, 20_000)) return;
+
+    this.logger.warn('The email step did not move on after Continue; typing it once more');
+    await emailBox.click().catch(() => undefined);
+    await emailBox.fill('');
+    await emailBox.pressSequentially(username, { delay: 60 });
+    await emailBox.press('Enter');
+    await this.emailStepAdvanced(page, emailBox, 20_000);
+  }
+
+  /**
+   * Has the page moved past the email step? Any of: left /v2/login (the
+   * auth origin or the app), a password field, the reset-password
+   * prompt, or the email box going disabled — which is how the company
+   * step begins (see `signIn`, step 3).
+   */
+  private async emailStepAdvanced(
+    page: Page,
+    emailBox: Locator,
+    timeoutMs: number,
+  ): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      if (!/\/v2\/login/.test(page.url())) return true;
+      if ((await page.locator('input[type="password"]:visible').count()) > 0) return true;
+      if (
+        await page
+          .getByText(/one more step/i)
+          .first()
+          .isVisible()
+          .catch(() => false)
+      ) {
+        return true;
+      }
+      if (await emailBox.isDisabled().catch(() => true)) return true;
+      if (Date.now() >= deadline) return false;
+      await page.waitForTimeout(500);
     }
   }
 
@@ -920,4 +995,65 @@ export class PortalSessionService {
       this.browser = null;
     }
   }
+}
+
+/** One control on the login form, as `readLoginForm` saw it. NEVER a value. */
+export interface LoginFormControl {
+  readonly kind: 'input' | 'button' | 'frame';
+  readonly label: string;
+  readonly filled?: boolean;
+  readonly disabled?: boolean;
+}
+
+/**
+ * What the login form holds: its visible inputs and buttons, and the
+ * hosts of any frames (a captcha or a Google sign-in renders in one).
+ *
+ * An input is reported as filled or empty, never by its value — the
+ * email box holds the portal username, and anything in this string ends
+ * up in `audit_logs`, which is append-only (see `login`). The redactor
+ * there is the second line, not the first.
+ *
+ * Runs in the BROWSER, passed as source for the same reason as the
+ * reset-password closer: this package compiles without the DOM lib.
+ */
+export async function readLoginForm(page: Page): Promise<readonly LoginFormControl[]> {
+  const raw = await page
+    .evaluate(
+      `(() => {
+        function shown(n) { return !!(n.offsetWidth || n.offsetHeight || n.getClientRects().length); }
+        var out = [];
+        Array.prototype.slice.call(document.querySelectorAll('input')).filter(shown).forEach(function (i) {
+          if (i.type === 'hidden') return;
+          out.push({ kind: 'input', label: (i.type || 'text') + (i.name ? ' name=' + i.name : '') +
+            (i.placeholder ? ' "' + i.placeholder.slice(0, 40) + '"' : ''),
+            filled: (i.value || '').length > 0, disabled: !!i.disabled });
+        });
+        Array.prototype.slice.call(document.querySelectorAll('button, [role="button"]')).filter(shown).forEach(function (b) {
+          var t = (b.innerText || b.getAttribute('aria-label') || '').replace(/\\s+/g, ' ').trim().slice(0, 40);
+          if (t) out.push({ kind: 'button', label: t, disabled: !!b.disabled || b.getAttribute('aria-disabled') === 'true' });
+        });
+        Array.prototype.slice.call(document.querySelectorAll('iframe')).forEach(function (f) {
+          try { out.push({ kind: 'frame', label: new URL(f.src).host }); } catch (e) {}
+        });
+        return out;
+      })()`,
+    )
+    .catch(() => []);
+  return Array.isArray(raw) ? (raw as LoginFormControl[]) : [];
+}
+
+/** The form in one line for an error message. Pure, so it is tested without a browser. */
+export function formatLoginForm(controls: readonly LoginFormControl[]): string {
+  if (controls.length === 0) return 'nothing readable';
+  return controls
+    .slice(0, 12)
+    .map((c) => {
+      const state = [
+        c.filled === undefined ? null : c.filled ? 'filled' : 'empty',
+        c.disabled === true ? 'disabled' : null,
+      ].filter((s) => s !== null);
+      return `${c.kind} ${c.label}${state.length > 0 ? ` (${state.join(', ')})` : ''}`;
+    })
+    .join('; ');
 }
