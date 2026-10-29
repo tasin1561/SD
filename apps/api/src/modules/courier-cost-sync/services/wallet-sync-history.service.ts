@@ -27,6 +27,13 @@ const MAX_PRESIGNED_ARTIFACTS = 24;
 export interface WalletSyncRunAccount {
   readonly label: string;
   readonly courierAccountId: string;
+  /**
+   * READ, FAILED or CHALLENGE, as the run recorded it. Without it a
+   * CHALLENGE skip — no browser opened, nothing read — rendered as a
+   * normal account with every figure blank, under a run labelled
+   * "Worked" (29 October 2026).
+   */
+  readonly outcome: string | null;
   readonly error: string | null;
   readonly fileBytes: number | null;
   readonly rowsRead: number | null;
@@ -354,6 +361,7 @@ function toAccount(raw: unknown): WalletSyncRunAccount {
   return {
     label: str(a, 'label') ?? 'Unnamed account',
     courierAccountId: str(a, 'courierAccountId') ?? '',
+    outcome: str(a, 'outcome'),
     error: str(a, 'error'),
     fileBytes: num(a, 'fileBytes'),
     coveredDays: num(a, 'coveredDays'),

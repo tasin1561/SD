@@ -68,7 +68,9 @@ function fmtDay(iso: string | null): string {
 function runTone(run: WalletSyncRun): 'delivered' | 'pending' | 'failed' {
   if (!run.ok) return 'failed';
   if (run.skipped !== null) return 'pending';
-  return run.accounts.some((a) => a.error !== null) ? 'pending' : 'delivered';
+  return run.accounts.some((a) => a.error !== null || a.outcome === 'CHALLENGE')
+    ? 'pending'
+    : 'delivered';
 }
 
 function runLabel(t: Translate<MessageKey>, run: WalletSyncRun): string {
@@ -76,6 +78,10 @@ function runLabel(t: Translate<MessageKey>, run: WalletSyncRun): string {
   if (run.skipped === 'DISABLED') return t('costSyncCostSyncIndex.switchedOff');
   if (run.skipped === 'NO_ACCOUNTS') return t('costSyncCostSyncIndex.noAccounts');
   if (run.accounts.some((a) => a.error !== null)) return t('costSyncCostSyncIndex.partlyFailed');
+  // Skipped because a challenge is open: nothing was read, so it did not work.
+  if (run.accounts.some((a) => a.outcome === 'CHALLENGE')) {
+    return t('costSyncCostSyncIndex.skippedChallenge');
+  }
   return run.wrote ? t('costSyncCostSyncIndex.worked') : t('costSyncCostSyncIndex.workedDryRun');
 }
 
@@ -190,6 +196,18 @@ function AccountResult({ account: a }: { readonly account: WalletSyncRunAccount 
             only part that says what to check. */}
         <p className="af-small">{a.error}</p>
         <FailureArtifact artifact={a.failureArtifact} />
+      </div>
+    );
+  }
+
+  if (a.outcome === 'CHALLENGE') {
+    return (
+      <div className="af-inner" data-tone="bad">
+        <p className="af-title cs-with-icon">
+          <AlertTriangle size={14} aria-hidden className="af-bad" />
+          {a.label}
+        </p>
+        <p className="af-small">{t('costSyncCostSyncIndex.skippedChallengeDetail')}</p>
       </div>
     );
   }

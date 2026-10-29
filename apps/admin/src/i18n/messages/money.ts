@@ -297,6 +297,14 @@ export const money = defineMessages({
   ],
   'costSyncCostSyncIndex.days': [' · {coveredDays} days', ' · {coveredDays} দিন'],
   'costSyncCostSyncIndex.rowsRead': ['Rows read', 'পড়া সারি'],
+  'costSyncCostSyncIndex.skippedChallenge': [
+    'Skipped — sign-in challenge open',
+    'বাদ পড়েছে — সাইন-ইন চ্যালেঞ্জ খোলা',
+  ],
+  'costSyncCostSyncIndex.skippedChallengeDetail': [
+    'Not read: a sign-in challenge is open for this account, so no browser was opened. Sign in to the portal by hand once, then resolve the issue on Needs attention.',
+    'পড়া হয়নি: এই অ্যাকাউন্টে একটি সাইন-ইন চ্যালেঞ্জ খোলা আছে, তাই ব্রাউজার খোলা হয়নি। একবার নিজে পোর্টালে সাইন ইন করুন, তারপর Needs attention-এ সমস্যাটি সমাধান করুন।',
+  ],
   'costSyncCostSyncIndex.ourParcels': ['Our parcels', 'আমাদের পার্সেল'],
   'costSyncCostSyncIndex.revised': ['Revised', 'সংশোধিত'],
   'costSyncCostSyncIndex.theirStatedTotalDoesNot': [

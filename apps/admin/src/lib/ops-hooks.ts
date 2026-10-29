@@ -4491,6 +4491,8 @@ export function useAdminSetStoreActive(): UseMutationResult<
 export interface WalletSyncRunAccount {
   readonly label: string;
   readonly courierAccountId: string;
+  /** READ, FAILED or CHALLENGE (skipped: a sign-in challenge is open). */
+  readonly outcome: string | null;
   readonly error: string | null;
   readonly fileBytes: number | null;
   readonly rowsRead: number | null;

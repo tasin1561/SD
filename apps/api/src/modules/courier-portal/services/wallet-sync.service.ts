@@ -20,6 +20,7 @@ import {
   portalFailureArtifactOf,
   type PortalFailureArtifact,
 } from './portal-failure-artifact';
+import { PortalChallengeError } from './portal-session.service';
 
 const SETTING_ENABLED = 'courier.wallet_sync_enabled';
 const SETTING_WRITE = 'courier.wallet_sync_writes_enabled';
@@ -289,7 +290,19 @@ export class WalletSyncService {
           { err: message, courierAccountId: account.id, label: account.label },
           'Wallet ledger sync failed for one account; continuing with the rest',
         );
-        const challenge = /otp|captcha|challenge/i.test(message);
+        /*
+          BY CLASS, NOT BY WORDING. This was `/otp|captcha|challenge/i`
+          over the message, and on 29 October 2026 an ordinary "the
+          password step never appeared" failure — whose text ends "…or
+          this landed on a challenge rather than the password" — was filed
+          as a HIGH "prove it is human" issue. That key then made every
+          later run SKIP the account before opening a browser, and the
+          page reported each of those skips as "Worked". The session
+          throws `PortalChallengeError` for a real OTP or captcha, and
+          the credential redactor hands the same object back, so the
+          class is the honest test.
+        */
+        const challenge = err instanceof PortalChallengeError;
         results.push({
           courierAccountId: account.id,
           label: account.label,
