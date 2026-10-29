@@ -93,6 +93,7 @@ export const orderImport = defineMessages({
   ],
   'orderImport.errorsCsv': ['Errors CSV', 'ত্রুটির CSV'],
   'orderImport.viewErrors': ['View errors', 'ত্রুটি দেখুন'],
+  'orderImport.errorReportPreparing': ['Preparing error report…', 'ত্রুটির রিপোর্ট তৈরি হচ্ছে…'],
   'orderImport.importing': ['Importing {fileName}', '{fileName} ইম্পোর্ট হচ্ছে'],
   'orderImport.importFinished': ['Import finished', 'ইম্পোর্ট শেষ হয়েছে'],
   'orderImport.importStopped': ['Import stopped', 'ইম্পোর্ট থেমে গেছে'],

@@ -46,6 +46,8 @@ export interface ImportReviewDialogProps {
   readonly imported?: boolean;
   /** One line saying why an upload was NOT imported automatically. */
   readonly stopReason?: string | undefined;
+  /** Error report / pending-rows actions, shown in the footer when given. */
+  readonly errorActions?: ReactNode;
 }
 
 function countText(t: Translate<MessageKey>, kind: 'orders' | 'catalogue', n: number): string {
@@ -113,6 +115,7 @@ export function ImportReviewDialog(p: ImportReviewDialogProps): ReactElement {
       }
       footer={
         <DialogFooter>
+          {p.errorActions}
           <Button variant="secondary" disabled={p.busy} onClick={() => p.onOpenChange(false)}>
             {t('orderImport.reviewClose')}
           </Button>
