@@ -21,7 +21,11 @@ concurrency:
 jobs:
   deploy:
     name: build → ship → swap
-    runs-on: ubuntu-latest
+    # Pinned, not `ubuntu-latest` — see the note at the top of ci.yml.
+    # Deploy builds nothing any more, but it does tar an artifact and ssh,
+    # and a runner image that changes under it is the one variable here
+    # that no diff would ever show.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     if: >-

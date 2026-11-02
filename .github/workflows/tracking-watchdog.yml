@@ -35,7 +35,8 @@ on:
 jobs:
   check:
     name: Is tracking still moving?
-    runs-on: ubuntu-latest
+    # Pinned, not `ubuntu-latest` — see the note at the top of ci.yml.
+    runs-on: ubuntu-24.04
     steps:
       - name: Ask the API whether a poll cycle completed recently
         run: |
