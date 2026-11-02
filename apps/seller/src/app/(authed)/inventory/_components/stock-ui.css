@@ -754,6 +754,17 @@
        the number. Sized to content, the pill is its own 147px and the
        unit-cost field takes the slack. */
     grid-template-columns: auto minmax(0, 1fr) auto;
+    /* END, not START — the row lines up on its CONTROLS.
+       These two fields label themselves differently and always will:
+       TextField floats its label INSIDE the box (u33), NumberStepper
+       stands one above the pill (u12). Top-aligning the cells
+       therefore guarantees the mismatch — the pill hangs a label's
+       height below the input next to it, which is exactly what it
+       looked like. Aligning the bottoms puts the control line
+       straight, and the labels are free to sit where each component
+       puts them. Only works because the unit-cost hint is gone; see
+       the note at that field. */
+    align-items: end;
   }
   .inv-line-grid > :first-child {
     grid-column: 1 / -1;

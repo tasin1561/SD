@@ -667,10 +667,25 @@ function AnnounceConsignment({
               value={qty}
               onChange={(e) => setQty(e.target.value)}
             />
+            {/*
+              NO `hint="Optional"` on this one, where every other money
+              field in this file keeps it. Two reasons, and the second
+              is why it had to go rather than just being redundant.
+
+              It repeats itself: the sentence directly above this row
+              already reads "Unit cost is optional but makes landed cost
+              and margin accurate", so the word under the box says
+              nothing the reader has not just been told.
+
+              And it broke the line. A hint sits UNDER the input, so the
+              cell's bottom edge is the hint's, not the control's —
+              which means no amount of aligning puts this input on the
+              same line as the stepper beside it. Removing it is what
+              lets the row bottom-align on the controls themselves.
+            */}
             <TextField
               label={t('inbound.unitCost')}
               id="cn-cost"
-              hint={t('inbound.optional')}
               type="number"
               min={0}
               step="0.01"
