@@ -18,6 +18,29 @@ concurrency:
   cancel-in-progress: true
 
 # ─────────────────────────────────────────────────────────────────────────
+# THE RUNNER IMAGE IS PINNED, AND `ubuntu-latest` IS NOT A VERSION
+# (2026-11-02)
+#
+# GitHub rolled `ubuntu-latest` from 24.04 to 26.04 and the `browser` job
+# went red on a commit that changed one CSS file:
+#
+#   ERROR: Playwright does not support chromium on ubuntu26.04-x64
+#
+# `84eebd3b` had been green on the same workflow hours earlier. CI failing
+# takes Deploy with it — it is gated on CI success — so a change nobody
+# had shipped yet blocked everything behind it, for a reason that was not
+# in anybody's diff.
+#
+# This is the SECOND mutable pointer to do this to us; the first was the
+# floating `pg18` Docker tag, pinned by digest further down this file with
+# the same argument written out at length. A tag that moves is not a
+# version, it is a subscription to somebody else's upgrade schedule.
+#
+# To move: change these, run the browser and e2e suites on a PR, and merge
+# the upgrade as its own commit with its own evidence.
+# ─────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────
 # SHAPE OF THIS FILE — four jobs, all in parallel (2026-08-03)
 #
 # It used to be two: a `checks` job running everything in sequence, and
@@ -60,7 +83,7 @@ jobs:
   # errs toward skipping is a filter that eventually hides a real break.
   changes:
     name: what changed
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       api: ${{ steps.f.outputs.api }}
@@ -205,7 +228,7 @@ jobs:
   # nothing.
   static:
     name: static (${{ matrix.group.name }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -309,7 +332,7 @@ jobs:
   # tree, so they belong in one job rather than repeated per group.
   unit:
     name: unit (${{ matrix.part.name }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -401,7 +424,7 @@ jobs:
     name: e2e — API (${{ matrix.shard }}/4)
     needs: changes
     if: needs.changes.outputs.api == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
 
     # SHARDED because the suite is ~250s of test time spread flat across
@@ -626,7 +649,7 @@ jobs:
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       needs.changes.outputs.frontend == 'true' ||
       needs.changes.outputs.api == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:
@@ -754,7 +777,7 @@ jobs:
     # stops burning four duplicate builds either way.
     needs: [changes, build]
     if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
       fail-fast: false
