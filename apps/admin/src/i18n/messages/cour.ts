@@ -18,6 +18,10 @@ export const cour = defineMessages({
   'courierAccountsCourierAccountsIndex.makeDefault': ['Make default', 'ডিফল্ট করুন'],
   'courierAccountsCourierAccountsIndex.edit': ['Edit', 'সম্পাদনা'],
   'courierAccountsCourierAccountsIndex.portalLogin': ['Portal login', 'পোর্টাল লগইন'],
+  'courierAccountsCourierAccountsIndex.signInCodeMailbox': [
+    'Sign-in code mailbox',
+    'সাইন-ইন কোডের মেইলবক্স',
+  ],
   'courierAccountsCourierAccountsIndex.network': ['Network', 'নেটওয়ার্ক'],
   'courierAccountsCourierAccountsIndex.courierAccounts': [
     'Courier accounts',
@@ -238,6 +242,36 @@ export const cour = defineMessages({
   'courierAccountsPortalLoginModal.theApiTokenOnThis': [
     'The API token on this account is left exactly as it is — this adds to the credential rather than replacing it.',
     'এই অ্যাকাউন্টের API টোকেন যেমন আছে তেমনই থাকে — এটি ক্রেডেনশিয়ালে যোগ করে, বদলায় না।',
+  ],
+  'courierAccountsSignInCodeMailboxModal.signInCodeMailbox': [
+    'Sign-in code mailbox — {accountLabel}',
+    'সাইন-ইন কোডের মেইলবক্স — {accountLabel}',
+  ],
+  'courierAccountsSignInCodeMailboxModal.theCourierEmailsACode': [
+    'Shiprocket emails a code when it does not recognise the sign-in, and it never recognises ours — a fresh browser from the India route is exactly what that check is for. With these set, the nightly run reads the code itself and carries on. Read-only access (gmail.readonly): it cannot send, delete or change anything, and is used for nothing but that code.',
+    'শিপরকেট সাইন-ইন চিনতে না পারলে ইমেইলে একটি কোড পাঠায়, আর আমাদের কখনোই চেনে না — ভারতের রুট থেকে আসা নতুন ব্রাউজার ঠিক এই চেকটিরই লক্ষ্য। এগুলো দেওয়া থাকলে রাতের রানটি নিজেই কোডটি পড়ে কাজ চালিয়ে যায়। শুধু-পড়ার অনুমতি (gmail.readonly): এটি কিছু পাঠাতে, মুছতে বা বদলাতে পারে না, এবং ওই কোড ছাড়া আর কিছুতেই ব্যবহার হয় না।',
+  ],
+  'courierAccountsSignInCodeMailboxModal.clientId': ['Client ID', 'ক্লায়েন্ট আইডি'],
+  'courierAccountsSignInCodeMailboxModal.clientSecret': ['Client secret', 'ক্লায়েন্ট সিক্রেট'],
+  'courierAccountsSignInCodeMailboxModal.refreshToken': ['Refresh token', 'রিফ্রেশ টোকেন'],
+  'courierAccountsSignInCodeMailboxModal.fromTheOauthClient': [
+    'From the OAuth client you created for this mailbox.',
+    'এই মেইলবক্সের জন্য তৈরি করা OAuth ক্লায়েন্ট থেকে।',
+  ],
+  'courierAccountsSignInCodeMailboxModal.theLongLivedTokenFrom': [
+    'The long-lived token from the consent step. It is stored encrypted and never shown again.',
+    'সম্মতির ধাপ থেকে পাওয়া দীর্ঘমেয়াদি টোকেন। এটি এনক্রিপ্ট করে রাখা হয় এবং আর কখনো দেখানো হয় না।',
+  ],
+  'courierAccountsSignInCodeMailboxModal.notSaved': ['Not saved', 'সেভ হয়নি'],
+  'courierAccountsSignInCodeMailboxModal.cancel': ['Cancel', 'বাতিল'],
+  'courierAccountsSignInCodeMailboxModal.saveMailbox': ['Save mailbox', 'মেইলবক্স সেভ করুন'],
+  'courierAccountsSignInCodeMailboxModal.mailboxSavedAdded': [
+    'Mailbox saved. Added: {value}.',
+    'মেইলবক্স সেভ হয়েছে। যোগ হয়েছে: {value}।',
+  ],
+  'courierAccountsSignInCodeMailboxModal.mailboxReplaced': [
+    'Mailbox replaced.',
+    'মেইলবক্স বদলানো হয়েছে।',
   ],
   'courierAccountsPortalLoginModal.portalLoginSavedAdded': [
     'Portal login saved — added {value}',

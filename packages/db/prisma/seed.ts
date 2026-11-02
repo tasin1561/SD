@@ -548,6 +548,15 @@ const systemSettings: SystemSettingSeed[] = [
       'Each night (03:50 IST) sign in to the Shiprocket panel through the India egress route and read the Passbook (every wallet movement), the Recharge History and the Ledger. Stores each movement once, nets each parcel’s cost from them the way Delhivery’s are (COST-1), matches recharges to our bank book, and checks the Ledger’s credits against the Passbook.',
   },
   {
+    key: 'courier.shiprocket_otp_auto_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Shiprocket sign-in — read the emailed code',
+    description:
+      'Shiprocket asks for a code by email when it does not recognise the sign-in, and it never recognises ours: a fresh browser from the India egress is exactly what that check is built to stop. With this ON the sign-in reads the code from the mailbox configured on the Shiprocket courier account (Gmail, read-only) and types it itself. It reads ONE code per sign-in, and only a message that arrived after the password was submitted — an older code in the inbox would be a wrong code typed into an account that also moves COD money. If the code does not arrive, or is refused, the run stops and asks a person exactly as it does with this OFF. Starts OFF: it does nothing until the mailbox credentials are set.',
+  },
+  {
     key: 'courier.shiprocket_wallet_sync_writes_enabled',
     category: 'courier',
     valueType: SettingValueType.BOOLEAN,

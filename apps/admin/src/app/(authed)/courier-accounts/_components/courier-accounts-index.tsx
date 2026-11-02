@@ -20,6 +20,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { AfCard, Notice } from '@/app/(authed)/system/_components/af-parts';
 import { EditCourierAccountModal } from './edit-courier-account-modal';
 import { PortalLoginModal } from './portal-login-modal';
+import { SignInCodeMailboxModal } from './sign-in-code-mailbox-modal';
 import { CreateCourierAccountModal } from './create-courier-account-modal';
 import { CourierMasterSwitches } from './courier-master-switches';
 import { usePermission } from '@/lib/use-permission';
@@ -142,6 +143,7 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
   const update = useUpdateCourierAccount();
   const [editing, setEditing] = useState(false);
   const [portalLogin, setPortalLogin] = useState(false);
+  const [codeMailbox, setCodeMailbox] = useState(false);
   // "Make default" re-routes every unlinked seller and "Deactivate" stops
   // an account being used; both ask first and then send the same PATCH.
   const [confirming, setConfirming] = useState<RowAct | null>(null);
@@ -247,6 +249,14 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
               {t('courierAccountsCourierAccountsIndex.portalLogin')}
             </Button>
           )}
+          {/* Shiprocket only, for now: theirs is the panel that asks for
+              an emailed code. Delhivery's challenge is a captcha, which
+              no mailbox can answer. */}
+          {account.courierCode === 'shiprocket' && (
+            <Button variant="ghost" size="sm" onClick={() => setCodeMailbox(true)}>
+              {t('courierAccountsCourierAccountsIndex.signInCodeMailbox')}
+            </Button>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -274,6 +284,13 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
             accountLabel={account.label}
             courierCode={account.courierCode}
             onClose={() => setPortalLogin(false)}
+          />
+        )}
+        {codeMailbox && (
+          <SignInCodeMailboxModal
+            accountId={account.id}
+            accountLabel={account.label}
+            onClose={() => setCodeMailbox(false)}
           />
         )}
         <ConfirmDialog

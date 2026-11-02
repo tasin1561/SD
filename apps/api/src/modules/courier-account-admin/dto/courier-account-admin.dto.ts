@@ -161,7 +161,11 @@ export class MergeCredentialFieldsDto {
   @ApiProperty({
     description:
       'Field name → value. For the Delhivery portal: portalUsername, portalPassword, ' +
-      'portalCompany (the company shown in their login dropdown, e.g. "MS EXPORTS"). Values are ' +
+      'portalCompany (the company shown in their login dropdown, e.g. "MS EXPORTS"). For the ' +
+      'Shiprocket portal: portalUsername, portalPassword — plus gmailClientId, gmailClientSecret ' +
+      'and gmailRefreshToken when their panel asks for an emailed code and ' +
+      'courier.shiprocket_otp_auto_enabled is on. The Gmail token is read-only ' +
+      '(gmail.readonly) and is used for nothing but reading that code. Values are ' +
       'encrypted at rest and never returned — only the NAMES are ever reported back.',
   })
   @IsObject()

@@ -1649,6 +1649,23 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
       ],
     ),
   },
+  'courier.shiprocket_otp_auto_enabled': {
+    name: 'Read the emailed sign-in code for Shiprocket',
+    group: 'Courier costs & invoices',
+    what: 'Shiprocket asks for a code by email when it does not recognise a sign-in, and it never recognises ours — a fresh browser from the India route is exactly what that check is for. On, the nightly run reads that code from the mailbox set on the Shiprocket courier account and types it itself. It reads one code per sign-in, and only a message that arrived after the password was sent: an older code sitting in the inbox is a WRONG code, not an old one. Needs the mailbox filled in first (Courier accounts → Shiprocket → Sign-in code mailbox).',
+    example:
+      'On, with the mailbox set: the 03:50 run signs itself in and reads the passbook. Off: it screenshots the code box and raises an issue for a person.',
+    values: onOff(
+      [
+        'The sign-in reads the emailed code and continues on its own.',
+        'The nightly wallet sync completes without anybody being asked for anything.',
+      ],
+      [
+        'A code request stops the run, exactly as it did before this existed.',
+        'An issue is raised with a screenshot, and no courier costs are recorded until somebody signs in by hand.',
+      ],
+    ),
+  },
   'courier.shiprocket_wallet_sync_window_days': {
     name: 'Days of Shiprocket wallet read each night',
     group: 'Courier costs & invoices',

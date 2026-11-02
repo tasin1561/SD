@@ -4,6 +4,7 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { SystemIssueService } from '../../src/modules/system-issues/services/system-issue.service';
 import type { CourierCredentialService } from '../../src/modules/courier-shared/services/courier-credential.service';
+import type { GmailOtpReaderService } from '../../src/modules/courier-portal/services/gmail-otp-reader.service';
 import {
   ShiprocketPortalChallengeError,
   ShiprocketPortalCredentialsMissingError,
@@ -96,7 +97,13 @@ function sessionWith(settings: Record<string, string>): ShiprocketPortalSessionS
       },
     },
   } as unknown as PrismaService;
-  return new ShiprocketPortalSessionService(prisma, {} as CourierCredentialService);
+  // The OTP reader is never reached by these specs — they exercise the
+  // proxy and egress preflights, which run before a browser opens.
+  return new ShiprocketPortalSessionService(
+    prisma,
+    {} as CourierCredentialService,
+    {} as GmailOtpReaderService,
+  );
 }
 
 describe('ShiprocketPortalSessionService', () => {
@@ -314,10 +321,35 @@ describe('the panel sign-in is verified, not assumed', () => {
     'utf8',
   );
 
-  it('re-asks after waitForURL instead of trusting one match', () => {
-    const after = src.slice(src.indexOf('waitForURL(/\\/seller\\//'));
+  /*
+    ANCHOR MOVED 2026-11-02, guarantee unchanged. This used to slice
+    from `waitForURL(/\/seller\//`, which no longer exists: the bare
+    wait became a loop that reacts to the page, because their survey
+    modal and their emailed OTP each may or may not appear and a fixed
+    sequence gets at most one of those four cases right.
+
+    What is pinned is the same property as before — a URL that matched
+    once is not a sign-in — so this now slices from the settle that
+    follows the loop. Delete the re-check and this still fails.
+  */
+  it('settles and re-asks instead of trusting one URL match', () => {
+    const after = src.slice(src.indexOf('SETTLE_AFTER_LOGIN_MS)'));
     expect(after).toContain('isShiprocketLoginUrl(page.url())');
     expect(after).toContain('ShiprocketPortalSignInRejectedError');
+  });
+
+  it('fetches at most ONE code per sign-in', () => {
+    // A second guess at an OTP is a second failed attempt against an
+    // account that also moves COD money, on a panel whose tolerance for
+    // those is unknown. The loop must give up to a person instead.
+    expect(src).toContain('if (otpFilled) throw await this.challenge');
+  });
+
+  it('only accepts a code that arrived after the password was submitted', () => {
+    // An inbox holds every OTP the account was ever sent and they all
+    // look alike; the older one is a WRONG code, not a near miss.
+    expect(src).toContain('const submittedAt = Date.now()');
+    expect(src).toContain('notBeforeMs');
   });
 
   it('is a DIFFERENT failure from a challenge — one needs a person, the other needs them', () => {

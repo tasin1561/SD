@@ -21,6 +21,7 @@ import { TicketModule } from '../ticket/ticket.module';
 import { TicketHandlingModule } from '../ticket-handling/ticket-handling.module';
 import { SystemIssuesModule } from '../system-issues/system-issues.module';
 import { CourierWalletReconcileService } from './services/courier-wallet-reconcile.service';
+import { GmailOtpReaderService } from './services/gmail-otp-reader.service';
 import { ShiprocketPortalSessionService } from './services/shiprocket-portal-session.service';
 import { ShiprocketPortalProbeService } from './services/shiprocket-portal-probe.service';
 import { ShiprocketPortalWorker } from './queue/shiprocket-portal.worker';
@@ -95,6 +96,7 @@ import { DelhiveryInvoiceCheckService } from './services/delhivery-invoice-check
     // route named by `courier.shiprocket_portal_proxy` (the NordVPN
     // container since 2026-09-28; the Bangalore tunnel it replaced was
     // retired on 2026-10-24).
+    GmailOtpReaderService,
     ShiprocketPortalSessionService,
     ShiprocketPortalProbeService,
     ShiprocketWalletSyncService,

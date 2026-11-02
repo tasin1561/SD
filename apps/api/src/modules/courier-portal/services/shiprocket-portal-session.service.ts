@@ -8,6 +8,7 @@ import {
   redactCredentialsInError,
 } from '../../../common/crypto/credential-redaction';
 import { gotoPortal } from '../pages/navigate';
+import { GmailOtpReaderService } from './gmail-otp-reader.service';
 import {
   CourierCredentialService,
   courierActor,
@@ -22,6 +23,16 @@ import {
 
 export const SR_PORTAL_ORIGIN = 'https://app.shiprocket.in';
 export const SR_PORTAL_PROXY_SETTING = 'courier.shiprocket_portal_proxy';
+
+/**
+ * Whether a sign-in may read the emailed code for itself.
+ *
+ * OFF BY DEFAULT and a setting rather than a constant, so the
+ * mailbox can be taken out of the loop without a deploy. A switch
+ * that needs a release is not a switch (CUR-18 makes the same
+ * argument for the portal's own kill switch).
+ */
+export const SR_OTP_AUTO_SETTING = 'courier.shiprocket_otp_auto_enabled';
 /**
  * The control server of the VPN the proxy above goes through, asked
  * before a browser is launched — see `common/net/egress-probe.ts`.
@@ -37,6 +48,38 @@ export const SR_PORTAL_EGRESS_CHECK_SETTING = 'courier.shiprocket_portal_egress_
 /** The country that check must report. EMPTY accepts any, as long as it is up. */
 export const SR_PORTAL_EGRESS_COUNTRY_SETTING = 'courier.shiprocket_portal_egress_country';
 const STATE_DIR = process.env['PORTAL_STATE_DIR'] ?? '/home/skydrop/portal-state';
+
+/**
+ * A code box a PERSON can see. Every branch carries `:visible` — see
+ * the note in `detectChallenge`.
+ */
+const OTP_INPUT_SELECTOR =
+  'input[autocomplete="one-time-code"]:visible, input[name*="otp" i]:visible, ' +
+  'input[id*="otp" i]:visible, input[placeholder*="otp" i]:visible';
+
+/**
+ * Whatever they have decided to put in front of the page this week.
+ *
+ * GENERIC ON PURPOSE. Today it is an NPS survey — "How likely are you
+ * to recommend Shiprocket?" — which on 2026-10-29 sat on top of the 2FA
+ * box and swallowed every click aimed at it. Next month it will be a
+ * feature announcement or a festive banner. Naming the survey would fix
+ * one of those and leave the shape of the bug in place.
+ */
+const OVERLAY_DISMISS_SELECTOR =
+  '[role="dialog"] button[aria-label*="close" i]:visible, ' +
+  '[role="dialog"] [aria-label*="close" i]:visible, ' +
+  '.modal button[aria-label*="close" i]:visible, ' +
+  '[class*="modal" i] [class*="close" i]:visible';
+
+/** How long the whole sign-in may take, obstacles included. */
+const SIGN_IN_WINDOW_MS = 90_000;
+/** Between looks at the page while signing in. */
+const SIGN_IN_POLL_MS = 1_000;
+/** Shiprocket's emailed code. */
+const OTP_DIGITS = 6;
+/** How long to keep asking the mailbox once a code box appears. */
+const OTP_WAIT_MS = 60_000;
 /** Long enough for their router to bounce a session it will not honour.
  *  Measured at well under 4s on 2026-09-28; 6 leaves room. */
 const SETTLE_AFTER_LOGIN_MS = 6_000;
@@ -294,6 +337,7 @@ export class ShiprocketPortalSessionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly credentials: CourierCredentialService,
+    private readonly gmailOtp: GmailOtpReaderService,
   ) {}
 
   async open(courierAccountId: string, runId: string): Promise<ShiprocketPortalHandle> {
@@ -464,7 +508,7 @@ export class ShiprocketPortalSessionService {
     */
     const redact = makeCredentialRedactor({ portalUsername: user, portalPassword: pass });
     try {
-      await this.submitCredentials(page, user, pass, net);
+      await this.submitCredentials(page, user, pass, net, courierAccountId, runId);
     } catch (err) {
       throw redactCredentialsInError(err, redact);
     }
@@ -479,6 +523,8 @@ export class ShiprocketPortalSessionService {
     user: string,
     pass: string,
     net: PortalNetworkWatch,
+    courierAccountId: string,
+    runId: string,
   ): Promise<void> {
     if (!isShiprocketLoginUrl(page.url())) {
       await gotoPortal(page, `${SR_PORTAL_ORIGIN}/newlogin`);
@@ -505,9 +551,55 @@ export class ShiprocketPortalSessionService {
       .first()
       .click();
 
-    try {
-      await page.waitForURL(/\/seller\//, { timeout: 30_000 });
-    } catch {
+    /*
+      ── REACT TO THE PAGE; DO NOT ASSUME AN ORDER ──────────────────
+
+      This used to be a bare `waitForURL`, which is right only when
+      nothing interrupts. Two things do, and NEITHER IS RELIABLE:
+      their survey modal may or may not appear, and the emailed OTP may
+      or may not be asked for. That is four combinations, and a fixed
+      sequence gets at most one of them right — waiting for a code that
+      never comes fails a sign-in that had already worked, and not
+      expecting the modal means every click lands on an overlay, which
+      is precisely what 2026-10-29's screenshot showed.
+
+      So this watches instead. Each pass dismisses what is in the way,
+      answers what is being asked, and otherwise waits — in whatever
+      order the page chooses to do things, including an overlay that
+      returns after being closed.
+    */
+    const deadline = Date.now() + SIGN_IN_WINDOW_MS;
+    // The instant credentials went in. Nothing older than this counts
+    // as our code — see GmailOtpQuery.notBeforeMs.
+    const submittedAt = Date.now();
+    let otpFilled = false;
+
+    while (Date.now() < deadline) {
+      if (!isShiprocketLoginUrl(page.url()) && /\/seller\//.test(page.url())) break;
+
+      if (await this.dismissOverlay(page)) continue;
+
+      if ((await page.locator(OTP_INPUT_SELECTOR).count()) > 0) {
+        /*
+          ONE CODE PER SIGN-IN. If a box is still here after we filled
+          one, the code was wrong, stale or already spent — and the
+          answer to that is a person, not another guess. Shiprocket's
+          tolerance for failed attempts is unknown and this account
+          also moves COD money, so the second guess is the one that
+          could cost us the account.
+        */
+        if (otpFilled) throw await this.challenge(page, 'OTP');
+        const code = await this.fetchOtp(courierAccountId, submittedAt, runId);
+        if (code === null) throw await this.challenge(page, 'OTP');
+        await this.fillOtp(page, code);
+        otpFilled = true;
+        continue;
+      }
+
+      await page.waitForTimeout(SIGN_IN_POLL_MS);
+    }
+
+    if (isShiprocketLoginUrl(page.url()) || !/\/seller\//.test(page.url())) {
       // Did not reach the panel. Whatever stopped it, it is not something
       // to try again automatically.
       throw await this.challenge(page, (await this.detectChallenge(page)) ?? 'UNKNOWN');
@@ -577,12 +669,117 @@ export class ShiprocketPortalSessionService {
       )
       .count();
     if (captcha > 0) return 'CAPTCHA';
-    const otp = await page
-      .locator(
-        'input[autocomplete="one-time-code"], input[name*="otp" i], input[id*="otp" i], input[placeholder*="otp" i]',
-      )
-      .count();
+    // `:visible` HERE TOO, and it was missing (2026-11-02). The captcha
+    // line above has carried it since 2026-09-11 for exactly this
+    // reason, and the OTP line never got the same treatment — so a 2FA
+    // panel sitting in the DOM counted whether or not anyone was being
+    // asked for a code. It matters twice as much now: the sign-in loop
+    // below reacts to this, and a locator that is true forever would
+    // have it fetching a code against a page that wants none.
+    const otp = await page.locator(OTP_INPUT_SELECTOR).count();
     return otp > 0 ? 'OTP' : null;
+  }
+
+  /**
+   * Close whatever is covering the page. True when something was
+   * closed, so the caller looks again rather than acting on a page it
+   * has not re-read.
+   *
+   * NEVER THROWS AND NEVER WAITS LONG. An overlay that will not close
+   * is not this method's problem to solve — the loop runs out of time
+   * and the screenshot shows a person what was in the way, which is a
+   * better answer than a clever selector that half-works.
+   */
+  private async dismissOverlay(page: Page): Promise<boolean> {
+    try {
+      const closer = page.locator(OVERLAY_DISMISS_SELECTOR).first();
+      if ((await closer.count()) === 0) return false;
+      await closer.click({ timeout: 2_000 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * The emailed code, or null.
+   *
+   * Null covers every way this can decline — the feature switched off,
+   * no mailbox configured, Google unreachable, nothing delivered in
+   * time — because the caller does the same thing in all of them:
+   * raise the challenge and leave it to a person, exactly as before
+   * this existed. A courier sign-in is not the place to tell a missing
+   * setting apart from a failed request.
+   */
+  private async fetchOtp(
+    courierAccountId: string,
+    notBeforeMs: number,
+    runId: string,
+  ): Promise<string | null> {
+    const enabled = await this.prisma.client.systemSetting.findUnique({
+      where: { key: SR_OTP_AUTO_SETTING },
+      select: { valueBoolean: true },
+    });
+    if (enabled?.valueBoolean !== true) return null;
+
+    // Audited decrypt (CUR-1), same as the portal password above.
+    const creds = await this.credentials.getCredentialForAccount(
+      courierAccountId,
+      courierActor.runner('shiprocket-portal-otp', runId),
+    );
+    const clientId = creds['gmailClientId'];
+    const clientSecret = creds['gmailClientSecret'];
+    const refreshToken = creds['gmailRefreshToken'];
+    if (
+      typeof clientId !== 'string' ||
+      typeof clientSecret !== 'string' ||
+      typeof refreshToken !== 'string' ||
+      clientId === '' ||
+      clientSecret === '' ||
+      refreshToken === ''
+    ) {
+      return null;
+    }
+
+    /*
+      POLL, because the mail has not arrived yet. Shiprocket sends it
+      when the panel renders the box, and it reaches Gmail a few
+      seconds later — so the first look almost always finds nothing and
+      that is not a failure.
+    */
+    const until = Date.now() + OTP_WAIT_MS;
+    while (Date.now() < until) {
+      const code = await this.gmailOtp.readOtp(
+        { clientId, clientSecret, refreshToken },
+        { notBeforeMs, from: 'shiprocket', digits: OTP_DIGITS },
+      );
+      if (code !== null) return code;
+      await new Promise((r) => setTimeout(r, 3_000));
+    }
+    return null;
+  }
+
+  /**
+   * Type the code and submit it.
+   *
+   * Their box is six separate single-character inputs, so `fill` on the
+   * first one sets one digit and drops five. `pressSequentially` on the
+   * focused field lets their own key handlers move the caret along,
+   * which is what a person's typing does.
+   */
+  private async fillOtp(page: Page, code: string): Promise<void> {
+    const boxes = page.locator(OTP_INPUT_SELECTOR);
+    const count = await boxes.count();
+    if (count >= code.length) {
+      for (let i = 0; i < code.length; i += 1) {
+        await boxes.nth(i).fill(code[i] ?? '');
+      }
+    } else {
+      await boxes.first().click();
+      await page.keyboard.type(code, { delay: 60 });
+    }
+    const verify = page.getByRole('button', { name: /^\s*verify\s*$/i }).first();
+    if ((await verify.count()) > 0) await verify.click({ timeout: 5_000 });
   }
 
   private async challenge(
