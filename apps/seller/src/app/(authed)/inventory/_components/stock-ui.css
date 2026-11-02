@@ -728,14 +728,57 @@
   gap: var(--sp-3);
 }
 @media (min-width: 640px) {
+  /* ITEM TAKES ITS OWN ROW; quantity, cost and Add share the next.
+     This used to be four columns across — item, quantity, cost, Add —
+     inside a 42rem dialog. Two things went wrong with that and only
+     one of them was visible.
+
+     `minmax(0, 1fr)` lets a track shrink BELOW its contents, and the
+     NumberStepper cannot take that: two `--tap` buttons either side of
+     a 3rem input is a hard floor near 150px. The track came out around
+     120px, so the pill overflowed its column and sat under the
+     unit-cost field. The number between − and + was still there and
+     still typeable — it was simply covered, which is why clicking it
+     put the caret in unit cost instead.
+
+     Widening that one track would have stopped the overlap and left
+     every column cramped, because four controls do not fit across
+     42rem. One row each is what the content asks for: the product
+     search is the widest thing here and the other three are small. */
   .inv-line-grid {
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+    /* `auto` for quantity, not `1fr`. A stretched track is as wrong as
+       a starved one, just less obviously: `.sk-stepper__row` is an
+       inline-flex whose children are `flex: none` and left-packed, so
+       at 271px it drew a 141px cluster of controls and 130px of empty
+       pill — and the CENTRE of that pill was the + button rather than
+       the number. Sized to content, the pill is its own 147px and the
+       unit-cost field takes the slack. */
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
+  .inv-line-grid > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+/* The stepper is sized by its contents, never by its cell — at EVERY
+   width, which is why this sits outside the media query. A grid item
+   stretches by default, and `.sk-stepper__row` packs its `flex: none`
+   children to the left, so a stretched pill is a cluster of controls
+   with a dead zone after them: at phone width the single-column track
+   made a 632px pill whose centre was empty. Pre-existing, and the same
+   bug as the desktop overflow seen from the other side. */
+.inv-line-grid > .sk-stepper {
+  justify-self: start;
 }
 .inv-line-grid__add {
   display: flex;
   align-items: flex-end;
   min-height: 100%;
+  /* The grid is `align-items: start`, so this cell is content-height
+     and the `min-height: 100%` above resolves against `auto` — it has
+     never done anything on its own. `align-self: end` is what actually
+     sits the button on the same line as the inputs beside it, which
+     carry a label above them and so start lower than it does. */
+  align-self: end;
 }
 .inv-product {
   display: inline-flex;
