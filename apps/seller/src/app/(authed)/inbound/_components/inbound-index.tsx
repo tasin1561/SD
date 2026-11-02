@@ -442,7 +442,21 @@ function AnnounceConsignment({
   const [lines, setLines] = useState<StagedLine[]>([]);
   const [picked, setPicked] = useState<SellerVariantSearchHit | null>(null);
   const [variantLabel, setVariantLabel] = useState<string | null>(null);
-  const [qty, setQty] = useState('');
+  /**
+   * '0', not ''. An empty stepper draws a pill with a gap between − and
+   * +, which reads as a control that failed to load rather than one
+   * waiting for a number.
+   *
+   * ZERO AND NOT ONE, deliberately. `lineReady` wants `qty > 0`, so a
+   * zero keeps Add disabled exactly as the empty string did — the
+   * person still has to state a quantity. A default of 1 would look
+   * just as tidy and would silently ship one unit for anybody who
+   * picked a product, glanced past the number and pressed Add. On a
+   * consignment line that is a discrepancy discovered at the receiving
+   * bench, weeks later, against goods already in the air.
+   */
+  const QTY_EMPTY = '0';
+  const [qty, setQty] = useState(QTY_EMPTY);
   const [unitCost, setUnitCost] = useState('');
   /**
    * Most goods are not dated. Asking every consignment for a manufacture
@@ -461,7 +475,7 @@ function AnnounceConsignment({
     setLines([]);
     setPicked(null);
     setVariantLabel(null);
-    setQty('');
+    setQty(QTY_EMPTY);
     setUnitCost('');
     setHasDates(false);
     setManufacturedAt('');
@@ -498,7 +512,7 @@ function AnnounceConsignment({
     // the form looked stuck on one item.
     setPicked(null);
     setVariantLabel(null);
-    setQty('');
+    setQty(QTY_EMPTY);
     setUnitCost('');
     setHasDates(false);
     setManufacturedAt('');
