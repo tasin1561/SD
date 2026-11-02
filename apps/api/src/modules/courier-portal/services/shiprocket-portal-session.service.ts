@@ -80,6 +80,13 @@ const SIGN_IN_POLL_MS = 1_000;
 const OTP_DIGITS = 6;
 /** How long to keep asking the mailbox once a code box appears. */
 const OTP_WAIT_MS = 60_000;
+/**
+ * How long their Verify may take before a typed code is called wrong.
+ *
+ * Only ever paid in full by a code that really was refused: the wait
+ * ends the moment the page moves, so a good one costs nothing.
+ */
+const OTP_VERIFY_GRACE_MS = 20_000;
 /** Long enough for their router to bounce a session it will not honour.
  *  Measured at well under 4s on 2026-09-28; 6 leaves room. */
 const SETTLE_AFTER_LOGIN_MS = 6_000;
@@ -593,6 +600,35 @@ export class ShiprocketPortalSessionService {
         if (code === null) throw await this.challenge(page, 'OTP');
         await this.fillOtp(page, code);
         otpFilled = true;
+        /*
+          WAIT FOR THEIR ANSWER BEFORE JUDGING THE CODE.
+
+          Verify is a round trip to their server, and `continue` on its
+          own re-reads the page within milliseconds — while the box is
+          still on screen because nothing has come back yet. The next
+          pass then sees a code box with `otpFilled` already true and
+          calls a CORRECT code wrong.
+
+          Measured on the first live run (2026-11-02 16:17): the code
+          was read from the mailbox and typed — the screenshot shows
+          all six digits in their boxes and Verify lit — and the run
+          still raised a challenge, 14 seconds end to end, where a real
+          OTP failure cannot take less than the 60 the mailbox poll
+          spends looking.
+
+          So wait for the page to MOVE: either away from the login, or
+          the box to leave the DOM. Whichever happens first ends the
+          wait, so a good code costs no delay; only a genuinely refused
+          one pays the full grace, once, before a person is asked.
+        */
+        await Promise.race([
+          page.waitForURL(/\/seller\//, { timeout: OTP_VERIFY_GRACE_MS }).catch(() => undefined),
+          page
+            .locator(OTP_INPUT_SELECTOR)
+            .first()
+            .waitFor({ state: 'detached', timeout: OTP_VERIFY_GRACE_MS })
+            .catch(() => undefined),
+        ]);
         continue;
       }
 

@@ -338,6 +338,16 @@ describe('the panel sign-in is verified, not assumed', () => {
     expect(after).toContain('ShiprocketPortalSignInRejectedError');
   });
 
+  it('waits for their answer before calling a typed code wrong', () => {
+    // The first live run typed a CORRECT code and still raised a
+    // challenge: `continue` re-read the page within milliseconds of
+    // clicking Verify, while the box was still on screen because
+    // nothing had come back yet. 14 seconds end to end, where a real
+    // failure cannot take less than the 60 the mailbox poll spends.
+    expect(src).toContain('OTP_VERIFY_GRACE_MS');
+    expect(src).toContain("waitFor({ state: 'detached'");
+  });
+
   it('fetches at most ONE code per sign-in', () => {
     // A second guess at an OTP is a second failed attempt against an
     // account that also moves COD money, on a panel whose tolerance for
