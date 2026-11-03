@@ -28,12 +28,13 @@
 import * as seller from './seller.mjs';
 import * as reseller from './reseller.mjs';
 import * as associate from './associate.mjs';
+import * as admin from './admin.mjs';
 import * as promoSeller from './promo-seller.mjs';
 import * as promoReseller from './promo-reseller.mjs';
 import * as promoAssociate from './promo-associate.mjs';
 
 /** Every long-form module, in the order they are meant to be watched. */
-const MODULES = [seller, reseller, associate, promoSeller, promoReseller, promoAssociate];
+const MODULES = [seller, reseller, associate, admin, promoSeller, promoReseller, promoAssociate];
 
 /**
  * `[{ id, run }]` → `{ id: run }`, refusing the mistakes that would
