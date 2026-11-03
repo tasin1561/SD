@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { AgentSettingsService } from '../../src/modules/call-center/services/agent-settings.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
@@ -51,10 +53,46 @@ describe('AgentSettingsService.get', () => {
     expect(v).toMatchObject({
       agentId: 'agent-9',
       maxActiveCalls: 1,
-      isAvailable: true,
+      // FALSE, and this line used to say true — which PINNED the bug
+      // rather than catching it (flipped 2026-11-03). See below.
+      isAvailable: false,
       languages: ['en', 'hi'],
     });
     expect(upsert).not.toHaveBeenCalled();
+  });
+
+  /*
+    THE TWO SIDES MUST AGREE ABOUT A MISSING ROW.
+
+    The column is `@default(false)` and `CallAssignmentService.rosterState`
+    reads `settings?.isAvailable ?? false`, with the reason written beside
+    it: a missing row is an agent who has never opened the station, and
+    being logged in is not being at the desk.
+
+    This file's DEFAULTS said `true`, so the admin roster showed
+    **Available** for three people `pullNext` would have refused — a
+    screen reporting a state the system does not act on, for exactly the
+    question that screen exists to answer. Found on 2026-11-03 by looking
+    at the live roster and not believing it.
+
+    Pinned from BOTH sides so the next edit to either has to come here.
+  */
+  it('agrees with the assignment path about an agent who has never opened the station', async () => {
+    const { svc } = makeService({ row: null });
+    const view = await svc.get('never-opened-the-station');
+    expect(view.isAvailable).toBe(false);
+
+    const assignment = readFileSync(
+      join(__dirname, '../../src/modules/call-center/services/call-assignment.service.ts'),
+      'utf8',
+    );
+    expect(assignment).toContain('settings?.isAvailable ?? false');
+
+    const schema = readFileSync(
+      join(__dirname, '../../../../packages/db/prisma/schema.prisma'),
+      'utf8',
+    );
+    expect(schema).toContain('isAvailable         Boolean   @default(false)');
   });
 });
 

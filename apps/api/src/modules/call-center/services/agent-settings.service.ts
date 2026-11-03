@@ -18,11 +18,25 @@ export interface AgentSettingsView {
   canHandleHighValue: boolean;
 }
 
-/** Schema @default mirror — the effective settings for an agent with no
- *  row yet (maxActiveCalls=1 matches CallAssignmentService's cap default). */
+/**
+ * Schema @default mirror — the effective settings for an agent with no
+ * row yet (maxActiveCalls=1 matches CallAssignmentService's cap default).
+ *
+ * `isAvailable` WAS `true` HERE AND FALSE EVERYWHERE ELSE (fixed
+ * 2026-11-03). The column is `@default(false)` and `pullNext`'s
+ * `rosterState` reads `settings?.isAvailable ?? false`, with the reason
+ * written out beside it: a missing row means an agent who has never
+ * opened the station, and being logged in is not being at the desk.
+ *
+ * This file disagreed, so the admin roster showed **Available** for
+ * three people the assignment path would have refused — a screen
+ * reporting a state the system does not act on, for exactly the
+ * decision that screen exists to support ("who can take these calls?").
+ * It is a mirror of the column, so it mirrors the column.
+ */
 const DEFAULTS: Omit<AgentSettingsView, 'agentId'> = {
   maxActiveCalls: 1,
-  isAvailable: true,
+  isAvailable: false,
   workingHoursStart: '09:00',
   workingHoursEnd: '18:00',
   workingDays: [1, 2, 3, 4, 5, 6],
