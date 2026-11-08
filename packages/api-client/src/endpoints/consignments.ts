@@ -23,6 +23,11 @@ export interface ConsignmentLegLineView {
   readonly expectedQty: number;
   readonly receivedQty: number | null;
   readonly damagedQty: number | null;
+  /**
+   * When somebody recorded a count on this line. NULL means nobody has —
+   * which is NOT the same as a count of 0 (`receivedQty` defaults to 0).
+   */
+  readonly countedAt: string | null;
   readonly batchId: string | null;
   readonly variant: {
     readonly skuCode: string;

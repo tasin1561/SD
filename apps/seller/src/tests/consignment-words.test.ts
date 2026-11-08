@@ -59,6 +59,7 @@ function line(over: Partial<ConsignmentLegView['lines'][number]> = {}) {
     expectedQty: 10,
     receivedQty: null,
     damagedQty: null,
+    countedAt: null,
     batchId: null,
     variant: { skuCode: 'SKU-1', variantLabel: null, product: { name: 'Sunglasses' } },
     ...over,

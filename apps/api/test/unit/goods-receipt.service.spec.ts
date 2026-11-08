@@ -27,6 +27,7 @@ interface Line {
   expiresAt: Date | null;
   unitCostInr: null;
   batchId: string | null;
+  countedAt: Date | null;
 }
 
 function makeReceipt(status: GoodsReceiptStatus, lines: Partial<Line>[]) {
@@ -48,6 +49,9 @@ function makeReceipt(status: GoodsReceiptStatus, lines: Partial<Line>[]) {
       expiresAt: null,
       unitCostInr: null,
       batchId: null as string | null,
+      // Counted unless a test says otherwise: most fixtures model a receipt
+      // somebody already recorded.
+      countedAt: l.countedAt === undefined ? new Date('2026-05-01T10:00:00Z') : l.countedAt,
       // The real include always carries this. The fixture omitted it,
       // which is how the note printed a uuid to sellers unnoticed.
       variant: {
@@ -274,6 +278,43 @@ describe('GoodsReceiptService.complete', () => {
     const res = await sut.svc.complete('staff1', 'gr1', CTX);
     expect(res.status).toBe(GoodsReceiptStatus.COMPLETED);
     expect(res.hasDiscrepancies).toBe(true);
+  });
+
+  it('RECEIPT_NOTHING_COUNTED: refuses a receipt nobody recorded, writes no stock', async () => {
+    const sut = makeSut(
+      makeReceipt(GoodsReceiptStatus.ARRIVING, [
+        { id: 'ln1', expectedQty: 10, receivedQty: 0, countedAt: null },
+        { id: 'ln2', variantId: 'v2', expectedQty: 5, receivedQty: 0, countedAt: null },
+      ]),
+    );
+    await expect(sut.svc.complete('staff1', 'gr1', CTX)).rejects.toMatchObject({
+      response: { code: 'RECEIPT_NOTHING_COUNTED' },
+    });
+    expect(sut.applyCalls).toHaveLength(0);
+    expect(sut.batchCreates).toHaveLength(0);
+    expect(sut.emails).toHaveLength(0);
+  });
+
+  it('an explicitly recorded ZERO completes — nothing arrived is a count, not a gap (CNS-3)', async () => {
+    const sut = makeSut(
+      makeReceipt(GoodsReceiptStatus.ARRIVING, [
+        { id: 'ln1', expectedQty: 10, receivedQty: 0 }, // countedAt set by the fixture default
+      ]),
+    );
+    const res = await sut.svc.complete('staff1', 'gr1', CTX);
+    expect(res.status).toBe(GoodsReceiptStatus.COMPLETED);
+    expect(sut.applyCalls).toHaveLength(0);
+  });
+
+  it('one counted line is enough: an uncounted sibling does not block completion', async () => {
+    const sut = makeSut(
+      makeReceipt(GoodsReceiptStatus.ARRIVING, [
+        { id: 'ln1', expectedQty: 10, receivedQty: 10 },
+        { id: 'ln2', variantId: 'v2', expectedQty: 5, receivedQty: 0, countedAt: null },
+      ]),
+    );
+    const res = await sut.svc.complete('staff1', 'gr1', CTX);
+    expect(res.status).toBe(GoodsReceiptStatus.COMPLETED);
   });
 
   it('rejects completing a non-ARRIVING receipt', async () => {

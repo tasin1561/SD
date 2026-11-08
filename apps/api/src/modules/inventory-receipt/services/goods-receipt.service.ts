@@ -73,6 +73,7 @@ const RECEIPT_VIEW_INCLUDE = {
       expectedQty: true,
       receivedQty: true,
       damagedQty: true,
+      countedAt: true,
       unitCostInr: true,
       manufacturedAt: true,
       expiresAt: true,
@@ -602,6 +603,7 @@ export class GoodsReceiptService {
       }
     }
 
+    const now = new Date();
     return this.prisma.client.$transaction(async (tx) => {
       for (const l of lines) {
         await tx.goodsReceiptLine.update({
@@ -609,6 +611,9 @@ export class GoodsReceiptService {
           data: {
             receivedQty: l.receivedQty,
             damagedQty: l.damagedQty ?? 0,
+            // The one fact `receivedQty` cannot carry: somebody recorded
+            // this line. A deliberate 0 sets it too.
+            countedAt: now,
             putawayBinId: resolvedBins.get(l.lineId) ?? null,
             ...(l.notedLocation !== undefined ? { notedLocation: l.notedLocation || null } : {}),
             ...(l.manufacturedAt !== undefined
@@ -725,6 +730,20 @@ export class GoodsReceiptService {
         where: { id },
         include: RECEIPT_VIEW_INCLUDE,
       });
+      // "Nobody counted" is not "counted zero". `received_qty` defaults to
+      // 0, so an untouched receipt would otherwise bank zeros and raise a
+      // shortfall ticket about goods that did arrive. Read INSIDE the
+      // completing transaction, on the same row set the stock is written
+      // from. NOT a variance gate (CNS-3): one explicitly recorded zero
+      // sets `countedAt` and completes normally. A Bangladesh leg
+      // forwarded without a count is a different path and never lands here.
+      if (receipt.lines.length > 0 && receipt.lines.every((l) => l.countedAt === null)) {
+        throw new BadRequestException({
+          code: 'RECEIPT_NOTHING_COUNTED',
+          message:
+            'Nothing has been recorded on this receipt yet. Record the counts first, then complete it. If nothing arrived, record 0 for each product.',
+        });
+      }
       const variantIds: string[] = [];
       const transitVariance: Array<{
         lineId: string;

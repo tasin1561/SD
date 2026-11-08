@@ -1664,6 +1664,11 @@ model GoodsReceiptLine {
   /// note taken on arrival — a head start when tracking is switched on,
   /// never an authority, because stock sells and gets shuffled after.
   notedLocation  String?   @map("noted_location")
+  /// When somebody RECORDED a count on this line. `receivedQty` defaults
+  /// to 0 and is not nullable, so on its own it cannot tell "counted,
+  /// nothing there" from "nobody has counted". NULL = nobody has; set
+  /// by `recordLines` and the count amendment. Never read as a variance.
+  countedAt      DateTime? @map("counted_at") @db.Timestamptz
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 

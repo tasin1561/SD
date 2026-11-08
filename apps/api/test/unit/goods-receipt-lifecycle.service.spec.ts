@@ -177,6 +177,30 @@ describe('GoodsReceiptService — admin recording lifecycle', () => {
     ).rejects.toMatchObject({ response: { code: 'BIN_REQUIRED' } });
   });
 
+  it('recordLines stamps countedAt on every line it writes, including a recorded zero', async () => {
+    const sut = makeSut({
+      receipt: {
+        id: 'gr1',
+        sellerId: 's1',
+        warehouseId: 'w1',
+        status: GoodsReceiptStatus.ARRIVING,
+        lines: [{ id: 'ln1', variantId: 'v1', expectedQty: 5, receivedQty: 0, damagedQty: 0 }],
+      },
+    });
+    await sut.svc.recordLines(
+      'staff1',
+      'gr1',
+      [{ lineId: 'ln1', receivedQty: 0, putawayBinId: 'b1' }],
+      CTX,
+    );
+    const update = sut.client.goodsReceiptLine.update as jest.Mock;
+    const data = (
+      update.mock.calls[0] as [{ data: { receivedQty: number; countedAt: unknown } }]
+    )[0].data;
+    expect(data.receivedQty).toBe(0);
+    expect(data.countedAt).toBeInstanceOf(Date);
+  });
+
   it('recordLines rejects a line id not on the receipt', async () => {
     const sut = makeSut({
       receipt: {
