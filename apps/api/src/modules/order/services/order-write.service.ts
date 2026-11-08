@@ -1029,6 +1029,24 @@ export class OrderWriteService {
         if (from === OrderStatus.PENDING_CONFIRMATION && to !== OrderStatus.PENDING_CONFIRMATION) {
           data.confirmationDeadlineAt = null;
         }
+        if (from === OrderStatus.PENDING_CONFIRMATION) {
+          // Compare-and-set on the exit. The TTL sweeper is an actor with no
+          // human in the loop, so an unguarded update here lets a human confirm
+          // that read the order before a sweep landed write a SECOND
+          // PENDING_CONFIRMATION → CONFIRMED event (and, on the reserve path,
+          // leave a second set of reservations behind). Zero rows = someone
+          // else already moved it; the caller's compensation releases stock.
+          const cas = await tx.order.updateMany({
+            where: { id: order.id, status: from },
+            data: { status: to },
+          });
+          if (cas.count === 0) {
+            throw new ConflictException({
+              code: 'STALE_ORDER_STATUS',
+              message: `Order ${order.orderNumber} is no longer ${from}`,
+            });
+          }
+        }
         await tx.order.update({ where: { id: order.id }, data });
       }
 
