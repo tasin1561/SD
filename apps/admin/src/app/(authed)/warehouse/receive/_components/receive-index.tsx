@@ -27,10 +27,18 @@ const STATUSES: ReadonlyArray<GoodsReceiptStatus> = [
   'CANCELLED',
 ] as GoodsReceiptStatus[];
 
+// The queue opens on the work that is waiting AND the work underway: a
+// claimed receipt moves PENDING -> ARRIVING, so PENDING alone hid it.
+const OPEN_WORK = 'OPEN' as const;
+const OPEN_STATUSES: ReadonlyArray<GoodsReceiptStatus> = [
+  'PENDING',
+  'ARRIVING',
+] as GoodsReceiptStatus[];
+
 export function ReceiveIndex(): ReactElement {
   const t = useT();
   const router = useRouter();
-  const [status, setStatus] = useState<GoodsReceiptStatus | ''>('PENDING');
+  const [status, setStatus] = useState<GoodsReceiptStatus | typeof OPEN_WORK | ''>(OPEN_WORK);
   const [sellerId, setSellerId] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
   const [page, setPage] = useState(1);
@@ -47,7 +55,11 @@ export function ReceiveIndex(): ReactElement {
   const warehouses = useWarehouses();
 
   const list = useGoodsReceiptsList({
-    ...(status ? { status: status as GoodsReceiptStatus } : {}),
+    ...(status === OPEN_WORK
+      ? { statuses: OPEN_STATUSES }
+      : status
+        ? { status: status as GoodsReceiptStatus }
+        : {}),
     ...(sellerId === '' ? {} : { sellerId }),
     ...(warehouseId === '' ? {} : { warehouseId }),
     page,
@@ -61,10 +73,11 @@ export function ReceiveIndex(): ReactElement {
           label={t('warehouseReceiveReceiveIndex.status')}
           value={status}
           onChange={(e) => {
-            setStatus(e.target.value as GoodsReceiptStatus | '');
+            setStatus(e.target.value as GoodsReceiptStatus | typeof OPEN_WORK | '');
             setPage(1);
           }}
         >
+          <option value={OPEN_WORK}>{t('warehouseReceiveReceiveIndex.pendingAndArriving')}</option>
           <option value="">{t('warehouseReceiveReceiveIndex.allStatuses')}</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>

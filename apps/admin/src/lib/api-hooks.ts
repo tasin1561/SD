@@ -1336,6 +1336,7 @@ export function useGoodsReceiptsList(
       if (query.sellerId) sp.set('sellerId', query.sellerId);
       if (query.warehouseId) sp.set('warehouseId', query.warehouseId);
       if (query.status) sp.set('status', query.status);
+      if (query.statuses && query.statuses.length > 0) sp.set('statuses', query.statuses.join(','));
       if (query.page) sp.set('page', String(query.page));
       if (query.pageSize) sp.set('pageSize', String(query.pageSize));
       const qs = sp.toString();

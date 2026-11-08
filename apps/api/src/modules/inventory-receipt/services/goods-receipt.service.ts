@@ -411,6 +411,7 @@ export class GoodsReceiptService {
     sellerId?: string;
     warehouseId?: string;
     status?: GoodsReceiptStatus;
+    statuses?: GoodsReceiptStatus[];
     page?: number;
     pageSize?: number;
   }): Promise<{ items: GoodsReceiptView[]; total: number; page: number; pageSize: number }> {
@@ -419,7 +420,11 @@ export class GoodsReceiptService {
     const where: Prisma.GoodsReceiptWhereInput = { deletedAt: null };
     if (query.sellerId) where.sellerId = query.sellerId;
     if (query.warehouseId) where.warehouseId = query.warehouseId;
-    if (query.status) where.status = query.status;
+    // Single `status` and multi `statuses` both narrow; sent together they AND.
+    const and: Prisma.GoodsReceiptWhereInput[] = [];
+    if (query.status) and.push({ status: query.status });
+    if (query.statuses && query.statuses.length > 0) and.push({ status: { in: query.statuses } });
+    if (and.length > 0) where.AND = and;
     const [items, total] = await Promise.all([
       this.prisma.client.goodsReceipt.findMany({
         where,

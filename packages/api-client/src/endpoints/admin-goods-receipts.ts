@@ -92,6 +92,8 @@ export interface ListAdminGoodsReceiptsQuery {
   readonly sellerId?: string;
   readonly warehouseId?: string;
   readonly status?: GoodsReceiptStatus;
+  /** Several statuses at once (sent as CSV); narrows server-side so paging stays honest. */
+  readonly statuses?: ReadonlyArray<GoodsReceiptStatus>;
   readonly page?: number;
   readonly pageSize?: number;
 }

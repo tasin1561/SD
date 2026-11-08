@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { GoodsReceiptStatus } from '@skydrop/db';
 import {
   ArrayMinSize,
@@ -34,6 +34,26 @@ export class ListAdminGoodsReceiptsQueryDto {
   @IsOptional()
   @IsEnum(GoodsReceiptStatus)
   status?: GoodsReceiptStatus;
+
+  /**
+   * Several statuses at once, as CSV (`PENDING,ARRIVING`) or a repeated
+   * param. Kept server-side so `total` and the pager stay honest. When both
+   * `status` and `statuses` are sent, the receipt must satisfy both.
+   */
+  @ApiProperty({ required: false, enum: GoodsReceiptStatus, isArray: true })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    const parts = Array.isArray(value) ? value : typeof value === 'string' ? [value] : value;
+    return Array.isArray(parts)
+      ? parts
+          .flatMap((v) => (typeof v === 'string' ? v.split(',') : [v]))
+          .map((v) => (typeof v === 'string' ? v.trim() : v))
+      : parts;
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsEnum(GoodsReceiptStatus, { each: true })
+  statuses?: GoodsReceiptStatus[];
 
   @ApiProperty({ required: false, default: 1, minimum: 1 })
   @IsOptional()

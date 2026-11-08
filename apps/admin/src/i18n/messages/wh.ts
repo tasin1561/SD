@@ -1897,6 +1897,7 @@ export const wh = defineMessages({
     'কমপক্ষে 10 অক্ষর — রিসিপ্টে রেকর্ড হয়',
   ],
   'warehouseReceiveReceiveIndex.allStatuses': ['All statuses', 'সব স্ট্যাটাস'],
+  'warehouseReceiveReceiveIndex.pendingAndArriving': ['Pending & arriving', 'অপেক্ষমাণ ও আসছে'],
   'warehouseReceiveReceiveIndex.allClients': ['All clients', 'সব ক্লায়েন্ট'],
   'warehouseReceiveReceiveIndex.allWarehouses': ['All warehouses', 'সব ওয়্যারহাউস'],
   'warehouseReceiveReceiveIndex.receipt': ['Receipt', 'রিসিপ্ট'],
