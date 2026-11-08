@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { ActorType, Currency, SellerStatus } from '@skydrop/db';
 import type { ImpersonationBannerService } from '../../src/common/impersonation/impersonation-banner';
+import type { SpacesService } from '../../src/infrastructure/spaces/spaces.service';
 import { SellerAuthService } from '../../src/modules/seller-auth/seller-auth.service';
 import { PasswordService } from '../../src/modules/auth-common/services/password.service';
 import { JwtService } from '../../src/modules/auth-common/services/jwt.service';
@@ -548,6 +549,7 @@ function makeSut(): Sut {
     {
       getRate: jest.fn().mockRejectedValue(new Error('FX_RATE_NOT_FOUND')),
     } as unknown as FxRateService,
+    { presignGetUrl: jest.fn().mockResolvedValue('https://x/logo') } as unknown as SpacesService,
   );
   return { svc, client, enqueueMock, password, hashes };
 }

@@ -28,6 +28,7 @@ import {
   type IssuedRefresh,
 } from '../auth-common/services/refresh-token.service';
 import { AuditLogService } from '../auth-common/services/audit-log.service';
+import { SpacesService } from '../../infrastructure/spaces/spaces.service';
 import { FxRateService } from '../fx/services/fx-rate.service';
 import { EmailQueue } from '../email/queue/email.queue';
 import { SellerOnboardingService } from '../seller-onboarding/services/seller-onboarding.service';
@@ -95,6 +96,8 @@ export interface SellerMe {
   email: string;
   emailDisplay: string;
   companyName: string;
+  /** Presigned (short-lived) company logo for the avatar; null when none. */
+  logoUrl: string | null;
   contactPersonName: string;
   phone: string;
   whatsapp: string | null;
@@ -133,6 +136,7 @@ export class SellerAuthService {
     private readonly notificationPreferences: SellerNotificationPreferenceService,
     private readonly impersonationBanner: ImpersonationBannerService,
     private readonly fx: FxRateService,
+    private readonly spaces: SpacesService,
   ) {}
 
   /**
@@ -981,6 +985,15 @@ export class SellerAuthService {
 
   // ---------- ME ----------
 
+  private async presignLogo(key: string | null): Promise<string | null> {
+    if (key === null) return null;
+    try {
+      return await this.spaces.presignGetUrl(key);
+    } catch {
+      return null;
+    }
+  }
+
   async getMe(sellerUserId: string): Promise<SellerMe> {
     // Phase 1B: the auth path identifies a SellerUser (the person who
     // signed in). The SellerMe projection still mirrors the COMPANY
@@ -1013,6 +1026,7 @@ export class SellerAuthService {
           select: {
             id: true,
             companyName: true,
+            logoStorageKey: true,
             contactPersonName: true,
             phone: true,
             whatsapp: true,
@@ -1058,6 +1072,8 @@ export class SellerAuthService {
       email: user.email,
       emailDisplay: user.emailDisplay,
       companyName: user.seller.companyName,
+      // A missing logo costs the picture, never the page.
+      logoUrl: await this.presignLogo(user.seller.logoStorageKey),
       initials: user.seller.initials,
       contactPersonName: user.seller.contactPersonName,
       phone: user.seller.phone,

@@ -61,6 +61,8 @@ export interface SellerMe {
   readonly email: string;
   readonly emailDisplay: string;
   readonly companyName: string;
+  /** Presigned company logo for the avatar; null/absent means initials. */
+  readonly logoUrl?: string | null;
   /**
    * The company's short code — "Menev Store" → "MSt". Shown as a fixed
    * prefix on recipient names, the way +91 is shown on a phone field.
