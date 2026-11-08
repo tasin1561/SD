@@ -94,7 +94,7 @@ export class ReceiptCountAmendmentService {
       // completion racing in between flips the receipt and updates 0 rows.
       const updated = await tx.goodsReceiptLine.updateMany({
         where: { id: lineId, receiptId, receipt: { status: GoodsReceiptStatus.ARRIVING } },
-        data: { receivedQty: nextReceived, damagedQty: nextDamaged },
+        data: { receivedQty: nextReceived, damagedQty: nextDamaged, countedAt: new Date() },
       });
       if (updated.count !== 1) {
         throw new ConflictException({

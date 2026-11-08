@@ -60,7 +60,9 @@ describe('ReceiptCountAmendmentService', () => {
     const s = makeSut({});
     const out = await s.svc.amend('st1', 'gr1', 'l1', { receivedQty: 8, reason: REASON }, CTX);
     expect(s.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { receivedQty: 8, damagedQty: 0 } }),
+      expect.objectContaining({
+        data: { receivedQty: 8, damagedQty: 0, countedAt: expect.any(Date) },
+      }),
     );
     expect(s.audit.log).toHaveBeenCalledWith(
       expect.objectContaining({
