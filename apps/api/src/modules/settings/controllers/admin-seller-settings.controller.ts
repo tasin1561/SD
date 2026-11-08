@@ -18,6 +18,7 @@ import { SetSellerSettingOverrideDto } from '../dto/set-seller-setting-override.
 import {
   SettingsResolverService,
   type ResolvedSetting,
+  type SettingOverrideAttribution,
   type SellerSettingOverrideView,
 } from '../services/settings-resolver.service';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
@@ -42,7 +43,9 @@ export class AdminSellerSettingsController {
   @ApiOperation({ summary: 'List overridable settings for a seller (resolved value + source)' })
   list(
     @Param('sellerId') sellerId: string,
-  ): Promise<readonly (ResolvedSetting & { systemDefault: unknown })[]> {
+  ): Promise<
+    readonly (ResolvedSetting & SettingOverrideAttribution & { systemDefault: unknown })[]
+  > {
     return this.svc.listForSeller(sellerId);
   }
 

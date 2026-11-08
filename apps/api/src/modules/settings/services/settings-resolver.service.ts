@@ -336,6 +336,13 @@ export interface SellerSettingOverrideView {
   readonly updatedAt: Date;
 }
 
+export interface SettingOverrideAttribution {
+  /** Staff id of the last writer; null = the client (or no override at all). */
+  readonly setByStaffId: string | null;
+  /** When the override row was last written; null when there is no override. */
+  readonly updatedAt: Date | null;
+}
+
 export interface SetSellerSettingOverrideInput {
   readonly valueType: SettingValueType;
   readonly value: unknown;
@@ -396,7 +403,9 @@ export class SettingsResolverService {
   /** List every seller-overridable key with the seller's current override (if any) + the system default. */
   async listForSeller(
     sellerId: string,
-  ): Promise<readonly (ResolvedSetting & { systemDefault: unknown })[]> {
+  ): Promise<
+    readonly (ResolvedSetting & SettingOverrideAttribution & { systemDefault: unknown })[]
+  > {
     const overridable = await this.prisma.client.systemSetting.findMany({
       where: { sellerOverridable: true },
       orderBy: { key: 'asc' },
@@ -414,6 +423,11 @@ export class SettingsResolverService {
         value: override ? this.extractTypedValue(override) : this.extractTypedValue(system),
         source: override ? 'SELLER_OVERRIDE' : 'SYSTEM_DEFAULT',
         systemDefault: this.extractTypedValue(system),
+        // Who wrote the row last, and when: admin and client share one row
+        // (last writer wins), so the admin console needs this to avoid
+        // silently reversing a client's choice. null staff id = the client.
+        setByStaffId: override ? override.setByStaffId : null,
+        updatedAt: override ? override.updatedAt : null,
       };
     });
   }

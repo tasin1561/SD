@@ -633,6 +633,27 @@ describe('SettingsResolverService.listForSeller', () => {
     expect(plain.value).toBe(7);
     expect(plain.source).toBe('SYSTEM_DEFAULT');
   });
+
+  it('returns who wrote each override and when: staff id, null for the client, null on a default', async () => {
+    const staffAt = new Date('2026-11-01T10:00:00Z');
+    const clientAt = new Date('2026-11-02T10:00:00Z');
+    const { svc } = makeService({
+      overridableRows: [
+        makeSystemRow({ key: 'k.staff', valueInt: 1 }),
+        makeSystemRow({ key: 'k.client', valueInt: 1 }),
+        makeSystemRow({ key: 'k.none', valueInt: 1 }),
+      ],
+      overrideRows: [
+        makeOverrideRow({ key: 'k.staff', setByStaffId: 'staff-9', updatedAt: staffAt }),
+        makeOverrideRow({ key: 'k.client', setByStaffId: null, updatedAt: clientAt }),
+      ],
+    });
+    const result = await svc.listForSeller('seller-1');
+    const by = (k: string) => result.find((r) => r.key === k)!;
+    expect(by('k.staff')).toMatchObject({ setByStaffId: 'staff-9', updatedAt: staffAt });
+    expect(by('k.client')).toMatchObject({ setByStaffId: null, updatedAt: clientAt });
+    expect(by('k.none')).toMatchObject({ setByStaffId: null, updatedAt: null });
+  });
 });
 
 describe('SET-1 parseAndClamp — BOOLEAN accepts what the other types accept', () => {
