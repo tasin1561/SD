@@ -162,8 +162,14 @@ export class ApiClient {
     if (first.status === 401 && !init.suppressRefresh) {
       const outcome = await this.refresher.run();
       if (outcome === 'OK') return this.doFetch(path, init);
+      // Diagnostic only: names the path (no query) and that a refresh ran.
+      console.warn(
+        `[api-client] 401 on ${path.split('?')[0]}; refresh attempted: yes, outcome: ${String(outcome)}`,
+      );
       // Refresh failed → surface the original 401 to the caller. The
       // app's React layer reacts (redirect to /login).
+    } else if (first.status === 401) {
+      console.warn(`[api-client] 401 on ${path.split('?')[0]}; refresh attempted: no (suppressed)`);
     }
     return first;
   }

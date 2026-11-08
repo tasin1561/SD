@@ -57,6 +57,13 @@ export default async function AuthedLayout({
   });
 
   if (result.state !== 'authenticated') {
+    // Diagnostic only (booleans and a reason code; never a cookie value).
+    // This redirect is the one place an authed page bounces to /login.
+    console.warn(
+      `[seller-layout] redirect /login: state=${result.state}` +
+        `${result.state === 'forbidden' ? ` code=${result.code}` : ''}` +
+        ` refreshCookie=${cookieValue !== ''} impersonationCookie=${impersonationCookieValue !== ''}`,
+    );
     redirect('/login');
   }
 

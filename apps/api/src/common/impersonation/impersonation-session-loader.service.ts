@@ -14,6 +14,14 @@ import { IMPERSONATION_COOKIE, inspectImpersonationCookie } from './impersonatio
 const AUTHED_SURFACE = /^\/(v\d+\/)?(seller|store)\//i;
 const ABSENT_THROTTLE_MS = 60_000;
 const ABSENT_THROTTLE_MAX_KEYS = 5_000;
+/**
+ * Success-path diagnostics: only the first N served requests of each
+ * session get an audit row. The question being asked is what the FIRST few
+ * requests of a session are, so a small in-memory per-process counter is
+ * enough, and it bounds `audit_logs` growth to N rows per session.
+ */
+export const SERVED_ROWS_PER_SESSION = 20;
+const SERVED_MAX_KEYS = 5_000;
 
 /**
  * Turn the cookie on a request into the ambient context, or into the
@@ -52,6 +60,7 @@ export type ImpersonationVerdict =
 export class ImpersonationSessionLoader {
   private readonly logger = new Logger(ImpersonationSessionLoader.name);
   private readonly absentSeenAt = new Map<string, number>();
+  private readonly servedCount = new Map<string, number>();
 
   constructor(
     private readonly env: EnvService,
@@ -119,6 +128,44 @@ export class ImpersonationSessionLoader {
     }
   }
 
+  /**
+   * OBSERVABILITY ONLY. Records that a request was served inside a support
+   * session: path (no query), method, whether it carried a bearer, and the
+   * session id (a database id). Never the cookie or any token text. Capped
+   * per session; never throws; never changes the verdict.
+   *
+   * NOTE on `request_count`: that counter is bumped by `ImpersonationGuard`
+   * (via `noteRequest`), not here. This runs in the middleware, so it also
+   * sees requests the guard skips (@SkipImpersonation exchange routes) or
+   * never reaches (404s, an earlier guard throwing). A row here without a
+   * matching count is therefore possible; a count without a row is not,
+   * except past the cap or after a process restart.
+   */
+  private async reportServed(req: Request, sessionId: string): Promise<void> {
+    try {
+      const seen = this.servedCount.get(sessionId) ?? 0;
+      if (seen >= SERVED_ROWS_PER_SESSION) return;
+      if (seen === 0 && this.servedCount.size >= SERVED_MAX_KEYS) this.servedCount.clear();
+      this.servedCount.set(sessionId, seen + 1);
+      await this.audit.log({
+        actorType: ActorType.SYSTEM,
+        action: 'impersonation.request_served',
+        entityType: 'impersonation_session',
+        entityId: sessionId,
+        metadata: {
+          path: req.path,
+          method: req.method,
+          hasBearer: typeof req.headers?.authorization === 'string',
+          sequence: seen + 1,
+          host: req.headers?.host ?? null,
+        },
+        severity: 'LOW',
+      });
+    } catch {
+      // Diagnostics must never alter or fail a request.
+    }
+  }
+
   async verdictFor(req: Request): Promise<ImpersonationVerdict> {
     const inspected = inspectImpersonationCookie({ signingKey: this.env.jwtSigningKey, req });
     // The early return that keeps an ordinary seller request EXACTLY as
@@ -143,6 +190,8 @@ export class ImpersonationSessionLoader {
       if (err instanceof HttpException) return { kind: 'refused', error: err };
       throw err;
     }
+
+    await this.reportServed(req, claim.sessionId);
 
     return {
       kind: 'ok',
