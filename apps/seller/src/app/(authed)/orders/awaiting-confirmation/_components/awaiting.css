@@ -1,0 +1,224 @@
+/* Awaiting confirmation + the call-confirmation setting. Tokens only; only
+   transform and opacity ever animate. */
+
+/* ── Setting ──────────────────────────────────────────────────────────── */
+.cc-setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.cc-fact {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  min-width: 0;
+}
+.cc-fact > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--sky);
+}
+.cc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  color: var(--sky);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+.cc-link > svg {
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.cc-link:hover > svg,
+.cc-link:focus-visible > svg {
+  transform: translateX(3px);
+}
+
+/* ── Result ───────────────────────────────────────────────────────────── */
+.cc-result-slot {
+  min-width: 0;
+}
+.cc-result {
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  animation: cc-in var(--dur) var(--ease-out) both;
+}
+.cc-result p {
+  margin: 0;
+}
+.cc-result__summary {
+  font-weight: var(--fw-semibold);
+}
+.cc-result__list {
+  margin: var(--sp-2) 0 0;
+  padding-left: var(--sp-4);
+}
+.cc-result[data-tone='good'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.cc-result[data-tone='warn'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.cc-result[data-tone='bad'] {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+
+/* ── List ─────────────────────────────────────────────────────────────── */
+.cc-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  transition: opacity var(--dur) var(--ease-out);
+}
+/* Re-reading after a send: the old rows stay, dimmed, so nothing jumps. */
+.cc-list[data-refreshing] {
+  opacity: 0.6;
+}
+.cc-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.cc-bar__count {
+  margin-right: auto;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.cc-bar[data-active] {
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+}
+.cc-bar[data-active] .cc-bar__count {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.cc-table .sk-tr {
+  animation: cc-in var(--dur) var(--ease-out) both;
+}
+.cc-name {
+  display: block;
+  font-weight: var(--fw-medium);
+}
+.cc-faint {
+  display: block;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+
+/* ── Time left: colour + icon + word, never colour alone ──────────────── */
+.cc-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-body);
+  border-radius: var(--r-sm);
+}
+.cc-left:focus-visible {
+  outline: 2px solid var(--sky);
+  outline-offset: 2px;
+}
+.cc-left__icon {
+  flex: none;
+}
+.cc-left__tag {
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.cc-left[data-urgency='soon'] {
+  color: var(--saffron-text);
+}
+.cc-left[data-urgency='soon'] .cc-left__tag {
+  background: var(--saffron-tint);
+  border: 1px solid var(--saffron-line);
+  color: var(--saffron-on-tint);
+}
+.cc-left[data-urgency='urgent'],
+.cc-left[data-urgency='expired'] {
+  color: var(--red-text);
+  font-weight: var(--fw-semibold);
+}
+.cc-left[data-urgency='urgent'] .cc-left__tag {
+  background: var(--red-tint);
+  border: 1px solid var(--red-line);
+  color: var(--red-on-tint);
+}
+.cc-left[data-urgency='urgent'] .cc-left__icon {
+  animation: cc-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes cc-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes cc-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (pointer: coarse) {
+  .cc-bar button,
+  .cc-link {
+    min-height: 44px;
+  }
+  .cc-table .sk-td--select,
+  .cc-table .sk-th--select {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .cc-left {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-result,
+  .cc-table .sk-tr {
+    animation: none;
+  }
+  .cc-left[data-urgency='urgent'] .cc-left__icon {
+    animation: none;
+  }
+  .cc-list,
+  .cc-link > svg {
+    transition: none;
+  }
+}

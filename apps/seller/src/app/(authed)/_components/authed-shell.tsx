@@ -27,6 +27,7 @@ import {
   Package,
   PackageOpen,
   PackageSearch,
+  PhoneCall,
   PhoneOff,
   Settings,
   Store,
@@ -108,6 +109,11 @@ export function AuthedShell({
           icon: <LayoutDashboard size={15} />,
         },
         { href: '/orders', label: t('authedShell.orders'), icon: <Package size={15} /> },
+        {
+          href: '/orders/awaiting-confirmation',
+          label: t('authedShell.awaitingConfirmation'),
+          icon: <PhoneCall size={15} />,
+        },
         { href: '/tracking', label: t('authedShell.tracking'), icon: <Truck size={15} /> },
         {
           href: '/needs-attention',

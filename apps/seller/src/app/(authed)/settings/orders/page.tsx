@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { SetPageHeader } from '../_components/settings-parts';
 import { OrderDefaultsPanel } from './_components/order-defaults-panel';
+import { CallConfirmationPanel } from './_components/call-confirmation-panel';
 import { getT } from '@/i18n/server';
 
 export default async function OrderDefaultsPage(): Promise<ReactElement> {
@@ -18,6 +19,7 @@ export default async function OrderDefaultsPage(): Promise<ReactElement> {
         subtitle={t('settingsOrders.whatANewOrder')}
       />
       <OrderDefaultsPanel />
+      <CallConfirmationPanel />
     </div>
   );
 }
