@@ -120,7 +120,11 @@ describe('ReceiptCountAmendmentService', () => {
       consignment event instead. Asserted here because the leak is
       invisible at the call site and would be found by a customer.
     */
-    const note = String(s.tickets.addNote.mock.calls[0]?.[1] ?? '');
+    // The mock is declared with no parameters, so jest types its calls as
+    // an empty tuple and `[1]` does not typecheck. The call is real; only
+    // the inferred arity is wrong.
+    const call = s.tickets.addNote.mock.calls[0] as unknown as readonly unknown[] | undefined;
+    const note = String(call?.[1] ?? '');
     expect(note).not.toContain(REASON);
     expect(note).not.toContain('st1');
     expect(s.tickets.openOrFind).not.toHaveBeenCalled();
