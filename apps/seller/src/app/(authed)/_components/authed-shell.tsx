@@ -237,6 +237,7 @@ export function AuthedShell({
           navGroups={visibleGroups}
           identityPrimary={identity.companyName}
           identitySecondary={identity.emailDisplay}
+          identityLogoUrl={identity.logoUrl ?? null}
           // Reachable from EVERY page: the moment somebody needs an order
           // is rarely the moment they are on the orders list. In its OWN
           // slot so it does not squeeze the identity beside it.

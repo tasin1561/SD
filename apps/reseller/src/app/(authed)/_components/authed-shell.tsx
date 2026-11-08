@@ -146,6 +146,7 @@ export function AuthedShell({
           navGroups={visible}
           identityPrimary={identity.store.displayName ?? identity.store.name}
           identitySecondary={identity.emailDisplay}
+          identityLogoUrl={identity.store.logoUrl}
           pathname={pathname}
           Link={Link}
           // The bell, at every width (FE-7's `headerAlways`): the one

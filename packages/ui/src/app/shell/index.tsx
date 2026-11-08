@@ -294,19 +294,39 @@ export function initialsOf(text: string): string {
   return (first + second).toUpperCase();
 }
 
-/** A round avatar with initials and a presence dot. Decorative. */
+/**
+ * A round avatar: the account's logo when there is one, initials otherwise,
+ * plus a presence dot. Decorative — the name sits beside it. A logo that
+ * fails to load (a presigned URL expires) drops back to the initials.
+ */
 export function Avatar({
   name,
   size = 32,
   presence = true,
+  logoUrl,
 }: {
   readonly name: string;
   readonly size?: number;
   readonly presence?: boolean;
+  readonly logoUrl?: string | null | undefined;
 }): ReactElement {
+  const [failed, setFailed] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState<string | null>(null);
+  const showLogo = typeof logoUrl === 'string' && logoUrl !== '' && failed !== logoUrl;
   return (
     <span className="sk-avatar" aria-hidden style={{ '--av': `${size}px` } as CSSProperties}>
       <span className="sk-avatar__initials">{initialsOf(name)}</span>
+      {showLogo && (
+        <img
+          src={logoUrl}
+          alt=""
+          draggable={false}
+          className="sk-avatar__img"
+          data-loaded={loaded === logoUrl ? '1' : undefined}
+          onLoad={(): void => setLoaded(logoUrl)}
+          onError={(): void => setFailed(logoUrl)}
+        />
+      )}
       {presence && <span className="sk-avatar__dot" />}
     </span>
   );
@@ -378,7 +398,9 @@ function Identity({
   Link,
   onNavigate,
   align = 'left',
+  logoUrl,
 }: {
+  readonly logoUrl?: string | null | undefined;
   readonly primary: string;
   readonly secondary: string;
   readonly href?: string | undefined;
@@ -388,7 +410,7 @@ function Identity({
 }): ReactElement {
   const inner = (
     <>
-      <Avatar name={primary} />
+      <Avatar name={primary} logoUrl={logoUrl} />
       <span className="sk-identity__text" data-align={align}>
         <span className="sk-identity__primary">{primary}</span>
         <span className="sk-identity__secondary">{secondary}</span>
@@ -416,6 +438,7 @@ export function Shell({
   navGroups,
   identityPrimary,
   identitySecondary,
+  identityLogoUrl,
   identityHref,
   headerActions,
   headerAlways,
@@ -442,6 +465,8 @@ export function Shell({
   readonly navGroups: readonly NavGroup[];
   readonly identityPrimary: string;
   readonly identitySecondary: string;
+  /** The account's logo for the avatar; initials when absent or broken. */
+  readonly identityLogoUrl?: string | null | undefined;
   readonly identityHref?: string | undefined;
   /** Desktop-only top-bar controls, left of the identity. */
   readonly headerActions?: ReactNode;
@@ -495,6 +520,7 @@ export function Shell({
           <Identity
             primary={identityPrimary}
             secondary={identitySecondary}
+            logoUrl={identityLogoUrl}
             href={identityHref}
             Link={Link}
           />
@@ -562,6 +588,7 @@ export function Shell({
                     <Identity
                       primary={identityPrimary}
                       secondary={identitySecondary}
+                      logoUrl={identityLogoUrl}
                       href={identityHref}
                       Link={Link}
                       onNavigate={() => setDrawerOpen(false)}
@@ -597,6 +624,7 @@ export function Shell({
               <Identity
                 primary={identityPrimary}
                 secondary={identitySecondary}
+                logoUrl={identityLogoUrl}
                 href={identityHref}
                 Link={Link}
                 align="right"
