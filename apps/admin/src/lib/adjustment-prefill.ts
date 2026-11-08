@@ -54,6 +54,28 @@ export function adjustmentHref(line: {
   return `/inventory/adjustments?${params.toString()}`;
 }
 
+/**
+ * The adjustment form for a SKU whose count was already banked as stock.
+ * Carries whatever the caller knows; the page prefills only when it is
+ * given a WHOLE line (seller, variant, bin and batch), and otherwise
+ * simply opens the form.
+ */
+export function countCorrectionHref(line: {
+  readonly sellerId: string;
+  readonly variantId: string;
+  readonly binId?: string | null | undefined;
+  readonly batchId?: string | null | undefined;
+}): string {
+  const params = new URLSearchParams({
+    sellerId: line.sellerId,
+    variantId: line.variantId,
+    reason: DEFAULT_REASON,
+  });
+  if (line.binId) params.set('binId', line.binId);
+  if (line.batchId) params.set('batchId', line.batchId);
+  return `/inventory/adjustments?${params.toString()}`;
+}
+
 /** The prefill a URL carries, or null when it does not name a whole line. */
 export function prefillFromSearchParams(sp: {
   readonly sellerId?: string;

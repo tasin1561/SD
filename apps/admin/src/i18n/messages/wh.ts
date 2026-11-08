@@ -2248,4 +2248,48 @@ export const wh = defineMessages({
     'Receive returned parcels, inspect each line, finalize the disposition (restock or write-off).',
     'ফেরত আসা পার্সেল গ্রহণ করুন, প্রতিটি লাইন পরীক্ষা করুন, নিষ্পত্তি চূড়ান্ত করুন (পুনরায় স্টক বা অবলোপন)।',
   ],
+  'warehouseAmendCount.editCount': ['Edit count', 'গণনা সম্পাদনা'],
+  'warehouseAmendCount.editCountFor': [
+    'Edit the counted quantity for {skuCode}',
+    '{skuCode}-এর গণনা করা পরিমাণ সম্পাদনা করুন',
+  ],
+  'warehouseAmendCount.amendTheCount': ['Amend the count', 'গণনা সংশোধন করুন'],
+  'warehouseAmendCount.close': ['Close', 'বন্ধ করুন'],
+  'warehouseAmendCount.received': ['Received', 'গৃহীত'],
+  'warehouseAmendCount.damaged': ['Damaged', 'ক্ষতিগ্রস্ত'],
+  'warehouseAmendCount.wholeNumber': [
+    'A whole number, 0 or more.',
+    'শূন্য বা তার বেশি একটি পূর্ণ সংখ্যা।',
+  ],
+  'warehouseAmendCount.why': ['Why is the count changing', 'গণনা কেন বদলাচ্ছে'],
+  'warehouseAmendCount.reasonHint': [
+    'Required, at least {min} characters. It is recorded against the receipt.',
+    'আবশ্যক, কমপক্ষে {min}টি অক্ষর। এটি রসিদে রেকর্ড হয়।',
+  ],
+  'warehouseAmendCount.reasonPlaceholder': [
+    'e.g. recounted the carton, 10 were in a second box',
+    'যেমন কার্টন আবার গুনে দেখা গেছে',
+  ],
+  'warehouseAmendCount.counter': ['{n} / {min} minimum', 'ন্যূনতম {min}, এখন {n}'],
+  'warehouseAmendCount.cancel': ['Cancel', 'বাতিল'],
+  'warehouseAmendCount.review': ['Review change', 'পরিবর্তন দেখুন'],
+  'warehouseAmendCount.back': ['Back', 'ফিরে যান'],
+  'warehouseAmendCount.confirmTitle': ['Confirm the new count', 'নতুন গণনা নিশ্চিত করুন'],
+  'warehouseAmendCount.confirmBody': [
+    'This overrides the physical count for {skuCode}: {from} becomes {to}. It is recorded with your reason.',
+    'এটি {skuCode}-এর প্রকৃত গণনা বদলে দেবে: {from} থেকে {to}। আপনার কারণসহ রেকর্ড হবে।',
+  ],
+  'warehouseAmendCount.confirmSave': ['Confirm and save', 'নিশ্চিত করে সংরক্ষণ'],
+  'warehouseAmendCount.saving': ['Saving', 'সংরক্ষণ হচ্ছে'],
+  'warehouseAmendCount.saved': ['Count updated', 'গণনা হালনাগাদ হয়েছে'],
+  'warehouseAmendCount.refusedRetry': ['Not saved, try again', 'সংরক্ষণ হয়নি, আবার চেষ্টা করুন'],
+  'warehouseAmendCount.couldNotSave': ['The count could not be saved.', 'গণনা সংরক্ষণ করা যায়নি।'],
+  'warehouseAmendCount.bankedExplain': [
+    'That count has already become stock, so the correction is a stock adjustment, not an edit.',
+    'ওই গণনা ইতিমধ্যে স্টকে পরিণত হয়েছে, তাই সংশোধন সম্পাদনা নয়, স্টক সমন্বয়।',
+  ],
+  'warehouseAmendCount.adjustStock': [
+    'Adjust stock for {skuCode}',
+    '{skuCode}-এর স্টক সমন্বয় করুন',
+  ],
 });

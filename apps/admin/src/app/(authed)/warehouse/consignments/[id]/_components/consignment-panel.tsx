@@ -68,6 +68,7 @@ function parseSerials(raw: string): string[] {
 import { LabelReprintRequests } from './label-reprint-requests';
 import { LabelSheetView } from './label-sheet';
 import { Step, Variance } from './steps';
+import { AmendCount } from '../../../_components/amend-count';
 import { useT } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
@@ -488,6 +489,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                   {!bdLeg.forwardedWithoutCount && (
                     <LegLines
                       leg={bdLeg}
+                      sellerId={c.sellerId}
                       shortWord={t('warehouseConsignmentsIdConsignmentPanel.shortOfDeclared')}
                       overWord={t('warehouseConsignmentsIdConsignmentPanel.overDeclared')}
                     />
@@ -938,10 +940,13 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
 
 function LegLines({
   leg,
+  sellerId,
   shortWord,
   overWord,
 }: {
   readonly leg: ConsignmentLegView;
+  /** Given only for the Bangladesh intake, the one leg whose count can be amended here. */
+  readonly sellerId?: string | undefined;
   readonly shortWord: string;
   readonly overWord: string;
 }): ReactElement {
@@ -960,6 +965,23 @@ function LegLines({
             shortWord={shortWord}
             overWord={overWord}
           />
+          {/* Gated inside by inventory.goods_receipts.amend_count. Offered once
+              the leg has been counted or is being counted; whether the count
+              may still change is the server's call (FE-2). */}
+          {sellerId !== undefined &&
+            (leg.status === 'ARRIVING' || leg.status === 'COMPLETED') &&
+            !leg.forwardedWithoutCount && (
+              <AmendCount
+                receiptId={leg.id}
+                lineId={l.id}
+                skuCode={l.variant.skuCode}
+                receivedQty={l.receivedQty}
+                damagedQty={l.damagedQty}
+                sellerId={sellerId}
+                variantId={l.variantId}
+                batchId={l.batchId}
+              />
+            )}
         </div>
       ))}
       {leg.discrepancyNotes !== null && <p className="stk-sub">{leg.discrepancyNotes}</p>}

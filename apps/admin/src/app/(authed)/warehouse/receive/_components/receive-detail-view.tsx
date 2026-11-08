@@ -26,6 +26,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { SerialScanner, scanCountMet } from '@/components/ui/serial-scanner';
 import { SkuLabelSheetView } from '@/components/sku-label-sheet';
+import { AmendCount } from '../../_components/amend-count';
 import { buildReceiptLines } from './receive-lines';
 import '../../_components/benches.css';
 import { useT } from '@/i18n/client';
@@ -541,6 +542,22 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                 </span>
               )}
             </div>
+
+            {/* Same gate and same control as the consignment page, so the
+                two screens agree on who may change a count. */}
+            {(isArriving || isCompleted) && (
+              <AmendCount
+                receiptId={r.id}
+                lineId={line.id}
+                skuCode={line.variant.skuCode}
+                receivedQty={line.receivedQty}
+                damagedQty={line.damagedQty}
+                sellerId={r.sellerId}
+                variantId={line.variantId}
+                binId={line.putawayBinId}
+                batchId={line.batchId}
+              />
+            )}
 
             {isArriving && (
               <div className="wh-fields" data-cols="receive">

@@ -2280,6 +2280,50 @@ export function useCancelGoodsReceipt(): UseMutationResult<
   });
 }
 
+export interface AmendReceiptLineCountInput {
+  readonly receiptId: string;
+  readonly lineId: string;
+  readonly receivedQty: number;
+  readonly damagedQty?: number | undefined;
+  readonly reason: string;
+}
+
+/**
+ * Correct ONE line's counted quantity while the receipt is still
+ * ARRIVING. The server refuses a COMPLETED receipt with
+ * `RECEIPT_COUNT_ALREADY_BANKED` (the count already became stock) — the
+ * caller surfaces that verbatim and points at a stock adjustment.
+ * Re-fetches both the receipt and the consignment views on success;
+ * nothing is patched in place.
+ */
+export function useAmendReceiptLineCount(): UseMutationResult<
+  GoodsReceiptView,
+  Error,
+  AmendReceiptLineCountInput
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ receiptId, lineId, receivedQty, damagedQty, reason }) =>
+      client.request<GoodsReceiptView>(
+        `/api/admin/goods-receipts/${receiptId}/lines/${lineId}/count`,
+        {
+          method: 'PATCH',
+          body:
+            damagedQty === undefined
+              ? { receivedQty, reason }
+              : { receivedQty, damagedQty, reason },
+        },
+      ),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin-goods-receipts'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin-consignments'] }),
+      ]);
+    },
+  });
+}
+
 export function useConsignmentsList(
   query: {
     sellerId?: string;
