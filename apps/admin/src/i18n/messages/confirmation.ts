@@ -109,6 +109,7 @@ export const confirmation = defineMessages({
   'awaiting.level.soon': ['Under 12 hours left', '12 ঘণ্টার কম বাকি'],
   'awaiting.level.urgent': ['Under 3 hours left', '3 ঘণ্টার কম বাকি'],
   'awaiting.level.overdue': ['Past its time', 'সময় পেরিয়ে গেছে'],
+  'awaiting.noTimer': ['No timer running', 'কোনো টাইমার চলছে না'],
   'awaiting.callsBackOn': ['Calls back on', 'কল আবার চালু'],
   'awaiting.callsBackOnTitle': [
     'This client has switched calls back on since this order arrived.',

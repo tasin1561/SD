@@ -40,8 +40,11 @@ export function attributionOf(rows: readonly (ResolvedSetting | undefined)[]): A
     (a, b) => Date.parse(b.updatedAt ?? '') - Date.parse(a.updatedAt ?? '') || 0,
   )[0] as ResolvedSetting;
   const at = latest.updatedAt ?? null;
+  // Only two writers exist for this row: a staff member (their id is
+  // recorded) and the client (no staff id). `null` is the API saying so;
+  // an ABSENT field means the API did not say, which stays "unknown".
   if (latest.setByStaffId) return { kind: 'staff', at };
-  if (latest.setBySellerId) return { kind: 'client', at };
+  if (latest.setBySellerId || latest.setByStaffId === null) return { kind: 'client', at };
   return { kind: 'unknown', at };
 }
 

@@ -91,7 +91,7 @@ function Page(): ReactElement {
   const sellers = useSellersList({ page: 1, pageSize: 100 });
   const list = useAwaitingConfirmation({ sellerId: sellerId || undefined, page, pageSize });
   const rows = useMemo(() => list.data?.items ?? [], [list.data]);
-  const ids = useMemo(() => rows.map((r) => r.orderId), [rows]);
+  const ids = useMemo(() => rows.map((r) => r.id), [rows]);
   const selection = useRowSelection(ids);
 
   const send = useSendForConfirmationCall();
@@ -100,14 +100,14 @@ function Page(): ReactElement {
 
   const sellerOptions = sellers.data?.items ?? [];
   const sellerMissing = sellerId !== '' && !sellerOptions.some((s) => s.id === sellerId);
-  const numberById = new Map(rows.map((r) => [r.orderId, r.orderNumber]));
+  const numberById = new Map(rows.map((r) => [r.id, r.orderNumber]));
 
   const sent = results?.filter((r) => r.kind === 'sent').length ?? 0;
   const already = results?.filter((r) => r.kind === 'already').length ?? 0;
   const failed = results?.filter((r) => r.kind === 'failed') ?? [];
 
   async function onSend(): Promise<void> {
-    const picked = rows.filter((r) => selection.isSelected(r.orderId)).map((r) => r.orderId);
+    const picked = rows.filter((r) => selection.isSelected(r.id)).map((r) => r.id);
     if (picked.length === 0) return;
     setPhase('busy');
     setResults(null);
@@ -275,7 +275,7 @@ function Page(): ReactElement {
             </THead>
             <TBody>
               {rows.map((r) => (
-                <Row key={r.orderId} row={r} now={now} selection={selection} />
+                <Row key={r.id} row={r} now={now} selection={selection} />
               ))}
             </TBody>
           </Table>
@@ -307,25 +307,29 @@ function Row({
 }): ReactElement {
   const t = useT();
   const locale = useLocale();
-  const rem = remainingUntil(row.confirmationDeadlineAt, now);
-  const Icon = LEVEL_ICON[rem.level];
-  const absolute = formatDateTime(row.confirmationDeadlineAt, locale);
-  const text = rem.overdue
-    ? t('awaiting.overdue')
-    : rem.hours >= 48
-      ? t('awaiting.autoConfirmsInDays', { d: Math.floor(rem.hours / 24), h: rem.hours % 24 })
-      : rem.hours === 0
-        ? t('awaiting.autoConfirmsInMin', { m: rem.minutes })
-        : t('awaiting.autoConfirmsIn', { h: rem.hours, m: rem.minutes });
+  const deadline = row.confirmationDeadlineAt;
+  const rem = deadline === null ? null : remainingUntil(deadline, now);
+  const Icon = rem === null ? Clock : LEVEL_ICON[rem.level];
+  const absolute = deadline === null ? '' : formatDateTime(deadline, locale);
+  const text =
+    rem === null
+      ? ''
+      : rem.overdue
+        ? t('awaiting.overdue')
+        : rem.hours >= 48
+          ? t('awaiting.autoConfirmsInDays', { d: Math.floor(rem.hours / 24), h: rem.hours % 24 })
+          : rem.hours === 0
+            ? t('awaiting.autoConfirmsInMin', { m: rem.minutes })
+            : t('awaiting.autoConfirmsIn', { h: rem.hours, m: rem.minutes });
   return (
-    <Tr selected={selection.isSelected(row.orderId)} className="aw-row">
+    <Tr selected={selection.isSelected(row.id)} className="aw-row">
       <SelectTd
         selection={selection}
-        id={row.orderId}
+        id={row.id}
         label={t('awaiting.selectRow', { order: row.orderNumber })}
       />
       <Td>
-        <Link href={`/orders/${row.orderId}`} className="oo-link sk-ident">
+        <Link href={`/orders/${row.id}`} className="oo-link sk-ident">
           {row.orderNumber}
         </Link>
         <div className="aw-sub">{formatDateTime(row.createdAt, locale)}</div>
@@ -348,24 +352,28 @@ function Row({
         {row.recipientCity !== null && <div className="aw-sub">{row.recipientCity}</div>}
       </Td>
       <Td align="right">
-        {row.codAmount === null ? '—' : <Money amount={row.codAmount} currency="INR" />}
+        {row.codAmountInr === null ? '—' : <Money amount={row.codAmountInr} currency="INR" />}
       </Td>
       <Td align="right">{row.itemCount}</Td>
       <Td>
-        <div className="aw-remaining" data-level={rem.level}>
-          <StatusChip
-            size="sm"
-            kind={LEVEL_KIND[rem.level]}
-            label={t(`awaiting.level.${rem.level}`)}
-          />
-          <span className="aw-remaining__line">
-            <Icon size={14} aria-hidden className="aw-remaining__icon" />
-            <time dateTime={row.confirmationDeadlineAt} title={absolute}>
-              {text}
-            </time>
-          </span>
-          <span className="aw-sub">{t('awaiting.at', { when: absolute })}</span>
-        </div>
+        {rem === null || deadline === null ? (
+          <span className="aw-sub">{t('awaiting.noTimer')}</span>
+        ) : (
+          <div className="aw-remaining" data-level={rem.level}>
+            <StatusChip
+              size="sm"
+              kind={LEVEL_KIND[rem.level]}
+              label={t(`awaiting.level.${rem.level}`)}
+            />
+            <span className="aw-remaining__line">
+              <Icon size={14} aria-hidden className="aw-remaining__icon" />
+              <time dateTime={deadline} title={absolute}>
+                {text}
+              </time>
+            </span>
+            <span className="aw-sub">{t('awaiting.at', { when: absolute })}</span>
+          </div>
+        )}
       </Td>
     </Tr>
   );

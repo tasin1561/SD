@@ -75,6 +75,16 @@ describe('ConfirmationCallsPanel', () => {
     expect(screen.queryByText(/replaces their choice/i)).toBeNull();
   });
 
+  it('reads a null staff id as the client, and an absent one as not recorded', () => {
+    const { unmount } = renderWithProviders(
+      <ConfirmationCallsPanel sellerId="s1" settings={overridden({ setByStaffId: null })} />,
+    );
+    expect(screen.getByText(/Last set by the client on/i)).toBeInTheDocument();
+    unmount();
+    renderWithProviders(<ConfirmationCallsPanel sellerId="s1" settings={overridden({})} />);
+    expect(screen.getByText(/who set it was not recorded/i)).toBeInTheDocument();
+  });
+
   it('attributes an override to the client and warns that saving replaces it', () => {
     renderWithProviders(
       <ConfirmationCallsPanel sellerId="s1" settings={overridden({ setBySellerId: 'sel-1' })} />,

@@ -13,12 +13,13 @@ const inHours = (h: number): string => new Date(NOW + h * 3_600_000).toISOString
 
 function row(id: string, over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    orderId: id,
+    id,
     orderNumber: `SD-${id}`,
+    clientId: 'c1',
     clientName: 'Acme Traders',
     recipientName: 'Ravi',
     recipientCity: 'Pune',
-    codAmount: '1299.00',
+    codAmountInr: '1299.00',
     itemCount: 2,
     createdAt: inHours(-5),
     confirmationDeadlineAt: inHours(2.5),
@@ -65,6 +66,23 @@ describe('AwaitingConfirmationIndex', () => {
     expect(screen.getByText(/Under 3 hours left/)).toBeInTheDocument();
     expect(screen.getByText(/Auto-confirm due now/)).toBeInTheDocument();
     expect(screen.getAllByText(/^at /).length).toBe(2);
+  });
+
+  it('says so when no timer is running for a row', async () => {
+    const fetchImpl = buildFetchMock([
+      {
+        match: /awaiting-confirmation/,
+        responses: [
+          {
+            status: 200,
+            body: PAGE([row('1', { confirmationDeadlineAt: null, callsRequired: true })]),
+          },
+        ],
+      },
+    ]);
+    renderWithProviders(<AwaitingConfirmationIndex />, { identity: WITH, fetchImpl });
+    expect(await screen.findByText('No timer running')).toBeInTheDocument();
+    expect(screen.getByText('Calls back on')).toBeInTheDocument();
   });
 
   it('posts exactly the selected ids, then reports a partial result honestly', async () => {
@@ -131,8 +149,7 @@ describe('AwaitingConfirmationIndex', () => {
             body: [
               {
                 orderId: '1',
-                outcome: 'REJECTED',
-                code: 'ORDER_NOT_WAITING',
+                outcome: 'NOT_PENDING_CONFIRMATION',
                 message: 'order already left the wait',
               },
             ],
@@ -148,7 +165,7 @@ describe('AwaitingConfirmationIndex', () => {
     expect(region).toBeInTheDocument();
     expect(
       within(region.closest('.aw-result') as HTMLElement).getByText(
-        /\[ORDER_NOT_WAITING\] order already left the wait/,
+        /\[NOT_PENDING_CONFIRMATION\] order already left the wait/,
       ),
     ).toBeInTheDocument();
   });

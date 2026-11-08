@@ -26,16 +26,18 @@ export const CONFIRMATION_PERMISSION = 'callcenter.queue.manage';
 export const MAX_SEND_BATCH = 100;
 
 export interface AwaitingConfirmationRow {
-  readonly orderId: string;
+  readonly id: string;
   readonly orderNumber: string;
+  readonly clientId: string;
   readonly clientName: string;
   readonly recipientName: string | null;
   readonly recipientCity: string | null;
   /** Decimal string in rupees, as the API serialises money. */
-  readonly codAmount: string | null;
+  readonly codAmountInr: string | null;
   readonly itemCount: number;
   readonly createdAt: string;
-  readonly confirmationDeadlineAt: string;
+  /** Null when no timer is running (the client has calls on). */
+  readonly confirmationDeadlineAt: string | null;
   /** True when the client has since switched calls back on. */
   readonly callsRequired: boolean;
 }
@@ -108,10 +110,13 @@ export function readOutcomes(body: unknown): readonly SendResult[] {
   return (raw as RawOutcome[]).map((o) => {
     const label = (o.outcome ?? o.status ?? '').toUpperCase();
     const message = o.message ?? o.error ?? null;
+    // The server's refusal vocabulary is `outcome` + `message`; some
+    // shapes carry an explicit `code`. Show whichever it sent, as written.
+    const codeWord = o.code ?? (label === '' ? undefined : label);
     const detail =
-      o.code !== undefined && message !== null
-        ? `[${o.code}] ${message}`
-        : (message ?? (o.code !== undefined ? `[${o.code}]` : null));
+      codeWord !== undefined && message !== null
+        ? `[${codeWord}] ${message}`
+        : (message ?? (codeWord !== undefined ? `[${codeWord}]` : null));
     const kind: SendKind = label.startsWith('ALREADY')
       ? 'already'
       : ['QUEUED', 'ENQUEUED', 'SENT', 'SUCCESS', 'OK'].includes(label)
