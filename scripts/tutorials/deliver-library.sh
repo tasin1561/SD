@@ -37,7 +37,10 @@ declare -A FOLDER=(
   [associate]="Associate (sales people)"
 )
 
-LONG_EN=(seller-everything reseller-everything associate-everything)
+# `admin-everything` joins the English set — the FOLDER map above has had
+# an [admin] entry since this script was written, but no video was ever
+# listed to put in it.
+LONG_EN=(admin-everything seller-everything reseller-everything associate-everything)
 LONG_BN=(seller-everything-bn reseller-everything-bn associate-everything-bn)
 LONG_HI=(seller-everything-hi reseller-everything-hi associate-everything-hi)
 PROMOS=(promo-seller promo-reseller promo-associate)

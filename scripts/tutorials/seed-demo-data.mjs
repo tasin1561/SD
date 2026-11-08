@@ -1542,9 +1542,30 @@ async function createTopupClaim(sellerId, sellerToken, amountInr, salt = 0) {
 }
 
 async function dangerousActsWorldFor(slug, sellerId, sellerToken, staffToken) {
-  if (slug !== 'what-we-cannot-undo') return;
+  /*
+    The admin long video's `bank-*` scenes need an OPEN bank-change
+    request: `/bank-changes` renders an EmptyState with no `.mk-card`
+    when none is waiting, and the scene's own navigation probe IS
+    `.mk-card`, so the step cannot even arrive.
+
+    `pendingBankChange` is the only thing in this file that makes one,
+    and it lived behind a gate for a different video — verified on this
+    stack, `seller_bank_change_requests` was EMPTY. Widened for the same
+    reason the adjustment and cycle-count worlds were: a request is
+    consumed by being approved, so it has to be rebuilt per take rather
+    than borrowed from a sibling slug's run.
+  */
+  const forAdminLong = slug === 'admin-everything';
+  if (slug !== 'what-we-cannot-undo' && !forAdminLong) return;
 
   await pendingBankChange(sellerId, sellerToken);
+  /*
+    The rest of this world CLOSES an accounting month and reopens later
+    ones. That is the subject of `what-we-cannot-undo` and it is not
+    something to do to the estate on the way to filming something else —
+    the admin video only needs the bank-change request.
+  */
+  if (forAdminLong) return;
   await closeAnEndedMonth(staffToken);
   await reopenMonthsAfter('2026-07');
   await aReceiptReadyToComplete(staffToken);
@@ -1909,12 +1930,180 @@ async function stopTheAutoClose() {
 }
 
 async function walletWorldFor(slug, sellerId, sellerToken, staffToken) {
-  // A request moves no money (WAL-3: the balance changes when the
-  // remittance is recorded), so these are free to remove — and the
-  // video's closing shot is a table with exactly the one it just made.
-  const reqs = await prisma.withdrawalRequest.deleteMany({ where: { sellerId } });
-  if (reqs.count > 0) {
-    console.log(`  · removed ${reqs.count} withdrawal request(s) from a previous take`);
+  /*
+    ── THIS CLEARING IS GATED, AND IT HAS TO BE ─────────────────────────
+    It used to run for EVERY slug, above the `take-money-out` gate forty
+    lines below. So every seed run of every video deleted the demo
+    seller's withdrawal requests, and only `take-money-out` put one
+    back — which meant the admin long video's withdrawals and
+    remittances screens were guaranteed empty no matter what else was
+    seeded, and the cause was a statement that had nothing to do with
+    the slug being built.
+
+    A request moves no money (WAL-3: the balance changes when the
+    remittance is recorded), so these are still free to remove when this
+    world is the one being built — the video's closing shot is a table
+    holding exactly the one it just made.
+  */
+  if (slug === 'take-money-out') {
+    const reqs = await prisma.withdrawalRequest.deleteMany({ where: { sellerId } });
+    if (reqs.count > 0) {
+      console.log(`  · removed ${reqs.count} withdrawal request(s) from a previous take`);
+    }
+  }
+
+  /*
+    ── ONE WITHDRAWAL A DAY IS TOO FEW FOR THE ADMIN LONG VIDEO ─────────
+    `wallet.withdrawal_max_per_day` is seeded 1, and the server counts
+    REQUESTS in the last 24h (`withdrawal-request.service.ts:409`). The
+    admin video needs two withdrawals in DIFFERENT states at once: a
+    PENDING one for the withdrawals queue, and an APPROVED one for the
+    remittance screen, which only pays out approved requests. Two seed
+    worlds each tried to make one and the second was refused
+    `WITHDRAWAL_DAILY_LIMIT_REACHED` — which is the product rule working
+    correctly, not a bug.
+
+    Raised on the FILMING STACK so both are made through the real
+    endpoint, rather than hand-writing withdrawal rows into the database.
+    Money rows written by a script do not go through the balance and
+    ledger rules that make them true, and a seed that fakes them teaches
+    the video to show something the product cannot produce.
+    `assertStackEnvironment` at the top of this file is what makes
+    changing a setting here safe — it refuses to run outside a local
+    filming database.
+  */
+  if (slug === 'admin-everything') {
+    const raised = await prisma.systemSetting.updateMany({
+      where: { key: 'wallet.withdrawal_max_per_day', valueInt: { lt: 5 } },
+      data: { valueInt: 5 },
+    });
+    if (raised.count > 0) {
+      console.log('  · withdrawal daily limit raised to 5 for the take — the video needs two');
+    }
+
+    /*
+      ── AND IT HAS TO BE *THIS* CLIENT'S ─────────────────────────────
+      The wallet scenes open the FIRST row of `/seller-wallets` and then
+      walk its tabs, and the Top-ups and Withdrawals panels render a
+      bare paragraph with NO `<table>` when the list is empty
+      (`seller-wallet-detail.tsx:403`) — so the scene needs one of each
+      against the client it actually opened, not merely somewhere in the
+      estate.
+
+      That distinction cost a take: the database held a top-up and a
+      withdrawal, both satisfied as counts, but the withdrawal belonged
+      to "Test Brand" while the row the video opens is the demo seller.
+      A count is not a world.
+
+      Placed through the seller endpoint rather than written as a row,
+      because a withdrawal is checked against the wallet's available
+      balance and its bank details, and a hand-made row can claim money
+      the wallet does not have.
+    */
+    /*
+      Bank details FIRST, and UNCONDITIONALLY: a withdrawal with nowhere
+      to send the money is refused `NO_BANK_ACCOUNT_ON_FILE`, which is
+      the server being right. The demo seller's details are cleared by
+      whichever world films the first-time path, so they are restored
+      rather than assumed.
+
+      Outside the branch below, because that branch is skipped once a
+      pending request exists — and the APPROVED one still needs an
+      account to be paid into. Nesting this cost a cycle.
+    */
+    const token = await sellerToken();
+    await call('/seller/profile/bank-details', {
+      method: 'PATCH',
+      token,
+      body: {
+        bankName: WALLET_PAYOUT_BANK.name,
+        bankBranchName: WALLET_PAYOUT_BANK.branch,
+        bankAccountName: WALLET_PAYOUT_BANK.holder,
+        bankAccountNumber: WALLET_PAYOUT_BANK.account,
+        bankRoutingNumber: WALLET_PAYOUT_BANK.routing,
+        bankSwiftCode: WALLET_PAYOUT_BANK.swift,
+      },
+    }).catch(() => undefined);
+
+    const mine = await prisma.withdrawalRequest.count({
+      where: { sellerId, status: { in: ['PENDING', 'APPROVED'] } },
+    });
+    if (mine === 0) {
+      // Reported from what HAPPENED, not from having tried. An earlier
+      // version logged success unconditionally beside the catch and
+      // announced a withdrawal that had just been refused.
+      try {
+        await call('/seller/wallet/withdrawal-requests', {
+          method: 'POST',
+          token,
+          body: {
+            currency: 'INR',
+            amount: '5000.00',
+            note: 'Monthly payout to our BRAC account.',
+          },
+        });
+        console.log('  · one withdrawal waiting on the demo client, for the wallet tabs');
+      } catch (e) {
+        // Never fatal: the wallet may genuinely be short, and every
+        // other scene in this video still films without it.
+        console.log(`  · NO withdrawal for the wallet tabs: ${String(e).slice(0, 160)}`);
+      }
+    }
+
+    /*
+      ── AND ONE *APPROVED*, WHICH IS A DIFFERENT SCREEN ──────────────
+      `/remittances` only offers "Pay" when there is something approved
+      to pay out (`remittances-index.tsx:74` — `owedItems` is the
+      APPROVED list), and the withdrawals queue one scene earlier needs
+      a PENDING one. Two requests in two states, which is why the daily
+      limit had to come up: the product allows a seller one a day, and
+      the video shows a day's worth of the whole desk at once.
+
+      Approved through the admin endpoint rather than by setting the
+      column, so the approval is a real decision with an actor and an
+      audit row behind it — the remittance screen reads what that
+      decision produced, not merely a status string.
+    */
+    const approved = await prisma.withdrawalRequest.count({
+      where: { sellerId, status: 'APPROVED' },
+    });
+    if (approved === 0) {
+      try {
+        /*
+          Approve one that is ALREADY WAITING when there is a spare,
+          rather than placing another. The queue scene needs a PENDING
+          request and this screen needs an APPROVED one — two states of
+          the same kind of thing — so the cheapest correct world is two
+          requests with one decided, not three requests.
+        */
+        const waiting = await prisma.withdrawalRequest.findMany({
+          where: { sellerId, status: 'PENDING' },
+          select: { id: true },
+          orderBy: { createdAt: 'asc' },
+        });
+        let toApprove = waiting.length >= 2 ? waiting[0].id : null;
+        if (toApprove === null) {
+          const second = await call('/seller/wallet/withdrawal-requests', {
+            method: 'POST',
+            token,
+            body: {
+              currency: 'INR',
+              amount: '3000.00',
+              note: 'Second payout, already approved — the remittance desk pays this one.',
+            },
+          });
+          toApprove = second.id;
+        }
+        await call(`/admin/withdrawal-requests/${toApprove}/approve`, {
+          method: 'PATCH',
+          token: staffToken,
+          body: { note: 'Checked against the wallet and the bank details on file.' },
+        });
+        console.log('  · one withdrawal APPROVED — the remittance desk has something to pay');
+      } catch (e) {
+        console.log(`  · NO approved withdrawal for /remittances: ${String(e).slice(0, 160)}`);
+      }
+    }
   }
 
   // The schedule the video changes on camera. Its third scene is the
@@ -2857,7 +3046,21 @@ const CALL_WAITING = {
 };
 
 async function callWorldFor(slug, sellerId, sellerToken, staffToken) {
-  if (slug !== 'taking-calls') return;
+  /*
+    TWO VIDEOS, ONE WORLD, OPPOSITE ENDINGS.
+
+    I1 (`taking-calls`) is about BECOMING an agent: it opens with
+    availability off and the call unclaimed, because turning it on and
+    pulling is what that video teaches.
+
+    The admin long video arrives at the station mid-shift. It never
+    marks itself available and never pulls — pressing either on camera
+    would claim a real call — so it needs the station already SHOWING
+    one, which means available and holding. Same world, built the same
+    way; only the last two steps differ, at the bottom of this function.
+  */
+  const forAdminLong = slug === 'admin-everything';
+  if (slug !== 'taking-calls' && !forAdminLong) return;
 
   const ops = await prisma.staffUser.findUniqueOrThrow({
     where: { email: OPS.email },
@@ -2874,11 +3077,12 @@ async function callWorldFor(slug, sellerId, sellerToken, staffToken) {
   if (held.count > 0) {
     console.log(`  · released ${held.count} call(s) a previous take was still holding`);
   }
-  // OFF, because turning it on is the video's second scene.
+  // OFF for I1, because turning it on is that video's second scene.
+  // ON for the admin long video, which arrives mid-shift.
   await call('/agent/settings', {
     method: 'PATCH',
     token: staffToken,
-    body: { isAvailable: false },
+    body: { isAvailable: forAdminLong },
   });
 
   const spent = await prisma.order.findFirst({
@@ -2988,6 +3192,129 @@ async function callWorldFor(slug, sellerId, sellerToken, staffToken) {
     );
   }
   console.log(`  · the customer has ${history} previous order(s) — the risk strip will render`);
+
+  /*
+    AND FOR THE ADMIN LONG VIDEO, PULL IT — through the real endpoint.
+
+    `POST /agent/calls/next` is what the station's own button calls, so
+    the assignment it writes is the one the app would have written:
+    assignedAt set, the expiry job scheduled, the pull counted. Writing
+    the row by hand would produce a station that renders and an
+    assignment the rest of the system does not agree exists.
+
+    The video then opens on a call already in progress, and never has
+    to claim one on camera.
+  */
+  if (forAdminLong) {
+    /*
+      PRESENCE FIRST, OR THE SWEEP UNDOES BOTH OF THE NEXT TWO LINES.
+
+      `PATCH /agent/settings` sets `isAvailable` and does NOT touch
+      `lastSeenAt` — availability is a claim, presence is evidence, and
+      `AgentPresenceService.sweep` exists to stop the first standing in
+      for the second. It stands down every available agent whose
+      `lastSeenAt` is null or older than
+      `ops.agent_presence_timeout_minutes` (10), AND RELEASES THEIR
+      CALLS.
+
+      A seeded agent has never opened the station, so `lastSeenAt` is
+      null and the first sweep after seeding took the call straight back
+      off the board. Measured: two check runs failed identically at
+      `call-arrives`, and by the time the station was reached there were
+      zero ASSIGNED entries and ops was `available: false` again.
+
+      Stamping presence is honest here rather than a cheat: the take IS
+      about to drive that station, within the window. It is written
+      directly because no endpoint sets it without a real station
+      heartbeat, which is the thing being stood in for.
+    */
+    await prisma.agentCallSettings.updateMany({
+      where: { agentId: ops.id },
+      data: { lastSeenAt: new Date() },
+    });
+
+    const pulled = await call('/agent/calls/next', { method: 'POST', token: staffToken, body: {} });
+    if (pulled?.assignment == null) {
+      throw new Error(
+        'The call station has nothing to show: /agent/calls/next returned no assignment. ' +
+          'The queue was empty or the agent is at capacity — the admin video opens on a live ' +
+          'call and cannot film an empty station.',
+      );
+    }
+    console.log('  · pulled it onto the station, so the admin video opens on a live call');
+
+    /*
+      ── AND THE CLOCK ON IT IS STOPPED ───────────────────────────────
+      `ops.call_assignment_timeout_minutes` (seeded 15) is the window a
+      pulled entry survives before the BullMQ expiration worker returns
+      it to PENDING — the agent is expected to ACT on it, and this video
+      deliberately never does: it arrives at the station mid-shift,
+      points at a live call, and moves on.
+
+      The admin long video is 302 scenes. The station is reached about
+      ten minutes in, and the seed itself takes several more before the
+      browser even starts, so the take was racing a fifteen-minute timer
+      from the moment the call was pulled. That is why this failed
+      INTERMITTENTLY and looked like flakiness: one pass reached scene
+      124, the next died at 46 with an empty station, from identical
+      seed output.
+
+      Widened for the filming stack only. `assertStackEnvironment` at
+      the top of this script is what makes that safe to say — this file
+      refuses to run anywhere but a local filming database.
+    */
+    const TAKE_MINUTES = 240;
+    /*
+      TWO CLOCKS, NOT ONE — and the second only shows itself in a REAL
+      TAKE.
+
+      `ops.call_assignment_timeout_minutes` (15) returns a pulled entry
+      nobody acts on. `ops.agent_presence_timeout_minutes` (10) stands
+      the AGENT down for not being seen at the station, and releases
+      their call with them. The video is guilty of both by design: it
+      arrives mid-shift, points at a live call, and walks away to look
+      at the warehouse for an hour.
+
+      The presence one is the crueller of the two because a `--check`
+      pass does not trip it. A check drives the scenes as fast as the
+      page allows and reaches the call station in about five minutes;
+      the recording waits for each scene's narration and takes thirteen.
+      So the check went green on all 302 scenes and the take that
+      followed died at scene 46 — same code, same seed, same world,
+      different clock.
+    */
+    const widened = await prisma.systemSetting.updateMany({
+      where: {
+        key: {
+          in: [
+            'ops.call_assignment_timeout_minutes',
+            'ops.agent_presence_timeout_minutes',
+            /*
+              The pack bench's own clock (60). A box the video opens is
+              read by five consecutive scenes, so the live exposure is
+              about two minutes rather than sixty — but it is the only
+              other reclaim window in the estate shorter than a take,
+              and it costs one line to remove.
+
+              It is the STAMPED kind: `expires_at` is written when the
+              box is opened, so raising it here — before the video
+              scans a label — is what makes it apply. Raising it
+              afterwards would change nothing.
+            */
+            'ops.pack_box_timeout_minutes',
+          ],
+        },
+        valueInt: { lt: TAKE_MINUTES },
+      },
+      data: { valueInt: TAKE_MINUTES },
+    });
+    if (widened.count > 0) {
+      console.log(
+        `  · ${widened.count} call-centre timeout(s) widened to ${TAKE_MINUTES}m for the take — ` +
+          'the station holds its call for the whole video',
+      );
+    }
+  }
 }
 
 /**
@@ -3144,7 +3471,15 @@ const SUPERVISE_ORDERS = [
  * records what the call would have come to. One world, two videos,
  * rather than a second copy that drifts.
  */
-const SUPERVISE_SLUGS = new Set(['supervising-the-queue', 'forcing-an-outcome']);
+const SUPERVISE_SLUGS = new Set([
+  'supervising-the-queue',
+  'forcing-an-outcome',
+  // The admin long video walks the supervisor's queue too, and
+  // scopes its Reassign to the stuck agent's ROW rather than
+  // relying on there being exactly one button — so it can share
+  // this world with a call still on the station.
+  'admin-everything',
+]);
 
 /**
  * The two call agents, on the roster and holding the `call_agent` role.
@@ -3441,7 +3776,39 @@ const DELIVERY_ASKS = [
 ];
 
 async function deliveryAsksWorldFor(slug, sellerId, sellerToken) {
-  if (slug !== 'acting-on-a-failed-delivery') return;
+  /*
+    The admin long video's `fd-*` scenes read this queue: one request
+    asking us to re-attempt and one asking for the parcel back, both
+    still waiting. Its list defaults to the PENDING filter, so an
+    expired request is the same as no request at all.
+  */
+  if (slug !== 'acting-on-a-failed-delivery' && slug !== 'admin-everything') return;
+
+  /*
+    ── RE-ARM WHAT A SWEEP RECLAIMED ────────────────────────────────────
+    These requests are not consumed by anybody using them — they are
+    reclaimed by a BACKGROUND JOB. `StoreRequestExpiryService` flips a
+    PENDING request to EXPIRED once it is older than its window
+    (`store-request-expiry.service.ts:143`), so a world seeded in the
+    morning is gone by the afternoon with nothing in the seed log to say
+    so. Verified on this stack: the RTO ask was still PENDING and the
+    REATTEMPT beside it had been expired out from under it.
+
+    Re-arming rather than placing another keeps the queue at the two
+    rows the narration describes; `createdAt` is pushed forward so the
+    same sweep does not immediately take it again.
+  */
+  const rearmed = await prisma.orderDeliveryActionRequest.updateMany({
+    where: {
+      sellerId,
+      status: 'EXPIRED',
+      order: { sellerOrderRef: { in: DELIVERY_ASKS.map((a) => a.ref) } },
+    },
+    data: { status: 'PENDING', expiredAt: null, createdAt: new Date() },
+  });
+  if (rearmed.count > 0) {
+    console.log(`  · re-armed ${rearmed.count} delivery ask(s) a background sweep had expired`);
+  }
 
   const token = await sellerToken();
   for (const ask of DELIVERY_ASKS) {
@@ -3474,7 +3841,11 @@ async function deliveryAsksWorldFor(slug, sellerId, sellerToken) {
 }
 
 async function reattemptWorldFor(slug, sellerId, sellerToken, staffToken) {
-  if (slug !== 'sellers-asking-to-call-again') return;
+  // The admin long video walks this queue too — it reads the waiting
+  // request, opens Approve and Reject, and cancels both. Without a
+  // request the page renders its empty state and the scene is about a
+  // blank panel.
+  if (slug !== 'sellers-asking-to-call-again' && slug !== 'admin-everything') return;
 
   /*
     EVERY PREVIOUS TAKE'S REQUESTS GO FIRST, and that is not a detail:
@@ -5966,8 +6337,69 @@ const RECEIVE_CONSIGNMENT = {
   ],
 };
 
+/**
+ * RETIRED 2026-11-03, kept for the reason rather than the code.
+ *
+ * Pre-claiming the receipt made the count fields render and EMPTIED the
+ * queue the scene before it: `/warehouse/receive` opens filtered to
+ * PENDING, so a claimed receipt is not in the default list at all. The
+ * check went BACKWARDS, 92 scenes to 88.
+ *
+ * The two narration lines cannot both be true of one receipt — "it
+ * opens on what is waiting" and "this receipt is already claimed" — so
+ * the video follows the product instead: queue, click, Start
+ * receiving, count. That click is a claim, not a stock write; the
+ * irreversible button is "Complete and write stock" and the video
+ * still stops before it.
+ *
+ * Unused. Delete it if it is still here in a month.
+ *
+ * Claim the waiting receipt, for the admin long video only.
+ *
+ * J2 presses "Start receiving" on camera — that click is its scene, so
+ * its receipt stays PENDING. The admin video says the opposite out loud
+ * ("this receipt is already claimed, which is why the count fields are
+ * showing") and never presses it, because claiming a pallet in
+ * somebody's name is not a thing to do for a camera. The count fields
+ * render only once the receipt leaves PENDING.
+ *
+ * Its own function because `receiveWorldFor` has TWO exits — a reused
+ * consignment returns early — and a claim written at the tail of the
+ * function runs on exactly one of them. It ran on the first seed and
+ * silently not on the second, which is the shape of bug that makes a
+ * take fail only when nothing changed.
+ *
+ * Through the endpoint the button calls, so the claim is recorded
+ * against the filming user the way a real one would be.
+ */
+async function claimReceiptForAdminLong(slug, staffToken) {
+  if (slug !== 'admin-everything') return;
+  const pending = await prisma.goodsReceipt.findMany({
+    where: { status: 'PENDING' },
+    select: { id: true, receiptNumber: true },
+  });
+  if (pending.length !== 1) {
+    throw new Error(
+      `${pending.length} goods receipt(s) are PENDING, expected exactly one to claim for the ` +
+        'admin video — its receiving scenes open on a receipt already being counted.',
+    );
+  }
+  await call(`/admin/goods-receipts/${pending[0].id}/start-receiving`, {
+    method: 'POST',
+    token: staffToken,
+    body: {},
+  });
+  console.log(`  \u00b7 claimed ${pending[0].receiptNumber} — the count fields will render`);
+}
+
 async function receiveWorldFor(slug, sellerId, sellerToken, staffToken) {
-  if (slug !== 'receive-a-consignment') return;
+  /*
+    The admin long video opens the receiving queue and walks a receipt,
+    stopping before "Complete and write stock". It needs the same
+    waiting consignment J2 films, or `/warehouse/receive` renders an
+    empty table and the scene is about a blank queue.
+  */
+  if (slug !== 'receive-a-consignment' && slug !== 'admin-everything') return;
 
   const live = await prisma.consignment.findFirst({
     where: { sellerId, sellerReference: RECEIVE_CONSIGNMENT.ref, deletedAt: null },
@@ -6164,6 +6596,29 @@ const PICK_STAGE = new Map([
     gets onto one.
   */
   ['what-went-out-together', 'PACKED'],
+  /*
+    The admin long video walks J3 through J8 in one pass, so no single
+    stage suits every scene of it, and the one it needs is the one the
+    OTHER videos never want on its own.
+
+    It reads BOTH tabs of the printing station, and the two select on
+    opposite sides of one column: the label queue wants
+    `labelPrintedAt IS NULL`, the picking queue wants it set with
+    `pickBatchId IS NULL`. Three parcels cannot be on both, so LABELLED
+    — J3's stage, which is where this started — left the picking tab
+    empty and its scene had no checkbox to tick.
+
+    PRINTED puts the three on the PICKING side, because that is the
+    side that would otherwise be empty. The label queue does not need
+    them: every confirmed order on this box carries a waybill from the
+    moment it is confirmed (CUR-2b), so it holds about thirty rows
+    already, and the video's label scene selects the top three of
+    whatever is there without acting on them — it ticks the boxes and
+    points at `Print labels`, and the take ends before the press. The
+    picking tab has no such crowd to borrow from, which is exactly why
+    ours go there.
+  */
+  ['admin-everything', 'PRINTED'],
 ]);
 
 /**
@@ -6317,8 +6772,25 @@ async function storeStubLabel(shipmentId, shipmentNumber, awbNumber) {
  *
  * Idempotent: a parcel already PICKED with an unprinted label is
  * exactly what is wanted and is left alone, so a re-run costs nothing.
- * Only J4 — every other video in this world would be showing a callout
- * its narration does not explain.
+ *
+ * ── J4 AND THE ADMIN LONG VIDEO, AND NOTHING ELSE ────────────────────
+ * This used to read "Only J4", on the rule that any other video would
+ * be showing a callout its narration does not explain. The rule is
+ * right and the admin long video satisfies it: its `pack-queue`
+ * narration says "A parcel with no printed label is called out,
+ * because there is nothing to scan" — the same sentence J4 uses,
+ * because it is the same callout.
+ *
+ * It is also the only way that scene can exist. `.wh-card__note`
+ * renders if and only if some queued parcel has `label_printed_at`
+ * null (`pack-queue-list.tsx` filters on exactly that), so without
+ * this parcel the admin video does not get a quieter version of the
+ * scene — it gets a locator that never appears.
+ *
+ * ── AND IT CARRIES THE OPEN BOX ──────────────────────────────────────
+ * The admin video's next scene wants a box already open, and this is
+ * the parcel that opens it. See `openBoxForAdminLong` below for why one
+ * parcel can be both and why that does not disturb the callout.
  */
 const PICK_UNLABELLED = {
   ref: 'RSH-PICK-NOLABEL',
@@ -6332,7 +6804,8 @@ const PICK_UNLABELLED = {
 };
 
 async function ensureUnlabelledPackParcel(slug, sellerId, sellerToken, staffToken) {
-  if (slug !== 'pack-a-parcel') return;
+  const forAdminLong = slug === 'admin-everything';
+  if (slug !== 'pack-a-parcel' && !forAdminLong) return;
   const o = PICK_UNLABELLED;
 
   const existing = await prisma.order.findFirst({
@@ -6464,6 +6937,274 @@ async function ensureUnlabelledPackParcel(slug, sellerId, sellerToken, staffToke
   );
 }
 
+/*
+  ── WHY THERE IS NO "OPEN A BOX IN THE SEED" FUNCTION HERE ────────────
+  There was one, briefly, and it could never have worked.
+
+  `pack-station.tsx` holds the open box in `useState<OpenPackBox | null>
+  (null)` and sets it ONLY from the response to a successful scan. It
+  never asks the server whether a box is already open. So a box this
+  script opens is real in the database and invisible on the screen —
+  the admin video reached the bench, found `.wh-scan__meta` absent, and
+  the seed log said it had opened a box. Both were true.
+
+  It would also have collided: `pack_boxes` holds a partial unique per
+  shipment, so the video's own scan would have been refused.
+
+  The fix belongs in the video, not here: the operator scans a label,
+  which is what the narration already says ("Scanning the label opens a
+  box"). What the seed owes it is a parcel worth scanning — PICKED, with
+  a PRINTED label — which is `PACK_SCANNABLE` below.
+
+  (Worth noting as a product observation, not acted on here: an operator
+  who reloads the bench mid-pack also loses their box this way, and the
+  box stays open in the database with no way back to it.)
+*/
+
+/**
+ * The parcel the admin video SCANS at the pack bench.
+ *
+ * ── WHY IT CANNOT BE EITHER OF THE OTHER TWO COHORTS ─────────────────
+ * The bench needs a parcel at PICKED whose label HAS been printed, and
+ * the admin video's other two cohorts are both disqualified by what
+ * makes them useful:
+ *
+ *   · `PICK_UNLABELLED` is PICKED with no printed label, which is the
+ *     whole point of it — it is what renders the unlabelled callout one
+ *     scene earlier. The narration about that callout says "there is
+ *     nothing to scan", so scanning it would contradict the sentence
+ *     being spoken over it.
+ *   · `PICK_ORDERS` sits at the `PRINTED` stage so the PICKING queue has
+ *     rows (scenes 100-102). A parcel on the picking queue has not been
+ *     picked yet, so it is not at the bench at all.
+ *
+ * One parcel cannot be on the picking queue and at the pack bench, and
+ * one parcel cannot be both the unlabelled callout and the labelled
+ * thing scanned next to it. Hence a third cohort of exactly one.
+ *
+ * ── A DIFFERENT PIN, FOR THE REASON THE OTHERS HAVE ONE ──────────────
+ * `pickWorldFor` asserts EXACTLY three parcels at `PICK_PIN`, because
+ * the printing station's rows are selected by that pin and a fourth
+ * would be worked on camera unnarrated. This one is addressed elsewhere
+ * and reached by being the only LABELLED row in the pack queue.
+ */
+const PACK_SCANNABLE = {
+  ref: 'RSH-PACK-SCAN',
+  recipientName: 'Devika Menon',
+  phone: '+919845090711',
+  line1: '44, Sarjapur Main Road',
+  line2: 'Opposite the old post office',
+  postalCode: '560035',
+  codAmountInr: '1650',
+  lines: [{ sku: 'RSH-KANTHA-BLUE', quantity: 1, unitPriceInr: '1650' }],
+};
+
+/**
+ * Every box the filming packer has open, cleared.
+ *
+ * ── SCOPED TO THE PACKER, NOT THE PARCEL ─────────────────────────────
+ * This is the whole lesson of the refusal that cost a take:
+ * `[PACK_BOX_ALREADY_OPEN] Close or cancel your open box before
+ * starting another` is enforced per PACKER, not per shipment. An
+ * earlier version of this cleanup deleted open boxes `WHERE shipment_id
+ * = <the parcel we are about to scan>`, which is the obvious scoping
+ * and the wrong one: the box blocking the scan was open on a DIFFERENT
+ * parcel, so the cleanup ran, reported success, deleted nothing that
+ * mattered, and the bench refused the scan anyway.
+ *
+ * So it is keyed on `packer_staff_id`. A box nobody closed is always a
+ * previous take's litter — the video opens one and never closes it (the
+ * close button is pointed at, not pressed) — so deleting rather than
+ * cancelling is right: a cancelled box is a real operational record and
+ * this is not one.
+ */
+async function clearOpenBoxesForPacker() {
+  const ops = await prisma.staffUser.findUnique({
+    where: { email: OPS.email },
+    select: { id: true },
+  });
+  if (ops === null) return;
+  const stale = await prisma.packBox.deleteMany({
+    where: { packerStaffId: ops.id, closedAt: null, cancelledAt: null },
+  });
+  if (stale.count > 0) {
+    console.log(
+      `  · cleared ${stale.count} box(es) a previous take left open on the bench — ` +
+        'the packer can only hold one at a time',
+    );
+  }
+}
+
+async function ensureScannablePackParcel(slug, sellerId, sellerToken, staffToken) {
+  if (slug !== 'admin-everything') return;
+  const o = PACK_SCANNABLE;
+  // Before anything else: an open box from a previous take refuses the
+  // scan whatever parcel it is on, so it goes first and unconditionally.
+  await clearOpenBoxesForPacker();
+
+  /*
+    REUSABLE IS: PICKED, label printed, and no box closed on it yet.
+
+    The video OPENS a box on this parcel and never closes it (the close
+    is `pack-cancel`'s neighbour and is not pressed), so a take leaves
+    the parcel PICKED with an open box. An open box is fine to inherit —
+    the station cannot see it (see the note above), and the video's own
+    scan would be refused by the partial unique — so a leftover box is
+    cleared rather than the whole parcel being rebuilt.
+  */
+  const existing = await prisma.order.findFirst({
+    where: { sellerId, sellerOrderRef: o.ref },
+    select: { id: true, orderNumber: true, status: true },
+  });
+  if (existing !== null) {
+    const link = await prisma.orderShipment.findFirst({
+      where: {
+        orderId: existing.id,
+        shipment: { deletedAt: null, labelPrintedAt: { not: null }, packCompletedAt: null },
+      },
+      select: { shipment: { select: { id: true, awbNumber: true } } },
+    });
+    if (existing.status === 'PICKED' && link !== null) {
+      await clearOpenBoxesForPacker();
+      console.log(
+        `  · ${existing.orderNumber} (${o.ref}) is picked with a printed label — ` +
+          'the bench has something to scan',
+      );
+      return;
+    }
+    const parked = await prisma.order.count({
+      where: { sellerId, sellerOrderRef: { startsWith: `${o.ref}-SPENT-` } },
+    });
+    await prisma.order.update({
+      where: { id: existing.id },
+      data: { sellerOrderRef: `${o.ref}-SPENT-${parked + 1}` },
+    });
+    console.log(
+      `  · ${o.ref} is spent — ${existing.orderNumber} is ${existing.status}. ` +
+        `Renamed ${o.ref}-SPENT-${parked + 1}; a fresh one follows`,
+    );
+    // Same reason the other cohorts cancel rather than abandon: left
+    // live it stays in the pack queue carrying a second scannable row,
+    // and the video's "the only labelled row" handle stops being true.
+    if (['PICKED', 'CONFIRMED', 'PENDING_PICK'].includes(existing.status)) {
+      await call(`/admin/orders/${existing.id}/cancel`, {
+        method: 'POST',
+        token: staffToken,
+        body: { reason: 'Tutorial demo world: a previous take spent this parcel.' },
+      }).catch((e) => {
+        console.log(`  · could not cancel ${existing.orderNumber}, leaving it: ${String(e)}`);
+      });
+    }
+  }
+
+  const variant = await prisma.productVariant.findFirst({
+    where: { skuCode: o.lines[0].sku, product: { sellerId } },
+    select: { id: true },
+  });
+  if (variant === null) {
+    throw new Error(`No ${o.lines[0].sku} for this seller — the catalogue seeding runs first.`);
+  }
+  const token = await sellerToken();
+  const order = await call('/seller/orders', {
+    method: 'POST',
+    token,
+    body: {
+      recipientName: o.recipientName,
+      recipientPhoneE164: o.phone,
+      recipientAddressLine1: o.line1,
+      recipientAddressLine2: o.line2,
+      recipientPostalCode: o.postalCode,
+      paymentMode: 'COD',
+      codAmountInr: o.codAmountInr,
+      sellerOrderRef: o.ref,
+      items: [
+        {
+          variantId: variant.id,
+          quantity: o.lines[0].quantity,
+          unitPriceInr: o.lines[0].unitPriceInr,
+        },
+      ],
+      acknowledgeDuplicate: true,
+    },
+  });
+  await call(`/seller/orders/${order.id}/submit`, { method: 'POST', token });
+
+  const entry = await waitFor(`${o.ref} to reach the call queue`, () =>
+    prisma.callQueueEntry.findFirst({
+      where: { orderId: order.id, status: 'PENDING' },
+      select: { id: true },
+    }),
+  );
+  await call(`/admin/call-queue/${entry.id}/force-outcome`, {
+    method: 'POST',
+    token: staffToken,
+    body: {
+      outcome: 'CONFIRMED',
+      startedAt: new Date(Date.now() - 18 * 60_000).toISOString(),
+      endedAt: new Date(Date.now() - 17 * 60_000).toISOString(),
+      outcomeNotes: 'Confirmed on the phone; happy to pay cash at the door.',
+    },
+  });
+
+  const booked = await waitFor(
+    `${o.ref} to be given a waybill`,
+    async () => {
+      const link = await prisma.orderShipment.findFirst({
+        where: { orderId: order.id, shipment: { deletedAt: null, awbNumber: { not: null } } },
+        select: { shipment: { select: { id: true, shipmentNumber: true, awbNumber: true } } },
+      });
+      return link?.shipment ?? null;
+    },
+    { tries: 45 },
+  );
+  await storeStubLabel(booked.id, booked.shipmentNumber, booked.awbNumber);
+
+  /*
+    ── THROUGH THE PRINTING STATION, NOT THE PER-PARCEL ONE ─────────────
+    `drivePickToPicked` is the other route to PICKED and is the wrong one
+    here: it is the per-parcel station, which is the ONLY way to reach
+    PICKED with `label_printed_at` still null (that is precisely why
+    `PICK_UNLABELLED` uses it). This parcel's whole job is to be the
+    LABELLED row, so it goes the way a real labelled parcel goes — the
+    same five endpoints the printing station's camera presses, which
+    also means the phase-2 reservation the bench later fulfils is real
+    (CUR-3) rather than a hand-written status.
+  */
+  const shipmentIds = [booked.id];
+  await call('/admin/warehouse/printing/labels/confirm-printed', {
+    method: 'POST',
+    token: staffToken,
+    body: { shipmentIds },
+  });
+  const batch = await call('/admin/warehouse/printing/pick-batches', {
+    method: 'POST',
+    token: staffToken,
+    body: { shipmentIds },
+  });
+  await call(`/admin/warehouse/printing/pick-batches/${batch.id}/build-list`, {
+    method: 'POST',
+    token: staffToken,
+  });
+  await call(`/admin/warehouse/printing/pick-batches/${batch.id}/confirm-printed`, {
+    method: 'POST',
+    token: staffToken,
+  });
+  const picked = await call(`/admin/warehouse/printing/pick-batches/${batch.id}/mark-picked`, {
+    method: 'POST',
+    token: staffToken,
+  });
+  if (picked.skipped.length > 0) {
+    throw new Error(
+      `${o.ref} was left behind by ${batch.batchNumber}: ` +
+        picked.skipped.map((p) => `${p.shipmentNumber} (${p.reason})`).join(', '),
+    );
+  }
+  console.log(
+    `  · ${order.orderNumber} (${o.ref}) picked with a printed label — ` +
+      `the bench can scan ${booked.awbNumber}`,
+  );
+}
+
 async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
   const stage = PICK_STAGE.get(slug ?? '');
   if (stage === undefined) return;
@@ -6471,6 +7212,9 @@ async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
   // station is wanted for both.
   const wantsPacked = stage === 'PACKED';
   const wantsPicked = stage === 'PICKED' || wantsPacked;
+  // PRINTED is the first of the four steps below and nothing more, so
+  // every later stage wants it too.
+  const wantsPrinted = stage === 'PRINTED' || wantsPicked;
 
   /*
     AND THE SCAN BLOCK IS LIFTED FIRST, for every one of these videos.
@@ -6569,11 +7313,27 @@ async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
       if (!sameContents) {
         console.log(`  · ${o.ref} holds ${has}; the video wants ${wanted} — replacing it`);
       }
+      /*
+        PRINTED's row is the picking queue's own gate, restated: a label
+        that HAS been printed on a parcel no batch has claimed. It needs
+        saying because it is the exact negation of the stage below it —
+        reuse asked `labelPrintedAt: null` for every non-picked stage
+        until the admin long video wanted the other side of that column,
+        and a parcel judged reusable by the wrong half of it is one the
+        seeding then leaves in the queue the video is not filming.
+      */
       const wherePutBack = wantsPacked
         ? { deletedAt: null, status: 'CREATED', handoverScannedAt: null }
         : wantsPicked
           ? { deletedAt: null, status: 'CREATED', packCompletedAt: null }
-          : { deletedAt: null, labelPrintedAt: null, awbNumber: { not: null } };
+          : stage === 'PRINTED'
+            ? {
+                deletedAt: null,
+                labelPrintedAt: { not: null },
+                pickBatchId: null,
+                awbNumber: { not: null },
+              }
+            : { deletedAt: null, labelPrintedAt: null, awbNumber: { not: null } };
       const wantStatus = wantsPacked ? 'PACKED' : wantsPicked ? 'PICKED' : 'CONFIRMED';
       const stillWaiting =
         sameContents &&
@@ -6737,13 +7497,24 @@ async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
 
     Only the FRESH parcels are driven. A reused one is already PICKED and
     `confirmPrinted` would refuse its labels as already printed.
+
+    ── AND THE FIRST STEP STANDS ALONE ─────────────────────────────────
+    `PRINTED` stops after it, which is the admin long video's stage: the
+    parcels are on the picking queue and no further. The split is here
+    rather than in a second copy of the walk because the four steps are
+    one sequence and the only question is where it is cut.
   */
-  if (wantsPicked && toDrive.length > 0) {
+  if (wantsPrinted && toDrive.length > 0) {
     await call('/admin/warehouse/printing/labels/confirm-printed', {
       method: 'POST',
       token: staffToken,
       body: { shipmentIds: toDrive },
     });
+    console.log(
+      `  · ${toDrive.length} label(s) confirmed printed — the parcels are on the picking queue`,
+    );
+  }
+  if (wantsPicked && toDrive.length > 0) {
     const batch = await call('/admin/warehouse/printing/pick-batches', {
       method: 'POST',
       token: staffToken,
@@ -6841,6 +7612,9 @@ async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
   }
 
   await ensureUnlabelledPackParcel(slug, sellerId, sellerToken, staffToken);
+  // The admin video's bench needs BOTH rows: the unlabelled one above
+  // for the callout, and a labelled one to actually scan.
+  await ensureScannablePackParcel(slug, sellerId, sellerToken, staffToken);
 
   /*
     AND THE WORLD IS ASSERTED AT WHICHEVER STAGE WAS ASKED FOR. J3's flow
@@ -7202,7 +7976,16 @@ async function collapseOnceForTheBackup(wh, staffToken) {
 }
 
 async function binsWorldFor(slug, staffToken) {
-  if (slug !== 'where-things-live') return;
+  /*
+    The admin long video walks J1's screens and types J1's OWN
+    coordinates (A / 1 / 3), so it needs the same clean building: the
+    preview note reads "Will be created as" only while that bin does
+    not exist, and its narration says the Dhaka intake has no shelving
+    at all. A bin a previous take built on camera makes both false, and
+    the scene then films an "already exists" warning under a line about
+    creating one.
+  */
+  if (slug !== 'where-things-live' && slug !== 'admin-everything') return;
 
   const warehouses = await call('/admin/warehouses', { token: staffToken });
   const bd = warehouses.find((w) => w.code === BD_WAREHOUSE.code);
@@ -7379,7 +8162,26 @@ const L1_PENDING_NOTE =
   'Recounted twice by two people before raising this.';
 
 async function adjustmentWorldFor(slug, sellerId, staffToken, warehouse) {
-  if (slug !== 'correct-a-count') return;
+  /*
+    ── WHY THE ADMIN LONG VIDEO IS HERE TOO ─────────────────────────────
+    Its `adj-*` scenes open on `/inventory/adjustments`, whose default
+    filter is PENDING, and the table is replaced by an EmptyState when
+    nothing matches — so the scene has no `.sk-table` to point at
+    without a waiting adjustment.
+
+    Seeding `correct-a-count` ONCE is not enough and that is the general
+    lesson: the admin video re-seeds only its own slug before each take,
+    so a world built by some other slug earlier in the day stays however
+    the day left it. This one is consumed — a PENDING adjustment gets
+    approved and becomes EXECUTED — so by the time the camera arrived
+    there were fifteen EXECUTED rows and nothing waiting. A world the
+    video NEEDS has to be rebuilt by the video's own seed, not borrowed
+    from a sibling's.
+
+    `clearUndecidedAdjustments` below makes the rebuild idempotent, so
+    running it every take costs one row rather than accumulating a queue.
+  */
+  if (slug !== 'correct-a-count' && slug !== 'admin-everything') return;
 
   await clearUndecidedAdjustments(sellerId);
 
@@ -8860,7 +9662,20 @@ async function courierAccountWorldFor(slug) {
 }
 
 async function cycleCountWorldFor(slug, sellerId, staffToken, warehouse) {
-  if (slug !== 'count-the-shelves') return;
+  /*
+    The admin long video reads this queue too, and it needs the count
+    IN_PROGRESS with at least one line whose counted quantity differs
+    from the system's: the scene points at `Complete — raises N
+    adjustments`, and with no variance that button reads `Complete — no
+    adjustments` and the locator misses.
+
+    Widened for the same reason `adjustmentWorldFor` was: seeding
+    `count-the-shelves` once is not enough, because a count is CONSUMED
+    — it gets completed and becomes history. Verified on this stack: four
+    cycle counts, all COMPLETED, none in progress. A world the video
+    needs must be rebuilt by the video's own seed.
+  */
+  if (slug !== 'count-the-shelves' && slug !== 'admin-everything') return;
 
   const open = await prisma.cycleCount.findMany({
     where: { status: { in: ['SCHEDULED', 'IN_PROGRESS'] } },
@@ -8912,6 +9727,56 @@ async function cycleCountWorldFor(slug, sellerId, staffToken, warehouse) {
   });
   console.log(
     `  · the count sheet says ${variant.skuCode} in ${bin.code}: ${level.qtyOnHand} on hand`,
+  );
+
+  /*
+    ── THE ADMIN LONG VIDEO NEEDS A COUNT ALREADY UNDER WAY ─────────────
+    Everything above prepares a count for `count-the-shelves` to SCHEDULE
+    AND RUN on camera, and leaves a fixture rather than a row — which is
+    right for that video and useless for this one. The admin video only
+    READS the queue: it opens an in-progress count, looks at the
+    variances, and points at `Complete — raises N adjustments`.
+
+    So one is driven here, through the real endpoints rather than written
+    as rows, because `counted != system` is what the completion button's
+    label is computed from and a hand-made row can disagree with the
+    stock it claims to have counted.
+
+    The variance is deliberate and small: one line counted two short, so
+    the button reads "raises 1 adjustment" rather than "no adjustments",
+    which is the sentence the narration says.
+  */
+  if (slug !== 'admin-everything') return;
+
+  const scheduled = await call('/admin/cycle-counts', {
+    method: 'POST',
+    token: staffToken,
+    body: {
+      warehouseId: warehouse.id,
+      countType: 'SKU_TARGETED',
+      countDate: new Date().toISOString(),
+    },
+  });
+  await call(`/admin/cycle-counts/${scheduled.id}/start`, { method: 'POST', token: staffToken });
+  await call(`/admin/cycle-counts/${scheduled.id}/items`, {
+    method: 'POST',
+    token: staffToken,
+    body: {
+      items: [
+        {
+          variantId: line.variantId,
+          binId: line.binId,
+          batchId: line.batchId,
+          // Two short of what the system believes — the variance the
+          // "raises 1 adjustment" label is derived from.
+          countedQty: Math.max(0, level.qtyOnHand - 2),
+        },
+      ],
+    },
+  });
+  console.log(
+    `  · a count is under way on ${bin.code} with one line two short — ` +
+      'the admin video has its variance',
   );
 }
 
@@ -9896,6 +10761,84 @@ async function withdrawTutorialFreightBills(sellerId, staffToken) {
     });
   }
   console.log(`  · withdrew ${live.length} freight bill(s) a previous take left live`);
+}
+
+/**
+ * One freight bill standing, so the admin video has something to settle.
+ *
+ * ── WHY IT IS RECORDED AND NOT WRITTEN ───────────────────────────────
+ * A freight bill splits a forwarder's invoice over the units that
+ * actually landed, and in PAY_LATER it leaves a receivable the wallet
+ * amortises per unit as the stock sells (WAL-1). Writing the row would
+ * produce a bill whose arithmetic nothing had checked and whose
+ * receivable no ledger knew about — and the scene after this one points
+ * at exactly those numbers.
+ *
+ * ── AND BILLED AGAINST AN ARRIVAL THAT HAS NONE ──────────────────────
+ * The server refuses a second bill for the same receipt by name, so the
+ * unbilled COMPLETED arrivals are the candidates. Idempotent: a live
+ * bill already standing is what is wanted, and nothing is recorded.
+ */
+async function ensureLiveFreightBill(sellerId, staffToken) {
+  const bills = await call(`/admin/inbound-freight?sellerId=${sellerId}`, { token: staffToken });
+  if ((bills ?? []).some((b) => b.voidedAt == null)) {
+    console.log('  · a freight bill is already standing — the settle scene has its row');
+    return;
+  }
+
+  const billed = new Set((bills ?? []).map((b) => b.goodsReceiptId));
+  const receipts = await prisma.goodsReceipt.findMany({
+    where: {
+      status: 'COMPLETED',
+      /*
+        IN_FINAL only — the INDIA arrival. The Bangladesh intake is the
+        start of the leg being billed, not its end, and the server says
+        so by name (`FREIGHT_NOT_AN_ARRIVAL`). One bill per consignment,
+        raised against the receipt that proves what actually landed.
+      */
+      leg: 'IN_FINAL',
+      /*
+        VIA_BD only. Freight is the cost of the Bangladesh→India leg, so
+        a DIRECT_IN consignment — one the client shipped straight to
+        India — has no such leg and the server refuses it by name
+        (`FREIGHT_NOT_BILLABLE`, `inbound-freight.service.ts:338`). The
+        page's own empty state says the same thing; picking the newest
+        completed arrival without checking found one of those first.
+      */
+      consignment: { sellerId, route: 'VIA_BD' },
+    },
+    select: { id: true, lines: { select: { id: true, receivedQty: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+  });
+  const receipt = receipts.find(
+    (r) => !billed.has(r.id) && r.lines.some((l) => (l.receivedQty ?? 0) > 0),
+  );
+  if (receipt === undefined) {
+    console.log('  · NO unbilled arrival to raise a freight bill against — /freight stays empty');
+    return;
+  }
+
+  try {
+    await call('/admin/inbound-freight', {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        goodsReceiptId: receipt.id,
+        currency: 'BDT',
+        // PAY_LATER so the bill stays OUTSTANDING and therefore
+        // settleable; PAY_NOW debits the wallet at once and the row the
+        // video wants would already be closed.
+        mode: 'PAY_LATER',
+        lines: receipt.lines
+          .filter((l) => (l.receivedQty ?? 0) > 0)
+          .map((l) => ({ goodsReceiptLineId: l.id, basis: 'PER_PIECE', rate: '45.00' })),
+      },
+    });
+    console.log('  · one freight bill standing — the admin video has something to settle');
+  } catch (e) {
+    console.log(`  · NO freight bill for the settle scene: ${String(e).slice(0, 170)}`);
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -12581,6 +13524,23 @@ async function main() {
   // them in a row.
   await clearLongTakeArtefacts(sellerId);
 
+  /*
+    AN OPEN PACK BOX IS ALWAYS LITTER, FOR EVERY SLUG.
+
+    The bench allows one open box PER PACKER, so a box a previous take
+    left open refuses the next `POST /warehouse/packs/boxes/open` —
+    whatever parcel it is on and whatever video is being seeded. This
+    used to be cleared only while building the admin long video's world,
+    which runs LAST, so every other world that packs something failed
+    first: seeding the returns bench died on `PACK_BOX_ALREADY_OPEN`
+    left behind by the admin video's own scan.
+
+    Nothing legitimately holds a box open between runs — the videos open
+    one and point at the close button without pressing it — so this is
+    unconditional and goes before any world is built.
+  */
+  await clearOpenBoxesForPacker();
+
   // Per-video tailoring, AFTER the clearing. The slug is optional: with
   // none, this is the shared world every video that needs nothing extra
   // records against.
@@ -12589,14 +13549,43 @@ async function main() {
   if (slug === 'invite-a-colleague') await ensureTeamColleague(sellerId, sellerToken);
   await editDraftWorldFor(slug, sellerId, sellerToken);
   await cancelWorldFor(slug, sellerId, sellerToken);
-  await callWorldFor(slug, sellerId, sellerToken, staffToken);
+  /*
+    SUPERVISE FIRST, THEN THE STATION — and the order is load-bearing
+    for `admin-everything`, the only slug that wants both.
+
+    `superviseWorldFor` opens by releasing EVERY assigned entry, so that
+    "Reassign" is a unique button for the two short videos. Run second,
+    it would release the station call `callWorldFor` had just pulled,
+    and the admin video would reach a live-call scene with an empty
+    station — which is exactly how it failed on 2026-11-03.
+
+    `callWorldFor`'s own release is scoped to the ops agent, so running
+    it second leaves the supervisor's stuck call alone. For every other
+    slug these two are mutually exclusive and the order is immaterial.
+  */
   await superviseWorldFor(slug, sellerId, sellerToken);
+  await callWorldFor(slug, sellerId, sellerToken, staffToken);
   await reattemptWorldFor(slug, sellerId, sellerToken, staffToken);
   await deliveryAsksWorldFor(slug, sellerId, sellerToken);
   await binsWorldFor(slug, staffToken);
   await collapseWorldFor(slug, staffToken);
-  await adjustmentWorldFor(slug, sellerId, staffToken, warehouse);
+  /*
+    CYCLE COUNTS FIRST, THEN ADJUSTMENTS — and the order is load-bearing
+    for `admin-everything`, the only slug that builds both.
+
+    Both worlds call `clearUndecidedAdjustments`: the count world because
+    completing a count RAISES adjustments and it wants a clean slate, the
+    adjustment world because its queue scene needs exactly the one row it
+    is about to make. Run the other way round, the count world's clear
+    deletes the PENDING adjustment the adjustment world had just raised,
+    and `/inventory/adjustments` opens on an empty queue — which is
+    precisely what happened once both gates admitted this slug.
+
+    Neither world was wrong; they had simply never been awake at the same
+    time. The same caution applies to any further widening here.
+  */
   await cycleCountWorldFor(slug, sellerId, staffToken, warehouse);
+  await adjustmentWorldFor(slug, sellerId, staffToken, warehouse);
   await courierAccountWorldFor(slug);
   await delhiveryHealthWorldFor(slug);
   await leadsWorldFor(slug);
@@ -12707,6 +13696,21 @@ async function main() {
   if (slug === 'bill-the-freight') {
     await withdrawTutorialFreightBills(sellerId, staffToken);
   }
+  /*
+    ── AND THE ADMIN LONG VIDEO WANTS THE OPPOSITE ──────────────────────
+    `bill-the-freight` films a bill being RECORDED, so it withdraws any
+    live one first — otherwise the arrival it reaches for is already
+    billed and the form refuses it. The admin video walks past that same
+    page and SETTLES a bill, so it needs one standing.
+
+    Those two requirements are exact opposites on the same table, which
+    is why this sits here beside the withdrawal rather than inside a
+    shared freight world: the videos disagree, and the disagreement is
+    the point. Verified on screen before it was understood — the page
+    read "No freight bills recorded · Bills shown 0, All statuses"
+    while the database held two, both voided.
+  */
+  if (slug === 'admin-everything') await ensureLiveFreightBill(sellerId, staffToken);
 
   // E2's ledger, AFTER the parcels have moved — the COD credit needs a
   // delivered order to settle, and the pending rows need a wallet that

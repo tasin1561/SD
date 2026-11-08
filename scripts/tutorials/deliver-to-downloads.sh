@@ -33,9 +33,13 @@ SLUGS=(
   seller-everything
   reseller-everything
   associate-everything
+  # The admin long video. English only for now — the owner asked for the
+  # other two languages after it is approved.
+  admin-everything
   seller-everything-bn
   reseller-everything-bn
   associate-everything-bn
+  admin-everything-bn
   seller-everything-hi
   reseller-everything-hi
   associate-everything-hi
@@ -57,12 +61,14 @@ pretty() {
     seller-everything) echo "Skydrop - 1 - Seller - everything.mp4" ;;
     reseller-everything) echo "Skydrop - 2 - Reseller - everything.mp4" ;;
     associate-everything) echo "Skydrop - 3 - Associate - everything.mp4" ;;
+    admin-everything) echo "Skydrop - 4 - Admin - everything.mp4" ;;
     # The LANGUAGE leads on the translated ones, so the three Bangla
     # files sit together in a folder sorted by name rather than being
     # scattered between the English ones.
     seller-everything-bn) echo "Skydrop - Bangla - 1 - Seller.mp4" ;;
     reseller-everything-bn) echo "Skydrop - Bangla - 2 - Reseller.mp4" ;;
     associate-everything-bn) echo "Skydrop - Bangla - 3 - Associate.mp4" ;;
+    admin-everything-bn) echo "Skydrop - Bangla - 4 - Admin.mp4" ;;
     seller-everything-hi) echo "Skydrop - Hindi - 1 - Seller.mp4" ;;
     reseller-everything-hi) echo "Skydrop - Hindi - 2 - Reseller.mp4" ;;
     associate-everything-hi) echo "Skydrop - Hindi - 3 - Associate.mp4" ;;
