@@ -41,6 +41,10 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // on the write permission meant a role that could manage agents but
   // not read the queue opened a page that 403'd on its own data.
   ['/call-center/agents', 'callcenter.queue.view'],
+  // Orders held because their client switched the confirmation call off.
+  // The page's one act is sending them to the call queue, which is the
+  // queue-manage permission (the same key as re-queueing a declined order).
+  ['/call-center/awaiting-confirmation', 'callcenter.queue.manage'],
   ['/call-center', 'callcenter.work'],
   ['/warehouse', 'warehouse.view'],
   // Bins, and a bin's own page (what it holds) — the same permission as

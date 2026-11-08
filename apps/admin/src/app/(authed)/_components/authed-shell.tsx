@@ -49,6 +49,7 @@ import {
   Wallet,
   Warehouse,
   Webhook,
+  Hourglass,
   PhoneForwarded,
 } from 'lucide-react';
 import { useT } from '@/i18n/client';
@@ -138,6 +139,11 @@ export function AuthedShell({
           href: '/reattempt-requests',
           label: t('nav.reattemptRequests'),
           icon: <PhoneForwarded size={15} />,
+        },
+        {
+          href: '/call-center/awaiting-confirmation',
+          label: t('nav.awaitingConfirmation'),
+          icon: <Hourglass size={15} />,
         },
         { href: '/call-center/agents', label: t('nav.callAgents'), icon: <Users size={15} /> },
         { href: '/warehouse', label: t('nav.warehouse'), icon: <Warehouse size={15} /> },

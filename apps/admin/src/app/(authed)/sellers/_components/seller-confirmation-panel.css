@@ -1,0 +1,128 @@
+/* Phone-confirmation panel on a client's page. Tokens only; the only
+   motion is a one-property opacity/transform change on the TTL field, so
+   nothing reflows when the switch moves. */
+.cc-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+  padding: var(--sp-5);
+  border-bottom: 1px solid var(--line);
+}
+.cc-panel__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.cc-panel__chip {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-md);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint, var(--fg-strong));
+  transition:
+    background-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out);
+}
+.cc-panel[data-on='0'] .cc-panel__chip {
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.cc-panel__titles {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cc-panel__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+.cc-panel__note {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.cc-panel__attr {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-inline-start: 3px solid var(--line-strong);
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.cc-panel__attr[data-kind='client'] {
+  border-inline-start-color: var(--saffron-fill);
+}
+.cc-panel__attr[data-kind='staff'] {
+  border-inline-start-color: var(--green-fill);
+}
+.cc-panel__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+@media (min-width: 720px) {
+  .cc-panel__body {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+.cc-panel__ttl {
+  min-width: 0;
+  transition: opacity var(--dur) var(--ease-out);
+}
+.cc-panel[data-on='1'] .cc-panel__ttl {
+  opacity: 0.6;
+}
+.cc-panel__rto {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--saffron-line);
+  border-radius: var(--r-md);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+  font-size: var(--fs-sm);
+  animation: cc-rise var(--dur) var(--ease-out);
+}
+.cc-panel__rto > svg {
+  flex: none;
+  margin-top: 2px;
+}
+.cc-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+@keyframes cc-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-panel__rto {
+    animation: none;
+  }
+  .cc-panel__chip,
+  .cc-panel__ttl {
+    transition: none;
+  }
+}
+:root[data-reduced='1'] .cc-panel__rto {
+  animation: none;
+}

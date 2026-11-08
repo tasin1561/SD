@@ -527,6 +527,32 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     what: 'How many times our call centre tries to reach the customer to confirm an order before it is rejected as unreachable. Only calls that reached a real outcome count (no answer, busy, wrong number and so on).',
     example: 'Set to 3: three unanswered calls and the order is stopped instead of shipped.',
   },
+  'ops.call_confirmation_required': {
+    name: 'Call customers to confirm orders',
+    group: 'Customer calls',
+    what: 'Whether our call centre phones the customer before an order is packed. A client can switch this off for themselves; the client carries the return cost of any order confirmed without a call.',
+    example:
+      'Off for a client: their orders wait instead of being called, then confirm on their own when the auto-confirm time runs out.',
+    values: {
+      true: opt(
+        'Call every customer',
+        'Orders go to the call queue and an agent phones the customer before the order is packed.',
+        'A new order is rung the same day; if the customer does not pick up it is retried per the call-attempt settings.',
+      ),
+      false: opt(
+        'Do not call; confirm on a timer',
+        'Orders wait instead of being called and confirm on their own when the auto-confirm time runs out. The client carries any return cost.',
+        'With a 24 hour timer, an order placed Monday 10 am confirms itself Tuesday 10 am unless staff send it for a call first.',
+      ),
+    },
+  },
+  'ops.call_auto_confirm_ttl_hours': {
+    name: 'Auto-confirm after (hours)',
+    group: 'Customer calls',
+    what: 'How long an order waits, with calls switched off, before it confirms with no call. Whole hours from 1 to 168 (7 days).',
+    example:
+      'Set to 24: an order placed at 10 am confirms itself at 10 am the next day unless staff send it for a call first.',
+  },
   'ops.call_retry_interval_hours': {
     name: 'Wait before calling again (hours)',
     group: 'Customer calls',

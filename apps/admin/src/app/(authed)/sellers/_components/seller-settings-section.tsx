@@ -1,14 +1,6 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseMutationResult,
-  type UseQueryResult,
-} from '@tanstack/react-query';
-import { useApiClient } from '@skydrop/auth/client';
 import { RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
@@ -19,6 +11,13 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { TBody, Table, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
 import { AcAlert, AcSection } from '../../settings/_components/ac-parts';
+import {
+  useClearOverride,
+  useSellerSettings,
+  useSetOverride,
+  type ResolvedSetting,
+} from './seller-settings-hooks';
+import { ConfirmationCallsPanel, isConfirmationKey } from './seller-confirmation-panel';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
   fallbackSettingName,
@@ -60,62 +59,18 @@ import { richMessage } from '@/i18n/client';
  * choices is overridden from a list that says what each choice does.
  */
 
-interface ResolvedSetting {
-  key: string;
-  valueType: string;
-  value: unknown;
-  source: 'SELLER_OVERRIDE' | 'SYSTEM_DEFAULT';
-  systemDefault: unknown;
-}
-
-function useSellerSettings(sellerId: string): UseQueryResult<readonly ResolvedSetting[]> {
-  const client = useApiClient();
-  return useQuery({
-    queryKey: ['admin-seller-settings', sellerId],
-    queryFn: () =>
-      client.request<readonly ResolvedSetting[]>(`/api/admin/sellers/${sellerId}/settings`),
-  });
-}
-
-function useSetOverride(
-  sellerId: string,
-): UseMutationResult<
-  unknown,
-  Error,
-  { key: string; valueType: string; value: unknown; note?: string }
-> {
-  const client = useApiClient();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ key, ...body }) =>
-      client.request<unknown>(`/api/admin/sellers/${sellerId}/settings/${key}`, {
-        method: 'PATCH',
-        body,
-      }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-seller-settings', sellerId] }),
-  });
-}
-
-function useClearOverride(sellerId: string): UseMutationResult<unknown, Error, { key: string }> {
-  const client = useApiClient();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ key }) =>
-      client.request<unknown>(`/api/admin/sellers/${sellerId}/settings/${key}`, {
-        method: 'DELETE',
-      }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-seller-settings', sellerId] }),
-  });
-}
-
 export function SellerSettingsSection({ sellerId }: { readonly sellerId: string }): ReactElement {
   const t = useT();
   const list = useSellerSettings(sellerId);
   const clear = useClearOverride(sellerId);
   const [editing, setEditing] = useState<ResolvedSetting | null>(null);
 
-  const items = sortByGroup(list.data ?? []);
-  const overridden = items.filter((s) => s.source === 'SELLER_OVERRIDE');
+  // The phone-confirmation pair has its own panel (a switch and a bounded
+  // field read better than two generic rows); it writes through the SAME
+  // override endpoints, so it is a view onto the mechanism, not a second one.
+  const all = list.data ?? [];
+  const items = sortByGroup(all.filter((s) => !isConfirmationKey(s.key)));
+  const overridden = all.filter((s) => s.source === 'SELLER_OVERRIDE');
 
   return (
     <AcSection
@@ -125,11 +80,13 @@ export function SellerSettingsSection({ sellerId }: { readonly sellerId: string 
           ? t('sellersSellerSettingsSection.everythingIsOnTheSystem')
           : t('sellersSellerSettingsSection.ofKeysAreOverriddenFor', {
               length: overridden.length,
-              length2: items.length,
+              length2: all.length,
             })
       }
       flush
     >
+      <ConfirmationCallsPanel sellerId={sellerId} settings={all} />
+
       {list.isLoading ? (
         <SkeletonRows rows={4} />
       ) : list.isError ? (

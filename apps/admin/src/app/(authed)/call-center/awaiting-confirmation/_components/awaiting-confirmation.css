@@ -1,0 +1,133 @@
+/* Orders awaiting confirmation. Tokens only. Motion is opacity/transform on
+   mount of the result panel and the urgent icon; the table never changes
+   height as rows leave because it is re-read from the server, not animated. */
+.aw-count {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+.aw-bar {
+  position: sticky;
+  top: var(--sk-sticky-top, 0px);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+  transition:
+    border-color var(--dur) var(--ease-out),
+    background-color var(--dur) var(--ease-out);
+}
+.aw-bar[data-active='1'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+}
+.aw-bar__text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  color: var(--fg-strong);
+}
+.aw-bar__hint {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.aw-live:empty {
+  display: none;
+}
+.aw-result {
+  display: grid;
+  gap: var(--sp-2);
+  justify-items: start;
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--fg-body);
+  animation: aw-rise var(--dur) var(--ease-out);
+}
+.aw-result[data-tone='good'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.aw-result[data-tone='mixed'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.aw-result[data-tone='bad'] {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.aw-result__list {
+  margin: 0;
+  padding-inline-start: var(--sp-5);
+  overflow-wrap: anywhere;
+}
+.aw-sub {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.aw-client {
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+}
+.aw-remaining {
+  display: grid;
+  gap: var(--sp-1);
+  justify-items: start;
+  min-width: 0;
+}
+.aw-remaining__line {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.aw-remaining[data-level='urgent'] .aw-remaining__line,
+.aw-remaining[data-level='overdue'] .aw-remaining__line {
+  color: var(--red-text);
+  font-weight: var(--fw-semibold);
+}
+.aw-remaining[data-level='urgent'] .aw-remaining__icon {
+  animation: aw-pulse 1.6s var(--ease-out) infinite;
+}
+@keyframes aw-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes aw-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aw-result,
+  .aw-remaining__icon {
+    animation: none !important;
+  }
+  .aw-bar {
+    transition: none;
+  }
+}
