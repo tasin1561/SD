@@ -334,3 +334,65 @@ describe('DelhiveryAwbService — RS-10 seller_name', () => {
     expect(JSON.stringify(restStore)).toBe(JSON.stringify(restPlain));
   });
 });
+
+/** Setting courier.delhivery_omit_blank_seller_fields: default = today's payload. */
+describe('DelhiveryAwbService — omit blank seller/return fields', () => {
+  const OK = { success: true, packages: [{ waybill: 'DLV1', refnum: 'SH-2026-05-000042' }] };
+  const GROUP = [
+    'seller_add',
+    'seller_name',
+    'seller_inv',
+    'return_add',
+    'return_pin',
+    'return_city',
+    'return_state',
+    'return_country',
+    'return_phone',
+  ];
+
+  async function shipmentWith(omit: boolean | null, over: Partial<DelhiveryAwbRequest> = {}) {
+    const { svc, request, prisma } = makeServiceWithPickup('Skydrop-CCU-01');
+    prisma.client.systemSetting.findUnique.mockImplementation((async (a: {
+      where: { key: string };
+    }) =>
+      a.where.key === 'courier.delhivery_omit_blank_seller_fields'
+        ? omit === null
+          ? null
+          : { valueBoolean: omit }
+        : { valueString: 'Skydrop-CCU-01' }) as never);
+    request.mockResolvedValueOnce(OK);
+    await svc.generateAwb(awbReq(over));
+    return request.mock.calls[0][0].body.shipments[0] as Record<string, unknown>;
+  }
+
+  it('default (unset or false) sends every key blank, identical for direct and store orders', async () => {
+    for (const over of [{}, { sellerName: 'Priya Kurtis' }]) {
+      const unset = await shipmentWith(null, over);
+      const off = await shipmentWith(false, over);
+      expect(off).toEqual(unset);
+      for (const k of GROUP) expect(k in off).toBe(true);
+      expect(off.seller_name).toBe(over.sellerName ?? '');
+      expect(off.hsn_code).toBe('');
+      expect(off.address_type).toBe('');
+    }
+  });
+
+  it('on: a direct order drops exactly the blank group keys', async () => {
+    const off = await shipmentWith(false);
+    const on = await shipmentWith(true);
+    for (const k of GROUP) expect(k in on).toBe(false);
+    const expected = { ...off };
+    for (const k of GROUP) delete expected[k];
+    expect(on).toEqual(expected);
+    expect(on.hsn_code).toBe('');
+    expect(on.address_type).toBe('');
+  });
+
+  it('on: populated keys survive, including the RS-10 store name', async () => {
+    const on = await shipmentWith(true, { sellerName: 'Priya Kurtis', returnPin: '700001' });
+    expect(on.seller_name).toBe('Priya Kurtis');
+    expect(on.return_pin).toBe('700001');
+    expect('seller_add' in on).toBe(false);
+    expect('return_add' in on).toBe(false);
+  });
+});

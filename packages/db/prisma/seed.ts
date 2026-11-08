@@ -1063,6 +1063,15 @@ const systemSettings: SystemSettingSeed[] = [
       "Shiprocket does not sign webhooks either. Their form asks for a URL, a header NAME (their 'Auth Token Type') and a token, and sends that token verbatim on every push — a static credential, which is SHARED_SECRET. The token itself lives in the env var named by tracking.webhook_secret_ref.shiprocket (CUR-1: secret in env, reference in the DB).",
   },
   {
+    key: 'courier.delhivery_omit_blank_seller_fields',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Delhivery — omit blank seller/return fields',
+    description:
+      'OFF = every Delhivery create sends the seller and return keys present-but-empty (today\'s behaviour), which makes Delhivery print the pickup location as a nameless "Seller:" block on the label. ON = those keys are left out when blank; a real value (e.g. the member store name) is always sent. Untested against the live create endpoint: after turning on, the next booking is the test, and if Delhivery rejects it, turn this back off.',
+  },
+  {
     key: 'courier.delhivery_waybill_pool_refill_enabled',
     category: 'courier',
     valueType: SettingValueType.BOOLEAN,

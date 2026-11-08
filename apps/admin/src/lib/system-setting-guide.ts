@@ -1472,6 +1472,23 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
       ],
     ),
   },
+  'courier.delhivery_omit_blank_seller_fields': {
+    name: 'Leave blank seller and return fields out of Delhivery bookings',
+    group: 'Courier connection',
+    what: 'Whether a Delhivery booking leaves out the seller and return details it has no value for, instead of sending them empty. Sent empty, Delhivery prints our pickup address under a nameless “Seller:” heading on the label. Off keeps the long-standing behaviour; the booking after switching on is the test, because Delhivery might refuse it.',
+    example:
+      'On: a direct order’s label no longer shows a blank “Seller:” block; a member-store order still shows the store’s name.',
+    values: onOff(
+      [
+        'Blank seller and return details are left out of the booking.',
+        'The label stops printing a nameless Seller block; if Delhivery refuses the booking, switch this off again.',
+      ],
+      [
+        'Blank seller and return details are sent empty, as before.',
+        'The label may show a Seller heading with the pickup address and no name.',
+      ],
+    ),
+  },
   'courier.delhivery_waybill_pool_refill_enabled': {
     name: 'Refill the Delhivery waybill pool automatically',
     group: 'Courier connection',

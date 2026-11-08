@@ -106,6 +106,19 @@ export function toNationalPhone(e164: string): string {
   return m?.[1] ?? e164.trim();
 }
 
+const OMIT_BLANK_SETTING = 'courier.delhivery_omit_blank_seller_fields';
+const OMITTABLE_BLANK_KEYS = [
+  'seller_add',
+  'seller_name',
+  'seller_inv',
+  'return_add',
+  'return_pin',
+  'return_city',
+  'return_state',
+  'return_country',
+  'return_phone',
+] as const;
+
 @Injectable()
 export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'> {
   private readonly logger = new Logger(DelhiveryAwbService.name);
@@ -142,8 +155,9 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
     if ('blocked' in preflight) return preflight.blocked;
 
     const pickupLocationName = await this.resolvePickupLocationName(courierAccountId ?? null);
+    const omitBlank = await this.omitBlankOptionalFields();
     const envelope = {
-      shipments: [this.buildShipment(req, preflight)],
+      shipments: [this.buildShipment(req, preflight, omitBlank)],
       pickup_location: { name: pickupLocationName },
     };
 
@@ -283,10 +297,11 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
   private buildShipment(
     req: DelhiveryAwbRequest,
     resolved: { city: string; state: string },
+    omitBlank = false,
   ): Record<string, unknown> {
     const isCod = req.codAmountInr !== null;
     const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
-    return {
+    const shipment: Record<string, unknown> = {
       // EMPTY — Delhivery assigns, and the number it returns is the AWB.
       //
       // This was changed while chasing a create that failed five times,
@@ -382,6 +397,33 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       ...(req.returnPhone === undefined ? {} : { return_phone: req.returnPhone }),
       ...(req.returnCountry === undefined ? {} : { return_country: req.returnCountry }),
     };
+    if (omitBlank) {
+      // Delhivery prints the PICKUP LOCATION as the seller/return block
+      // when seller_add is not given; sending '' counts as "not given"
+      // but also leaves the name blank. Drop only the blank keys of the
+      // seller/return group; any populated value (RS-10 store name
+      // included) is kept.
+      for (const k of OMITTABLE_BLANK_KEYS) {
+        if (shipment[k] === '') delete shipment[k];
+      }
+    }
+    return shipment;
+  }
+
+  /**
+   * Fail-safe read: any error or missing row means false, i.e. today's
+   * behaviour (blank keys sent).
+   */
+  private async omitBlankOptionalFields(): Promise<boolean> {
+    try {
+      const row = await this.prisma.client.systemSetting.findUnique({
+        where: { key: OMIT_BLANK_SETTING },
+        select: { valueBoolean: true },
+      });
+      return row?.valueBoolean === true;
+    } catch {
+      return false;
+    }
   }
 
   /**
