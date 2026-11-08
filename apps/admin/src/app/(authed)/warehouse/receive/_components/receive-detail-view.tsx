@@ -467,12 +467,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                     ) : null}
                   </div>
                   <div className="wh-item__sub">
-                    <span className="sk-ident">{line.variant.skuCode}</span> ·{' '}
-                    <span className="sk-figure">
-                      {t('warehouseReceiveReceiveDetailView.expected', {
-                        expectedQty: line.expectedQty,
-                      })}
-                    </span>
+                    <span className="sk-ident">{line.variant.skuCode}</span>
                     {line.inventoryMode === 'STRICT'
                       ? t('warehouseReceiveReceiveDetailView.perUnitTracked')
                       : ''}
@@ -516,6 +511,23 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                     )}
                   </div>
                 </div>
+              </div>
+              {/* The number the carton is counted against. The figure is the
+                  loud part; the word is a quiet label. The full phrase stays
+                  as the accessible name. */}
+              <div
+                className="wh-expect"
+                role="group"
+                aria-label={t('warehouseReceiveReceiveDetailView.expected', {
+                  expectedQty: line.expectedQty,
+                })}
+              >
+                <span className="wh-expect__label" aria-hidden>
+                  {t('warehouseReceiveReceiveDetailView.expectedLabel')}
+                </span>
+                <span className="wh-expect__qty sk-figure" aria-hidden>
+                  {line.expectedQty}
+                </span>
               </div>
               {line.receivedQty !== null && (
                 <span className="wh-tag" data-tone="good">

@@ -1781,6 +1781,7 @@ export const wh = defineMessages({
     'expected {expectedQty}',
     'প্রত্যাশিত {expectedQty}',
   ],
+  'warehouseReceiveReceiveDetailView.expectedLabel': ['Expected', 'প্রত্যাশিত'],
   'warehouseReceiveReceiveDetailView.unitCost': ['Unit cost {value}', 'ইউনিট খরচ {value}'],
   'warehouseReceiveReceiveDetailView.damaged': ['Damaged {value}', 'ক্ষতিগ্রস্ত {value}'],
   'warehouseReceiveReceiveDetailView.mfg': ['Mfg {value}', 'উৎপাদন {value}'],
