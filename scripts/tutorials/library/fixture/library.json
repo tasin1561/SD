@@ -1,0 +1,329 @@
+{
+  "generatedAt": "2026-11-08T09:00:00Z",
+  "consoles": [
+    {
+      "key": "client",
+      "name": "Client",
+      "host": "https://client.skydrop.global",
+      "who": "the client who owns the stock",
+      "pages": [
+        {
+          "path": "/dashboard",
+          "title": "Dashboard",
+          "section": "Overview"
+        },
+        {
+          "path": "/orders",
+          "title": "Orders",
+          "section": "Selling"
+        },
+        {
+          "path": "/orders/new",
+          "title": "Create an order",
+          "section": "Selling"
+        },
+        {
+          "path": "/catalog/products",
+          "title": "Products",
+          "section": "Catalog"
+        },
+        {
+          "path": "/inventory/stock",
+          "title": "Stock on hand",
+          "section": "Catalog"
+        },
+        {
+          "path": "/wallet",
+          "title": "Wallet",
+          "section": "Money"
+        },
+        {
+          "path": "/wallet/withdrawals",
+          "title": "Withdrawals",
+          "section": "Money"
+        },
+        {
+          "path": "/settings/profile",
+          "title": "Profile",
+          "section": "Settings"
+        }
+      ]
+    },
+    {
+      "key": "member",
+      "name": "Member store",
+      "host": "https://member.skydrop.global",
+      "who": "the shopkeeper selling it",
+      "pages": [
+        {
+          "path": "/dashboard",
+          "title": "Store dashboard",
+          "section": "Overview"
+        },
+        {
+          "path": "/orders/new",
+          "title": "Place an order",
+          "section": "Selling"
+        },
+        {
+          "path": "/associates",
+          "title": "Associates",
+          "section": "People"
+        }
+      ]
+    },
+    {
+      "key": "admin",
+      "name": "Admin",
+      "host": "https://admin.skydrop.global",
+      "who": "Skydrop staff — call centre, warehouse, finance",
+      "pages": [
+        {
+          "path": "/dashboard",
+          "title": "Operations dashboard",
+          "section": "Overview"
+        },
+        {
+          "path": "/orders",
+          "title": "Orders",
+          "section": "Orders"
+        },
+        {
+          "path": "/call-centre/queue",
+          "title": "Call queue",
+          "section": "Call centre"
+        },
+        {
+          "path": "/warehouse/pick",
+          "title": "Pick list",
+          "section": "Warehouse"
+        },
+        {
+          "path": "/warehouse/pack",
+          "title": "Pack station",
+          "section": "Warehouse"
+        },
+        {
+          "path": "/warehouse/manifests",
+          "title": "Manifests",
+          "section": "Warehouse"
+        },
+        {
+          "path": "/money/wallets",
+          "title": "Client wallets",
+          "section": "Money"
+        },
+        {
+          "path": "/money/remittances",
+          "title": "Remittances",
+          "section": "Money"
+        },
+        {
+          "path": "/couriers/accounts",
+          "title": "Courier accounts",
+          "section": "Couriers"
+        }
+      ]
+    }
+  ],
+  "tutorials": [
+    {
+      "slug": "client-create-an-order",
+      "title": "Create an order and get it confirmed",
+      "console": "client",
+      "kind": "short",
+      "section": "B — selling",
+      "order": 1,
+      "summary": "Type a customer in, pick the variant, and watch the call centre confirm it.",
+      "steps": [
+        "Open the orders list",
+        "Start a new order",
+        "Find the customer",
+        "Pick the variant",
+        "Set the COD amount",
+        "Place it",
+        "Where it goes next"
+      ],
+      "durationSeconds": 412,
+      "languages": ["en", "bn"],
+      "files": {
+        "en": "client-create-an-order.mp4",
+        "bn": "client-create-an-order-bn.mp4"
+      },
+      "teaches": ["/orders", "/orders/new"]
+    },
+    {
+      "slug": "client-top-up-the-wallet",
+      "title": "Top up the wallet and read the ledger",
+      "console": "client",
+      "kind": "short",
+      "section": "E — money",
+      "order": 1,
+      "summary": "What each ledger line means and how a top-up claim gets accepted.",
+      "steps": [
+        "Open the wallet",
+        "Read a ledger line",
+        "Claim a top-up",
+        "What happens next",
+        "Ask for a withdrawal"
+      ],
+      "durationSeconds": 338,
+      "languages": ["en", "bn"],
+      "files": {
+        "en": "client-top-up-the-wallet.mp4",
+        "bn": "client-top-up-the-wallet-bn.mp4"
+      },
+      "teaches": ["/wallet", "/wallet/withdrawals"]
+    },
+    {
+      "slug": "member-place-an-order",
+      "title": "Place an order for a walk-in customer",
+      "console": "member",
+      "kind": "short",
+      "section": "R — the counter",
+      "order": 1,
+      "summary": "The store form, the price the store pays, and what the customer is told.",
+      "steps": [
+        "Open the store dashboard",
+        "Place an order",
+        "Confirm the price",
+        "Hand over the receipt"
+      ],
+      "durationSeconds": 221,
+      "languages": ["en"],
+      "files": {
+        "en": "member-place-an-order.mp4"
+      },
+      "teaches": ["/orders/new"]
+    },
+    {
+      "slug": "admin-pack-a-parcel",
+      "title": "Pack a parcel at the bench",
+      "console": "admin",
+      "kind": "short",
+      "section": "L — the warehouse floor",
+      "order": 2,
+      "summary": "Scan into a box, handle a line that cannot be packed, and print the label.",
+      "steps": [
+        "Open the pack station",
+        "Scan the waybill",
+        "Open a box",
+        "Scan each line",
+        "A line that will not scan",
+        "Pack without scanning",
+        "Confirm the pack",
+        "Print the label"
+      ],
+      "durationSeconds": 486,
+      "languages": [],
+      "files": {},
+      "teaches": ["/warehouse/pack", "/warehouse/pick"]
+    },
+    {
+      "slug": "admin-everything",
+      "title": "Running the Skydrop operations desk",
+      "console": "admin",
+      "kind": "long",
+      "section": "H — the desk",
+      "order": 1,
+      "summary": "The whole admin console end to end, in the order a new staff member meets it.",
+      "steps": [
+        "dash-bands",
+        "dash-callcentre",
+        "dash-merchant",
+        "dash-warehouse",
+        "dash-quiet",
+        "dash-support",
+        "dash-settlements",
+        "dash-performance",
+        "dash-money",
+        "dash-owed",
+        "orders-list",
+        "orders-filters",
+        "orders-search",
+        "orders-saved-view",
+        "orders-export",
+        "order-open",
+        "order-recipient",
+        "order-reputation",
+        "order-payment",
+        "order-items",
+        "order-charges",
+        "order-parcel",
+        "order-tracker",
+        "order-history",
+        "order-attempt",
+        "queue-open",
+        "queue-claim",
+        "queue-script",
+        "queue-outcome",
+        "queue-confirm",
+        "queue-reject",
+        "queue-reattempt",
+        "queue-supervise",
+        "pack-open",
+        "pack-scan",
+        "pack-box",
+        "pack-lines",
+        "pack-cancel-note",
+        "pack-without-scanning",
+        "pack-confirm",
+        "pack-label",
+        "manifest-open",
+        "manifest-draft",
+        "manifest-add",
+        "manifest-handover",
+        "manifest-close",
+        "manifest-reprint",
+        "rto-receive",
+        "rto-door",
+        "rto-bench",
+        "rto-inspect",
+        "rto-disposition",
+        "rto-finalise",
+        "stock-levels",
+        "stock-ledger",
+        "stock-adjust",
+        "stock-approve",
+        "stock-count",
+        "stock-transfer",
+        "stock-bins",
+        "money-wallets",
+        "money-ledger",
+        "money-topup",
+        "money-withdrawal",
+        "money-bank-change",
+        "money-remittance",
+        "money-bank-book",
+        "money-freight",
+        "money-pnl",
+        "courier-accounts",
+        "courier-credentials",
+        "courier-health",
+        "courier-manual",
+        "courier-ndr",
+        "courier-costs",
+        "courier-invoice",
+        "settings-overrides",
+        "settings-roles",
+        "settings-users",
+        "settings-tickets",
+        "settings-holds",
+        "settings-broadcasts"
+      ],
+      "durationSeconds": 5410,
+      "languages": ["en", "bn"],
+      "files": {
+        "en": "admin-everything.mp4",
+        "bn": "admin-everything-bn.mp4"
+      },
+      "teaches": [
+        "/dashboard",
+        "/orders",
+        "/call-centre/queue",
+        "/money/wallets",
+        "/couriers/accounts"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "folder": "https://drive.google.com/drive/folders/1FIXTUREfolderIDnotreal",
+  "videos": {
+    "client-create-an-order": {
+      "en": "https://drive.google.com/file/d/1FIXTUREcreateorderEN/view",
+      "bn": "https://drive.google.com/file/d/1FIXTUREcreateorderBN/view"
+    },
+    "member-place-an-order": {
+      "en": "https://drive.google.com/file/d/1FIXTUREmemberorderEN/view"
+    },
+    "admin-everything": {
+      "en": "https://drive.google.com/file/d/1FIXTUREadmineverythingEN/view"
+    }
+  }
+}

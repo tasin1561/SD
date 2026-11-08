@@ -1,0 +1,4902 @@
+{
+  "generatedAt": "2026-11-08T03:17:39.078Z",
+  "consoles": [
+    {
+      "key": "admin",
+      "name": "Admin",
+      "host": "https://admin.skydrop.global",
+      "pages": [
+        {
+          "path": "/account",
+          "title": "Your account",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/bank-accounts/history",
+          "title": "Bank account history",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/bank-accounts",
+          "title": "Bank accounts",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/bank-changes",
+          "title": "Bank detail changes",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/call-center/agents",
+          "title": "Call agents",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/call-center",
+          "title": "Call centre",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/call-center/queue",
+          "title": "Call queue",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/cost-sync",
+          "title": "Courier cost sync",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/courier-accounts",
+          "title": "Courier accounts",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/courier-decisions",
+          "title": "Courier decisions",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/courier-escalation",
+          "title": "Courier escalation",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/courier-escalation/portal",
+          "title": "Portal worker",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/courier-escalation/templates",
+          "title": "Message patterns",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/courier-escalation/threads",
+          "title": "Courier conversations",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/courier-wallet",
+          "title": "Courier wallets",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/dashboard",
+          "title": "Overview",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/delhivery",
+          "title": "Delhivery",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/delivery-actions",
+          "title": "Failed deliveries",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/expenses/categories",
+          "title": "Spending categories",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/expenses",
+          "title": "Expenses & investments",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/freight",
+          "title": "Inbound freight",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/fx",
+          "title": "FX rates",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/holds",
+          "title": "Held stock",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/impersonation",
+          "title": "Support sessions",
+          "titleSource": "heading",
+          "section": "System"
+        },
+        {
+          "path": "/inventory-units",
+          "title": "Unit discrepancies",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/inventory/adjustments",
+          "title": "Stock adjustments",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/inventory/cycle-counts",
+          "title": "Cycle counts",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/inventory/movements",
+          "title": "Stock movements",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/inventory",
+          "title": "Inventory",
+          "titleSource": "path"
+        },
+        {
+          "path": "/inventory/transfers",
+          "title": "Inter-warehouse transfer",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/leads",
+          "title": "Invite requests",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/liabilities/instant-pay",
+          "title": "Instant Pay advances",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/liabilities",
+          "title": "What we owe",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/manual-placement",
+          "title": "Manual placement",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/margin",
+          "title": "Lane margin",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/notifications/broadcasts",
+          "title": "Broadcast",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/notifications",
+          "title": "Notifications",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/notifications/settings",
+          "title": "What reaches you",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/nsa",
+          "title": "Needs attention",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/orders/[id]",
+          "title": "Orders detail",
+          "titleSource": "path",
+          "section": "Operations"
+        },
+        {
+          "path": "/orders",
+          "title": "Orders",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/pnl/carry-forward",
+          "title": "Carry-forward P&L",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/pnl",
+          "title": "Profit & loss",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/pricing",
+          "title": "Pricing preview",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/reattempt-requests",
+          "title": "Re-attempt requests",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/remittances",
+          "title": "Remittances",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/reports",
+          "title": "Reports",
+          "titleSource": "heading",
+          "section": "System"
+        },
+        {
+          "path": "/reseller-store-wallets",
+          "title": "Member store wallets",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/reseller-stores/[storeId]",
+          "title": "Member store",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/reseller-stores/analysis",
+          "title": "Member store analysis",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/reseller-stores",
+          "title": "Member stores",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/roles",
+          "title": "Roles",
+          "titleSource": "heading",
+          "section": "System"
+        },
+        {
+          "path": "/seller-wallets/[id]",
+          "title": "Where their money is held",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/seller-wallets",
+          "title": "Client wallets",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/sellers/[id]",
+          "title": "Client",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/sellers",
+          "title": "Clients",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/settings",
+          "title": "System settings",
+          "titleSource": "heading",
+          "section": "System"
+        },
+        {
+          "path": "/settlements",
+          "title": "Courier settlements",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/shiprocket",
+          "title": "Shiprocket",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/staff",
+          "title": "Staff",
+          "titleSource": "heading",
+          "section": "System"
+        },
+        {
+          "path": "/stores",
+          "title": "Shops",
+          "titleSource": "heading",
+          "section": "Network"
+        },
+        {
+          "path": "/system-issues",
+          "title": "Needs a person",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/system/capacity",
+          "title": "System limits",
+          "titleSource": "heading",
+          "section": "System"
+        },
+        {
+          "path": "/tickets/[id]",
+          "title": "Tickets detail",
+          "titleSource": "path",
+          "section": "Operations"
+        },
+        {
+          "path": "/tickets",
+          "title": "Tickets",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/topups",
+          "title": "Wallet top-ups",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/treasury",
+          "title": "Treasury",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/wallet-transfers",
+          "title": "Wallet transfers",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/warehouse/bins/[binId]",
+          "title": "Bins detail",
+          "titleSource": "path",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse/bins",
+          "title": "Bins",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse/collapse",
+          "title": "Collapse a warehouse's bins",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse/consignments/[id]",
+          "title": "Consignments detail",
+          "titleSource": "path",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse/consignments",
+          "title": "Consignments",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse/handover",
+          "title": "Handover",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse/manifests/[id]",
+          "title": "Manifests detail",
+          "titleSource": "path",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse/manifests",
+          "title": "Manifests",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse/pack",
+          "title": "Pack station",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse",
+          "title": "Warehouse",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse/pick",
+          "title": "Pick station",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse/pickups",
+          "title": "Pickups",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse/printing",
+          "title": "Printing",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse/receive/[id]",
+          "title": "Receive detail",
+          "titleSource": "path",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse/receive",
+          "title": "Receive station",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/warehouse/rto",
+          "title": "RTO station",
+          "titleSource": "heading",
+          "section": "Operations"
+        },
+        {
+          "path": "/webhooks",
+          "title": "Webhook deliveries",
+          "titleSource": "heading",
+          "section": "System"
+        },
+        {
+          "path": "/withdrawals",
+          "title": "Withdrawals",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/auth/accept-invitation",
+          "title": "Set up your staff account",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/auth/forgot-password",
+          "title": "Forgot your password?",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/auth/reset-password",
+          "title": "Invalid reset link",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/auth/verify-email",
+          "title": "Verify your email",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/login",
+          "title": "Sign in",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/",
+          "title": "Home",
+          "titleSource": "path"
+        }
+      ],
+      "who": "Skydrop's own staff"
+    },
+    {
+      "key": "client",
+      "name": "Client",
+      "host": "https://client.skydrop.global",
+      "pages": [
+        {
+          "path": "/customers",
+          "title": "Customers",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/dashboard",
+          "title": "Dashboard",
+          "titleSource": "path",
+          "section": "Selling"
+        },
+        {
+          "path": "/freight",
+          "title": "Inbound freight",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/holds",
+          "title": "Unreachable customers",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/inbound/[id]",
+          "title": "Inbound detail",
+          "titleSource": "path",
+          "section": "Stock"
+        },
+        {
+          "path": "/inbound",
+          "title": "Add stock",
+          "titleSource": "heading",
+          "section": "Stock"
+        },
+        {
+          "path": "/inventory",
+          "title": "Inventory",
+          "titleSource": "heading",
+          "section": "Stock"
+        },
+        {
+          "path": "/inventory/units",
+          "title": "Unit discrepancies",
+          "titleSource": "heading",
+          "section": "Stock"
+        },
+        {
+          "path": "/needs-attention",
+          "title": "Needs attention",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/notifications",
+          "title": "Notifications",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/notifications/settings",
+          "title": "Notification settings",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/orders/[id]/edit",
+          "title": "Edit order",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/orders/[id]",
+          "title": "Orders detail",
+          "titleSource": "path",
+          "section": "Selling"
+        },
+        {
+          "path": "/orders/import/[id]",
+          "title": "Import detail",
+          "titleSource": "path",
+          "section": "Selling"
+        },
+        {
+          "path": "/orders/import",
+          "title": "Bulk import",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/orders/new-v2",
+          "title": "New order",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/orders/new",
+          "title": "New order",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/orders",
+          "title": "Orders",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/orders/pending",
+          "title": "Pending orders",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/products/[id]",
+          "title": "Products detail",
+          "titleSource": "path",
+          "section": "Stock"
+        },
+        {
+          "path": "/products/[id]/variants/[variantId]",
+          "title": "Variants detail",
+          "titleSource": "path",
+          "section": "Stock"
+        },
+        {
+          "path": "/products/import/jobs/[id]",
+          "title": "Import",
+          "titleSource": "heading",
+          "section": "Stock"
+        },
+        {
+          "path": "/products/import/jobs",
+          "title": "Import history",
+          "titleSource": "heading",
+          "section": "Stock"
+        },
+        {
+          "path": "/products/import",
+          "title": "Bulk catalogue import",
+          "titleSource": "heading",
+          "section": "Stock"
+        },
+        {
+          "path": "/products/new",
+          "title": "New product",
+          "titleSource": "heading",
+          "section": "Stock"
+        },
+        {
+          "path": "/products",
+          "title": "Products",
+          "titleSource": "heading",
+          "section": "Stock"
+        },
+        {
+          "path": "/profile",
+          "title": "Profile",
+          "titleSource": "heading",
+          "section": "Account"
+        },
+        {
+          "path": "/reseller-stores/[storeId]",
+          "title": "Member store",
+          "titleSource": "heading",
+          "section": "Reselling"
+        },
+        {
+          "path": "/reseller-stores",
+          "title": "Member stores",
+          "titleSource": "heading",
+          "section": "Reselling"
+        },
+        {
+          "path": "/reseller-stores/price-list",
+          "title": "Member store price list",
+          "titleSource": "heading",
+          "section": "Reselling"
+        },
+        {
+          "path": "/reseller-stores/reports",
+          "title": "Member store reports",
+          "titleSource": "heading",
+          "section": "Reselling"
+        },
+        {
+          "path": "/reseller-stores/requests",
+          "title": "Waiting on you",
+          "titleSource": "heading",
+          "section": "Reselling"
+        },
+        {
+          "path": "/reseller-stores/stock-forecast",
+          "title": "Stock forecast",
+          "titleSource": "heading",
+          "section": "Reselling"
+        },
+        {
+          "path": "/settings/api-keys",
+          "title": "API keys",
+          "titleSource": "heading",
+          "section": "Account"
+        },
+        {
+          "path": "/settings/notifications",
+          "title": "Notifications",
+          "titleSource": "path",
+          "section": "Account"
+        },
+        {
+          "path": "/settings/orders",
+          "title": "Order defaults",
+          "titleSource": "heading",
+          "section": "Account"
+        },
+        {
+          "path": "/settings",
+          "title": "Settings",
+          "titleSource": "heading",
+          "section": "Account"
+        },
+        {
+          "path": "/settings/security",
+          "title": "Sign-in & sessions",
+          "titleSource": "heading",
+          "section": "Account"
+        },
+        {
+          "path": "/settings/stock",
+          "title": "Stock alerts",
+          "titleSource": "heading",
+          "section": "Account"
+        },
+        {
+          "path": "/settings/stores",
+          "title": "Stores",
+          "titleSource": "heading",
+          "section": "Account"
+        },
+        {
+          "path": "/settings/webhooks",
+          "title": "Outbound webhooks",
+          "titleSource": "heading",
+          "section": "Account"
+        },
+        {
+          "path": "/team",
+          "title": "Team",
+          "titleSource": "heading",
+          "section": "Account"
+        },
+        {
+          "path": "/team/roles",
+          "title": "Roles",
+          "titleSource": "heading",
+          "section": "Account"
+        },
+        {
+          "path": "/tickets/[id]",
+          "title": "Ticket",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/tickets",
+          "title": "Tickets",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/tracking",
+          "title": "Tracking",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/wallet/limits",
+          "title": "Wallet limits and settings",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/wallet",
+          "title": "Wallet",
+          "titleSource": "heading",
+          "section": "Money"
+        },
+        {
+          "path": "/auth/accept-invitation",
+          "title": "Invalid invitation link",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/auth/accept-team-invitation",
+          "title": "Invalid invitation link",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/auth/reset-password",
+          "title": "Invalid reset link",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/auth/verify-email",
+          "title": "Verify your email",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/impersonation/handoff",
+          "title": "Opening the support session",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/login",
+          "title": "Sign in",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/",
+          "title": "Home",
+          "titleSource": "path"
+        },
+        {
+          "path": "/password-reset",
+          "title": "Reset your password",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/sign-up",
+          "title": "Get a client account",
+          "titleSource": "heading"
+        }
+      ],
+      "who": "the client who owns the stock"
+    },
+    {
+      "key": "member",
+      "name": "Member store",
+      "host": "https://member.skydrop.global",
+      "pages": [
+        {
+          "path": "/account",
+          "title": "My account",
+          "titleSource": "heading",
+          "section": "You"
+        },
+        {
+          "path": "/associates/[storeUserId]/prices",
+          "title": "Prices",
+          "titleSource": "path",
+          "section": "Store"
+        },
+        {
+          "path": "/associates/analysis",
+          "title": "How your associates are doing",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/associates",
+          "title": "Associates",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/catalogue",
+          "title": "Catalogue",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/customers/[id]",
+          "title": "Customer",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/customers",
+          "title": "Customers",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/dashboard",
+          "title": "Dashboard",
+          "titleSource": "path",
+          "section": "Store"
+        },
+        {
+          "path": "/expenses",
+          "title": "Expenses",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/integrations",
+          "title": "Integrations",
+          "titleSource": "heading",
+          "section": "Setup"
+        },
+        {
+          "path": "/notifications",
+          "title": "Notifications",
+          "titleSource": "heading",
+          "section": "You"
+        },
+        {
+          "path": "/notifications/settings",
+          "title": "Notification settings",
+          "titleSource": "heading",
+          "section": "You"
+        },
+        {
+          "path": "/orders/[id]",
+          "title": "Orders detail",
+          "titleSource": "path",
+          "section": "Store"
+        },
+        {
+          "path": "/orders/call-reviews",
+          "title": "Customers we could not reach",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/orders/import",
+          "title": "Upload orders",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/orders/new-v2",
+          "title": "New order",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/orders/new",
+          "title": "New order",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/orders",
+          "title": "Orders",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/reports/analysis",
+          "title": "Analysis",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/reports",
+          "title": "Reports",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/settings",
+          "title": "Store settings",
+          "titleSource": "heading",
+          "section": "Setup"
+        },
+        {
+          "path": "/team",
+          "title": "Team",
+          "titleSource": "heading",
+          "section": "Setup"
+        },
+        {
+          "path": "/terms",
+          "title": "Terms",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/tickets/[id]",
+          "title": "Ticket",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/tickets/new",
+          "title": "Raise a ticket",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/tickets",
+          "title": "Tickets",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/wallet",
+          "title": "Wallet",
+          "titleSource": "heading",
+          "section": "Store"
+        },
+        {
+          "path": "/auth/accept-invitation",
+          "title": "Join your store on Skydrop",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/auth/reset-password",
+          "title": "Set a new password",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/auth/verify-email",
+          "title": "Confirm your email",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/impersonation/handoff",
+          "title": "Opening the support session",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/login",
+          "title": "Sign in",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/",
+          "title": "Home",
+          "titleSource": "path"
+        },
+        {
+          "path": "/password-reset",
+          "title": "Reset your password",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/sign-up",
+          "title": "Get a store login",
+          "titleSource": "heading"
+        }
+      ],
+      "who": "the shopkeeper selling it"
+    },
+    {
+      "key": "associate",
+      "name": "Associate",
+      "host": "https://associate.skydrop.global",
+      "pages": [
+        {
+          "path": "/account",
+          "title": "My account",
+          "titleSource": "heading",
+          "section": "You"
+        },
+        {
+          "path": "/catalogue",
+          "title": "What I sell",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/customers",
+          "title": "My customers",
+          "titleSource": "heading",
+          "section": "Following up"
+        },
+        {
+          "path": "/notifications",
+          "title": "Notifications",
+          "titleSource": "heading",
+          "section": "You"
+        },
+        {
+          "path": "/orders/[id]",
+          "title": "Order",
+          "titleSource": "heading",
+          "section": "Following up"
+        },
+        {
+          "path": "/orders/import",
+          "title": "Upload orders",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/orders/new-v2",
+          "title": "New order",
+          "titleSource": "heading",
+          "section": "Following up"
+        },
+        {
+          "path": "/orders/new",
+          "title": "New order",
+          "titleSource": "heading",
+          "section": "Selling"
+        },
+        {
+          "path": "/orders",
+          "title": "My orders",
+          "titleSource": "heading",
+          "section": "Following up"
+        },
+        {
+          "path": "/tickets/[id]",
+          "title": "Issue",
+          "titleSource": "heading",
+          "section": "Following up"
+        },
+        {
+          "path": "/tickets/new",
+          "title": "Raise an issue",
+          "titleSource": "heading",
+          "section": "Following up"
+        },
+        {
+          "path": "/tickets",
+          "title": "Issues",
+          "titleSource": "heading",
+          "section": "Following up"
+        },
+        {
+          "path": "/auth/accept-invitation",
+          "title": "Join your store on Skydrop",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/auth/reset-password",
+          "title": "Set a new password",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/auth/verify-email",
+          "title": "Confirm your email",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/login",
+          "title": "Sign in",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/",
+          "title": "Home",
+          "titleSource": "path"
+        },
+        {
+          "path": "/password-reset",
+          "title": "Reset your password",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/sign-up",
+          "title": "Get a sales login",
+          "titleSource": "heading"
+        }
+      ],
+      "who": "the shopkeeper's salesperson"
+    },
+    {
+      "key": "track",
+      "name": "Track",
+      "host": "https://track.skydrop.global",
+      "pages": [
+        {
+          "path": "/[awb]",
+          "title": "Tracking number not found",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/",
+          "title": "Track your shipment",
+          "titleSource": "heading"
+        }
+      ],
+      "who": "Track your Skydrop parcel by AWB number."
+    },
+    {
+      "key": "marketing",
+      "name": "Marketing",
+      "host": "https://skydrop.global",
+      "pages": [
+        {
+          "path": "/",
+          "title": "Home",
+          "titleSource": "path"
+        },
+        {
+          "path": "/privacy",
+          "title": "Privacy policy",
+          "titleSource": "heading"
+        },
+        {
+          "path": "/request-invite",
+          "title": "Request invite",
+          "titleSource": "path"
+        }
+      ],
+      "who": "Skydrop holds your stock in India, confirms every COD order by phone, and delivers through India’s couriers — with returns, tracking and your money itemised in one place."
+    }
+  ],
+  "tutorials": [
+    {
+      "slug": "place-an-order",
+      "title": "Placing an order",
+      "console": "client",
+      "kind": "short",
+      "section": "B — The everyday job: orders",
+      "order": 1,
+      "summary": "This is the Skydrop client console. We're going to place an order by hand for a customer in India — who it goes to, what is in it, and what they pay when it arrives.",
+      "steps": [
+        "Intro",
+        "Open form",
+        "Recipient",
+        "Landmark",
+        "Pincode",
+        "Reference",
+        "Products",
+        "Quantity",
+        "Payment",
+        "Submit",
+        "Detail"
+      ],
+      "durationSeconds": 118,
+      "languages": ["en"],
+      "files": {
+        "en": "place-an-order.mp4"
+      },
+      "teaches": ["/orders/new"]
+    },
+    {
+      "slug": "add-a-product-with-variations",
+      "title": "Adding a product with variations",
+      "console": "client",
+      "kind": "short",
+      "section": "A — Day one: before you can sell anything",
+      "order": 3,
+      "summary": "Now a product that comes in more than one version. In Skydrop, stock is counted against variants — never against the product itself — so getting these right is what makes everything downstream work.",
+      "steps": [
+        "Intro",
+        "Open form",
+        "Name",
+        "Shared",
+        "Option colour",
+        "Option size",
+        "Size values",
+        "Variants",
+        "Sku",
+        "Save",
+        "Done"
+      ],
+      "durationSeconds": 128,
+      "languages": ["en"],
+      "files": {
+        "en": "add-a-product-with-variations.mp4"
+      },
+      "teaches": ["/products/new"]
+    },
+    {
+      "slug": "upload-bulk-orders",
+      "title": "Uploading orders in bulk",
+      "console": "client",
+      "kind": "short",
+      "section": "B — The everyday job: orders",
+      "order": 2,
+      "summary": "Typing orders in one at a time is fine for a handful. For a day’s worth, Skydrop takes a spreadsheet instead.",
+      "steps": [
+        "Intro",
+        "Open import",
+        "Template",
+        "Choose file",
+        "Preview",
+        "Problem row",
+        "Import",
+        "Processing",
+        "Orders list",
+        "Multi line"
+      ],
+      "durationSeconds": 127,
+      "languages": ["en"],
+      "files": {
+        "en": "upload-bulk-orders.mp4"
+      },
+      "teaches": ["/orders/import"]
+    },
+    {
+      "slug": "find-your-way-around",
+      "title": "Finding your way around",
+      "console": "client",
+      "kind": "short",
+      "section": "A — Day one: before you can sell anything",
+      "order": 1,
+      "summary": "You can find any screen, and you know what the five sidebar sections are for.",
+      "steps": [
+        "Intro",
+        "Dashboard",
+        "Sidebar",
+        "Selling",
+        "Stock",
+        "Money",
+        "Account",
+        "Search",
+        "Quick actions",
+        "Bell",
+        "Strip",
+        "Outro"
+      ],
+      "durationSeconds": 133,
+      "languages": ["en"],
+      "files": {
+        "en": "find-your-way-around.mp4"
+      }
+    },
+    {
+      "slug": "set-up-your-profile",
+      "title": "Setting up your company profile",
+      "console": "client",
+      "kind": "short",
+      "section": "A — Day one: before you can sell anything",
+      "order": 2,
+      "summary": "Skydrop knows who you are, and your logo is on your customers' tracking page.",
+      "steps": [
+        "Intro",
+        "Open profile",
+        "Edit company",
+        "Fixed",
+        "Save company",
+        "Logo pick",
+        "Logo done",
+        "Bank open",
+        "Bank approval"
+      ],
+      "durationSeconds": 107,
+      "languages": ["en"],
+      "files": {
+        "en": "set-up-your-profile.mp4"
+      }
+    },
+    {
+      "slug": "announce-a-consignment",
+      "title": "Telling us stock is coming",
+      "console": "client",
+      "kind": "short",
+      "section": "A — Day one: before you can sell anything",
+      "order": 4,
+      "summary": "You have told Skydrop stock is coming, and you chose the route that decides what you are billed.",
+      "steps": [
+        "Intro",
+        "Open inbound",
+        "Open form",
+        "Route",
+        "Route info",
+        "Route pick",
+        "First line",
+        "Unit cost",
+        "Second line",
+        "Details",
+        "Announce",
+        "Outro"
+      ],
+      "durationSeconds": 131,
+      "languages": ["en"],
+      "files": {
+        "en": "announce-a-consignment.mp4"
+      }
+    },
+    {
+      "slug": "add-a-shopfront",
+      "title": "Selling under more than one name",
+      "console": "client",
+      "kind": "short",
+      "section": "A — Day one: before you can sell anything",
+      "order": 5,
+      "summary": "Say you sell under two names — your own label, and a boutique brand. Skydrop calls each one a store, and this is how you add the second.",
+      "steps": [
+        "Intro",
+        "Open settings",
+        "Open stores",
+        "Shared",
+        "Tiles",
+        "Add",
+        "Name",
+        "Saved",
+        "Close",
+        "Make default",
+        "Outro"
+      ],
+      "durationSeconds": 121,
+      "languages": ["en"],
+      "files": {
+        "en": "add-a-shopfront.mp4"
+      },
+      "teaches": ["/settings/stores"]
+    },
+    {
+      "slug": "set-your-delivery-fee",
+      "title": "The delivery fee your customer pays",
+      "console": "client",
+      "kind": "short",
+      "section": "A — Day one: before you can sell anything",
+      "order": 6,
+      "summary": "Most customers in India pay cash when the parcel arrives, and part of what they hand over is delivery. This is where you set what that normally comes to.",
+      "steps": [
+        "Intro",
+        "Open settings",
+        "Open defaults",
+        "Whose figure",
+        "Not ours",
+        "Type",
+        "Save",
+        "Outro"
+      ],
+      "durationSeconds": 92,
+      "languages": ["en"],
+      "files": {
+        "en": "set-your-delivery-fee.mp4"
+      }
+    },
+    {
+      "slug": "be-told-before-you-run-out",
+      "title": "Being told before you run out",
+      "console": "client",
+      "kind": "short",
+      "section": "C — Stock",
+      "order": 5,
+      "summary": "The worst way to find out a product has run out is a customer ordering one. Skydrop can warn you first, and this is where you say when.",
+      "steps": [
+        "Intro",
+        "Open settings",
+        "State",
+        "Blank vs zero",
+        "Set default",
+        "Saved",
+        "Open variant",
+        "Per sku",
+        "Override",
+        "Outro"
+      ],
+      "durationSeconds": 111,
+      "languages": ["en"],
+      "files": {
+        "en": "be-told-before-you-run-out.mp4"
+      },
+      "teaches": ["/settings/stock"]
+    },
+    {
+      "slug": "keep-a-product-up-to-date",
+      "title": "Keeping a product up to date",
+      "console": "client",
+      "kind": "short",
+      "section": "C — Stock",
+      "order": 3,
+      "summary": "You can change anything about a product except the things that must never change.",
+      "steps": [
+        "Intro",
+        "Open product",
+        "Defaults",
+        "Edit",
+        "Box size",
+        "Saved",
+        "Add variant",
+        "Sku",
+        "Added",
+        "Open variant",
+        "Sku immutable",
+        "Inherit",
+        "Archive",
+        "Restore"
+      ],
+      "durationSeconds": 162,
+      "languages": ["en"],
+      "files": {
+        "en": "keep-a-product-up-to-date.mp4"
+      },
+      "teaches": ["/products/[id]"]
+    },
+    {
+      "slug": "add-product-photos",
+      "title": "Product photos",
+      "console": "client",
+      "kind": "short",
+      "section": "C — Stock",
+      "order": 4,
+      "summary": "Your products have pictures, in the app and on the picking sheet.",
+      "steps": [
+        "Intro",
+        "Open variant",
+        "Empty",
+        "First",
+        "Upload steps",
+        "More",
+        "Gallery",
+        "Order",
+        "Delete",
+        "Gone",
+        "Outro"
+      ],
+      "durationSeconds": 117,
+      "languages": ["en"],
+      "files": {
+        "en": "add-product-photos.mp4"
+      }
+    },
+    {
+      "slug": "invite-a-colleague",
+      "title": "Inviting someone",
+      "console": "client",
+      "kind": "short",
+      "section": "F — Your team, and your account",
+      "order": 1,
+      "summary": "A colleague can sign in, with only the access you meant to give.",
+      "steps": [
+        "Intro",
+        "Open team",
+        "Invite",
+        "Role",
+        "Create",
+        "Link once",
+        "Outstanding",
+        "Resend",
+        "Revoke",
+        "Role change",
+        "Yourself",
+        "Outro"
+      ],
+      "durationSeconds": 134,
+      "languages": ["en"],
+      "files": {
+        "en": "invite-a-colleague.mp4"
+      },
+      "teaches": ["/team"]
+    },
+    {
+      "slug": "take-money-out",
+      "title": "Taking money out",
+      "console": "client",
+      "kind": "short",
+      "section": "E — Money",
+      "order": 3,
+      "summary": "You can request a payout, and set one to happen by itself.",
+      "steps": [
+        "Intro",
+        "Open wallet",
+        "Request",
+        "Amount",
+        "Confirm",
+        "Requested",
+        "Ledger",
+        "Open limits",
+        "Auto",
+        "Hour",
+        "Keep",
+        "Outro"
+      ],
+      "durationSeconds": 128,
+      "languages": ["en"],
+      "files": {
+        "en": "take-money-out.mp4"
+      }
+    },
+    {
+      "slug": "keys-and-webhooks",
+      "title": "API keys and webhooks",
+      "console": "client",
+      "kind": "short",
+      "section": "F — Your team, and your account",
+      "order": 5,
+      "summary": "Your own software can create orders and be told when they move.",
+      "steps": [
+        "Intro",
+        "Open keys",
+        "Issue",
+        "Confirm create",
+        "Once",
+        "List",
+        "Revoke",
+        "Revoked",
+        "Open webhooks",
+        "Endpoint",
+        "Secret",
+        "Rotate",
+        "Auto disabled",
+        "Back on",
+        "Outro"
+      ],
+      "durationSeconds": 166,
+      "languages": ["en"],
+      "files": {
+        "en": "keys-and-webhooks.mp4"
+      },
+      "teaches": ["/settings/api-keys"]
+    },
+    {
+      "slug": "open-a-reseller-store",
+      "title": "Opening a member store",
+      "console": "client",
+      "kind": "short",
+      "section": "G — Reselling",
+      "order": 1,
+      "summary": "You can open a store for someone who will sell your stock under their own name.",
+      "steps": [
+        "Intro",
+        "Open stores",
+        "Open form",
+        "Names",
+        "Contact",
+        "Wallet",
+        "Invite",
+        "Created",
+        "Detail",
+        "Details",
+        "Pause",
+        "Outro"
+      ],
+      "durationSeconds": 139,
+      "languages": ["en"],
+      "files": {
+        "en": "open-a-reseller-store.mp4"
+      },
+      "teaches": ["/reseller-stores"]
+    },
+    {
+      "slug": "set-a-reseller-price",
+      "title": "The price a member store pays",
+      "console": "client",
+      "kind": "short",
+      "section": "G — Reselling",
+      "order": 2,
+      "summary": "Every store has a default transfer price and a retail range.",
+      "steps": [
+        "Intro",
+        "Open list",
+        "Table",
+        "Open form",
+        "Transfer",
+        "Range",
+        "Suggested",
+        "Saved",
+        "Override",
+        "Remove",
+        "Outro"
+      ],
+      "durationSeconds": 125,
+      "languages": ["en"],
+      "files": {
+        "en": "set-a-reseller-price.mp4"
+      },
+      "teaches": ["/reseller-stores/price-list"]
+    },
+    {
+      "slug": "upload-a-catalogue",
+      "title": "Uploading a catalogue from a spreadsheet",
+      "console": "client",
+      "kind": "short",
+      "section": "C — Stock",
+      "order": 6,
+      "summary": "You can load hundreds of products at once, and you never have to rename your own column headers again.",
+      "steps": [
+        "Intro",
+        "Open import",
+        "Template",
+        "Upload",
+        "Matched",
+        "Missing",
+        "Mapping",
+        "Default",
+        "Re upload",
+        "Import",
+        "Running",
+        "Catalogue",
+        "Outro"
+      ],
+      "durationSeconds": 138,
+      "languages": ["en"],
+      "files": {
+        "en": "upload-a-catalogue.mp4"
+      },
+      "teaches": ["/products/import"]
+    },
+    {
+      "slug": "where-is-my-parcel",
+      "title": "Where is my parcel",
+      "console": "client",
+      "kind": "short",
+      "section": "D — When something goes wrong",
+      "order": 1,
+      "summary": "You can answer a customer asking where their parcel is, without ringing anyone.",
+      "steps": [
+        "Intro",
+        "Open tracking",
+        "Tiles",
+        "Register",
+        "Failed",
+        "Coming back",
+        "History",
+        "Search",
+        "Read only",
+        "Outro"
+      ],
+      "durationSeconds": 106,
+      "languages": ["en"],
+      "files": {
+        "en": "where-is-my-parcel.mp4"
+      },
+      "teaches": ["/tracking"]
+    },
+    {
+      "slug": "the-customer-was-not-there",
+      "title": "The customer was not there",
+      "console": "client",
+      "kind": "short",
+      "section": "D — When something goes wrong",
+      "order": 2,
+      "summary": "You know what happens after a failed delivery and what you can ask for.",
+      "steps": [
+        "Intro",
+        "Open order",
+        "Tracker",
+        "Panel",
+        "History",
+        "Ask open",
+        "Reattempt",
+        "Sendback",
+        "Recall",
+        "Reason",
+        "Sent",
+        "Outro"
+      ],
+      "durationSeconds": 136,
+      "languages": ["en"],
+      "files": {
+        "en": "the-customer-was-not-there.mp4"
+      }
+    },
+    {
+      "slug": "what-needs-you-today",
+      "title": "What needs you today",
+      "console": "client",
+      "kind": "short",
+      "section": "D — When something goes wrong",
+      "order": 3,
+      "summary": "You can open one screen in the morning and know what is waiting on you.",
+      "steps": [
+        "Intro",
+        "Open",
+        "Tiles",
+        "Could not reach",
+        "Waiting row",
+        "Overdue",
+        "Chasing",
+        "No buttons",
+        "Through to order",
+        "Outro"
+      ],
+      "durationSeconds": 116,
+      "languages": ["en"],
+      "files": {
+        "en": "what-needs-you-today.mp4"
+      },
+      "teaches": ["/needs-attention"]
+    },
+    {
+      "slug": "the-customer-would-not-answer",
+      "title": "The customer would not answer",
+      "console": "client",
+      "kind": "short",
+      "section": "D — When something goes wrong",
+      "order": 5,
+      "summary": "You can decide what happens to an order our agents could not confirm.",
+      "steps": [
+        "Intro",
+        "Open",
+        "Tiles",
+        "Units",
+        "Register",
+        "Decide open",
+        "Let it go",
+        "Confirm",
+        "Keep trying",
+        "Note",
+        "Send",
+        "Decided"
+      ],
+      "durationSeconds": 143,
+      "languages": ["en"],
+      "files": {
+        "en": "the-customer-would-not-answer.mp4"
+      },
+      "teaches": ["/holds"]
+    },
+    {
+      "slug": "something-arrived-damaged",
+      "title": "Something arrived damaged",
+      "console": "client",
+      "kind": "short",
+      "section": "D — When something goes wrong",
+      "order": 6,
+      "summary": "You can follow a damage claim from the warehouse finding it to the refund landing in your wallet.",
+      "steps": [
+        "Intro",
+        "Open",
+        "Tiles",
+        "Register",
+        "Our ticket",
+        "Refund banner",
+        "Facts",
+        "Conversation",
+        "Wallet link",
+        "Raise",
+        "Describe",
+        "Raised",
+        "Outro"
+      ],
+      "durationSeconds": 146,
+      "languages": ["en"],
+      "files": {
+        "en": "something-arrived-damaged.mp4"
+      },
+      "teaches": ["/tickets"]
+    },
+    {
+      "slug": "what-skydrop-charges",
+      "title": "What Skydrop charges, and what it lets you take out",
+      "console": "client",
+      "kind": "short",
+      "section": "E — Money",
+      "order": 4,
+      "summary": "Every wallet has rules behind it — what you can take out, when money reaches you, what is deducted. They are all on one page, and this is it.",
+      "steps": [
+        "Intro",
+        "Open limits",
+        "Framing",
+        "Withdrawals",
+        "Cod timing",
+        "Deductions",
+        "Charges",
+        "Outro"
+      ],
+      "durationSeconds": 95,
+      "languages": ["en"],
+      "files": {
+        "en": "what-skydrop-charges.mp4"
+      }
+    },
+    {
+      "slug": "pay-money-in",
+      "title": "Putting money into your wallet",
+      "console": "client",
+      "kind": "short",
+      "section": "E — Money",
+      "order": 1,
+      "summary": "Your wallet pays for deliveries, and it is topped up by bank transfer. The one thing to understand first: recording a transfer here is a claim, not a payment.",
+      "steps": [
+        "Intro",
+        "Open wallet",
+        "Choose account",
+        "Pick bd",
+        "Amount",
+        "Evidence",
+        "Submit",
+        "Claim",
+        "Outro"
+      ],
+      "durationSeconds": 102,
+      "languages": ["en"],
+      "files": {
+        "en": "pay-money-in.mp4"
+      }
+    },
+    {
+      "slug": "build-a-role",
+      "title": "Building a role that fits your team",
+      "console": "client",
+      "kind": "short",
+      "section": "F — Your team, and your account",
+      "order": 2,
+      "summary": "Most systems give you three fixed roles and leave you to fit your business around them. Skydrop lets you invent the ones you actually need.",
+      "steps": [
+        "Intro",
+        "Open roles",
+        "The list",
+        "New role",
+        "Purpose",
+        "Groups",
+        "Search",
+        "Pick",
+        "Sensitive",
+        "Save",
+        "Remove",
+        "Owner",
+        "Outro"
+      ],
+      "durationSeconds": 140,
+      "languages": ["en"],
+      "files": {
+        "en": "build-a-role.mp4"
+      },
+      "teaches": ["/team/roles"]
+    },
+    {
+      "slug": "sign-out-everywhere",
+      "title": "Sign-in and sessions",
+      "console": "client",
+      "kind": "short",
+      "section": "F — Your team, and your account",
+      "order": 3,
+      "summary": "A laptop left at a desk, a phone sold, someone who has left the company. This is the page for the moment you need every session on the account to end.",
+      "steps": [
+        "Intro",
+        "Open security",
+        "This session",
+        "No list",
+        "What it does",
+        "Not touched",
+        "Confirm",
+        "Done"
+      ],
+      "durationSeconds": 86,
+      "languages": ["en"],
+      "files": {
+        "en": "sign-out-everywhere.mp4"
+      },
+      "teaches": ["/settings/security"]
+    },
+    {
+      "slug": "ask-for-a-parcel-back",
+      "title": "Asking for a parcel back",
+      "console": "client",
+      "kind": "short",
+      "section": "D — When something goes wrong",
+      "order": 4,
+      "summary": "You can turn a parcel round, and you know the fee before you do.",
+      "steps": [
+        "Intro",
+        "Open live",
+        "On order",
+        "Ask open",
+        "Pick sendback",
+        "The fee",
+        "Reason",
+        "Confirm",
+        "Sent",
+        "Open delivered",
+        "Request return",
+        "Return dialog",
+        "Return reason",
+        "Booked",
+        "Outro"
+      ],
+      "durationSeconds": 172,
+      "languages": ["en"],
+      "files": {
+        "en": "ask-for-a-parcel-back.mp4"
+      }
+    },
+    {
+      "slug": "read-your-wallet",
+      "title": "Reading your wallet",
+      "console": "client",
+      "kind": "short",
+      "section": "E — Money",
+      "order": 2,
+      "summary": "You can tell what you have from what you have merely asked for.",
+      "steps": [
+        "Intro",
+        "Open",
+        "Balance",
+        "Rate",
+        "Three tabs",
+        "Ledger is truth",
+        "Columns",
+        "Charges",
+        "Cod",
+        "Cod timing",
+        "Gst",
+        "Refund",
+        "Topups",
+        "Withdrawals",
+        "Export",
+        "Outro"
+      ],
+      "durationSeconds": 183,
+      "languages": ["en"],
+      "files": {
+        "en": "read-your-wallet.mp4"
+      }
+    },
+    {
+      "slug": "what-one-store-sells",
+      "title": "What one store sells",
+      "console": "client",
+      "kind": "short",
+      "section": "G — Reselling",
+      "order": 3,
+      "summary": "You can decide which products a store sees, at what price, and how much of your stock it may have.",
+      "steps": [
+        "Intro",
+        "Open store",
+        "Table",
+        "Sold here",
+        "Price source",
+        "Edit open",
+        "Enable",
+        "Own price",
+        "Price fields",
+        "Stock shared",
+        "Stock setaside",
+        "Hidden",
+        "Overlay",
+        "Confirm",
+        "Result",
+        "Outro"
+      ],
+      "durationSeconds": 178,
+      "languages": ["en"],
+      "files": {
+        "en": "what-one-store-sells.mp4"
+      }
+    },
+    {
+      "slug": "the-deal",
+      "title": "The deal with a member store",
+      "console": "client",
+      "kind": "short",
+      "section": "G — Reselling",
+      "order": 4,
+      "summary": "You can publish terms and see exactly who pays what.",
+      "steps": [
+        "Intro",
+        "Open terms",
+        "Fees intro",
+        "Delivery share",
+        "Live example",
+        "Returns",
+        "Cod",
+        "Example table",
+        "Store credit",
+        "Seller credit",
+        "Note",
+        "Publish",
+        "In force",
+        "Versions",
+        "Outro"
+      ],
+      "durationSeconds": 171,
+      "languages": ["en"],
+      "files": {
+        "en": "the-deal.mp4"
+      }
+    },
+    {
+      "slug": "what-a-store-may-do",
+      "title": "What a store may do without asking",
+      "console": "client",
+      "kind": "short",
+      "section": "G — Reselling",
+      "order": 5,
+      "summary": "You decide, per task, whether a store acts directly or needs your approval.",
+      "steps": [
+        "Intro",
+        "Open tab",
+        "Two questions",
+        "Row anatomy",
+        "Recall",
+        "Recall direct",
+        "Sendback on",
+        "Sendback direct",
+        "Sendback ask",
+        "Cancel off",
+        "Save",
+        "Saved",
+        "Told",
+        "Outro"
+      ],
+      "durationSeconds": 163,
+      "languages": ["en"],
+      "files": {
+        "en": "what-a-store-may-do.mp4"
+      }
+    },
+    {
+      "slug": "answer-what-a-store-asked",
+      "title": "Answering what a store has asked",
+      "console": "client",
+      "kind": "short",
+      "section": "G — Reselling",
+      "order": 6,
+      "summary": "You can clear the queue of decisions stores are waiting on.",
+      "steps": [
+        "Intro",
+        "Open queue",
+        "Three queues",
+        "Only held",
+        "Cancel row",
+        "Approve open",
+        "Approved",
+        "Issue row",
+        "Delivery row",
+        "Reject open",
+        "Reject type",
+        "Rejected",
+        "Change row",
+        "Outro"
+      ],
+      "durationSeconds": 156,
+      "languages": ["en"],
+      "files": {
+        "en": "answer-what-a-store-asked.mp4"
+      },
+      "teaches": ["/reseller-stores/requests"]
+    },
+    {
+      "slug": "how-your-stores-are-doing",
+      "title": "How your member stores are doing",
+      "console": "client",
+      "kind": "short",
+      "section": "G — Reselling",
+      "order": 7,
+      "summary": "You can see what each member store is doing to your goods and your money, and stop one that keeps sending them back.",
+      "steps": [
+        "Intro",
+        "Open reports",
+        "Cards",
+        "Coverage",
+        "Window",
+        "Scorecard rates",
+        "Margin column",
+        "Ranking",
+        "Timing",
+        "Transfer revenue",
+        "Auto pause open",
+        "Auto pause fields",
+        "Forecast",
+        "Outro"
+      ],
+      "durationSeconds": 167,
+      "languages": ["en"],
+      "files": {
+        "en": "how-your-stores-are-doing.mp4"
+      },
+      "teaches": ["/reseller-stores/reports"]
+    },
+    {
+      "slug": "finding-an-order",
+      "title": "Finding an order",
+      "console": "client",
+      "kind": "short",
+      "section": "B — The everyday job: orders",
+      "order": 4,
+      "summary": "You can find any order by any handle you have, and send someone a link to what you are looking at.",
+      "steps": [
+        "Intro",
+        "Open orders",
+        "Tiles",
+        "Search what",
+        "Search do",
+        "Reload",
+        "Reset",
+        "Chips",
+        "Chip click",
+        "Placed when",
+        "Store",
+        "Columns",
+        "Paging",
+        "Outro"
+      ],
+      "durationSeconds": 158,
+      "languages": ["en"],
+      "files": {
+        "en": "finding-an-order.mp4"
+      },
+      "teaches": ["/orders"]
+    },
+    {
+      "slug": "reading-an-order",
+      "title": "Reading an order",
+      "console": "client",
+      "kind": "short",
+      "section": "B — The everyday job: orders",
+      "order": 5,
+      "summary": "You can tell where a parcel is and what it has cost you, from the order page alone.",
+      "steps": [
+        "Intro",
+        "Open order",
+        "Four facts",
+        "Tracker",
+        "Tracker detail",
+        "Recipient",
+        "Payment",
+        "Items",
+        "Charges",
+        "Invoice",
+        "Parcel",
+        "Parcel figures",
+        "History",
+        "Outro"
+      ],
+      "durationSeconds": 167,
+      "languages": ["en"],
+      "files": {
+        "en": "reading-an-order.mp4"
+      },
+      "teaches": ["/orders/[id]"]
+    },
+    {
+      "slug": "changing-an-order",
+      "title": "Changing an order before it is confirmed",
+      "console": "client",
+      "kind": "short",
+      "section": "B — The everyday job: orders",
+      "order": 6,
+      "summary": "You can correct anything about an order until the call centre confirms it, and you know when that window shuts.",
+      "steps": [
+        "Intro",
+        "Open draft",
+        "Edit",
+        "Rail",
+        "Items",
+        "Quantity",
+        "Cod warning",
+        "Use figure",
+        "Recipient",
+        "Landmark",
+        "Notes",
+        "Bar",
+        "Submit",
+        "Outro"
+      ],
+      "durationSeconds": 152,
+      "languages": ["en"],
+      "files": {
+        "en": "changing-an-order.mp4"
+      },
+      "teaches": ["/orders/[id]/edit"]
+    },
+    {
+      "slug": "cancelling-an-order",
+      "title": "Cancelling an order",
+      "console": "client",
+      "kind": "short",
+      "section": "B — The everyday job: orders",
+      "order": 7,
+      "summary": "You can call an order off, and you know what it costs at each stage.",
+      "steps": [
+        "Intro",
+        "Open pending",
+        "Buttons",
+        "Dialog",
+        "Consequence pending",
+        "Reason",
+        "Confirm",
+        "History",
+        "Open confirmed",
+        "Tracker",
+        "Cancel confirmed",
+        "Consequence confirmed",
+        "Confirm confirmed",
+        "Window",
+        "Outro"
+      ],
+      "durationSeconds": 164,
+      "languages": ["en"],
+      "files": {
+        "en": "cancelling-an-order.mp4"
+      }
+    },
+    {
+      "slug": "fix-the-rows-that-failed",
+      "title": "Fixing the rows that would not import",
+      "console": "client",
+      "kind": "short",
+      "section": "B — The everyday job: orders",
+      "order": 3,
+      "summary": "Every row of your spreadsheet becomes an order, including the ones the check refused.",
+      "steps": [
+        "Intro",
+        "Pending button",
+        "Open",
+        "Tiles",
+        "Band",
+        "Problem",
+        "Fix",
+        "Buttons",
+        "Discard",
+        "Keep",
+        "Confirm",
+        "Empty",
+        "Outro"
+      ],
+      "durationSeconds": 138,
+      "languages": ["en"],
+      "files": {
+        "en": "fix-the-rows-that-failed.mp4"
+      },
+      "teaches": ["/orders/pending"]
+    },
+    {
+      "slug": "quieten-your-notifications",
+      "title": "What Skydrop tells you, and how to quieten it",
+      "console": "client",
+      "kind": "short",
+      "section": "F — Your team, and your account",
+      "order": 4,
+      "summary": "You get the notifications you want and none of the ones you do not.",
+      "steps": [
+        "Intro",
+        "Inbox",
+        "Counts",
+        "Filters",
+        "Message",
+        "Open",
+        "Unread",
+        "Dismiss",
+        "Settings",
+        "Tiles",
+        "Yours",
+        "Off",
+        "Company",
+        "Outro"
+      ],
+      "durationSeconds": 160,
+      "languages": ["en"],
+      "files": {
+        "en": "quieten-your-notifications.mp4"
+      },
+      "teaches": ["/notifications"]
+    },
+    {
+      "slug": "follow-a-consignment",
+      "title": "Following a consignment from Dhaka to the shelf",
+      "console": "client",
+      "kind": "short",
+      "section": "C — Stock",
+      "order": 1,
+      "summary": "You can tell where your goods are and why two counts exist.",
+      "steps": [
+        "Intro",
+        "Register",
+        "Tiles",
+        "Open",
+        "Route",
+        "Detail tiles",
+        "Timeline",
+        "Dhaka",
+        "Dhaka lines",
+        "India",
+        "India lines",
+        "Why two",
+        "Freight",
+        "Outro"
+      ],
+      "durationSeconds": 156,
+      "languages": ["en"],
+      "files": {
+        "en": "follow-a-consignment.mp4"
+      },
+      "teaches": ["/inbound", "/inbound/[id]"]
+    },
+    {
+      "slug": "read-your-stock",
+      "title": "Reading your stock",
+      "console": "client",
+      "kind": "short",
+      "section": "C — Stock",
+      "order": 2,
+      "summary": "You can tell what is sellable today from what is merely yours.",
+      "steps": [
+        "Intro",
+        "Open",
+        "India",
+        "Held",
+        "Transit",
+        "Value",
+        "Uncovered",
+        "Register",
+        "Row",
+        "Transit column",
+        "Low",
+        "Outro"
+      ],
+      "durationSeconds": 149,
+      "languages": ["en"],
+      "files": {
+        "en": "read-your-stock.mp4"
+      },
+      "teaches": ["/inventory"]
+    },
+    {
+      "slug": "what-the-freight-cost",
+      "title": "What the freight cost",
+      "console": "client",
+      "kind": "short",
+      "section": "E — Money",
+      "order": 5,
+      "summary": "You understand why a freight bill is only partly owed.",
+      "steps": [
+        "Intro",
+        "Open",
+        "Owed",
+        "Billed",
+        "Units",
+        "Terms",
+        "Total",
+        "Progress",
+        "Tabs",
+        "Note",
+        "Consignment",
+        "Panel",
+        "Service",
+        "Invoice",
+        "Timeline",
+        "Outro"
+      ],
+      "durationSeconds": 192,
+      "languages": ["en"],
+      "files": {
+        "en": "what-the-freight-cost.mp4"
+      },
+      "teaches": ["/freight"]
+    },
+    {
+      "slug": "what-we-cannot-undo",
+      "title": "What we cannot undo",
+      "console": "admin",
+      "kind": "short",
+      "section": "P — The dangerous five",
+      "order": 5,
+      "summary": "You can name every irreversible act in the admin app and say what it costs.",
+      "steps": [
+        "Intro",
+        "God mode",
+        "God mode stock",
+        "Receive",
+        "Force outcome",
+        "Pack",
+        "Pickups",
+        "Rto",
+        "Bins",
+        "Topups",
+        "Bank change",
+        "Month",
+        "Outro"
+      ],
+      "durationSeconds": 170,
+      "languages": ["en"],
+      "files": {
+        "en": "what-we-cannot-undo.mp4"
+      },
+      "teaches": [
+        "/bank-changes",
+        "/call-center/queue",
+        "/orders",
+        "/pnl/carry-forward",
+        "/topups",
+        "/warehouse/bins",
+        "/warehouse/pack",
+        "/warehouse/pickups",
+        "/warehouse/receive",
+        "/warehouse/rto"
+      ]
+    },
+    {
+      "slug": "the-ops-dashboard",
+      "title": "What needs a person today",
+      "console": "admin",
+      "kind": "short",
+      "section": "H — Your first day on the ops desk",
+      "order": 1,
+      "summary": "You can open one screen and know what needs a person today.",
+      "steps": [
+        "Intro",
+        "Attention",
+        "Call centre",
+        "Merchant",
+        "Warehouse",
+        "Quiet",
+        "Support",
+        "Settlements",
+        "Performance",
+        "Rates",
+        "Money",
+        "Outstanding",
+        "Outro"
+      ],
+      "durationSeconds": 157,
+      "languages": ["en"],
+      "files": {
+        "en": "the-ops-dashboard.mp4"
+      },
+      "teaches": ["/dashboard"]
+    },
+    {
+      "slug": "find-an-order",
+      "title": "Reading an order",
+      "console": "admin",
+      "kind": "short",
+      "section": "H — Your first day on the ops desk",
+      "order": 2,
+      "summary": "You can answer any question about one order from its page.",
+      "steps": [
+        "Intro",
+        "Filters",
+        "Search",
+        "Open",
+        "Snapshot",
+        "Reputation",
+        "Payment",
+        "Items",
+        "Charges",
+        "Parcel",
+        "Tracker",
+        "History",
+        "Attempt",
+        "Outro"
+      ],
+      "durationSeconds": 173,
+      "languages": ["en"],
+      "files": {
+        "en": "find-an-order.mp4"
+      },
+      "teaches": ["/orders"]
+    },
+    {
+      "slug": "the-permission-model",
+      "title": "Who can see what",
+      "console": "admin",
+      "kind": "short",
+      "section": "H — Your first day on the ops desk",
+      "order": 4,
+      "summary": "You understand why someone cannot see a screen, and you can fix it safely.",
+      "steps": [
+        "Intro",
+        "Roles",
+        "List",
+        "Superadmin",
+        "Open",
+        "Counts",
+        "Groups",
+        "Dangerous",
+        "Search",
+        "Lookalike",
+        "Cancel",
+        "Boundary",
+        "Outro"
+      ],
+      "durationSeconds": 161,
+      "languages": ["en"],
+      "files": {
+        "en": "the-permission-model.mp4"
+      },
+      "teaches": ["/roles"]
+    },
+    {
+      "slug": "things-the-system-has-raised",
+      "title": "Things the system has raised",
+      "console": "admin",
+      "kind": "short",
+      "section": "H — Your first day on the ops desk",
+      "order": 3,
+      "summary": "You can work the system-issue queue and know which to act on first.",
+      "steps": [
+        "Intro",
+        "Why",
+        "Counts",
+        "Severity",
+        "Detail",
+        "Link",
+        "Meta",
+        "Acknowledge",
+        "Medium",
+        "Closedialog",
+        "Cancelclose",
+        "History",
+        "Notify",
+        "Outro"
+      ],
+      "durationSeconds": 181,
+      "languages": ["en"],
+      "files": {
+        "en": "things-the-system-has-raised.mp4"
+      },
+      "teaches": ["/system-issues"]
+    },
+    {
+      "slug": "taking-calls",
+      "title": "Taking calls",
+      "console": "admin",
+      "kind": "short",
+      "section": "I — The call centre",
+      "order": 1,
+      "summary": "You can work the call queue from your first shift.",
+      "steps": [
+        "Intro",
+        "Availability",
+        "Start",
+        "Arrives",
+        "Purpose",
+        "Risk",
+        "Recipient",
+        "Outcome",
+        "Permanent",
+        "Note",
+        "Record",
+        "Next",
+        "Release",
+        "Stop"
+      ],
+      "durationSeconds": 172,
+      "languages": ["en"],
+      "files": {
+        "en": "taking-calls.mp4"
+      },
+      "teaches": ["/call-center"]
+    },
+    {
+      "slug": "supervising-the-queue",
+      "title": "Supervising the queue",
+      "console": "admin",
+      "kind": "short",
+      "section": "I — The call centre",
+      "order": 2,
+      "summary": "You can see what is waiting, who holds it, and move it.",
+      "steps": [
+        "Intro",
+        "Tiles",
+        "Filter",
+        "Row",
+        "Stuck",
+        "Reassign",
+        "Pick",
+        "Moved",
+        "Reschedule",
+        "When",
+        "Rescheduled",
+        "Force",
+        "Agents",
+        "Holding",
+        "Capacity",
+        "Outro"
+      ],
+      "durationSeconds": 197,
+      "languages": ["en"],
+      "files": {
+        "en": "supervising-the-queue.mp4"
+      },
+      "teaches": ["/call-center/agents", "/call-center/queue"]
+    },
+    {
+      "slug": "forcing-an-outcome",
+      "title": "Forcing an outcome on a stuck call",
+      "console": "admin",
+      "kind": "short",
+      "section": "I — The call centre",
+      "order": 3,
+      "summary": "You can close a call nobody can complete, and you know exactly what it writes.",
+      "steps": [
+        "Intro",
+        "Why",
+        "Open",
+        "Same",
+        "Permanent",
+        "Outcomes",
+        "Confirmed",
+        "Declined",
+        "When",
+        "Notes",
+        "Record",
+        "Landed",
+        "Gone",
+        "Outro"
+      ],
+      "durationSeconds": 170,
+      "languages": ["en"],
+      "files": {
+        "en": "forcing-an-outcome.mp4"
+      },
+      "teaches": ["/call-center/queue"]
+    },
+    {
+      "slug": "sellers-asking-to-call-again",
+      "title": "Clients asking us to call again",
+      "console": "admin",
+      "kind": "short",
+      "section": "I — The call centre",
+      "order": 4,
+      "summary": "You can decide a re-attempt request.",
+      "steps": [
+        "Intro",
+        "Why",
+        "Card",
+        "Read",
+        "Approve",
+        "Extra",
+        "Note",
+        "Approved",
+        "Second",
+        "Decline",
+        "Declined",
+        "History",
+        "Outro"
+      ],
+      "durationSeconds": 150,
+      "languages": ["en"],
+      "files": {
+        "en": "sellers-asking-to-call-again.mp4"
+      },
+      "teaches": ["/reattempt-requests"]
+    },
+    {
+      "slug": "where-things-live",
+      "title": "Where things live",
+      "console": "admin",
+      "kind": "short",
+      "section": "J — The warehouse floor",
+      "order": 1,
+      "summary": "You can build a warehouse's locations and know what the tracking switch does.",
+      "steps": [
+        "Intro",
+        "Overview",
+        "Holds",
+        "Building",
+        "Tracking",
+        "Compose",
+        "Preview",
+        "Added",
+        "On",
+        "Notcollapse",
+        "Off",
+        "Move",
+        "Collapse",
+        "Outro"
+      ],
+      "durationSeconds": 171,
+      "languages": ["en"],
+      "files": {
+        "en": "where-things-live.mp4"
+      },
+      "teaches": ["/warehouse/bins"]
+    },
+    {
+      "slug": "receive-a-consignment",
+      "title": "Receiving a consignment",
+      "console": "admin",
+      "kind": "short",
+      "section": "J — The warehouse floor",
+      "order": 2,
+      "summary": "You can count goods in and write them to stock.",
+      "steps": [
+        "Intro",
+        "Queue",
+        "Open",
+        "Declared",
+        "Start",
+        "Fields",
+        "Exact",
+        "Short",
+        "Recorded",
+        "Confirm",
+        "Variance",
+        "Written",
+        "Labels",
+        "Outro"
+      ],
+      "durationSeconds": 163,
+      "languages": ["en"],
+      "files": {
+        "en": "receive-a-consignment.mp4"
+      },
+      "teaches": ["/warehouse/receive"]
+    },
+    {
+      "slug": "print-and-pick",
+      "title": "Labels and the picking sheet",
+      "console": "admin",
+      "kind": "short",
+      "section": "J — The warehouse floor",
+      "order": 3,
+      "summary": "You can get a day's parcels printed and picked.",
+      "steps": [
+        "Intro",
+        "Order",
+        "Queue",
+        "Select",
+        "Printed",
+        "Confirm",
+        "Picking",
+        "List",
+        "Allocates",
+        "Batches",
+        "Walk",
+        "Strict",
+        "Outro"
+      ],
+      "durationSeconds": 152,
+      "languages": ["en"],
+      "files": {
+        "en": "print-and-pick.mp4"
+      },
+      "teaches": ["/warehouse/printing"]
+    },
+    {
+      "slug": "pack-a-parcel",
+      "title": "Packing a parcel",
+      "console": "admin",
+      "kind": "short",
+      "section": "J — The warehouse floor",
+      "order": 4,
+      "summary": "You can pack a box so that what is inside it is what was ordered.",
+      "steps": [
+        "Intro",
+        "Queue",
+        "Open",
+        "Lines",
+        "First",
+        "Set",
+        "Toomany",
+        "Fixed",
+        "Third",
+        "Close",
+        "Manifest",
+        "Second",
+        "Cancel",
+        "Cancelled",
+        "Outro"
+      ],
+      "durationSeconds": 191,
+      "languages": ["en"],
+      "files": {
+        "en": "pack-a-parcel.mp4"
+      },
+      "teaches": ["/warehouse/manifests", "/warehouse/pack"]
+    },
+    {
+      "slug": "pack-without-scanning",
+      "title": "Packing without a scan",
+      "console": "admin",
+      "kind": "short",
+      "section": "J — The warehouse floor",
+      "order": 5,
+      "summary": "You can get a parcel out when the label will not scan, and you know what you gave up.",
+      "steps": [
+        "Intro",
+        "Open",
+        "Stuck",
+        "Hatch",
+        "Who",
+        "Cost",
+        "Short",
+        "Reason",
+        "Press",
+        "Recorded",
+        "Outro"
+      ],
+      "durationSeconds": 136,
+      "languages": ["en"],
+      "files": {
+        "en": "pack-without-scanning.mp4"
+      },
+      "teaches": ["/warehouse/pack"]
+    },
+    {
+      "slug": "hand-over-to-the-courier",
+      "title": "Handing parcels to the courier",
+      "console": "admin",
+      "kind": "short",
+      "section": "J — The warehouse floor",
+      "order": 6,
+      "summary": "You can dispatch a van-load and know every parcel is accounted for.",
+      "steps": [
+        "Intro",
+        "Waiting",
+        "First",
+        "Why",
+        "Second",
+        "Manifest",
+        "Again",
+        "Stop",
+        "Operator",
+        "Clear",
+        "Outro"
+      ],
+      "durationSeconds": 132,
+      "languages": ["en"],
+      "files": {
+        "en": "hand-over-to-the-courier.mp4"
+      },
+      "teaches": ["/warehouse/handover"]
+    },
+    {
+      "slug": "book-the-van",
+      "title": "Booking the van",
+      "console": "admin",
+      "kind": "short",
+      "section": "J — The warehouse floor",
+      "order": 7,
+      "summary": "You can raise a pickup, and you know when freeing a day is dangerous.",
+      "steps": [
+        "Intro",
+        "Grain",
+        "Row",
+        "Close",
+        "Failed",
+        "Danger",
+        "Probably",
+        "Check",
+        "Raise",
+        "Outro"
+      ],
+      "durationSeconds": 113,
+      "languages": ["en"],
+      "files": {
+        "en": "book-the-van.mp4"
+      },
+      "teaches": ["/warehouse/pickups"]
+    },
+    {
+      "slug": "what-went-out-together",
+      "title": "Manifests",
+      "console": "admin",
+      "kind": "short",
+      "section": "J — The warehouse floor",
+      "order": 8,
+      "summary": "You can answer \"what went out on Tuesday's van\".",
+      "steps": [
+        "Intro",
+        "Columns",
+        "Filter",
+        "Draft",
+        "Open",
+        "Shipments",
+        "Move",
+        "Why",
+        "Close",
+        "Outro"
+      ],
+      "durationSeconds": 120,
+      "languages": ["en"],
+      "files": {
+        "en": "what-went-out-together.mp4"
+      },
+      "teaches": ["/warehouse/manifests"]
+    },
+    {
+      "slug": "take-a-return-in",
+      "title": "Taking a return in",
+      "console": "admin",
+      "kind": "short",
+      "section": "K — Returns",
+      "order": 1,
+      "summary": "You can book a returned parcel in at the door.",
+      "steps": [
+        "Intro",
+        "Door",
+        "Why",
+        "Transit",
+        "Bench",
+        "Pick",
+        "Receive",
+        "Hold",
+        "Lines",
+        "Outro"
+      ],
+      "durationSeconds": 122,
+      "languages": ["en"],
+      "files": {
+        "en": "take-a-return-in.mp4"
+      },
+      "teaches": ["/warehouse/rto"]
+    },
+    {
+      "slug": "inspect-and-finalise-a-return",
+      "title": "Inspecting and finalising",
+      "console": "admin",
+      "kind": "short",
+      "section": "K — Returns",
+      "order": 2,
+      "summary": "You can decide what happens to each unit that came back.",
+      "steps": [
+        "Intro",
+        "Open",
+        "Where",
+        "Condition",
+        "Choices",
+        "Mismatch",
+        "Split",
+        "Arith",
+        "Good",
+        "Aside",
+        "Save",
+        "Confirm",
+        "Press",
+        "Outro"
+      ],
+      "durationSeconds": 169,
+      "languages": ["en"],
+      "files": {
+        "en": "inspect-and-finalise-a-return.mp4"
+      },
+      "teaches": ["/warehouse/rto"]
+    },
+    {
+      "slug": "correct-a-count",
+      "title": "Adjusting stock",
+      "console": "admin",
+      "kind": "short",
+      "section": "L — Correcting stock",
+      "order": 1,
+      "summary": "You can correct a count, and you know which corrections need a second person.",
+      "steps": [
+        "Intro",
+        "Tiles",
+        "Open",
+        "Facts",
+        "Why",
+        "Choices",
+        "Approve",
+        "History",
+        "Form",
+        "Held",
+        "Bin",
+        "Prefilled",
+        "Cost",
+        "Raise",
+        "Outro"
+      ],
+      "durationSeconds": 184,
+      "languages": ["en"],
+      "files": {
+        "en": "correct-a-count.mp4"
+      },
+      "teaches": ["/inventory/adjustments", "/warehouse/bins"]
+    },
+    {
+      "slug": "how-seller-money-works",
+      "title": "How client money works",
+      "console": "admin",
+      "kind": "short",
+      "section": "N — Money",
+      "order": 1,
+      "summary": "You can read a client's wallet and explain any line in it.",
+      "steps": [
+        "Intro",
+        "Owed",
+        "Not yet",
+        "Row",
+        "Balance",
+        "Held",
+        "Rules",
+        "Ledger",
+        "Topup",
+        "Cod",
+        "Gst",
+        "Charges",
+        "Refund",
+        "Tabs",
+        "Outro"
+      ],
+      "durationSeconds": 195,
+      "languages": ["en"],
+      "files": {
+        "en": "how-seller-money-works.mp4"
+      },
+      "teaches": ["/seller-wallets"]
+    },
+    {
+      "slug": "is-the-money-picture-true",
+      "title": "Is the money picture true",
+      "console": "admin",
+      "kind": "short",
+      "section": "N — Money",
+      "order": 9,
+      "summary": "You can tell how much of the P&L is measured and how much is missing.",
+      "steps": [
+        "Intro",
+        "Headline",
+        "Honest",
+        "Sources",
+        "Delivery",
+        "Quoted",
+        "Open",
+        "Returns",
+        "Lines",
+        "Drill",
+        "Costsync",
+        "Silence",
+        "Counts",
+        "Runs",
+        "Outro"
+      ],
+      "durationSeconds": 205,
+      "languages": ["en"],
+      "files": {
+        "en": "is-the-money-picture-true.mp4"
+      },
+      "teaches": ["/cost-sync", "/pnl"]
+    },
+    {
+      "slug": "count-the-shelves",
+      "title": "Counting stock",
+      "console": "admin",
+      "kind": "short",
+      "section": "L — Correcting stock",
+      "order": 2,
+      "summary": "You can run a cycle count and turn its differences into adjustments.",
+      "steps": [
+        "Intro",
+        "Tiles",
+        "Schedule",
+        "Scope",
+        "Open",
+        "Start",
+        "Ids",
+        "Record",
+        "Diff",
+        "Button",
+        "Complete",
+        "Queue",
+        "Outro"
+      ],
+      "durationSeconds": 157,
+      "languages": ["en"],
+      "files": {
+        "en": "count-the-shelves.mp4"
+      },
+      "teaches": ["/inventory/adjustments", "/inventory/cycle-counts"]
+    },
+    {
+      "slug": "accept-a-top-up",
+      "title": "Accepting a top-up",
+      "console": "admin",
+      "kind": "short",
+      "section": "N — Money",
+      "order": 2,
+      "summary": "You can credit a client for money that has actually arrived.",
+      "steps": [
+        "Intro",
+        "Stakes",
+        "Row",
+        "Account",
+        "Evidence",
+        "Statement",
+        "Accept",
+        "Warning",
+        "Note",
+        "Credit",
+        "Credited",
+        "Reject",
+        "Outro"
+      ],
+      "durationSeconds": 149,
+      "languages": ["en"],
+      "files": {
+        "en": "accept-a-top-up.mp4"
+      },
+      "teaches": ["/topups"]
+    },
+    {
+      "slug": "pay-a-seller-out",
+      "title": "Paying a client out",
+      "console": "admin",
+      "kind": "short",
+      "section": "N — Money",
+      "order": 3,
+      "summary": "You can take a withdrawal request through to money leaving the bank.",
+      "steps": [
+        "Intro",
+        "Request",
+        "Rule",
+        "Approve",
+        "Confirm",
+        "Approved",
+        "Remittances",
+        "Destination",
+        "Cover",
+        "Currencies",
+        "Rate",
+        "Fee",
+        "Reference",
+        "Record",
+        "Outro"
+      ],
+      "durationSeconds": 195,
+      "languages": ["en"],
+      "files": {
+        "en": "pay-a-seller-out.mp4"
+      },
+      "teaches": ["/remittances", "/withdrawals"]
+    },
+    {
+      "slug": "approve-a-bank-change",
+      "title": "Approving a change of bank account",
+      "console": "admin",
+      "kind": "short",
+      "section": "N — Money",
+      "order": 4,
+      "summary": "You can approve a client's new bank details safely.",
+      "steps": [
+        "Intro",
+        "Until",
+        "First",
+        "Diff",
+        "Number",
+        "Attack",
+        "Verify",
+        "Open",
+        "Undo",
+        "Approve",
+        "After",
+        "Outro"
+      ],
+      "durationSeconds": 154,
+      "languages": ["en"],
+      "files": {
+        "en": "approve-a-bank-change.mp4"
+      },
+      "teaches": ["/bank-changes", "/withdrawals"]
+    },
+    {
+      "slug": "record-a-courier-payout",
+      "title": "Recording what the courier paid us",
+      "console": "admin",
+      "kind": "short",
+      "section": "N — Money",
+      "order": 5,
+      "summary": "You can record a COD payout and match it to the orders it covers.",
+      "steps": [
+        "Intro",
+        "Float",
+        "Window",
+        "Record",
+        "Reference",
+        "Allocate",
+        "Expected",
+        "Short",
+        "Reversal",
+        "Credit",
+        "Ledger",
+        "Unexplained",
+        "Outro"
+      ],
+      "durationSeconds": 170,
+      "languages": ["en"],
+      "files": {
+        "en": "record-a-courier-payout.mp4"
+      },
+      "teaches": ["/seller-wallets", "/settlements"]
+    },
+    {
+      "slug": "move-money-by-hand",
+      "title": "Moving money by hand",
+      "console": "admin",
+      "kind": "short",
+      "section": "N — Money",
+      "order": 6,
+      "summary": "You can correct a wallet with a reason the client will read.",
+      "steps": [
+        "Intro",
+        "Notacorrection",
+        "Seller",
+        "Direction",
+        "Debit",
+        "Reason",
+        "Internal",
+        "Preview",
+        "Numbers",
+        "Confirm",
+        "Post",
+        "History",
+        "Outro"
+      ],
+      "durationSeconds": 160,
+      "languages": ["en"],
+      "files": {
+        "en": "move-money-by-hand.mp4"
+      },
+      "teaches": ["/seller-wallets", "/wallet-transfers"]
+    },
+    {
+      "slug": "the-bank-book",
+      "title": "The bank book",
+      "console": "admin",
+      "kind": "short",
+      "section": "N — Money",
+      "order": 7,
+      "summary": "You can keep the treasury agreeing with the statements.",
+      "steps": [
+        "Intro",
+        "Owed",
+        "Held",
+        "Covered",
+        "Accounts",
+        "Inside",
+        "Movements",
+        "Transfer",
+        "Ownermoney",
+        "Reconcile",
+        "Opening",
+        "Why",
+        "Post",
+        "After",
+        "Outro"
+      ],
+      "durationSeconds": 219,
+      "languages": ["en"],
+      "files": {
+        "en": "the-bank-book.mp4"
+      },
+      "teaches": ["/treasury"]
+    },
+    {
+      "slug": "god-mode",
+      "title": "God mode",
+      "console": "admin",
+      "kind": "short",
+      "section": "P — The dangerous five",
+      "order": 1,
+      "summary": "You can force an order into a state the rules forbid, and you know everything that follows.",
+      "steps": [
+        "Intro",
+        "Stuck",
+        "Panel",
+        "Open",
+        "Consequences",
+        "Waybill",
+        "Whitelist",
+        "Field",
+        "Status",
+        "Reason",
+        "Ack",
+        "Typed",
+        "Press",
+        "Result",
+        "Claim",
+        "Release",
+        "Badge",
+        "Outro"
+      ],
+      "durationSeconds": 230,
+      "languages": ["en"],
+      "files": {
+        "en": "god-mode.mp4"
+      },
+      "teaches": ["/orders", "/orders/[id]"]
+    },
+    {
+      "slug": "live-courier-writes",
+      "title": "Live courier writes",
+      "console": "admin",
+      "kind": "short",
+      "section": "P — The dangerous five",
+      "order": 2,
+      "summary": "You can cancel a waybill, re-attempt a delivery or record a scan by hand.",
+      "steps": [
+        "Intro",
+        "Shut",
+        "Insight",
+        "Documents",
+        "Ndr",
+        "Ndrconfirm",
+        "Nosandbox",
+        "Edit",
+        "Cancel",
+        "Reason",
+        "Order",
+        "Scan",
+        "When",
+        "Record",
+        "Outro"
+      ],
+      "durationSeconds": 184,
+      "languages": ["en"],
+      "files": {
+        "en": "live-courier-writes.mp4"
+      }
+    },
+    {
+      "slug": "refunds-and-disputes",
+      "title": "Refunds and disputes",
+      "console": "admin",
+      "kind": "short",
+      "section": "P — The dangerous five",
+      "order": 3,
+      "summary": "You can close a ticket with money attached.",
+      "steps": [
+        "Intro",
+        "Kinds",
+        "Open",
+        "Thread",
+        "Reply",
+        "Sent",
+        "Stage",
+        "Outcomes",
+        "Amount",
+        "Confirm",
+        "Store",
+        "Settle",
+        "Norefund",
+        "Outro"
+      ],
+      "durationSeconds": 181,
+      "languages": ["en"],
+      "files": {
+        "en": "refunds-and-disputes.mp4"
+      },
+      "teaches": ["/tickets", "/tickets/[id]"]
+    },
+    {
+      "slug": "collapse-the-shelves",
+      "title": "Collapsing a warehouse’s shelving",
+      "console": "admin",
+      "kind": "short",
+      "section": "P — The dangerous five",
+      "order": 4,
+      "summary": "You can merge every bin into the floor, and recover if it was wrong.",
+      "steps": [
+        "Intro",
+        "Link",
+        "Page",
+        "Choose",
+        "Backups",
+        "Restore",
+        "Danger",
+        "Transit",
+        "Open",
+        "Reason",
+        "Ack",
+        "Preview",
+        "Code",
+        "Outro"
+      ],
+      "durationSeconds": 195,
+      "languages": ["en"],
+      "files": {
+        "en": "collapse-the-shelves.mp4"
+      },
+      "teaches": ["/warehouse/collapse"]
+    },
+    {
+      "slug": "acting-on-a-failed-delivery",
+      "title": "When a client asks about a failed delivery",
+      "console": "admin",
+      "kind": "short",
+      "section": "M — Couriers",
+      "order": 4,
+      "summary": "You can read what a client has asked us to do about a parcel the driver could not hand over, and say where each kind of ask actually lands.",
+      "steps": [
+        "Intro",
+        "Cost",
+        "Waiting",
+        "Decided",
+        "Already",
+        "Note",
+        "Ticket",
+        "Relay",
+        "Recall",
+        "Queue",
+        "Rto",
+        "Watch",
+        "Outro"
+      ],
+      "durationSeconds": 167,
+      "languages": ["en"],
+      "files": {
+        "en": "acting-on-a-failed-delivery.mp4"
+      },
+      "teaches": ["/call-center/queue", "/delivery-actions", "/tickets"]
+    },
+    {
+      "slug": "bill-the-freight",
+      "title": "Billing a consignment’s freight",
+      "console": "admin",
+      "kind": "short",
+      "section": "N — Money",
+      "order": 8,
+      "summary": "You can bill a consignment's freight and correct one you got wrong.",
+      "steps": [
+        "Intro",
+        "Spread",
+        "Record",
+        "Currency",
+        "Basis",
+        "Rate",
+        "Mode",
+        "Post",
+        "Split",
+        "Settle",
+        "Waive",
+        "Void",
+        "Withdrawn",
+        "Outro"
+      ],
+      "durationSeconds": 214,
+      "languages": ["en"],
+      "files": {
+        "en": "bill-the-freight.mp4"
+      },
+      "teaches": ["/freight"]
+    },
+    {
+      "slug": "read-the-stock-ledger",
+      "title": "Reading the stock ledger",
+      "console": "admin",
+      "kind": "short",
+      "section": "L — Correcting stock",
+      "order": 3,
+      "summary": "You can find out what happened to any SKU, or in any bin.",
+      "steps": [
+        "Intro",
+        "Appendonly",
+        "Row",
+        "Change",
+        "Cause",
+        "Types",
+        "Pack",
+        "Transfer",
+        "Variant",
+        "Trace",
+        "Bin",
+        "Reason",
+        "Outro"
+      ],
+      "durationSeconds": 165,
+      "languages": ["en"],
+      "files": {
+        "en": "read-the-stock-ledger.mp4"
+      },
+      "teaches": ["/inventory/movements"]
+    },
+    {
+      "slug": "courier-accounts-and-credentials",
+      "title": "Courier accounts and credentials",
+      "console": "admin",
+      "kind": "short",
+      "section": "M — Couriers",
+      "order": 1,
+      "summary": "You can add a courier account and understand why you can never read its password back.",
+      "steps": [
+        "Intro",
+        "Several",
+        "Credentials",
+        "Rotate",
+        "Switches",
+        "Notakill",
+        "Table",
+        "Default",
+        "Add",
+        "Shape",
+        "Secret",
+        "Save",
+        "Retire",
+        "Outro"
+      ],
+      "durationSeconds": 200,
+      "languages": ["en"],
+      "files": {
+        "en": "courier-accounts-and-credentials.mp4"
+      },
+      "teaches": ["/courier-accounts"]
+    },
+    {
+      "slug": "is-the-courier-healthy",
+      "title": "Is the courier integration healthy",
+      "console": "admin",
+      "kind": "short",
+      "section": "M — Couriers",
+      "order": 2,
+      "summary": "You can tell at a glance whether we can still book parcels.",
+      "steps": [
+        "Intro",
+        "Tracking",
+        "Lookup",
+        "Reads",
+        "Result",
+        "Connection",
+        "Guard",
+        "Pool",
+        "States",
+        "Budget",
+        "Waf",
+        "Reach",
+        "Pickup",
+        "Outro"
+      ],
+      "durationSeconds": 206,
+      "languages": ["en"],
+      "files": {
+        "en": "is-the-courier-healthy.mp4"
+      },
+      "teaches": ["/delhivery"]
+    },
+    {
+      "slug": "letting-a-seller-in",
+      "title": "Letting a client in",
+      "console": "admin",
+      "kind": "short",
+      "section": "O — Clients, stores and the platform",
+      "order": 1,
+      "summary": "You can take someone from asking to signed in.",
+      "steps": [
+        "Intro",
+        "Tabs",
+        "Waiting",
+        "Open",
+        "Told",
+        "Status",
+        "Notes",
+        "Save",
+        "Invite",
+        "Once",
+        "Pending",
+        "Resend",
+        "Registered",
+        "Outro"
+      ],
+      "durationSeconds": 154,
+      "languages": ["en"],
+      "files": {
+        "en": "letting-a-seller-in.mp4"
+      },
+      "teaches": ["/leads", "/sellers"]
+    },
+    {
+      "slug": "managing-a-seller",
+      "title": "Managing a client",
+      "console": "admin",
+      "kind": "short",
+      "section": "O — Clients, stores and the platform",
+      "order": 2,
+      "summary": "You can suspend, restrict or correct a client's account.",
+      "steps": [
+        "Intro",
+        "Identity",
+        "Open",
+        "Phone",
+        "Reason",
+        "Applied",
+        "Holdcard",
+        "Safe",
+        "Inflight",
+        "Warning",
+        "Clearat",
+        "Reason2",
+        "Placed",
+        "Lift",
+        "Suspend",
+        "Consequence",
+        "Suspended",
+        "Reapprove",
+        "Outro"
+      ],
+      "durationSeconds": 231,
+      "languages": ["en"],
+      "files": {
+        "en": "managing-a-seller.mp4"
+      },
+      "teaches": ["/sellers/[id]"]
+    },
+    {
+      "slug": "per-seller-settings",
+      "title": "Settings and couriers for one client",
+      "console": "admin",
+      "kind": "short",
+      "section": "O — Clients, stores and the platform",
+      "order": 3,
+      "summary": "You can change one client's behaviour without touching anybody else's.",
+      "steps": [
+        "Intro",
+        "Columns",
+        "Name",
+        "Open",
+        "Value",
+        "Saved",
+        "Currency",
+        "Reset",
+        "Couriers",
+        "Add",
+        "Linked",
+        "Second",
+        "Unlink",
+        "Credit",
+        "Outro"
+      ],
+      "durationSeconds": 176,
+      "languages": ["en"],
+      "files": {
+        "en": "per-seller-settings.mp4"
+      }
+    },
+    {
+      "slug": "change-a-system-setting",
+      "title": "Changing how the platform behaves",
+      "console": "admin",
+      "kind": "short",
+      "section": "O — Clients, stores and the platform",
+      "order": 4,
+      "summary": "You can change a system setting and know what it will do.",
+      "steps": [
+        "Intro",
+        "Groups",
+        "Row",
+        "Tooltip",
+        "Secret",
+        "Readonly",
+        "Switch",
+        "Compare",
+        "Number",
+        "Type",
+        "Saved",
+        "Live",
+        "Back",
+        "Outro"
+      ],
+      "durationSeconds": 176,
+      "languages": ["en"],
+      "files": {
+        "en": "change-a-system-setting.mp4"
+      },
+      "teaches": ["/settings"]
+    },
+    {
+      "slug": "staff-and-broadcasts",
+      "title": "Staff, and telling everyone something",
+      "console": "admin",
+      "kind": "short",
+      "section": "O — Clients, stores and the platform",
+      "order": 5,
+      "summary": "You can add a colleague and send a message to an audience.",
+      "steps": [
+        "Intro",
+        "Invite",
+        "Link",
+        "Pending",
+        "Role",
+        "Confirmrole",
+        "Deactivate",
+        "Deactivated",
+        "Broadcast",
+        "Audience",
+        "Message",
+        "Count",
+        "Send",
+        "Sent",
+        "Outro"
+      ],
+      "durationSeconds": 203,
+      "languages": ["en"],
+      "files": {
+        "en": "staff-and-broadcasts.mp4"
+      },
+      "teaches": ["/staff"]
+    },
+    {
+      "slug": "when-nobody-will-carry-it",
+      "title": "When nobody will carry it",
+      "console": "admin",
+      "kind": "short",
+      "section": "M — Couriers",
+      "order": 3,
+      "summary": "You can get a parcel moving that every courier refused.",
+      "steps": [
+        "Arrive",
+        "Intro",
+        "Why",
+        "After",
+        "Waiting",
+        "Unfulfillable",
+        "Open",
+        "Awb",
+        "Courier",
+        "Service",
+        "Record",
+        "Gone",
+        "Outro"
+      ],
+      "durationSeconds": 181,
+      "languages": ["en"],
+      "files": {
+        "en": "when-nobody-will-carry-it.mp4"
+      },
+      "teaches": ["/manual-placement"]
+    },
+    {
+      "slug": "moving-stock-between-warehouses",
+      "title": "Moving stock between warehouses",
+      "console": "admin",
+      "kind": "short",
+      "section": "L — Correcting stock",
+      "order": 4,
+      "summary": "You can transfer stock without losing what the batch knows.",
+      "steps": ["Intro", "Ids", "From", "To", "Why", "Same", "Note", "Confirm", "Done", "Outro"],
+      "durationSeconds": 136,
+      "languages": ["en"],
+      "files": {
+        "en": "moving-stock-between-warehouses.mp4"
+      },
+      "teaches": ["/inventory/transfers"]
+    },
+    {
+      "slug": "store-find-your-way-around",
+      "title": "Finding your way around the store",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 1,
+      "summary": "What this portal is, and where everything lives.",
+      "steps": ["Intro", "Dashboard", "Tiles", "Nav", "Search", "Inbox", "Your store", "Outro"],
+      "durationSeconds": 115,
+      "languages": ["en"],
+      "files": {
+        "en": "store-find-your-way-around.mp4"
+      },
+      "teaches": ["/dashboard"]
+    },
+    {
+      "slug": "store-what-you-may-sell",
+      "title": "What you may sell, and for how much",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 2,
+      "summary": "Your catalogue is a list your supplier decides, and a price you partly decide.",
+      "steps": ["Intro", "Table", "Glossary", "Range", "Available", "Absent", "Outro"],
+      "durationSeconds": 101,
+      "languages": ["en"],
+      "files": {
+        "en": "store-what-you-may-sell.mp4"
+      },
+      "teaches": ["/catalogue"]
+    },
+    {
+      "slug": "store-place-an-order",
+      "title": "Placing an order for a customer",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 3,
+      "summary": "Taking an order from your own customer into Skydrop.",
+      "steps": [
+        "Intro",
+        "Open form",
+        "Product",
+        "Line note",
+        "Retail",
+        "Customer",
+        "Landmark",
+        "Payment",
+        "Prepaid",
+        "Submit",
+        "Outro"
+      ],
+      "durationSeconds": 152,
+      "languages": ["en"],
+      "files": {
+        "en": "store-place-an-order.mp4"
+      },
+      "teaches": ["/orders/new"]
+    },
+    {
+      "slug": "store-upload-bulk-orders",
+      "title": "A day’s orders from a spreadsheet",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 4,
+      "summary": "A day's worth at once instead of one at a time.",
+      "steps": [
+        "Intro",
+        "Template",
+        "Rows",
+        "File",
+        "Preview",
+        "Bad row",
+        "Import",
+        "Uploads",
+        "Outro"
+      ],
+      "durationSeconds": 133,
+      "languages": ["en"],
+      "files": {
+        "en": "store-upload-bulk-orders.mp4"
+      },
+      "teaches": ["/orders/import"]
+    },
+    {
+      "slug": "store-find-an-order",
+      "title": "Finding an order",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 5,
+      "summary": "Finding any order from whatever the customer gives you.",
+      "steps": ["Intro", "List", "Tabs", "Filter", "Reload", "Search", "Reset", "Outro"],
+      "durationSeconds": 105,
+      "languages": ["en"],
+      "files": {
+        "en": "store-find-an-order.mp4"
+      },
+      "teaches": ["/orders"]
+    },
+    {
+      "slug": "store-read-an-order",
+      "title": "Reading an order",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 6,
+      "summary": "One order read top to bottom, pressing nothing.",
+      "steps": [
+        "Intro",
+        "Head",
+        "Customer",
+        "Money",
+        "Products",
+        "Parcel",
+        "Earns",
+        "Credit state",
+        "Fees",
+        "Timeline",
+        "Outro"
+      ],
+      "durationSeconds": 156,
+      "languages": ["en"],
+      "files": {
+        "en": "store-read-an-order.mp4"
+      },
+      "teaches": ["/orders/[id]"]
+    },
+    {
+      "slug": "store-invite-an-associate",
+      "title": "Invite a sales person, and pause one",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 19,
+      "summary": "Who sells for you, and whether they still may.",
+      "steps": [
+        "Intro",
+        "Roster",
+        "Coverage",
+        "Moved",
+        "Invite",
+        "Form",
+        "Sent",
+        "Pause",
+        "Paused",
+        "Resume",
+        "Outro"
+      ],
+      "durationSeconds": 157,
+      "languages": ["en"],
+      "files": {
+        "en": "store-invite-an-associate.mp4"
+      },
+      "teaches": ["/associates"]
+    },
+    {
+      "slug": "store-set-associate-prices",
+      "title": "Set what each of them sells it for",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 20,
+      "summary": "A price is per person, typed by hand, and bounded by your supplier.",
+      "steps": [
+        "Intro",
+        "Columns",
+        "Range",
+        "Save",
+        "Unpriced",
+        "Refuse",
+        "Refused",
+        "Fix",
+        "Copy",
+        "Replace",
+        "Outro"
+      ],
+      "durationSeconds": 138,
+      "languages": ["en"],
+      "files": {
+        "en": "store-set-associate-prices.mp4"
+      }
+    },
+    {
+      "slug": "store-how-associates-are-doing",
+      "title": "How your associates are doing",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 21,
+      "summary": "Who is selling, what it leaves you, and what to do about it.",
+      "steps": [
+        "Intro",
+        "Window",
+        "Totals",
+        "Margin",
+        "Others",
+        "Table",
+        "Money",
+        "Rates",
+        "Denominator",
+        "Dash",
+        "Blocked",
+        "Switch",
+        "Sort",
+        "Outro"
+      ],
+      "durationSeconds": 189,
+      "languages": ["en"],
+      "files": {
+        "en": "store-how-associates-are-doing.mp4"
+      },
+      "teaches": ["/associates/analysis"]
+    },
+    {
+      "slug": "store-delivery-gone-wrong",
+      "title": "When a delivery goes wrong",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 7,
+      "summary": "The parcel is out and something is wrong; here is what you can ask for, and which asks happen on your click.",
+      "steps": [
+        "Intro",
+        "Where",
+        "Section",
+        "Three",
+        "Strip",
+        "Dialog",
+        "Confirm",
+        "Back",
+        "History",
+        "Cancel",
+        "Change",
+        "Held",
+        "Outro"
+      ],
+      "durationSeconds": 186,
+      "languages": ["en"],
+      "files": {
+        "en": "store-delivery-gone-wrong.mp4"
+      },
+      "teaches": ["/orders/[id]"]
+    },
+    {
+      "slug": "store-unreachable-customers",
+      "title": "When we cannot reach your customer",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 8,
+      "summary": "The order has stopped and only you can decide what happens to it.",
+      "steps": [
+        "Intro",
+        "Tiles",
+        "Table",
+        "Open",
+        "Keep",
+        "Give",
+        "Why",
+        "Reason",
+        "Button",
+        "Never",
+        "Order",
+        "Outro"
+      ],
+      "durationSeconds": 163,
+      "languages": ["en"],
+      "files": {
+        "en": "store-unreachable-customers.mp4"
+      },
+      "teaches": ["/orders/call-reviews"]
+    },
+    {
+      "slug": "store-your-customers",
+      "title": "Your customers",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 9,
+      "summary": "Your book of business, built from your own orders.",
+      "steps": ["Intro", "List", "Search", "Open", "Facts", "Orders", "Edit", "Seller", "Outro"],
+      "durationSeconds": 122,
+      "languages": ["en"],
+      "files": {
+        "en": "store-your-customers.mp4"
+      },
+      "teaches": ["/customers"]
+    },
+    {
+      "slug": "store-raise-it-with-skydrop",
+      "title": "Raising a problem",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 10,
+      "summary": "Two different people you might be raising it with, and the page keeps them apart.",
+      "steps": [
+        "Intro",
+        "List",
+        "Tabs",
+        "Open",
+        "Reply",
+        "New",
+        "Choose",
+        "Money",
+        "Figures",
+        "Approval",
+        "Settled",
+        "Ledger",
+        "Outro"
+      ],
+      "durationSeconds": 174,
+      "languages": ["en"],
+      "files": {
+        "en": "store-raise-it-with-skydrop.mp4"
+      },
+      "teaches": ["/tickets", "/tickets/new"]
+    },
+    {
+      "slug": "store-the-terms",
+      "title": "The terms you are trading under",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 11,
+      "summary": "The arrangement you agreed to before you could place an order, read out.",
+      "steps": [
+        "Intro",
+        "Head",
+        "Fees",
+        "Credit",
+        "Example",
+        "Rounding",
+        "Note",
+        "History",
+        "Accept",
+        "Consequence",
+        "Outro"
+      ],
+      "durationSeconds": 165,
+      "languages": ["en"],
+      "files": {
+        "en": "store-the-terms.mp4"
+      },
+      "teaches": ["/terms"]
+    },
+    {
+      "slug": "store-your-team",
+      "title": "Your team",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 12,
+      "summary": "One login each, and what each of them may do.",
+      "steps": [
+        "Intro",
+        "Members",
+        "Union",
+        "Roles",
+        "Owner",
+        "Remove",
+        "Invite",
+        "Pending",
+        "Resend",
+        "Yourself",
+        "Outro"
+      ],
+      "durationSeconds": 161,
+      "languages": ["en"],
+      "files": {
+        "en": "store-your-team.mp4"
+      },
+      "teaches": ["/team"]
+    },
+    {
+      "slug": "store-your-wallet",
+      "title": "Your wallet",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 13,
+      "summary": "Where the money arrives, where it is taken, and the record of all of it.",
+      "steps": [
+        "Intro",
+        "Manager",
+        "Tiles",
+        "Negative",
+        "Topup",
+        "Requests",
+        "Withdrawals",
+        "Ledger",
+        "Credit",
+        "Transfer",
+        "Fees",
+        "Balance",
+        "Outro"
+      ],
+      "durationSeconds": 186,
+      "languages": ["en"],
+      "files": {
+        "en": "store-your-wallet.mp4"
+      },
+      "teaches": ["/wallet"]
+    },
+    {
+      "slug": "store-your-expenses",
+      "title": "Your own costs",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 14,
+      "summary": "Your own spending, which is what turns sales into a profit figure.",
+      "steps": [
+        "Intro",
+        "Why",
+        "Nobody",
+        "Form",
+        "Reference",
+        "Confirm",
+        "Recorded",
+        "Window",
+        "Remove",
+        "Closed",
+        "Outro"
+      ],
+      "durationSeconds": 151,
+      "languages": ["en"],
+      "files": {
+        "en": "store-your-expenses.mp4"
+      },
+      "teaches": ["/expenses"]
+    },
+    {
+      "slug": "store-month-by-month",
+      "title": "What you made, month by month",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 15,
+      "summary": "A closed month is a promise, and later changes are carried forward rather than rewritten.",
+      "steps": [
+        "Intro",
+        "Position",
+        "Period",
+        "Tiles",
+        "Lines",
+        "Open",
+        "Cash",
+        "Frozen",
+        "Carried in",
+        "Reason",
+        "Carried out",
+        "Custom",
+        "Outro"
+      ],
+      "durationSeconds": 179,
+      "languages": ["en"],
+      "files": {
+        "en": "store-month-by-month.mp4"
+      },
+      "teaches": ["/reports"]
+    },
+    {
+      "slug": "store-how-the-shop-is-doing",
+      "title": "How the shop is doing",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 16,
+      "summary": "Not what you made, but how the shop is performing.",
+      "steps": [
+        "Intro",
+        "Window",
+        "Rates",
+        "Denominator",
+        "Roas",
+        "Margin roas",
+        "Products",
+        "Returns col",
+        "Pincodes",
+        "Forecast",
+        "Overdue",
+        "Outro"
+      ],
+      "durationSeconds": 173,
+      "languages": ["en"],
+      "files": {
+        "en": "store-how-the-shop-is-doing.mp4"
+      },
+      "teaches": ["/reports/analysis"]
+    },
+    {
+      "slug": "store-your-inbox-and-login",
+      "title": "Your inbox, and your own login",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 17,
+      "summary": "Where Skydrop talks to you, and the one page that is about you rather than the store.",
+      "steps": [
+        "Intro",
+        "Inbox",
+        "Open",
+        "Filters",
+        "Dismiss",
+        "Settings",
+        "You",
+        "Store",
+        "Locked",
+        "Account",
+        "Roles",
+        "Sessions",
+        "Outro"
+      ],
+      "durationSeconds": 184,
+      "languages": ["en"],
+      "files": {
+        "en": "store-your-inbox-and-login.mp4"
+      },
+      "teaches": ["/notifications"]
+    },
+    {
+      "slug": "store-keys-and-webhooks",
+      "title": "Letting your own systems in",
+      "console": "member",
+      "kind": "short",
+      "section": "R — The member store portal",
+      "order": 18,
+      "summary": "Your own website can place these orders and hear when they move.",
+      "steps": [
+        "Intro",
+        "Keys note",
+        "Create",
+        "Confirm",
+        "Shown",
+        "Table",
+        "Revoke",
+        "Webhooks",
+        "Add",
+        "Secret",
+        "Rotate",
+        "Outro"
+      ],
+      "durationSeconds": 165,
+      "languages": ["en"],
+      "files": {
+        "en": "store-keys-and-webhooks.mp4"
+      },
+      "teaches": ["/integrations"]
+    },
+    {
+      "slug": "seller-everything",
+      "title": "Getting your products to India",
+      "console": "client",
+      "kind": "long",
+      "section": "Long walkthroughs",
+      "order": 1,
+      "summary": "Skydrop holds your stock in an Indian warehouse, phones every customer to confirm their order, then picks, packs and ships it. You sell into India without having anything in India.",
+      "steps": [
+        "What this is",
+        "Act one: the catalogue",
+        "Act two: announcing the consignment",
+        "Act three: freight",
+        "Act four: it lands",
+        "Act five: an order",
+        "Act six: the phone call",
+        "Act seven: the warehouse",
+        "Act eight: tracking",
+        "Act nine: it goes wrong",
+        "Act ten: the money",
+        "Act eleven: help, and what we skipped"
+      ],
+      "durationSeconds": 674,
+      "languages": ["en", "bn", "hi"],
+      "files": {
+        "en": "seller-everything.mp4",
+        "bn": "seller-everything-bn.mp4",
+        "hi": "seller-everything-hi.mp4"
+      }
+    },
+    {
+      "slug": "reseller-everything",
+      "title": "Selling a client’s stock under your own name",
+      "console": "member",
+      "kind": "long",
+      "section": "Long walkthroughs",
+      "order": 2,
+      "summary": "A member store sells somebody else’s stock under its own name. Your client holds the goods in our Indian warehouse; we ring the customer, pack the parcel and send it.",
+      "steps": [
+        "Intro",
+        "Invitation",
+        "Sign in",
+        "Dashboard",
+        "Nav",
+        "Terms why",
+        "Terms fees",
+        "Terms credit",
+        "Terms accepted",
+        "Catalogue",
+        "You pay",
+        "Range",
+        "Stock",
+        "Product",
+        "Retail",
+        "Customer",
+        "Payment",
+        "Placed",
+        "Bulk",
+        "Bulk check",
+        "Bulk import",
+        "Orders list",
+        "Order read",
+        "Order earns",
+        "Order timeline",
+        "Wrong intro",
+        "Delivery asks",
+        "Ask dialog",
+        "Asked before",
+        "Chase",
+        "Change order",
+        "Call it off",
+        "Wallet",
+        "Credited when",
+        "Topup",
+        "Withdraw",
+        "Assoc intro",
+        "Assoc invite",
+        "Assoc prices",
+        "Assoc doing",
+        "Reports",
+        "Rest",
+        "Outro"
+      ],
+      "durationSeconds": 569,
+      "languages": ["en", "bn", "hi"],
+      "files": {
+        "en": "reseller-everything.mp4",
+        "bn": "reseller-everything-bn.mp4",
+        "hi": "reseller-everything-hi.mp4"
+      }
+    },
+    {
+      "slug": "associate-everything",
+      "title": "Selling for your store",
+      "console": "associate",
+      "kind": "long",
+      "section": "Long walkthroughs",
+      "order": 3,
+      "summary": "This is your sales portal. Your store sells things, you sell them for your store, and Skydrop does the rest: it holds the stock in India, rings every customer, and gets the parcel to the door.",
+      "steps": [
+        "Intro",
+        "Invitation",
+        "Sign in",
+        "Nav",
+        "Catalogue",
+        "Unpriced",
+        "New order",
+        "Products",
+        "Customer",
+        "Landmark",
+        "Payment",
+        "Place",
+        "Placed",
+        "Csv template",
+        "Csv check",
+        "Csv import",
+        "My orders",
+        "One order",
+        "Reattempt",
+        "Held",
+        "Cancel",
+        "Customers",
+        "Issue",
+        "Digest",
+        "Outro"
+      ],
+      "durationSeconds": 387,
+      "languages": ["en", "bn", "hi"],
+      "files": {
+        "en": "associate-everything.mp4",
+        "bn": "associate-everything-bn.mp4",
+        "hi": "associate-everything-hi.mp4"
+      },
+      "teaches": ["/auth/accept-invitation", "/login"]
+    },
+    {
+      "slug": "admin-everything",
+      "title": "Running the Skydrop operations desk",
+      "console": "admin",
+      "kind": "long",
+      "section": "Long walkthroughs",
+      "order": 4,
+      "summary": "This is the staff console: where Skydrop’s own people run the business. Call centre agents, warehouse staff, finance, supervisors.",
+      "steps": [
+        "H — the desk",
+        "I — call centre",
+        "J — warehouse",
+        "K — returns",
+        "L — stock",
+        "M — couriers",
+        "N — money",
+        "O — clients",
+        "P — the five"
+      ],
+      "durationSeconds": 5410,
+      "languages": ["en", "bn"],
+      "files": {
+        "en": "admin-everything.mp4",
+        "bn": "admin-everything-bn.mp4"
+      },
+      "teaches": [
+        "/bank-changes",
+        "/call-center",
+        "/call-center/queue",
+        "/cost-sync",
+        "/courier-accounts",
+        "/courier-decisions",
+        "/dashboard",
+        "/delhivery",
+        "/delivery-actions",
+        "/freight",
+        "/inventory/adjustments",
+        "/inventory/cycle-counts",
+        "/inventory/movements",
+        "/inventory/transfers",
+        "/leads",
+        "/manual-placement",
+        "/notifications/broadcasts",
+        "/orders",
+        "/pnl",
+        "/pnl/carry-forward",
+        "/reattempt-requests",
+        "/remittances",
+        "/roles",
+        "/seller-wallets",
+        "/sellers",
+        "/settings",
+        "/settlements",
+        "/staff",
+        "/system-issues",
+        "/tickets",
+        "/topups",
+        "/treasury",
+        "/wallet-transfers",
+        "/warehouse",
+        "/warehouse/bins",
+        "/warehouse/handover",
+        "/warehouse/manifests",
+        "/warehouse/pack",
+        "/warehouse/pickups",
+        "/warehouse/printing",
+        "/warehouse/receive",
+        "/warehouse/rto",
+        "/withdrawals"
+      ]
+    },
+    {
+      "slug": "promo-seller",
+      "title": "Sell into India without being in India",
+      "console": "client",
+      "kind": "promo",
+      "section": "Promos",
+      "order": 1,
+      "summary": "You can sell into India. Operating there is the problem: no warehouse, nobody to ring a cash-on-delivery customer before the parcel leaves, no courier account, and no way home for the money.",
+      "steps": [
+        "Problem",
+        "Stock crosses",
+        "On the shelf",
+        "The call",
+        "The parcel",
+        "Tracking",
+        "Money",
+        "Invite"
+      ],
+      "durationSeconds": 96,
+      "languages": ["en"],
+      "files": {
+        "en": "promo-seller.mp4"
+      },
+      "teaches": ["/dashboard"]
+    },
+    {
+      "slug": "promo-reseller",
+      "title": "Sell it before you buy it",
+      "console": "member",
+      "kind": "promo",
+      "section": "Promos",
+      "order": 2,
+      "summary": "You have the customers. What you do not have is stock, the capital to buy it, or anywhere to keep it.",
+      "steps": [
+        "Problem",
+        "Catalogue",
+        "Your price",
+        "We do the rest",
+        "Your name",
+        "Money",
+        "Team",
+        "Outro"
+      ],
+      "durationSeconds": 87,
+      "languages": ["en"],
+      "files": {
+        "en": "promo-reseller.mp4"
+      },
+      "teaches": ["/dashboard", "/orders/new"]
+    },
+    {
+      "slug": "promo-associate",
+      "title": "Sell for a store, from your phone",
+      "console": "associate",
+      "kind": "promo",
+      "section": "Promos",
+      "order": 3,
+      "summary": "You know how to sell. What you have never had is something to sell that does not cost you money up front.",
+      "steps": [
+        "Problem",
+        "What i sell",
+        "Place",
+        "Follow",
+        "Digest",
+        "Customers",
+        "Paid",
+        "Outro"
+      ],
+      "durationSeconds": 74,
+      "languages": ["en"],
+      "files": {
+        "en": "promo-associate.mp4"
+      },
+      "teaches": ["/orders", "/orders/new"]
+    },
+    {
+      "slug": "assoc-find-your-way-around",
+      "title": "Finding your way around",
+      "console": "associate",
+      "kind": "short",
+      "section": "S — The associate portal",
+      "order": 1,
+      "summary": "What this portal is, and where everything lives.",
+      "steps": [
+        "Intro",
+        "Landing",
+        "Nav",
+        "Selling",
+        "Following",
+        "You",
+        "Header",
+        "Bell",
+        "Own only",
+        "Absent",
+        "Why",
+        "Outro"
+      ],
+      "durationSeconds": 119,
+      "languages": ["en"],
+      "files": {
+        "en": "assoc-find-your-way-around.mp4"
+      }
+    },
+    {
+      "slug": "assoc-what-you-may-sell",
+      "title": "What you may sell, and for how much",
+      "console": "associate",
+      "kind": "short",
+      "section": "S — The associate portal",
+      "order": 2,
+      "summary": "Your catalogue is a list your store decides, at a price your store sets *for you*.",
+      "steps": [
+        "Intro",
+        "Subtitle",
+        "Columns",
+        "Price",
+        "Fixed",
+        "Available",
+        "None left",
+        "Unpriced",
+        "Flag",
+        "Refused",
+        "Absent",
+        "Search",
+        "Outro"
+      ],
+      "durationSeconds": 128,
+      "languages": ["en"],
+      "files": {
+        "en": "assoc-what-you-may-sell.mp4"
+      },
+      "teaches": ["/catalogue"]
+    },
+    {
+      "slug": "assoc-place-an-order",
+      "title": "Placing an order for a customer",
+      "console": "associate",
+      "kind": "short",
+      "section": "S — The associate portal",
+      "order": 3,
+      "summary": "Turning a phone call into a parcel.",
+      "steps": [
+        "Intro",
+        "Open",
+        "Product",
+        "Quantity",
+        "Line note",
+        "No price field",
+        "Unpriced",
+        "Customer",
+        "Phone",
+        "Landmark",
+        "Payment",
+        "Prepaid",
+        "Confirm",
+        "Placed",
+        "Outro"
+      ],
+      "durationSeconds": 146,
+      "languages": ["en"],
+      "files": {
+        "en": "assoc-place-an-order.mp4"
+      },
+      "teaches": ["/orders/new"]
+    },
+    {
+      "slug": "assoc-upload-bulk-orders",
+      "title": "A day’s orders from a spreadsheet",
+      "console": "associate",
+      "kind": "short",
+      "section": "S — The associate portal",
+      "order": 4,
+      "summary": "A day's worth at once instead of one at a time.",
+      "steps": [
+        "Intro",
+        "Template",
+        "No price",
+        "Rows",
+        "File",
+        "Preview",
+        "Bad row",
+        "Rest",
+        "Import",
+        "Progress",
+        "Uploads",
+        "Reference",
+        "Outro"
+      ],
+      "durationSeconds": 132,
+      "languages": ["en"],
+      "files": {
+        "en": "assoc-upload-bulk-orders.mp4"
+      },
+      "teaches": ["/orders/import"]
+    },
+    {
+      "slug": "assoc-find-an-order",
+      "title": "Finding and reading an order",
+      "console": "associate",
+      "kind": "short",
+      "section": "S — The associate portal",
+      "order": 5,
+      "summary": "Finding any order from whatever the customer gives you, then reading it.",
+      "steps": [
+        "Intro",
+        "List",
+        "Own only",
+        "Search",
+        "Status",
+        "Reload",
+        "Open",
+        "Inside",
+        "Where",
+        "Parcel",
+        "History",
+        "Closed",
+        "Failed",
+        "Who",
+        "Outro"
+      ],
+      "durationSeconds": 157,
+      "languages": ["en"],
+      "files": {
+        "en": "assoc-find-an-order.mp4"
+      },
+      "teaches": ["/orders"]
+    },
+    {
+      "slug": "assoc-my-customers",
+      "title": "Your customers",
+      "console": "associate",
+      "kind": "short",
+      "section": "S — The associate portal",
+      "order": 6,
+      "summary": "The other way into an order: from the person rather than the parcel.",
+      "steps": [
+        "Intro",
+        "List",
+        "Own only",
+        "Count",
+        "Why",
+        "Repeat",
+        "Open",
+        "No detail",
+        "Search",
+        "Read only",
+        "Outro"
+      ],
+      "durationSeconds": 111,
+      "languages": ["en"],
+      "files": {
+        "en": "assoc-my-customers.mp4"
+      },
+      "teaches": ["/customers"]
+    },
+    {
+      "slug": "assoc-issues-and-account",
+      "title": "Raising an issue, your inbox and your login",
+      "console": "associate",
+      "kind": "short",
+      "section": "S — The associate portal",
+      "order": 7,
+      "summary": "The three screens that are about you rather than about one order.",
+      "steps": [
+        "Intro",
+        "List",
+        "Stages",
+        "Thread",
+        "Raise",
+        "Subject",
+        "No money",
+        "Sent",
+        "Inbox",
+        "Digest",
+        "Digest body",
+        "Account",
+        "What you see",
+        "Sessions",
+        "Outro"
+      ],
+      "durationSeconds": 146,
+      "languages": ["en"],
+      "files": {
+        "en": "assoc-issues-and-account.mp4"
+      },
+      "teaches": ["/tickets"]
+    }
+  ]
+}
