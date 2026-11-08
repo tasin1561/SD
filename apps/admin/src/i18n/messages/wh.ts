@@ -1834,6 +1834,23 @@ export const wh = defineMessages({
   ],
   'warehouseReceiveReceiveDetailView.completing': ['Completing…', 'সম্পন্ন হচ্ছে…'],
   'warehouseReceiveReceiveDetailView.complete': ['Complete', 'সম্পন্ন'],
+  'warehouseReceiveReceiveDetailView.saveCountsAndComplete': [
+    'Save counts & complete',
+    'গণনা সংরক্ষণ করে সম্পন্ন করুন',
+  ],
+  'warehouseReceiveReceiveDetailView.notCounted': ['Not counted', 'গণনা হয়নি'],
+  'warehouseReceiveReceiveDetailView.notCountedList': [
+    'Not counted yet: {skus}. Type a received quantity for each (0 if none arrived) and record it.',
+    'এখনও গণনা করা হয়নি: {skus}। প্রতিটির গৃহীত পরিমাণ লিখুন (কিছু না এলে 0) এবং সংরক্ষণ করুন।',
+  ],
+  'warehouseReceiveReceiveDetailView.notCountedStockNothing': [
+    'Not counted: {skus}. Nothing will be stocked for these products.',
+    'গণনা হয়নি: {skus}। এই পণ্যগুলোর জন্য কোনো স্টক যোগ হবে না।',
+  ],
+  'warehouseReceiveReceiveDetailView.damagedWithoutReceived': [
+    '{sku} has a damaged quantity but no received quantity. Enter the received quantity first (0 if none arrived).',
+    '{sku}-এর ক্ষতিগ্রস্ত পরিমাণ আছে কিন্তু গৃহীত পরিমাণ নেই। আগে গৃহীত পরিমাণ লিখুন (কিছু না এলে 0)।',
+  ],
   'warehouseReceiveReceiveDetailView.client': ['Client', 'ক্লায়েন্ট'],
   'warehouseReceiveReceiveDetailView.clientEmail': ['Client email', 'ক্লায়েন্টের ইমেইল'],
   'warehouseReceiveReceiveDetailView.clientRef': ['Client ref', 'ক্লায়েন্টের রেফ'],

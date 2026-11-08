@@ -961,7 +961,13 @@ function LegLines({
           </span>
           <Variance
             expected={l.expectedQty}
-            counted={leg.status === 'COMPLETED' ? (l.receivedQty ?? 0) : null}
+            // `receivedQty` is 0 on a line nobody counted (the column
+            // defaults to it), so only a line with a `countedAt` has a
+            // count to compare — otherwise this reads "0 of 10 — 10 short"
+            // about goods nobody has looked at.
+            counted={
+              leg.status === 'COMPLETED' && l.countedAt != null ? (l.receivedQty ?? 0) : null
+            }
             shortWord={shortWord}
             overWord={overWord}
           />

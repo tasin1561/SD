@@ -33,6 +33,18 @@ import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/client';
 
 /**
+ * The count a line carries, or null when NOBODY has counted it.
+ * `received_qty` is 0 by default, so the number alone cannot say; `countedAt`
+ * can. A recorded zero keeps its 0.
+ */
+function recordedQtyOf(l: {
+  readonly countedAt: string | null;
+  readonly receivedQty: number | null;
+}): number | null {
+  return l.countedAt != null ? l.receivedQty : null;
+}
+
+/**
  * Admin receive-station — full goods-receipt lifecycle in one page:
  *
  *   1. PENDING   → "Start receiving" button (admin claims it; status →
@@ -116,12 +128,18 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   );
   /**
    * Derived, never read from the stored note. Only meaningful once the
-   * receipt is COMPLETED — `receivedQty` is 0 on a line nobody has
-   * touched, so before that it would report every line as short.
+   * receipt is COMPLETED, and only for lines somebody counted
+   * (`countedAt`) — `receivedQty` is 0 on a line nobody has touched.
    */
   const variance = isCompleted
     ? r.lines
-        .filter((l) => (l.receivedQty ?? 0) !== l.expectedQty || (l.damagedQty ?? 0) > 0)
+        // An uncounted line is not a variance: `receivedQty` is 0 by
+        // default, so without this a line nobody counted reads "short".
+        .filter(
+          (l) =>
+            l.countedAt != null &&
+            ((l.receivedQty ?? 0) !== l.expectedQty || (l.damagedQty ?? 0) > 0),
+        )
         .map((l) => ({
           sku: l.variant.skuCode,
           want: l.expectedQty,
@@ -142,7 +160,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
     }
   }
 
-  async function onRecordAll(): Promise<void> {
+  async function onRecordAll(): Promise<boolean> {
     setError(null);
     setBusy('record');
     // Whether a bin is REQUIRED is the server's answer, never ours —
@@ -157,7 +175,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
     if (!built.ok) {
       setError(built.error);
       setBusy(null);
-      return;
+      return false;
     }
     const lines = built.lines;
     try {
@@ -166,11 +184,41 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       setReceived({});
       setDamaged({});
       setBinByLine({});
+      return true;
     } catch (e) {
       setError(serverVerdict(e));
+      return false;
     } finally {
       setBusy(null);
     }
+  }
+
+  /**
+   * Complete must never throw away what is on the screen. Typed quantities
+   * live only in this component's state until "Record all products"
+   * writes them, so pressing the primary button used to complete the
+   * receipt on whatever was SAVED — usually nothing — and discard the rest.
+   * Saving first is the choice (over refusing): the operator already said
+   * "I am done" by pressing it, a refusal would only make them press a
+   * second button to do what they just asked, and recording is iterative
+   * and writes no stock. If the save fails nothing proceeds and the
+   * numbers stay in the boxes.
+   */
+  async function onCompleteClick(): Promise<void> {
+    setError(null);
+    const orphan = r.lines.find(
+      (l) => (received[l.id] ?? '').trim() === '' && (damaged[l.id] ?? '').trim() !== '',
+    );
+    if (orphan) {
+      setError(
+        t('warehouseReceiveReceiveDetailView.damagedWithoutReceived', {
+          sku: orphan.variant.skuCode,
+        }),
+      );
+      return;
+    }
+    if (hasUnsaved && !(await onRecordAll())) return;
+    setCompleteOpen(true);
   }
 
   /**
@@ -185,9 +233,18 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
     return Number.isFinite(typed) && typed > 0 ? typed : 0;
   }
 
+  // Typed but not yet recorded.
+  const hasUnsaved = r.lines.some((l) => (received[l.id] ?? '').trim() !== '');
+  // Nobody counted it and nothing is typed for it: the gap the operator
+  // should see BEFORE pressing Complete.
+  const uncountedLines = r.lines.filter(
+    (l) => l.countedAt == null && (received[l.id] ?? '').trim() === '',
+  );
+  const uncountedSkus = uncountedLines.map((l) => l.variant.skuCode).join(', ');
+
   const strictLines = r.lines.filter((l) => l.inventoryMode === 'STRICT');
   const serialsOverCount = strictLines.some(
-    (l) => !scanCountMet((serialsByLine[l.id] ?? []).length, lineQty(l.id, l.receivedQty), true),
+    (l) => !scanCountMet((serialsByLine[l.id] ?? []).length, lineQty(l.id, recordedQtyOf(l)), true),
   );
 
   async function onComplete(): Promise<boolean> {
@@ -243,7 +300,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
     }
   }
 
-  const recordedCount = r.lines.filter((l) => l.receivedQty !== null).length;
+  const recordedCount = r.lines.filter((l) => l.countedAt != null).length;
 
   return (
     <div className="wh-page">
@@ -345,14 +402,15 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                   variant="primary"
                   size="md"
                   disabled={busy !== null || serialsOverCount}
-                  onClick={() => {
-                    setError(null);
-                    setCompleteOpen(true);
-                  }}
+                  onClick={() => void onCompleteClick()}
                 >
                   {busy === 'complete'
                     ? t('warehouseReceiveReceiveDetailView.completing')
-                    : t('warehouseReceiveReceiveDetailView.complete')}
+                    : busy === 'record'
+                      ? t('warehouseReceiveReceiveDetailView.recording')
+                      : hasUnsaved
+                        ? t('warehouseReceiveReceiveDetailView.saveCountsAndComplete')
+                        : t('warehouseReceiveReceiveDetailView.complete')}
                 </Button>
               </>
             )}
@@ -363,6 +421,12 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       {error && (
         <div role="alert" className="wh-alert">
           {error}
+        </div>
+      )}
+
+      {isArriving && uncountedLines.length > 0 && (
+        <div className="wh-callout" role="status" data-testid="uncounted-notice">
+          {t('warehouseReceiveReceiveDetailView.notCountedList', { skus: uncountedSkus })}
         </div>
       )}
 
@@ -448,7 +512,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
           <div
             key={line.id}
             className="wh-item"
-            data-done={line.receivedQty !== null ? '1' : undefined}
+            data-done={line.countedAt != null ? '1' : undefined}
           >
             <div className="wh-item__head">
               <div className="wh-item__who">
@@ -530,7 +594,12 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                   {line.expectedQty}
                 </span>
               </div>
-              {line.receivedQty !== null && (
+              {isArriving && line.countedAt == null && (received[line.id] ?? '').trim() === '' && (
+                <span className="wh-tag" data-tone="warn">
+                  {t('warehouseReceiveReceiveDetailView.notCounted')}
+                </span>
+              )}
+              {line.countedAt != null && (
                 <span className="wh-tag" data-tone="good">
                   {richMessage(t('warehouseReceiveReceiveDetailView.recorded'), {
                     check: <Check size={12} aria-hidden />,
@@ -568,7 +637,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                   max={1_000_000}
                   inputMode="numeric"
                   inputClassName="sk-figure"
-                  value={received[line.id] ?? String(line.receivedQty ?? '')}
+                  value={received[line.id] ?? String(recordedQtyOf(line) ?? '')}
                   onChange={(e) => setReceived({ ...received, [line.id]: e.target.value })}
                 />
                 <TextField
@@ -577,7 +646,10 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                   min={0}
                   inputMode="numeric"
                   inputClassName="sk-figure"
-                  value={damaged[line.id] ?? String(line.damagedQty ?? '0')}
+                  value={
+                    damaged[line.id] ??
+                    (line.countedAt != null ? String(line.damagedQty ?? '0') : '')
+                  }
                   onChange={(e) => setDamaged({ ...damaged, [line.id]: e.target.value })}
                 />
                 <div className="wh-stack wh-stack--tight">
@@ -628,7 +700,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                 label={t('warehouseReceiveReceiveDetailView.supplierSerialsFor', {
                   skuCode: line.variant.skuCode,
                 })}
-                required={lineQty(line.id, line.receivedQty)}
+                required={lineQty(line.id, recordedQtyOf(line))}
                 serials={serialsByLine[line.id] ?? []}
                 onChange={(next) => setSerialsByLine({ ...serialsByLine, [line.id]: next })}
                 hint={t('warehouseReceiveReceiveDetailView.scanWhatTheSupplierPrinted')}
@@ -669,6 +741,13 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
             code: r.warehouse.code,
           })}
         </p>
+        {uncountedLines.length > 0 && (
+          <div className="wh-callout" role="status" data-testid="uncounted-dialog-notice">
+            {t('warehouseReceiveReceiveDetailView.notCountedStockNothing', {
+              skus: uncountedSkus,
+            })}
+          </div>
+        )}
       </ConfirmDialog>
 
       <Dialog

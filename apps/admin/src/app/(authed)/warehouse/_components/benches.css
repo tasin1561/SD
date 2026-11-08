@@ -374,6 +374,11 @@ p.wh-alert {
   background: var(--green-tint);
   color: var(--green-on-tint);
 }
+.wh-tag[data-tone='warn'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
 .wh-thumb {
   flex: none;
   width: 48px;
