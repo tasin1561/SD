@@ -81,9 +81,51 @@ export class ConfirmationPolicyService {
       });
       return 'DEFERRED';
     }
-    await this.callQueue.enqueueOrder(orderId, ctx);
-    await this.clearDeadline(orderId);
+    await this.queueForCall(orderId, ctx);
     return 'ENQUEUED';
+  }
+
+  /**
+   * Put a PENDING_CONFIRMATION order in the call queue without ever leaving
+   * a window in which the TTL sweeper could auto-confirm it.
+   *
+   * The deadline is cleared FIRST, then the entry is enqueued. The sweeper's
+   * claim (`autoConfirmClaim`) is a compare-and-set on
+   * `confirmation_deadline_at IS NOT NULL AND <= now` inside its writing
+   * transaction, so once the clear has committed a sweep cannot claim the
+   * order, whatever the enqueue is doing. The old order (enqueue, then clear)
+   * left a gap in which a sweep could confirm an order a human had just queued.
+   * If the enqueue throws, the previous deadline is put back so the order is
+   * not stranded with neither a call nor a clock.
+   *
+   * Reuses the existing CAS rather than a transaction: CallQueueService owns
+   * its own writes and must stay free of Order knowledge (CC-1).
+   */
+  async queueForCall(orderId: string, ctx?: ClientContext): Promise<{ readonly created: boolean }> {
+    const before = await this.prisma.client.order.findUnique({
+      where: { id: orderId },
+      select: { confirmationDeadlineAt: true },
+    });
+    await this.clearDeadline(orderId);
+    try {
+      const r = await this.callQueue.enqueueOrder(orderId, ctx);
+      return { created: r.created };
+    } catch (e) {
+      const prev = before?.confirmationDeadlineAt ?? null;
+      if (prev !== null) {
+        await this.prisma.client.order
+          .updateMany({
+            where: {
+              id: orderId,
+              status: OrderStatus.PENDING_CONFIRMATION,
+              confirmationDeadlineAt: null,
+            },
+            data: { confirmationDeadlineAt: prev },
+          })
+          .catch(() => undefined);
+      }
+      throw e;
+    }
   }
 
   /** Idempotent: clears the TTL clock (order queued for a call, or left PENDING_CONFIRMATION). */

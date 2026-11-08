@@ -10,6 +10,7 @@ import {
   SellerStatus,
   StaffRoleKey,
 } from '@skydrop/db';
+import { CallQueueService } from '../../src/modules/call-queue/services/call-queue.service';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import { CallOutcomeMappingService } from '../../src/modules/call-center/services/call-outcome-mapping.service';
 import {
@@ -619,6 +620,62 @@ describe('Confirmation-call opt-out (e2e)', () => {
         expect(humanRes.ok).toBe(false);
         expect(await counts(id)).toEqual({ events: 1, active: 1 });
         expect((await order(id)).status).toBe(OrderStatus.CONFIRMED);
+      } finally {
+        open();
+        spy.mockRestore();
+      }
+    });
+
+    it('forced interleaving: a sweep landing while send-to-agents is paused mid-enqueue cannot confirm the order', async () => {
+      await receiveStock(a, 10);
+      await setCalls(a, false, 2).expect(200);
+      const id = await createSubmitted(a);
+      await expire(id); // due: the sweeper WOULD claim it if the deadline were still set
+
+      const cq = h.app.get(CallQueueService) as unknown as {
+        enqueueOrder: (...args: unknown[]) => Promise<unknown>;
+      };
+      const original = cq.enqueueOrder.bind(cq);
+      let reachedEnqueue!: () => void;
+      const reached = new Promise<void>((r) => {
+        reachedEnqueue = r;
+      });
+      let open!: () => void;
+      const gate = new Promise<void>((r) => {
+        open = r;
+      });
+      // Hold the human's enqueue; everything else runs live.
+      const spy = jest
+        .spyOn(cq, 'enqueueOrder')
+        .mockImplementationOnce(async (...args: unknown[]) => {
+          reachedEnqueue();
+          await gate;
+          return original(...args);
+        });
+      try {
+        const send = request(h.baseUrl)
+          .post('/seller/orders/confirmation-calls')
+          .set(a.auth)
+          .send({ orderIds: [id] })
+          .then((r) => r);
+        await reached; // the deadline clear has been written; the entry has not
+        const swept = await h.app.get(ConfirmationTtlSweeperService).sweep();
+        expect(swept.confirmed).toBe(0);
+        expect((await order(id)).status).toBe(OrderStatus.PENDING_CONFIRMATION);
+        open();
+        const res = await send;
+        expect(res.status).toBe(200);
+        expect(res.body.results).toEqual([{ orderId: id, outcome: 'QUEUED' }]);
+
+        const row = await order(id);
+        expect(row.status).toBe(OrderStatus.PENDING_CONFIRMATION);
+        expect(row.confirmationDeadlineAt).toBeNull();
+        expect(await openEntries(id)).toBe(1);
+        expect(
+          await h.prisma.orderEvent.count({
+            where: { orderId: id, toStatus: OrderStatus.CONFIRMED },
+          }),
+        ).toBe(0);
       } finally {
         open();
         spy.mockRestore();

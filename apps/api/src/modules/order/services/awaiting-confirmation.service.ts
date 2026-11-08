@@ -49,7 +49,6 @@ export class AwaitingConfirmationService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly callQueue: CallQueueService,
     private readonly policy: ConfirmationPolicyService,
   ) {}
 
@@ -135,8 +134,9 @@ export class AwaitingConfirmationService {
           results.push({ orderId, outcome: 'NOT_PENDING_CONFIRMATION' });
           continue;
         }
-        const r = await this.callQueue.enqueueOrder(orderId, opts.ctx);
-        await this.policy.clearDeadline(orderId);
+        // Clear-then-enqueue inside the policy, so a TTL sweep can never
+        // confirm an order a human has just queued for a call.
+        const r = await this.policy.queueForCall(orderId, opts.ctx);
         results.push({ orderId, outcome: r.created ? 'QUEUED' : 'ALREADY_QUEUED' });
       } catch (e) {
         this.logger.error({ orderId, err: (e as Error).message }, 'Send-to-agents failed');

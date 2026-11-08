@@ -5,12 +5,17 @@ function make(order: { status: OrderStatus; sellerId: string } | null) {
   const findFirst = jest.fn(async (a: { where: { sellerId?: string } }) =>
     order && (!a.where.sellerId || a.where.sellerId === order.sellerId) ? order : null,
   );
-  const enqueueOrder = jest.fn(async () => ({ entry: {}, created: true }));
-  const clearDeadline = jest.fn(async () => undefined);
+  const enqueueOrder = jest.fn(async (_orderId?: string) => ({ entry: {}, created: true }));
+  const clearDeadline = jest.fn(async (_orderId?: string) => undefined);
+  // The policy owns clear-then-enqueue now (no sweep window); the stub keeps
+  // the observable pair so the assertions below still read the same.
+  const queueForCall = jest.fn(async (id: string) => {
+    await clearDeadline(id);
+    return enqueueOrder(id);
+  });
   const svc = new AwaitingConfirmationService(
     { client: { order: { findFirst } } } as never,
-    { enqueueOrder } as never,
-    { clearDeadline } as never,
+    { queueForCall } as never,
   );
   return { svc, enqueueOrder, clearDeadline };
 }

@@ -61,3 +61,44 @@ describe('ConfirmationPolicyService.enqueueOrDefer', () => {
     expect(orderUpdateMany).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('ConfirmationPolicyService.queueForCall', () => {
+  function makeQ(enqueue: () => Promise<{ created: boolean }>, prev: Date | null) {
+    const order: string[] = [];
+    const updateMany = jest.fn(async (a: { data: Record<string, unknown> }) => {
+      order.push(a.data['confirmationDeadlineAt'] === null ? 'clear' : 'restore');
+      return { count: 1 };
+    });
+    const enqueueOrder = jest.fn(async () => {
+      order.push('enqueue');
+      return enqueue();
+    });
+    const svc = new ConfirmationPolicyService(
+      {
+        client: {
+          order: {
+            findUnique: jest.fn(async () => ({ confirmationDeadlineAt: prev })),
+            updateMany,
+          },
+        },
+      } as never,
+      { enqueueOrder } as never,
+      {} as never,
+    );
+    return { svc, order };
+  }
+
+  it('clears the deadline BEFORE it enqueues, so a sweep can never claim the order', async () => {
+    const { svc, order } = makeQ(async () => ({ created: true }), new Date());
+    await expect(svc.queueForCall('o1')).resolves.toEqual({ created: true });
+    expect(order).toEqual(['clear', 'enqueue']);
+  });
+
+  it('puts the previous deadline back when the enqueue fails, and rethrows', async () => {
+    const { svc, order } = makeQ(async () => {
+      throw new Error('queue down');
+    }, new Date());
+    await expect(svc.queueForCall('o1')).rejects.toThrow('queue down');
+    expect(order).toEqual(['clear', 'enqueue', 'restore']);
+  });
+});
