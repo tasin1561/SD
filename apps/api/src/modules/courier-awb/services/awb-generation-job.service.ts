@@ -11,6 +11,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { CourierFeeAccrualService } from '../../seller-wallet-accrual/services/courier-fee-accrual.service';
+import { CourierPickupService } from '../../courier-ops/services/courier-pickup.service';
 import { AwbGenerationService } from './awb-generation.service';
 import { AwbSupersedeService } from './awb-supersede.service';
 
@@ -105,7 +106,53 @@ export class AwbGenerationJobService {
     private readonly generation: AwbGenerationService,
     private readonly supersede: AwbSupersedeService,
     private readonly courierFeeAccrual: CourierFeeAccrualService,
+    private readonly pickups: CourierPickupService,
   ) {}
+
+  /**
+   * CUR-10 amendment #4 — a freshly booked AWB asks for today's van.
+   *
+   * Called ONLY after a booking that really happened (GENERATED /
+   * GENERATED_AWB_LABEL_PENDING), never for ALREADY_HAS_AWB, so a retry
+   * or a sweep re-run is not a second ask. The courier and warehouse are
+   * re-read AFTER the booking because the alternate-courier fallback can
+   * change `courierCode` on the row. Everything else (per-day grain, both
+   * switches, MANUAL skipped, a FAILED day never retried, the HIGH issue)
+   * lives in `raiseIfDue`, which this and `PackService.complete` share —
+   * so a failed day cannot become a retry loop from either entry point.
+   * NEVER throws.
+   */
+  private async askForPickup(shipmentId: string): Promise<void> {
+    try {
+      const s = await this.prisma.client.shipment.findUnique({
+        where: { id: shipmentId },
+        select: {
+          originWarehouseId: true,
+          courierCode: true,
+          courierAccountId: true,
+          isManualCourier: true,
+        },
+      });
+      if (s === null || s.isManualCourier) return;
+      const outcome = await this.pickups.raiseIfDue({
+        warehouseId: s.originWarehouseId,
+        courierCode: s.courierCode,
+        courierAccountId: s.courierAccountId,
+        triggeredByShipmentId: shipmentId,
+      });
+      if (!outcome.fired && outcome.reason !== 'ALREADY_REQUESTED_TODAY') {
+        this.logger.log(
+          { shipmentId, reason: outcome.reason, detail: outcome.detail ?? null },
+          'AWB-booked auto-pickup: no van requested',
+        );
+      }
+    } catch (err) {
+      this.logger.warn(
+        { shipmentId, err: err instanceof Error ? err.message : String(err) },
+        'AWB-booked auto-pickup check failed — pack time and the Pickups screen still cover it',
+      );
+    }
+  }
 
   /**
    * Why the shipment is being retired, in words that send the reader to
@@ -209,6 +256,7 @@ export class AwbGenerationJobService {
           if (orderId !== null) {
             await this.courierFeeAccrual.tryEarlyAccrual(orderId);
           }
+          if (gen.status === 'GENERATED') await this.askForPickup(shipment.id);
           continue;
         }
         if (gen.status === 'GENERATED_AWB_LABEL_PENDING') {
@@ -231,6 +279,7 @@ export class AwbGenerationJobService {
           if (orderId !== null) {
             await this.courierFeeAccrual.tryEarlyAccrual(orderId);
           }
+          await this.askForPickup(shipment.id);
           continue;
         }
         // CUR-17 — a MANUAL-policy parcel that reached manifest close
@@ -443,6 +492,7 @@ export class AwbGenerationJobService {
         // R1c early-accrual, same as the manifest path: a no-op for
         // AT_DELIVERY sellers, and never allowed to fail the job.
         await this.courierFeeAccrual.tryEarlyAccrual(orderId);
+        await this.askForPickup(shipmentId);
         if (gen.status === 'GENERATED_AWB_LABEL_PENDING') {
           // The AWB is durably persisted; only the label upload is
           // outstanding. Throwing hands it back to BullMQ, whose retry

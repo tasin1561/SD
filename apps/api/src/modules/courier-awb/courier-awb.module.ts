@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
+import { CourierOpsModule } from '../courier-ops/courier-ops.module';
 import { CourierSharedModule } from '../courier-shared/courier-shared.module';
 import { CourierShiprocketModule } from '../courier-shiprocket/courier-shiprocket.module';
 import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
@@ -53,6 +54,8 @@ import { SystemIssuesModule } from '../system-issues/system-issues.module';
     // CUR-17 — the TTL sweep says out loud that it chose for somebody.
     SystemIssuesModule,
     SellerWalletAccrualModule,
+    // CUR-10 #4 — a booked AWB asks for today's van (CourierPickupService).
+    CourierOpsModule,
     // The R3 dep-free bus. The order module publishes to it; this
     // module subscribes, which is what lets the AWB be generated at
     // confirmation without closing an order ↔ courier-awb cycle.

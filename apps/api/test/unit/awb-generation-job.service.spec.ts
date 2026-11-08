@@ -105,13 +105,27 @@ function makeService(
   const tryEarlyAccrual = jest.fn(async () => undefined);
   const courierFeeAccrual = { tryEarlyAccrual };
 
+  const raiseIfDue = jest.fn(async (_i: AnyArgs) => ({ fired: true, reason: 'REQUESTED' }));
   const svc = new AwbGenerationJobService(
-    { client } as unknown as PrismaService,
+    {
+      client: {
+        ...client,
+        shipment: {
+          findUnique: jest.fn(async () => ({
+            originWarehouseId: 'wh-1',
+            courierCode: 'delhivery',
+            courierAccountId: null,
+            isManualCourier: false,
+          })),
+        },
+      },
+    } as unknown as PrismaService,
     audit as unknown as AuditLogService,
     orderWrite as unknown as OrderWriteService,
     generation as unknown as AwbGenerationService,
     supersedeSvc as unknown as AwbSupersedeService,
     courierFeeAccrual as unknown as CourierFeeAccrualService,
+    { raiseIfDue } as never,
   );
   return {
     svc,
@@ -121,6 +135,7 @@ function makeService(
     generateForShipment,
     supersede,
     tryEarlyAccrual,
+    raiseIfDue,
   };
 }
 

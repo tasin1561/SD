@@ -225,6 +225,22 @@
     > straight to DISPATCHED, or a god-mode jump past PACKED; its van is
     > arranged on /warehouse/pickups.
     >
+    > **CUR-10 amendment #4, 2026-11-08 — the van is asked for when the AWB is
+    > booked, and pack time stays as the BACKSTOP.** The owner wanted the
+    > courier to have the whole day's notice, not the notice from the last box.
+    > `AwbGenerationJobService` (`processOrder`, plus the `processManifest`
+    > catch-up) calls `CourierPickupService.raiseIfDue` after a FRESH booking
+    > (`GENERATED` / `GENERATED_AWB_LABEL_PENDING`, never `ALREADY_HAS_AWB`),
+    > re-reading courier + `originWarehouseId` from the shipment AFTER the
+    > booking (the alternate-courier fallback can change the courier). Bare
+    > CONFIRMED is not the hook: it does not know the courier. The pack-time
+    > call is KEPT: a pickup is per DAY, so an order confirmed Monday and packed
+    > Tuesday would otherwise have no Tuesday van; `raiseIfDue` is a no-op when
+    > the day is already claimed and raises afresh on a later day. Both entry
+    > points share `raiseIfDue`'s FAILED-day lookup, so a failed day is still
+    > never retried from either (a later AWB or box only bumps the HIGH issue).
+    > Pinned by `awb-booked-pickup.spec.ts`.
+    >
     > **Amendment, 2026-09-19 — the per-courier location key is now TRUE,
     > and a courier that does not use one is not asked for one.** The
     > paragraph above claimed `courier.<code>_pickup_location`; the pickup
