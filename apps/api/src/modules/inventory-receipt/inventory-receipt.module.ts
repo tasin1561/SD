@@ -13,6 +13,7 @@ import { TicketModule } from '../ticket/ticket.module';
 import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
 import { SellerNotificationPreferenceModule } from '../seller-notification-preference/seller-notification-preference.module';
 import { ReceiptShortfallTicketService } from './services/receipt-shortfall-ticket.service';
+import { ReceiptCountAmendmentService } from './services/receipt-count-amendment.service';
 
 /**
  * Goods receipts — the counting station, invoked once per consignment LEG.
@@ -41,6 +42,7 @@ import { ReceiptShortfallTicketService } from './services/receipt-shortfall-tick
     GoodsReceiptService,
     TransitArrivalService,
     ReceiptShortfallTicketService,
+    ReceiptCountAmendmentService,
     SellerJwtGuard,
     StaffJwtGuard,
   ],

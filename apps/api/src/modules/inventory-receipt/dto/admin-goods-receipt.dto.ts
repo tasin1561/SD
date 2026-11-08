@@ -174,3 +174,34 @@ export class CancelGoodsReceiptDto {
   @MaxLength(500)
   reason!: string;
 }
+
+export class AmendReceiptCountDto {
+  @ApiProperty({ minimum: 0, description: 'The corrected count of good units received' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  receivedQty!: number;
+
+  @ApiProperty({
+    required: false,
+    minimum: 0,
+    description: 'The corrected damaged count. Omit to leave the damaged count as it is.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  damagedQty?: number;
+
+  @ApiProperty({
+    minLength: 10,
+    maxLength: 500,
+    description: 'Why the recorded count is being overridden. Audited and put on the leg’s ticket.',
+  })
+  @IsString()
+  @MinLength(10)
+  @MaxLength(500)
+  reason!: string;
+}

@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -17,6 +18,7 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
 import {
+  AmendReceiptCountDto,
   CancelGoodsReceiptDto,
   ListAdminGoodsReceiptsQueryDto,
   RecordReceiptLinesDto,
@@ -27,6 +29,10 @@ import {
   type GoodsReceiptDetailView,
   type GoodsReceiptView,
 } from './services/goods-receipt.service';
+import {
+  ReceiptCountAmendmentService,
+  type AmendCountResult,
+} from './services/receipt-count-amendment.service';
 import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 import { BackfillShortfallTicketsDto } from './dto/backfill-shortfall-tickets.dto';
 import {
@@ -51,6 +57,7 @@ export class AdminGoodsReceiptController {
   constructor(
     private readonly svc: GoodsReceiptService,
     private readonly shortfall: ReceiptShortfallTicketService,
+    private readonly amendment: ReceiptCountAmendmentService,
   ) {}
 
   /**
@@ -114,6 +121,23 @@ export class AdminGoodsReceiptController {
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<GoodsReceiptView> {
     return this.svc.recordLines(staff.id, id, body.lines, ctx);
+  }
+
+  @Patch(':id/lines/:lineId/count')
+  @RequirePermissions('inventory.goods_receipts.amend_count')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Amend a leg line’s counted quantity while ARRIVING (reason required; COMPLETED -> RECEIPT_COUNT_ALREADY_BANKED)',
+  })
+  amendCount(
+    @Param('id', uuid()) id: string,
+    @Param('lineId', uuid()) lineId: string,
+    @Body() body: AmendReceiptCountDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<AmendCountResult> {
+    return this.amendment.amend(staff.id, id, lineId, body, ctx);
   }
 
   @Post(':id/complete')

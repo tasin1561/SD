@@ -291,6 +291,14 @@ export const PERMISSIONS = [
     group: 'Inventory',
   },
   {
+    key: 'inventory.goods_receipts.amend_count',
+    label: 'Amend a received count',
+    description:
+      'Overwrite the quantity counted on a consignment leg that is still being received. Rewrites what the client is told arrived, so a reason is recorded and the leg’s ticket is updated.',
+    group: 'Inventory',
+    dangerous: true,
+  },
+  {
     key: 'inventory.transfers.manage',
     label: 'Transfer stock',
     description: 'Move stock between bins or warehouses.',

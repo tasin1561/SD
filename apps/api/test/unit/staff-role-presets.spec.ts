@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ALL_PERMISSION_KEYS, PERMISSIONS } from '../../src/common/auth/permissions';
 import { ADMIN_WITHHELD, STAFF_ROLE_PRESETS } from '../../src/common/auth/staff-role-presets';
@@ -15,30 +15,67 @@ import { ADMIN_WITHHELD, STAFF_ROLE_PRESETS } from '../../src/common/auth/staff-
  * the question is whether the committed SQL matches the committed
  * constant, which is answerable in milliseconds and before CI.
  */
-const MIGRATION = join(
-  __dirname,
-  '../../../../packages/db/prisma/migrations/20261005000100_staff_access_tier_roles/migration.sql',
-);
+const MIGRATIONS_DIR = join(__dirname, '../../../../packages/db/prisma/migrations');
+const TIER_MIGRATION = join(MIGRATIONS_DIR, '20261005000100_staff_access_tier_roles/migration.sql');
 
-/** `('admin', 'orders.view'),` → `['admin', 'orders.view']`, comments stripped. */
-function rowsFromMigration(): readonly (readonly [string, string])[] {
-  const sql = readFileSync(MIGRATION, 'utf8')
+/**
+ * The tier file is where the three presets were SEEDED, but it is not the
+ * only place their rows can live, and it must not become one.
+ *
+ * An applied migration is history: Prisma stores a checksum per applied
+ * migration, so editing one makes `migrate deploy` fail on the next
+ * deploy. A permission added after 2026-10-05 therefore has to be granted
+ * by a NEW migration — and if this spec read only the tier file, the
+ * honest way to add a key would look exactly like a missing grant.
+ *
+ * So the comparison reads EVERY migration and unions the rows. The
+ * both-directions property is what matters and it survives: the preset
+ * constant and the committed SQL still have to agree in full, the SQL is
+ * just allowed to arrive in more than one file. Rows for roles that are
+ * not one of the three tiers (`warehouse_supervisor` and friends, seeded
+ * by 20260803210000) are filtered out per preset, as they always were.
+ */
+function rowsFrom(file: string): readonly (readonly [string, string])[] {
+  const sql = readFileSync(file, 'utf8')
     // Comments FIRST: prose about a rule reads exactly like the rule to
     // a regex (the lesson from the spec that asserted on a docblock and
     // passed while testing nothing).
     .split('\n')
     .filter((line) => !line.trimStart().startsWith('--'))
     .join('\n');
+
+  /*
+    Only the statements that write THIS table. Reading the whole file and
+    matching every `('a', 'b')` pair was tried and is wrong: a tuple shape
+    is not a grant, and other migrations are full of two-string tuples
+    that look identical to a regex — role keys beside labels, seller-side
+    catalogues, enum backfills. Scoping to the statement is what makes
+    "every migration" safe to read.
+  */
   const out: [string, string][] = [];
-  const re = /\('([a-z_]+)',\s*'([a-z0-9_.]+)'\)/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(sql)) !== null) {
-    const key = m[1];
-    const permission = m[2];
-    if (key === undefined || permission === undefined) continue;
-    out.push([key, permission]);
+  for (const chunk of sql.split(/INSERT\s+INTO\s+/i).slice(1)) {
+    if (!/^"staff_role_permissions"/i.test(chunk.trimStart())) continue;
+    const statement = chunk.split(';')[0] ?? '';
+    const re = /\('([a-z_]+)',\s*'([a-z0-9_.]+)'\)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(statement)) !== null) {
+      const key = m[1];
+      const permission = m[2];
+      if (key === undefined || permission === undefined) continue;
+      out.push([key, permission]);
+    }
   }
   return out;
+}
+
+/** Every migration, oldest first, so a later grant is found too. */
+function rowsFromMigration(): readonly (readonly [string, string])[] {
+  return readdirSync(MIGRATIONS_DIR)
+    .filter((d) => /^\d{14}_/.test(d))
+    .sort()
+    .map((d) => join(MIGRATIONS_DIR, d, 'migration.sql'))
+    .filter((f) => existsSync(f))
+    .flatMap((f) => rowsFrom(f));
 }
 
 describe('staff access tiers (Admin / Support / Read-only)', () => {
@@ -46,7 +83,15 @@ describe('staff access tiers (Admin / Support / Read-only)', () => {
 
   it('seeds exactly the three presets, by key', () => {
     expect(STAFF_ROLE_PRESETS.map((p) => p.key)).toEqual(['admin', 'support', 'readonly']);
-    expect([...new Set(sqlRows.map(([k]) => k))].sort()).toEqual(['admin', 'readonly', 'support']);
+    // Scoped to the TIER file on purpose: it is the migration that creates
+    // the three roles, so it is the one that may not invent a fourth. The
+    // union across every migration naturally carries the older per-function
+    // roles too, which says nothing about the tiers.
+    expect([...new Set(rowsFrom(TIER_MIGRATION).map(([k]) => k))].sort()).toEqual([
+      'admin',
+      'readonly',
+      'support',
+    ]);
   });
 
   for (const preset of STAFF_ROLE_PRESETS) {
