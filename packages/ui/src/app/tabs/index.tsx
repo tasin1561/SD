@@ -12,7 +12,6 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { ms, reducedMotion } from '../motion/motion';
 import './tabs.css';
 
 const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -42,13 +41,13 @@ export type TabLink = ComponentType<{
 }>;
 
 /**
- * Tabs (u09 + the storytelling "liquid bead"). ONE accent pill slides
- * between tabs and squashes-and-stretches as it travels; the panel
+ * Tabs (u09). ONE full-round accent pill slides between tabs; the panel
  * cross-fades and rises in.
  *
- * The pill is three pieces — two round caps and a middle scaled on X —
- * so it can change width with transforms only and its round ends never
- * distort.
+ * The pill is a single element. Its width snaps to the new tab in one
+ * untransitioned step while `translateX` (the only transition) carries
+ * the travel, so the caps stay true circles — scaling one element would
+ * distort them.
  *
  * In-page tabs are a WAI-ARIA tablist: roving tabindex, arrow keys /
  * Home / End move AND select (automatic activation), panels are
@@ -88,7 +87,6 @@ export function Tabs({
   const baseId = useId();
   const root = useRef<HTMLDivElement>(null);
   const prev = useRef<string | null>(null);
-  const [moving, setMoving] = useState(false);
 
   const select = (id: string): void => {
     if (value === undefined) setInner(id);
@@ -108,18 +106,8 @@ export function Tabs({
       el.style.setProperty('--bead-x', `${active.offsetLeft}px`);
       el.style.setProperty('--bead-w', `${active.offsetWidth}px`);
       el.style.setProperty('--bead-h', `${active.offsetHeight}px`);
-      // The middle strip is 1px wide and scaled: a unitless factor.
-      el.style.setProperty(
-        '--bead-mid',
-        String(Math.max(0, active.offsetWidth - active.offsetHeight)),
-      );
     };
     place();
-    let t = 0;
-    if (prev.current !== null && prev.current !== selected && !reducedMotion()) {
-      setMoving(true);
-      t = window.setTimeout(() => setMoving(false), ms(380));
-    }
     // Enable the transition only after the first placement, so the pill
     // does not fly in from the left edge on mount.
     if (prev.current === null) {
@@ -131,7 +119,6 @@ export function Tabs({
     const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(place);
     ro?.observe(el);
     return () => {
-      window.clearTimeout(t);
       ro?.disconnect();
     };
   }, [selected, items]);
@@ -174,13 +161,7 @@ export function Tabs({
     </>
   );
 
-  const bead = (
-    <span className="sk-tabs__bead" aria-hidden>
-      <span className="sk-tabs__cap sk-tabs__cap--l" />
-      <span className="sk-tabs__mid" />
-      <span className="sk-tabs__cap sk-tabs__cap--r" />
-    </span>
-  );
+  const bead = <span className="sk-tabs__pill" aria-hidden />;
 
   const barClass = clsx(
     'sk-tabs__list',
@@ -191,12 +172,7 @@ export function Tabs({
   if (routes) {
     return (
       <nav className={clsx('sk-tabs', className)} aria-label={label}>
-        <div
-          ref={root}
-          className={barClass}
-          data-moving={moving ? '1' : undefined}
-          onKeyDown={onKey}
-        >
+        <div ref={root} className={barClass} onKeyDown={onKey}>
           {bead}
           {items.map((t) => {
             const on = t.id === selected;
@@ -235,14 +211,7 @@ export function Tabs({
 
   return (
     <div className={clsx('sk-tabs', className)}>
-      <div
-        ref={root}
-        role="tablist"
-        aria-label={label}
-        className={barClass}
-        data-moving={moving ? '1' : undefined}
-        onKeyDown={onKey}
-      >
+      <div ref={root} role="tablist" aria-label={label} className={barClass} onKeyDown={onKey}>
         {bead}
         {items.map((t) => {
           const on = t.id === selected;
