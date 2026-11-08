@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { ArrowRight, Building2, Store, UserRound, type LucideIcon } from 'lucide-react';
 import { DEFAULT_LOCALE, makeTranslator, type Locale } from '../i18n';
-import { UI_MESSAGES } from '../i18n/ui-messages';
+import { UI_MESSAGES, uiCatalog } from '../i18n/ui-messages';
 
 /**
  * The CONSOLE DIRECTORY — the one place that knows which Skydrop
@@ -125,7 +125,7 @@ export function OtherPortals({
   /** The reader's UI language (server pages pass it from the `sd-lang` cookie). */
   readonly locale?: Locale;
 }): ReactElement {
-  const t = makeTranslator(UI_MESSAGES[locale], UI_MESSAGES.en);
+  const t = makeTranslator(uiCatalog(locale), UI_MESSAGES.en);
   const others = CONSOLES.filter((c) => c.key !== self);
   return (
     <nav className="sk-signin__portals" aria-label={t('ui.portals.aria')}>

@@ -26,7 +26,7 @@ import {
   type Locale,
   type Translate,
 } from '../i18n';
-import { UI_MESSAGES, type UiMessageKey } from '../i18n/ui-messages';
+import { UI_MESSAGES, uiCatalog, type UiMessageKey } from '../i18n/ui-messages';
 import './language-switch.css';
 
 /**
@@ -131,9 +131,20 @@ export function useSetLocale(): (next: Locale) => void {
 export function useTranslator<K extends string>(catalogs: {
   readonly en: Catalog<K>;
   readonly bn: Catalog<K>;
+  /*
+    Optional, because an app may not speak every locale the TYPE admits.
+    `hi` arrived for the admin portal on 2026-11-08; the client and
+    member-store consoles carry no Hindi catalogue and fall through to
+    English below. The same holds for any locale added later: a console
+    gains the language when it gains the words, not when the union does.
+  */
+  readonly hi?: Catalog<K> | undefined;
 }): Translate<K> {
   const locale = useLocale();
-  return useMemo(() => makeTranslator(catalogs[locale], catalogs.en), [catalogs, locale]);
+  return useMemo(
+    () => makeTranslator(catalogs[locale] ?? catalogs.en, catalogs.en),
+    [catalogs, locale],
+  );
 }
 
 /**
@@ -155,7 +166,11 @@ export function richMessage(
 
 /** The shared primitives' own words (Shell, Pagination, Dismiss, …). */
 export function useUiT(): Translate<UiMessageKey> {
-  return useTranslator(UI_MESSAGES);
+  const locale = useLocale();
+  // `uiCatalog` rather than indexing UI_MESSAGES: the Hindi map is
+  // deliberately partial while the translation lands in phases, and it
+  // fills each gap from English per key.
+  return useMemo(() => makeTranslator(uiCatalog(locale), UI_MESSAGES.en), [locale]);
 }
 
 /**
@@ -163,10 +178,27 @@ export function useUiT(): Translate<UiMessageKey> {
  * its OWN language and never translated. A radiogroup, arrow keys move and
  * select, one tab stop — the same ARIA shape as ThemeSwitch.
  */
-export function LanguageSwitch({ className }: { className?: string | undefined }): ReactElement {
+export function LanguageSwitch({
+  className,
+  locales,
+}: {
+  className?: string | undefined;
+  /*
+    Which languages THIS console offers. Defaults to every locale the
+    type admits, which is right for an app translated into all of them
+    and wrong for one that is not: `hi` exists for the admin portal, and
+    a client console showing हिन्दी would flip and change nothing.
+
+    So an app that is not fully translated passes its own list. The
+    honest test is whether a catalogue exists, not whether the type
+    allows the string.
+  */
+  locales?: readonly Locale[] | undefined;
+}): ReactElement {
   const locale = useLocale();
   const setLocale = useSetLocale();
   const t = useUiT();
+  const shown = locales ?? LOCALES;
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>): void {
     const dir =
@@ -177,8 +209,8 @@ export function LanguageSwitch({ className }: { className?: string | undefined }
           : 0;
     if (dir === 0) return;
     e.preventDefault();
-    const i = LOCALES.indexOf(locale);
-    const next = LOCALES[(i + dir + LOCALES.length) % LOCALES.length];
+    const i = shown.indexOf(locale);
+    const next = shown[(i + dir + shown.length) % shown.length];
     if (next) {
       setLocale(next);
       const el = e.currentTarget.querySelector<HTMLElement>(`[data-locale="${next}"]`);
@@ -193,7 +225,7 @@ export function LanguageSwitch({ className }: { className?: string | undefined }
       className={clsx('sk-langsw', className)}
       onKeyDown={onKeyDown}
     >
-      {LOCALES.map((l) => (
+      {shown.map((l) => (
         <button
           key={l}
           type="button"

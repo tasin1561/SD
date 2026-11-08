@@ -13,7 +13,10 @@ import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
 export function PrefsControl(): ReactElement {
   return (
     <div className="as-prefs">
-      <LanguageSwitch />
+      {/* English and Bangla only: this console holds no Hindi
+          catalogue, and a switch that flips without changing the
+          words is worse than one language fewer. */}
+      <LanguageSwitch locales={['en', 'bn']} />
       <ThemeSwitch />
     </div>
   );

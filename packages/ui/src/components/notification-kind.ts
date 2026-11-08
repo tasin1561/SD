@@ -1,5 +1,5 @@
 import { DEFAULT_LOCALE, makeTranslator, type Locale } from '../app/i18n';
-import { UI_MESSAGES } from '../app/i18n/ui-messages';
+import { UI_MESSAGES, uiCatalog } from '../app/i18n/ui-messages';
 import {
   AlertTriangle,
   Bell,
@@ -69,7 +69,7 @@ export function notificationKindStyle(group: string | null): NotificationKindSty
  * worse.
  */
 export function agoLabel(iso: string, now: number, locale: Locale = DEFAULT_LOCALE): string {
-  const t = makeTranslator(UI_MESSAGES[locale], UI_MESSAGES.en);
+  const t = makeTranslator(uiCatalog(locale), UI_MESSAGES.en);
   const ts = Date.parse(iso);
   if (!Number.isFinite(ts)) return '';
   const mins = Math.floor((now - ts) / 60_000);

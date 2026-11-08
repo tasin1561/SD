@@ -13,7 +13,10 @@ import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
 export function PrefsControl(): ReactElement {
   return (
     <div className="ad-prefs">
-      <LanguageSwitch />
+      {/* The admin portal is the one console carrying Hindi (2026-11-08).
+          Stated explicitly rather than defaulted, so adding a fourth
+          locale to the shared list cannot silently offer it here. */}
+      <LanguageSwitch locales={['en', 'bn', 'hi']} />
       <ThemeSwitch />
     </div>
   );

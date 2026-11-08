@@ -28,7 +28,22 @@
  * English is the default: no cookie, no storage, an unknown value → `en`.
  */
 
-export const LOCALES = ['en', 'bn'] as const;
+/*
+  ── EVERY LOCALE THE CONSOLES CAN SPEAK, NOT EVERY ONE THEY DO ───────
+  `hi` joined on 2026-11-08 for the admin portal. It is listed here
+  because the TYPE has to admit it before any app can carry a Hindi
+  catalogue — but being listed is not the same as being offered.
+
+  Which locales a given console SHOWS is decided by that app, through
+  `LanguageSwitch`'s `locales` prop: admin passes all three, the client
+  and member-store consoles pass `['en', 'bn']` because they hold no
+  Hindi strings. Offering a language an app cannot speak is worse than
+  not offering it — the switch would flip and nothing would change.
+
+  `apps/track` keeps its own separate three-locale table and is
+  unaffected by any of this.
+*/
+export const LOCALES = ['en', 'bn', 'hi'] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = 'en';
 
@@ -44,21 +59,22 @@ export const LOCALE_COOKIE_NAME = LOCALE_STORAGE_KEY;
 export const LOCALE_NATIVE_NAMES: Record<Locale, string> = {
   en: 'English',
   bn: 'বাংলা',
+  hi: 'हिन्दी',
 };
 
 const LOCALE_COOKIE_ATTRIBUTES = `; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
 
 /** Narrow any cookie/storage value to a Locale; anything else is English. */
 export function resolveLocale(value: string | null | undefined): Locale {
-  return value === 'bn' ? 'bn' : DEFAULT_LOCALE;
+  return isLocale(value) ? value : DEFAULT_LOCALE;
 }
 
 /** True only for a value that IS a supported locale (no defaulting). */
 export function isLocale(value: string | null | undefined): value is Locale {
-  return value === 'en' || value === 'bn';
+  return LOCALES.includes(value as Locale);
 }
 
-/** Both supported languages read left-to-right; kept as a function so a future RTL one is one edit. */
+/** Every supported language reads left-to-right; kept as a function so a future RTL one is one edit. */
 export function localeDir(_locale: Locale): 'ltr' | 'rtl' {
   return 'ltr';
 }

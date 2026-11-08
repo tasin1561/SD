@@ -2,26 +2,28 @@ import { defineMessages } from '../define';
 
 /** Words every screen shares. Screen-specific copy lives in that screen's namespace. */
 export const common = defineMessages({
-  'common.email': ['Email', 'ইমেইল'],
-  'common.password': ['Password', 'পাসওয়ার্ড'],
-  'common.loading': ['Loading…', 'লোড হচ্ছে…'],
-  'common.retry': ['Retry', 'আবার চেষ্টা করুন'],
-  'common.tryAgain': ['Try again', 'আবার চেষ্টা করুন'],
-  'common.cancel': ['Cancel', 'বাতিল'],
-  'common.back': ['Back', 'ফিরে যান'],
-  'common.yes': ['Yes', 'হ্যাঁ'],
-  'common.no': ['No', 'না'],
-  'common.all': ['All', 'সব'],
-  'common.search': ['Search', 'খুঁজুন'],
-  'common.save': ['Save', 'সংরক্ষণ করুন'],
-  'common.saving': ['Saving…', 'সংরক্ষণ হচ্ছে…'],
-  'common.requestFailed': ['Request failed.', 'অনুরোধ ব্যর্থ হয়েছে।'],
+  'common.email': ['Email', 'ইমেইল', 'ईमेल'],
+  'common.password': ['Password', 'পাসওয়ার্ড', 'पासवर्ड'],
+  'common.loading': ['Loading…', 'লোড হচ্ছে…', 'लोड हो रहा है…'],
+  'common.retry': ['Retry', 'আবার চেষ্টা করুন', 'फिर कोशिश करें'],
+  'common.tryAgain': ['Try again', 'আবার চেষ্টা করুন', 'फिर कोशिश करें'],
+  'common.cancel': ['Cancel', 'বাতিল', 'रद्द करें'],
+  'common.back': ['Back', 'ফিরে যান', 'वापस'],
+  'common.yes': ['Yes', 'হ্যাঁ', 'हाँ'],
+  'common.no': ['No', 'না', 'नहीं'],
+  'common.all': ['All', 'সব', 'सभी'],
+  'common.search': ['Search', 'খুঁজুন', 'खोजें'],
+  'common.save': ['Save', 'সংরক্ষণ করুন', 'सेव करें'],
+  'common.saving': ['Saving…', 'সংরক্ষণ হচ্ছে…', 'सेव हो रहा है…'],
+  'common.requestFailed': ['Request failed.', 'অনুরোধ ব্যর্থ হয়েছে।', 'रिक्वेस्ट नाकाम रही।'],
   'common.unreachable': [
     'Skydrop could not be reached just now ({status}). Nothing was changed — try again in a moment.',
     'এই মুহূর্তে Skydrop-এ পৌঁছানো যায়নি ({status})। কিছুই বদলায়নি — একটু পরে আবার চেষ্টা করুন।',
+    'इस वक़्त Skydrop तक नहीं पहुँचा जा सका ({status})। कुछ भी नहीं बदला — ज़रा देर में फिर कोशिश करें।',
   ],
-  // Plural suffixes. English builds "issue" + "s"; Bangla has no plural suffix, so its half is
-  // empty ON PURPOSE (the catalogue spec exempts exactly these keys from the non-empty rule).
-  'common.pluralS': ['s', ''],
-  'common.pluralEs': ['es', ''],
+  // Plural suffixes. English builds "issue" + "s"; neither Bangla nor Hindi has a plural
+  // suffix, so both halves are empty ON PURPOSE (the catalogue spec exempts exactly these
+  // keys from the non-empty rule).
+  'common.pluralS': ['s', '', ''],
+  'common.pluralEs': ['es', '', ''],
 });

@@ -144,6 +144,8 @@ const en = {
   'ui.ac.labelAddress': 'Suggested label address',
   'ui.ac.rto': 'Return risk: {pct}%',
   'ui.ac.rtoNone': 'Return risk: not enough data yet',
+  'ui.ac.questions.title': 'Ask the customer',
+  'ui.ac.attribution.ola': 'Ola Maps',
   'ui.ac.others': 'Other offices of this pincode ({n})',
   'ui.ac.typeToSearch': 'Type to search…',
   'ui.ac.noOffice': 'No office of this pincode matches that.',
@@ -295,6 +297,8 @@ const bn: Record<UiMessageKey, string> = {
   'ui.ac.labelAddress': 'প্রস্তাবিত লেবেলের ঠিকানা',
   'ui.ac.rto': 'ফেরতের ঝুঁকি: {pct}%',
   'ui.ac.rtoNone': 'ফেরতের ঝুঁকি: এখনো যথেষ্ট তথ্য নেই',
+  'ui.ac.questions.title': 'গ্রাহককে জিজ্ঞেস করুন',
+  'ui.ac.attribution.ola': 'Ola Maps',
   'ui.ac.others': 'এই পিনকোডের অন্যান্য অফিস ({n})',
   'ui.ac.typeToSearch': 'খুঁজতে টাইপ করুন…',
   'ui.ac.noOffice': 'এই পিনকোডের কোনো অফিস এর সাথে মেলেনি।',
@@ -308,4 +312,186 @@ const bn: Record<UiMessageKey, string> = {
   'ui.table.selectAll': 'সব সারি বেছে নিন',
 };
 
-export const UI_MESSAGES = { en, bn } as const;
+/**
+ * Hindi for the shared primitives (2026-11-08).
+ *
+ * ── WHY IT IS A PARTIAL MAP AND NOT A FULL ONE ───────────────────────
+ * Hindi is arriving across the estate in phases, and `bn` above is typed
+ * `Record<UiMessageKey, string>` precisely so a missing Bangla string
+ * cannot compile. Holding Hindi to that same rule today would mean
+ * either eight thousand strings in one commit or a tree that does not
+ * build — so this is `Partial`, and `uiCatalog` falls back per key.
+ *
+ * The fallback is ENGLISH, never Bangla: a Hindi reader shown Bangla has
+ * been handed a script they may not read, where English is the language
+ * the console already speaks.
+ *
+ * When this map is complete, change the type to `Record<UiMessageKey,
+ * string>` and the compiler starts guarding it the way it guards Bangla.
+ */
+const hi: Partial<Record<UiMessageKey, string>> = {
+  'ui.language': 'भाषा',
+  'ui.loading': 'लोड हो रहा है…',
+  'ui.working': 'काम चल रहा है…',
+  'ui.done': 'हो गया',
+  'ui.complete': 'पूरा',
+  'ui.failed': 'नाकाम रहा',
+  'ui.failedRetry': 'नाकाम रहा, फिर कोशिश करें',
+  'ui.retry': 'फिर कोशिश करें',
+  'ui.cancel': 'रद्द करें',
+  'ui.close': 'बंद करें',
+  'ui.continue': 'आगे बढ़ें',
+  'ui.dismiss': 'हटाएँ',
+  'ui.error.title': 'कुछ गड़बड़ हो गई',
+
+  'ui.ago.now': 'अभी',
+  'ui.ago.minutes': '{n} मिनट पहले',
+  'ui.ago.hours': '{n} घंटे पहले',
+  'ui.ago.yesterday': 'कल',
+
+  'ui.shell.main': 'मुख्य',
+  'ui.shell.openMenu': 'नेविगेशन मेन्यू खोलें',
+  'ui.shell.closeMenu': 'नेविगेशन मेन्यू बंद करें',
+  'ui.shell.navigation': 'नेविगेशन',
+  'ui.shell.drawerDescription': 'मुख्य नेविगेशन और अकाउंट के काम',
+  'ui.shell.signOut': 'साइन आउट',
+  'ui.shell.signingOut': 'साइन आउट हो रहा है…',
+
+  'ui.theme.label': 'थीम',
+  'ui.theme.system': 'सिस्टम',
+  'ui.theme.light': 'हल्का',
+  'ui.theme.dark': 'गहरा',
+
+  'ui.motion.label': 'एनिमेशन कम करें',
+  'ui.motion.description': 'एनिमेशन तुरंत रुक जाते हैं। इसी ब्राउज़र में सेव रहता है।',
+  'ui.motion.osReduced':
+    'आपका डिवाइस पहले से ही कम एनिमेशन माँगता है, इसलिए यहाँ जो भी चुना हो, एनिमेशन बंद ही रहेगा।',
+
+  'ui.pagination.label': 'पेज बदलें',
+  'ui.pagination.summary': '{total} में से {range} दिखाए जा रहे हैं',
+  'ui.pagination.previous': 'पिछला पेज',
+  'ui.pagination.next': 'अगला पेज',
+  'ui.pagination.pageOf': '{total} में से पेज {page}',
+  'ui.pagination.perPage': 'हर पेज पर {n}',
+  'ui.pagination.rowsPerPage': 'हर पेज पर पंक्तियाँ',
+  'ui.pagination.goTo': 'पेज पर जाएँ',
+  'ui.pagination.ofTotal': '/ {total}',
+
+  'ui.filters.title': 'फ़िल्टर',
+  'ui.filters.noneActive': 'कोई चालू नहीं',
+  'ui.filters.nActive': '{n} चालू',
+  'ui.filters.reset': 'रीसेट',
+  'ui.filters.apply': 'लागू करें',
+  'ui.filters.active': 'चालू फ़िल्टर',
+  'ui.filters.remove': 'फ़िल्टर हटाएँ: {label}',
+
+  'ui.password.show': 'पासवर्ड दिखाएँ',
+  'ui.password.strength': 'पासवर्ड की मज़बूती',
+  'ui.password.requirements': 'पासवर्ड की शर्तें',
+  'ui.password.notSet': 'सेट नहीं है',
+  'ui.password.weak': 'कमज़ोर',
+  'ui.password.fair': 'ठीक-ठाक',
+  'ui.password.good': 'अच्छा',
+  'ui.password.strong': 'मज़बूत',
+  'ui.password.met': ', पूरी हुई',
+  'ui.password.notMet': ', पूरी नहीं हुई',
+
+  'ui.dropzone.label': 'फ़ाइलें यहाँ छोड़ें',
+  'ui.dropzone.button': 'फ़ाइलें चुनें',
+  'ui.dropzone.or': 'या',
+  'ui.dropzone.chosen': 'चुनी हुई फ़ाइलें',
+  'ui.dropzone.remove': '{name} हटाएँ',
+
+  'ui.table.selected': '{n} चुने गए',
+  'ui.stepper.decrease': '{label} कम करें',
+  'ui.stepper.increase': '{label} बढ़ाएँ',
+  'ui.field.counterSr': '{max} अक्षरों में से {count}',
+  'ui.code.character': '{total} में से अक्षर {n}',
+
+  'ui.bell.title': 'सूचनाएँ',
+  'ui.bell.labelUnread': 'सूचनाएँ, {n} बिन पढ़ी',
+  'ui.bell.unread': '{n} बिन पढ़ी',
+  'ui.bell.markAllAria': 'सभी सूचनाएँ पढ़ी हुई चिह्नित करें',
+  'ui.bell.markAllTitle': 'सभी पढ़ी हुई',
+  'ui.bell.markRead': 'पढ़ी हुई',
+  'ui.bell.close': 'सूचनाएँ बंद करें',
+  'ui.bell.filter': 'सूचनाएँ फ़िल्टर करें',
+  'ui.bell.all': 'सभी',
+  'ui.bell.empty': 'अभी कुछ नहीं। जिस चीज़ पर आपका ध्यान चाहिए, वह यहाँ दिखेगी।',
+  'ui.bell.emptyTab': '{tab} में कुछ नहीं।',
+  'ui.bell.dismissAria': 'इस सूचना को हटाएँ',
+  'ui.bell.preferences': 'पसंद',
+  'ui.bell.seeAll': 'सब देखें →',
+
+  'ui.portals.title': 'ग़लत साइन-इन पेज पर आ गए?',
+  'ui.portals.aria': 'Skydrop के बाक़ी पोर्टल',
+  'ui.portals.client.name': 'क्लाइंट पोर्टल',
+  'ui.portals.client.who': 'आप अपना स्टॉक ख़ुद भारत भेजते हैं',
+  'ui.portals.store.name': 'मेंबर स्टोर पोर्टल',
+  'ui.portals.store.who': 'आप किसी क्लाइंट का स्टॉक अपने नाम से बेचते हैं',
+  'ui.portals.associate.name': 'एसोसिएट पोर्टल',
+  'ui.portals.associate.who': 'आप किसी स्टोर के लिए बेचते हैं',
+
+  'ui.ac.title': 'पता जाँच',
+  'ui.ac.go': 'पता जाँचें',
+  'ui.ac.again': 'फिर जाँचें',
+  'ui.ac.checking': 'जाँच हो रही है…',
+  'ui.ac.hint': 'पता और PIN code भरकर उसे जाँचें। ग्राहक को इसका कुछ नहीं दिखता।',
+  'ui.ac.score': '100 में से वैधता स्कोर {n}',
+  'ui.ac.unavailable': 'पता जाँच अभी उपलब्ध नहीं',
+  'ui.ac.unavailableBody':
+    'हम इस पते को अभी जाँच नहीं सके, इसलिए यह सही है या ग़लत, दोनों में से कुछ भी मालूम नहीं। ऑर्डर पहले की तरह ही सेव होता है — पते में कुछ भी अधूरा लगे तो ग्राहक को फ़ोन करें। हम इसे पीछे से फिर जाँचेंगे।',
+  'ui.ac.action.approve': 'डिलीवरी होने लायक लगता है',
+  'ui.ac.action.confirm': 'ग्राहक से पक्का करें',
+  'ui.ac.action.reject': 'जैसा लिखा है वैसा न भेजें',
+  'ui.ac.rechecked': 'फिर जाँचा गया',
+  'ui.ac.confirmOnly': '{field} — ग्राहक से पक्का करें',
+  'ui.ac.pincodeSays': 'पिनकोड के मुताबिक {candidates}।',
+  'ui.ac.src.customer': 'ग्राहक से',
+  'ui.ac.src.pincode': 'पिनकोड से',
+  'ui.ac.src.inferred': 'अंदाज़े से',
+  'ui.ac.src.unknown': 'स्रोत मालूम नहीं',
+  'ui.ac.field.house': 'मकान',
+  'ui.ac.field.street': 'सड़क',
+  'ui.ac.field.locality': 'इलाक़ा',
+  'ui.ac.field.village_city': 'गाँव / शहर',
+  'ui.ac.field.landmark': 'लैंडमार्क',
+  'ui.ac.field.post_office': 'पोस्ट ऑफ़िस',
+  'ui.ac.field.police_station': 'थाना',
+  'ui.ac.field.sub_district': 'तहसील',
+  'ui.ac.field.district': 'ज़िला',
+  'ui.ac.field.state': 'राज्य',
+  'ui.ac.field.pincode': 'PIN code',
+  'ui.ac.labelAddress': 'लेबल के लिए सुझाया गया पता',
+  'ui.ac.rto': 'वापसी का जोखिम: {pct}%',
+  'ui.ac.rtoNone': 'वापसी का जोखिम: अभी इतना डेटा नहीं है',
+  'ui.ac.questions.title': 'ग्राहक से पूछें',
+  'ui.ac.attribution.ola': 'Ola Maps',
+  'ui.ac.others': 'इस पिनकोड के बाक़ी ऑफ़िस ({n})',
+  'ui.ac.typeToSearch': 'खोजने के लिए टाइप करें…',
+  'ui.ac.noOffice': 'इस पिनकोड का कोई ऑफ़िस उससे मेल नहीं खाता।',
+  'ui.ac.confirmed': 'मैंने यह पता ग्राहक से पक्का कर लिया है',
+  'ui.combo.noMatches': 'कुछ मेल नहीं खाया',
+  'ui.combo.showOptions': 'विकल्प दिखाएँ',
+  'ui.drop.fileNotAccepted': '{n} फ़ाइल की किस्म मंज़ूर नहीं है',
+  'ui.drop.filesNotAccepted': '{n} फ़ाइलों की किस्म मंज़ूर नहीं है',
+  'ui.drop.onlyOne': 'सिर्फ़ एक फ़ाइल जोड़ी जा सकती है',
+  'ui.drop.leftOut': 'छूट गई: {notes}।',
+  'ui.table.selectAll': 'सभी पंक्तियाँ चुनें',
+};
+
+export const UI_MESSAGES = { en, bn, hi } as const;
+
+/**
+ * The shared primitives' words in one locale, with every gap filled from
+ * English. Call this rather than indexing `UI_MESSAGES` directly — the
+ * Hindi map is deliberately incomplete and indexing it returns
+ * `undefined` for a key nobody has translated yet.
+ */
+export function uiCatalog(locale: 'en' | 'bn' | 'hi'): Record<UiMessageKey, string> {
+  if (locale === 'en') return en;
+  if (locale === 'bn') return bn;
+  const out = {} as Record<UiMessageKey, string>;
+  for (const key of Object.keys(en) as UiMessageKey[]) out[key] = hi[key] ?? en[key];
+  return out;
+}

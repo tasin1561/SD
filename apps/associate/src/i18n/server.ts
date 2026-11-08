@@ -17,5 +17,13 @@ export async function getLocale(): Promise<Locale> {
 /** The translator for server components, bound to the request's language. */
 export async function getT(): Promise<{ t: Translate<MessageKey>; locale: Locale }> {
   const locale = await getLocale();
-  return { t: makeTranslator<MessageKey>(CATALOGS[locale], CATALOGS.en), locale };
+  /*
+    This console speaks English and Bangla. `Locale` also admits `hi`
+    (the admin portal carries it), so the catalogue is chosen explicitly
+    rather than indexed: a Hindi cookie set by another console on the
+    same browser falls back to English here instead of failing to
+    compile or, worse, resolving to undefined at runtime.
+  */
+  const catalog = locale === 'bn' ? CATALOGS.bn : CATALOGS.en;
+  return { t: makeTranslator<MessageKey>(catalog, CATALOGS.en), locale };
 }
