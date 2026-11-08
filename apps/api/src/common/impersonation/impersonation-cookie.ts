@@ -82,6 +82,69 @@ export function signImpersonationCookie(input: {
 }
 
 /**
+ * Why a request has no usable support-session cookie. Diagnostic only:
+ * these codes are written to the audit trail and the process log, never
+ * to the client, and never carry any part of the token.
+ */
+export type ImpersonationCookieReason =
+  /** `req.cookies` exists but has no `__Host-impersonation` key. */
+  | 'COOKIE_ABSENT'
+  /** `req.cookies` is undefined: the cookie parser did not run on this path. */
+  | 'COOKIES_NOT_PARSED'
+  /** The key is present but its value is empty or not a string. */
+  | 'COOKIE_EMPTY'
+  /** Signature does not verify under the current signing key. */
+  | 'BAD_SIGNATURE'
+  /** Verified shape but audience or issuer is not ours. */
+  | 'AUDIENCE_OR_ISSUER_MISMATCH'
+  /** Signed by us, past its `exp`. */
+  | 'EXPIRED'
+  /** Not a parseable JWT, or an algorithm we do not accept. */
+  | 'MALFORMED_TOKEN'
+  /** Verified, but the payload carries no usable `sid`. */
+  | 'NO_SESSION_ID';
+
+export type ImpersonationCookieInspection =
+  | { readonly ok: true; readonly sessionId: string }
+  | { readonly ok: false; readonly reason: ImpersonationCookieReason };
+
+/**
+ * Same decision as `readImpersonationCookie`, with the reason kept.
+ * The reason is derived from the error CLASS/message category only; the
+ * token text is never copied into the result.
+ */
+export function inspectImpersonationCookie(input: {
+  readonly signingKey: string;
+  readonly req: Request;
+}): ImpersonationCookieInspection {
+  const cookies = (input.req as unknown as { cookies?: Record<string, unknown> }).cookies;
+  if (cookies === undefined || cookies === null) return { ok: false, reason: 'COOKIES_NOT_PARSED' };
+  if (!(IMPERSONATION_COOKIE in cookies)) return { ok: false, reason: 'COOKIE_ABSENT' };
+  const raw = cookies[IMPERSONATION_COOKIE];
+  if (typeof raw !== 'string' || raw.length === 0) return { ok: false, reason: 'COOKIE_EMPTY' };
+  try {
+    const decoded = jwt.verify(raw, input.signingKey, {
+      algorithms: ['HS256'],
+      audience: AUDIENCE,
+      issuer: ISSUER,
+    });
+    if (typeof decoded === 'string') return { ok: false, reason: 'NO_SESSION_ID' };
+    const sid = (decoded as Partial<CookieClaims>).sid;
+    return typeof sid === 'string' && sid.length > 0
+      ? { ok: true, sessionId: sid }
+      : { ok: false, reason: 'NO_SESSION_ID' };
+  } catch (err) {
+    if (err instanceof jwt.TokenExpiredError) return { ok: false, reason: 'EXPIRED' };
+    const message = err instanceof Error ? err.message : '';
+    if (message === 'invalid signature') return { ok: false, reason: 'BAD_SIGNATURE' };
+    if (message.startsWith('jwt audience invalid') || message.startsWith('jwt issuer invalid')) {
+      return { ok: false, reason: 'AUDIENCE_OR_ISSUER_MISMATCH' };
+    }
+    return { ok: false, reason: 'MALFORMED_TOKEN' };
+  }
+}
+
+/**
  * The session id this cookie names, or null if it is not ours.
  *
  * Returns null rather than throwing for every rejection — a bad
@@ -94,21 +157,8 @@ export function readImpersonationCookie(input: {
   readonly signingKey: string;
   readonly req: Request;
 }): string | null {
-  const jar = (input.req as unknown as { cookies?: Record<string, unknown> }).cookies ?? {};
-  const raw = jar[IMPERSONATION_COOKIE];
-  if (typeof raw !== 'string' || raw.length === 0) return null;
-  try {
-    const decoded = jwt.verify(raw, input.signingKey, {
-      algorithms: ['HS256'],
-      audience: AUDIENCE,
-      issuer: ISSUER,
-    });
-    if (typeof decoded === 'string') return null;
-    const sid = (decoded as Partial<CookieClaims>).sid;
-    return typeof sid === 'string' && sid.length > 0 ? sid : null;
-  } catch {
-    return null;
-  }
+  const r = inspectImpersonationCookie(input);
+  return r.ok ? r.sessionId : null;
 }
 
 export function setImpersonationCookie(res: Response, value: string, expiresAt: Date): void {
