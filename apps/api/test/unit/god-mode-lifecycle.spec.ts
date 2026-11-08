@@ -79,6 +79,10 @@ function makeGodMode(bus: OrderLifecycleEventBus, initial: OrderStatus) {
       enqueueOrder: jest.fn(async () => ({ created: true })),
       dequeueOrder: jest.fn(async () => ({ dequeued: 0 })),
     } as never,
+    {
+      enqueueOrDefer: jest.fn(async () => 'ENQUEUED'),
+      clearDeadline: jest.fn(async () => undefined),
+    } as never,
     { provisionFromSnapshot, voidForOrder: jest.fn(async () => ({ voided: 0 })) } as never,
     { refundIfCharged } as never,
     bus,

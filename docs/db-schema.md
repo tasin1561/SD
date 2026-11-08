@@ -771,6 +771,7 @@ Central order record.
 - Confirmation: `confirmedAt`, `confirmedById`, `cancellationReason`, `cancelledAt`, `cancelledById`
 - Notes: `internalNotes`, `sellerNotes`, `callNotes` (latest summary)
 - SLA: `slaDeadline`, `expectedDeliveryAt`
+- Confirmation TTL: `confirmationDeadlineAt` (nullable timestamptz, indexed) — set while calls are off, cleared on enqueue / on leaving PENDING_CONFIRMATION (CC-8)
 - `placedAt`
 - **RS-5 reseller orders:** `storeKind` (composite FK with `storeId` → `seller_stores (id, kind)`), `resellerTermsVersionId`, the six `reseller*StorePercent` shares, `resellerStoreCreditTrigger/Days`, `resellerSellerCreditTrigger/Days` — all NULL on a channel order, all set on a reseller one (CHECK). See "Reseller store orders — RS-5".
 

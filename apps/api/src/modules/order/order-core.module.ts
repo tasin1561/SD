@@ -28,6 +28,8 @@ import { StoreOrderRequestModule } from '../store-order-request/store-order-requ
 import { OrderPostCommitHooksService } from './services/order-post-commit-hooks.service';
 import { ResellerOrderService } from './services/reseller-order.service';
 import { ResellerOrderRetermService } from './services/reseller-order-reterm.service';
+import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-policy.module';
+import { AwaitingConfirmationService } from './services/awaiting-confirmation.service';
 
 /**
  * Module 6 — INTERNAL core (the Module-5 `inventory-shared` analogue).
@@ -51,6 +53,8 @@ import { ResellerOrderRetermService } from './services/reseller-order-reterm.ser
  */
 @Module({
   imports: [
+    // Whether a PENDING_CONFIRMATION order is phoned or waits on the no-call TTL.
+    ConfirmationPolicyModule,
     // Which shopfront a sale is filed under (R3 primitive — it
     // imports neither order nor auth, so wiring it into both closes
     // no cycle).
@@ -116,8 +120,10 @@ import { ResellerOrderRetermService } from './services/reseller-order-reterm.ser
     ResellerOrderService,
     // 2026-09-18 — a changed reseller order keeps its own terms.
     ResellerOrderRetermService,
+    AwaitingConfirmationService,
   ],
   exports: [
+    AwaitingConfirmationService,
     // Intra-Module-6 only (the store-order and CSV submodules place a
     // reseller store's order through it).
     ResellerOrderService,

@@ -113,6 +113,8 @@ const ORDERS_VIEW_GETS: Readonly<Record<string, Readonly<Record<string, string>>
     ':id/events': 'orders.view',
     summary: 'orders.view',
     'money-in-flight': 'orders.view',
+    // This seller's own orders waiting on a confirmation call they switched off.
+    'awaiting-confirmation': 'orders.view',
     // NOT orders.view. The counts inside span EVERY seller on the
     // platform, for any phone number the caller types — a lookup TOOL,
     // not a view of their own orders. `orders.create` reproduces the
@@ -151,7 +153,11 @@ const ORDERS_VIEW_GETS: Readonly<Record<string, Readonly<Record<string, string>>
   },
   // The fee this company would be charged — its own number, which the
   // order form shows before anything is placed.
-  'seller-order-defaults.controller.ts': { 'customer-delivery-fee': 'orders.view' },
+  'seller-order-defaults.controller.ts': {
+    'customer-delivery-fee': 'orders.view',
+    // Whether their own new orders are phoned, and the no-call TTL.
+    'confirmation-calls': 'orders.view',
+  },
   // What OUR three flat fees cost this company: the delivery fee and the
   // two return fees, priced in rupees now. Their own numbers, resolved
   // through SET-1, and they disclose nothing about another tenant.

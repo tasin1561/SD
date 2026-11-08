@@ -7,9 +7,19 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
+import { SetConfirmationCallsDto } from '../dto/confirmation-calls-setting.dto';
 import { SetCustomerDeliveryFeeDto } from '../dto/customer-delivery-fee.dto';
 
 const KEY = 'orders.default_customer_delivery_fee_inr';
+const KEY_CALLS = 'ops.call_confirmation_required';
+const KEY_TTL = 'ops.call_auto_confirm_ttl_hours';
+
+export interface ConfirmationCallsView {
+  readonly callsRequired: boolean;
+  readonly ttlHours: number;
+  /** true when this client (or an admin for them) has set their own; false = our default. */
+  readonly isOwnValue: boolean;
+}
 
 export interface CustomerDeliveryFeeView {
   readonly amountInr: string;
@@ -65,5 +75,53 @@ export class SellerOrderDefaultsController {
       { sellerActor: true },
     );
     return this.get(seller);
+  }
+
+  @Get('confirmation-calls')
+  @SellerAuthAllowSuspended()
+  @ApiOperation({ summary: 'Whether new orders are phoned automatically, and the no-call TTL' })
+  async getConfirmationCalls(
+    @CurrentSeller() seller: AuthenticatedSeller,
+  ): Promise<ConfirmationCallsView> {
+    const [calls, ttl] = await Promise.all([
+      this.settings.resolve(seller.id, KEY_CALLS),
+      this.settings.resolve(seller.id, KEY_TTL),
+    ]);
+    return {
+      callsRequired: calls.value !== false,
+      ttlHours: Number(ttl.value),
+      isOwnValue: calls.source === 'SELLER_OVERRIDE' || ttl.source === 'SELLER_OVERRIDE',
+    };
+  }
+
+  @Patch('confirmation-calls')
+  @RequireSellerPermissions('orders.create')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Turn automatic confirmation calls on/off and set the auto-confirm TTL',
+    description:
+      'OFF means new orders wait in the awaiting-confirmation list; you (or an admin) send the ' +
+      'ones that need a call, and the rest are confirmed without a call when the TTL runs out. ' +
+      'A return on an unconfirmed order is charged to you as usual. Shares one setting with admin; last writer wins.',
+  })
+  async setConfirmationCalls(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Body() body: SetConfirmationCallsDto,
+  ): Promise<ConfirmationCallsView> {
+    await this.settings.setOverride(
+      seller.id,
+      KEY_CALLS,
+      { valueType: 'BOOLEAN', value: body.callsRequired },
+      { sellerActor: true },
+    );
+    if (body.ttlHours !== undefined) {
+      await this.settings.setOverride(
+        seller.id,
+        KEY_TTL,
+        { valueType: 'INT', value: body.ttlHours },
+        { sellerActor: true },
+      );
+    }
+    return this.getConfirmationCalls(seller);
   }
 }

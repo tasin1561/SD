@@ -97,6 +97,8 @@ describe('both writers of orders.status share ONE set of post-commit hooks', () 
     // + resellerMoney (the re-pricing of a changed reseller order — a
     // money collaborator) and storeNotifier (god mode has no notice of
     // its own, so the two parties are told from here). Neither is stock.
-    expect(OrderPostCommitHooksService.length).toBe(11);
+    // + confirmationPolicy (whether a PENDING_CONFIRMATION order is phoned or
+    // waits on the no-call TTL) — a queue/settings collaborator, not stock.
+    expect(OrderPostCommitHooksService.length).toBe(12);
   });
 });

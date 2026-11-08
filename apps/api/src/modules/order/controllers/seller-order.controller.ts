@@ -43,6 +43,15 @@ import {
 } from '../services/order.service';
 import { OrderReadService } from '../services/order-read.service';
 import { OrderWriteService } from '../services/order-write.service';
+import {
+  ListAwaitingConfirmationQueryDto,
+  SendConfirmationCallsDto,
+} from '../dto/awaiting-confirmation.dto';
+import {
+  AwaitingConfirmationService,
+  type AwaitingConfirmationRow,
+  type SendCallResult,
+} from '../services/awaiting-confirmation.service';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
@@ -64,6 +73,7 @@ export class SellerOrderController {
     private readonly orderWrite: OrderWriteService,
     private readonly reputation: CustomerReputationService,
     private readonly reads: OrderReadService,
+    private readonly awaiting: AwaitingConfirmationService,
   ) {}
 
   private actor(seller: AuthenticatedSeller): { type: ActorType; id: string } {
@@ -91,6 +101,39 @@ export class SellerOrderController {
     @Query() query: ListOrdersQueryDto,
   ): Promise<{ items: OrderListItem[]; total: number; page: number; pageSize: number }> {
     return this.svc.list(seller.id, query);
+  }
+
+  // MUST stay above @Get(':id') (same reason as `summary` below).
+  @Get('awaiting-confirmation')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Your orders waiting for confirmation with no call queued (confirmation calls are off). Newest first.',
+  })
+  awaitingConfirmation(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Query() query: ListAwaitingConfirmationQueryDto,
+  ): Promise<{ items: AwaitingConfirmationRow[]; total: number; page: number; pageSize: number }> {
+    return this.awaiting.list({
+      sellerId: seller.id,
+      ...(query.page ? { page: query.page } : {}),
+      ...(query.pageSize ? { pageSize: query.pageSize } : {}),
+    });
+  }
+
+  @Post('confirmation-calls')
+  @RequireSellerPermissions('orders.create')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Send chosen orders to our call centre. Per-order outcome; an order that is not yours reads NOT_FOUND.',
+  })
+  sendConfirmationCalls(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Body() body: SendConfirmationCallsDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<{ results: SendCallResult[] }> {
+    return this.awaiting.sendToAgents(body.orderIds, { scopeSellerId: seller.id, ctx });
   }
 
   // MUST stay above @Get(':id') — Nest matches in declaration order, so

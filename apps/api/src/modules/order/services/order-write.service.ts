@@ -102,6 +102,15 @@ export interface TransitionStatusInput {
   /** Required-ish for the cancel family; defaults to OTHER. */
   cancellationReason?: OrderCancellationReason;
   ctx?: ClientContext;
+  /**
+   * TTL auto-confirm (no call was made). The status write becomes a
+   * GUARDED claim inside the writing tx — `updateMany` on (status = from,
+   * confirmation_deadline_at set and due) — so a human confirming at the
+   * same instant and the sweeper cannot both win; the loser gets a 409
+   * `AUTO_CONFIRM_CLAIM_LOST` and (on the CONFIRMED path) its reservations
+   * are released by the existing compensation.
+   */
+  autoConfirmClaim?: true;
 }
 
 export interface TransitionStatusResult {
@@ -995,7 +1004,33 @@ export class OrderWriteService {
         data.cancelledAt = now;
         if (staffConnect) data.cancelledBy = staffConnect;
       }
-      await tx.order.update({ where: { id: order.id }, data });
+      if (input.autoConfirmClaim) {
+        const claimed = await tx.order.updateMany({
+          where: {
+            id: order.id,
+            status: from,
+            confirmationDeadlineAt: { not: null, lte: now },
+          },
+          data: {
+            status: to,
+            confirmationDeadlineAt: null,
+            ...(to === OrderStatus.CONFIRMED ? { confirmedAt: now } : {}),
+          },
+        });
+        if (claimed.count === 0) {
+          throw new ConflictException({
+            code: 'AUTO_CONFIRM_CLAIM_LOST',
+            message: 'Order was confirmed, moved or queued for a call before the TTL claim',
+          });
+        }
+      } else {
+        // The TTL clock only runs while PENDING_CONFIRMATION; clearing it in
+        // the SAME write as the exit is what makes a human confirm beat the sweeper.
+        if (from === OrderStatus.PENDING_CONFIRMATION && to !== OrderStatus.PENDING_CONFIRMATION) {
+          data.confirmationDeadlineAt = null;
+        }
+        await tx.order.update({ where: { id: order.id }, data });
+      }
 
       const statusEvent = await this.events.statusChanged(tx, {
         orderId: order.id,

@@ -39,6 +39,7 @@ import { OrderEventWriterService, type EventActor } from './order-event-writer.s
 import { OrderStateMachineService } from './order-state-machine.service';
 import { RecipientAddressCacheService } from './recipient-address-cache.service';
 import { AddressValidationService } from './address-validation.service';
+import { ConfirmationPolicyService } from '../../confirmation-policy/confirmation-policy.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import { OrderChargesService } from '../../order-charges/services/order-charges.service';
 import { EarlyReservationService } from '../../early-reservation/services/early-reservation.service';
@@ -386,6 +387,7 @@ export class OrderService {
     private readonly stateMachine: OrderStateMachineService,
     private readonly stores: SellerStoreService,
     private readonly callQueue: CallQueueService,
+    private readonly confirmationPolicy: ConfirmationPolicyService,
     private readonly orderCharges: OrderChargesService,
     private readonly earlyReservations: EarlyReservationService,
     private readonly credit: SellerCreditService,
@@ -443,7 +445,9 @@ export class OrderService {
    */
   private async enqueueForCall(orderId: string, ctx: ClientContext): Promise<void> {
     try {
-      await this.callQueue.enqueueOrder(orderId, ctx);
+      // Gated per client (ops.call_confirmation_required): calls ON is the
+      // old enqueue; OFF sets the TTL deadline instead.
+      await this.confirmationPolicy.enqueueOrDefer(orderId, ctx);
     } catch (e) {
       this.logger.error(
         { orderId, err: (e as Error).message },

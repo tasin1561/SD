@@ -3535,6 +3535,11 @@ model Order {
   sellerNotes               String?                  @map("seller_notes") @db.Text
   callNotes                 String?                  @map("call_notes") @db.Text
   slaDeadline               DateTime?                @map("sla_deadline") @db.Timestamptz
+  /// When a PENDING_CONFIRMATION order is confirmed WITHOUT a call because the
+  /// client turned automatic confirmation calls off (`ops.call_confirmation_required`).
+  /// Set only while calls are off; cleared on enqueue for a call and on
+  /// leaving PENDING_CONFIRMATION. Indexed: the TTL sweeper reads it every minute.
+  confirmationDeadlineAt    DateTime?                @map("confirmation_deadline_at") @db.Timestamptz
   expectedDeliveryAt        DateTime?                @map("expected_delivery_at") @db.Timestamptz
   placedAt                  DateTime                 @default(now()) @map("placed_at") @db.Timestamptz
   createdAt                 DateTime                 @default(now()) @map("created_at") @db.Timestamptz
@@ -3608,6 +3613,7 @@ model Order {
   @@index([status, placedAt])
   @@index([placedAt])
   @@index([confirmedAt])
+  @@index([confirmationDeadlineAt])
   @@index([deletedAt])
   @@index([bulkUploadId])
   @@index([confirmedById])

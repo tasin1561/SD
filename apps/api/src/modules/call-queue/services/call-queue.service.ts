@@ -115,6 +115,20 @@ export class CallQueueService {
     return entry ?? null;
   }
 
+  /**
+   * Prisma `where` fragment for "this order has NO open queue entry".
+   *
+   * The queue's table shape belongs to the queue (MUST #17), so a caller
+   * that needs to FILTER orders by it (the awaiting-confirmation list)
+   * asks for the fragment here rather than naming `callQueueEntries` and
+   * its statuses itself. Pure — no query runs.
+   */
+  static orderHasNoOpenEntry(): {
+    callQueueEntries: { none: { status: { in: CallQueueStatus[] } } };
+  } {
+    return { callQueueEntries: { none: { status: { in: OPEN_STATUSES } } } };
+  }
+
   async dequeueOrder(
     orderId: string,
     closureReason: QueueClosureReason,

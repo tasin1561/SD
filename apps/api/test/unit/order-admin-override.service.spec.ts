@@ -144,6 +144,7 @@ function makeService(
     { client } as unknown as PrismaService,
     audit as never,
     { enqueueOrder, dequeueOrder } as never,
+    { enqueueOrDefer: enqueueOrder, clearDeadline: jest.fn(async () => undefined) } as never,
     { provisionFromSnapshot, voidForOrder } as never,
     { refundIfCharged } as never,
     { emit } as never,

@@ -71,6 +71,7 @@ function make(
     { client } as never,
     { log: jest.fn(async () => 'a') } as never,
     { enqueueOrder: jest.fn(), dequeueOrder: jest.fn(async () => ({ dequeued: 0 })) } as never,
+    { enqueueOrDefer: jest.fn(), clearDeadline: jest.fn(async () => undefined) } as never,
     { provisionFromSnapshot, voidForOrder: jest.fn(async () => ({ voided: 1 })) } as never,
     { refundIfCharged } as never,
     { emit: jest.fn() } as never,

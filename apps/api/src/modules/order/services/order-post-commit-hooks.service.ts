@@ -12,6 +12,7 @@ import {
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import { ConfirmationPolicyService } from '../../confirmation-policy/confirmation-policy.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import { ShipmentProvisionService } from '../../shipment-provision/services/shipment-provision.service';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
@@ -281,6 +282,7 @@ export class OrderPostCommitHooksService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly callQueue: CallQueueService,
+    private readonly confirmationPolicy: ConfirmationPolicyService,
     private readonly shipmentProvision: ShipmentProvisionService,
     private readonly chargesRefund: OrderChargesRefundService,
     // NOTIF-5: the order module publishes to the R3 bus and knows nothing
@@ -966,6 +968,9 @@ export class OrderPostCommitHooksService {
   ): Promise<void> {
     try {
       await this.callQueue.dequeueOrder(orderId, closureReasonFor(landed), ctx);
+      // The TTL clock only runs while PENDING_CONFIRMATION (writeStatusTx
+      // clears it atomically on a normal exit; this covers god mode).
+      await this.confirmationPolicy.clearDeadline(orderId);
     } catch (e) {
       this.logger.error(
         { orderId, landed, err: (e as Error).message },
@@ -978,7 +983,8 @@ export class OrderPostCommitHooksService {
    *  entry is a no-op — and best-effort). */
   private async enqueueForCall(orderId: string, ctx?: ClientContext): Promise<void> {
     try {
-      await this.callQueue.enqueueOrder(orderId, ctx);
+      // Gated per client (ops.call_confirmation_required) — see ConfirmationPolicyService.
+      await this.confirmationPolicy.enqueueOrDefer(orderId, ctx);
     } catch (e) {
       this.logger.error(
         { orderId, err: (e as Error).message },

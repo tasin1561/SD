@@ -23,6 +23,10 @@ import { AgentSettingsController } from './controllers/agent-settings.controller
 import { AgentCallController } from './controllers/agent-call.controller';
 import { AdminCallQueueController } from './controllers/admin-call-queue.controller';
 import { AdminAgentController } from './controllers/admin-agent.controller';
+import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-policy.module';
+import { ConfirmationTtlSweeperService } from './services/confirmation-ttl-sweeper.service';
+import { ConfirmationTtlQueue } from './queue/confirmation-ttl.queue';
+import { ConfirmationTtlWorker } from './queue/confirmation-ttl.worker';
 import { EarlyReservationModule } from '../early-reservation/early-reservation.module';
 
 /**
@@ -52,6 +56,8 @@ import { EarlyReservationModule } from '../early-reservation/early-reservation.m
     OrderModule,
     CallQueueModule,
     EarlyReservationModule,
+    // The no-call TTL auto-confirm sweep (ops.call_confirmation_required).
+    ConfirmationPolicyModule,
     SettingsModule,
     CatalogReadModule,
     // The agent needs to know WHY they are calling, and whoever
@@ -79,6 +85,9 @@ import { EarlyReservationModule } from '../early-reservation/early-reservation.m
     AssignmentExpirationService,
     AssignmentExpirationQueue,
     AssignmentExpirationWorker,
+    ConfirmationTtlSweeperService,
+    ConfirmationTtlQueue,
+    ConfirmationTtlWorker,
     StaffJwtGuard,
   ],
   exports: [CallOutcomeMappingService],

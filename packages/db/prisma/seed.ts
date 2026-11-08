@@ -282,6 +282,28 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMaxInt: 72,
   },
   {
+    key: 'ops.call_confirmation_required',
+    category: 'ops',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'Confirmation Calls Required',
+    description:
+      "Whether a new order waiting for confirmation is queued for our call centre automatically. ON is the long-standing behaviour: every order is phoned before it ships. Per-client overridable: a client who already confirms with their own customers can switch calls OFF, and their orders then wait in an 'awaiting confirmation' list — the client or an admin picks which ones still need a call and sends only those to agents. An order nobody sends is confirmed without a call when the TTL below runs out. This is a choice to skip the call, so the return fee on an order that comes back unconfirmed is the client's (pricing.flat_rto_fee already charges it on receipt); high-risk and high-value orders are NOT called by exception when this is OFF.",
+    sellerOverridable: true,
+  },
+  {
+    key: 'ops.call_auto_confirm_ttl_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 24,
+    displayName: 'Auto-Confirm After (hours)',
+    description:
+      "Only applies while confirmation calls are OFF for the client. How long an order may wait for someone to send it to agents before it is confirmed automatically, with no call. The clock starts when the order enters 'pending confirmation' and restarts if it re-enters; it stops the moment the order is queued for a call, after which the normal call-attempt rules apply. Per-client overridable. The minimum of 1 hour leaves time to pick which orders need a call; the maximum of 168 (a week) stops an order sitting unconfirmed, with stock not yet reserved, indefinitely.",
+    sellerOverridable: true,
+    overrideMinInt: 1,
+    overrideMaxInt: 168,
+  },
+  {
     key: 'ops.stock_reservation_ttl_hours',
     category: 'ops',
     valueType: SettingValueType.INT,

@@ -246,3 +246,14 @@ export type {
   InspectRtoItemResult,
   FinalizeRtoResult,
 } from './endpoints/admin-warehouse';
+export type {
+  AwaitingConfirmationQuery,
+  AwaitingConfirmationRow,
+  AwaitingConfirmationResponse,
+  SendConfirmationCallsRequest,
+  SendConfirmationCallOutcome,
+  SendConfirmationCallResult,
+  SendConfirmationCallsResponse,
+  ConfirmationCallsSetting,
+  SetConfirmationCallsRequest,
+} from './endpoints/awaiting-confirmation';

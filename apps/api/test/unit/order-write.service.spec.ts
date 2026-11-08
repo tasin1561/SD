@@ -28,6 +28,8 @@ function makeService(
     packConfirmMovements?: Array<AnyArgs>;
     /** PACK_REVERSED rows already written (idempotency). */
     packReversedMovements?: Array<AnyArgs>;
+    /** Rows the guarded TTL-claim updateMany matches (default 1 = claim won). */
+    claimCount?: number;
   } = {},
 ) {
   const order =
@@ -42,7 +44,8 @@ function makeService(
       : opts.order;
 
   const orderUpdate = jest.fn(async (a: { data: AnyArgs }) => ({ id: 'o1', ...a.data }));
-  const txClient = { order: { update: orderUpdate } };
+  const orderUpdateMany = jest.fn(async (_a: AnyArgs) => ({ count: opts.claimCount ?? 1 }));
+  const txClient = { order: { update: orderUpdate, updateMany: orderUpdateMany } };
   const orderFindFirst = jest.fn(async () => order);
   const systemSettingFindUnique = jest.fn(async () => ({ valueString: 'wh-1' }));
 
@@ -156,6 +159,8 @@ function makeService(
     { client } as unknown as PrismaService,
     audit as never,
     callQueue as never,
+    // Calls ON (the default): the policy is a straight enqueue.
+    { enqueueOrDefer: enqueueOrder, clearDeadline: jest.fn(async () => undefined) } as never,
     shipmentProvision as never,
     chargesRefund as never,
     lifecycleBus as never,
@@ -195,6 +200,7 @@ function makeService(
     guardFor,
     orderUpdate,
     orderFindFirst,
+    orderUpdateMany,
     orderShipmentFindFirst,
     stockMovementFindFirst,
     stockMovementFindMany,
@@ -261,6 +267,51 @@ describe('OrderWriteService — RS-5 reseller set-aside guard at confirmation', 
     });
     expect(res.status).toBe(OrderStatus.OUT_OF_STOCK);
     expect(res.reservationOutcome).toBe('OUT_OF_STOCK');
+  });
+});
+
+describe('OrderWriteService — confirmation TTL claim and deadline lifecycle', () => {
+  it('leaving PENDING_CONFIRMATION clears the deadline in the same write as the status', async () => {
+    const { svc, orderUpdate } = makeService();
+    await svc.transitionStatus({ orderId: 'o1', to: OrderStatus.CONFIRMED, actor: ACTOR });
+    expect((orderUpdate.mock.calls[0]![0].data as AnyArgs).confirmationDeadlineAt).toBeNull();
+  });
+
+  it('an auto-confirm claim is a guarded updateMany on status + deadline set and due', async () => {
+    const { svc, orderUpdate, orderUpdateMany } = makeService();
+    const res = await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.CONFIRMED,
+      actor: { type: ActorType.SYSTEM, id: null },
+      autoConfirmClaim: true,
+      reason: 'auto',
+    });
+    expect(res.status).toBe(OrderStatus.CONFIRMED);
+    expect(orderUpdate).not.toHaveBeenCalled();
+    const arg = orderUpdateMany.mock.calls[0]![0];
+    expect(arg['where']).toMatchObject({
+      id: 'o1',
+      status: OrderStatus.PENDING_CONFIRMATION,
+      confirmationDeadlineAt: { not: null },
+    });
+    expect(arg['data']).toMatchObject({
+      status: OrderStatus.CONFIRMED,
+      confirmationDeadlineAt: null,
+    });
+  });
+
+  it('RACE: when a human already took the order the claim loses — 409, no event, reservations released', async () => {
+    const { svc, events, release } = makeService({ claimCount: 0 });
+    await expect(
+      svc.transitionStatus({
+        orderId: 'o1',
+        to: OrderStatus.CONFIRMED,
+        actor: { type: ActorType.SYSTEM, id: null },
+        autoConfirmClaim: true,
+      }),
+    ).rejects.toMatchObject({ response: { code: 'AUTO_CONFIRM_CLAIM_LOST' } });
+    expect(events.statusChanged).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -31,6 +31,15 @@ import {
   ReleaseReservationsDto,
   RestoreReservationsDto,
 } from '../dto/admin-order.dto';
+import {
+  AdminListAwaitingConfirmationQueryDto,
+  SendConfirmationCallsDto,
+} from '../dto/awaiting-confirmation.dto';
+import {
+  AwaitingConfirmationService,
+  type AwaitingConfirmationRow,
+  type SendCallResult,
+} from '../services/awaiting-confirmation.service';
 import { ForceMutationDto } from '../dto/force-mutation.dto';
 import { OrderService, type AdminOrderView, type OrderListItem } from '../services/order.service';
 import { OrderWriteService, type TransitionStatusResult } from '../services/order-write.service';
@@ -65,6 +74,7 @@ export class AdminOrderController {
     private readonly orderWrite: OrderWriteService,
     private readonly override: OrderAdminOverrideService,
     private readonly reputation: CustomerReputationService,
+    private readonly awaiting: AwaitingConfirmationService,
   ) {}
 
   @Get()
@@ -74,6 +84,41 @@ export class AdminOrderController {
     @Query() query: AdminListOrdersQueryDto,
   ): Promise<{ items: OrderListItem[]; total: number; page: number; pageSize: number }> {
     return this.orders.adminList(query);
+  }
+
+  // MUST stay above @Get(':id') — a literal segment declared after the
+  // parameter is swallowed by it and read as an order id.
+  @Get('awaiting-confirmation')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Orders waiting for confirmation with NO open call-queue entry (the client turned confirmation calls off). Newest first; filter by client.',
+  })
+  awaitingConfirmation(@Query() query: AdminListAwaitingConfirmationQueryDto): Promise<{
+    items: AwaitingConfirmationRow[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }> {
+    return this.awaiting.list({
+      ...(query.sellerId ? { sellerId: query.sellerId } : {}),
+      ...(query.page ? { page: query.page } : {}),
+      ...(query.pageSize ? { pageSize: query.pageSize } : {}),
+    });
+  }
+
+  @Post('confirmation-calls')
+  @RequirePermissions('callcenter.queue.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Send chosen awaiting-confirmation orders to the call queue (stops their TTL clock). Per-order outcome; idempotent.',
+  })
+  sendConfirmationCalls(
+    @Body() body: SendConfirmationCallsDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<{ results: SendCallResult[] }> {
+    return this.awaiting.sendToAgents(body.orderIds, { ctx });
   }
 
   @Get(':id')

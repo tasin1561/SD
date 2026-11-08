@@ -187,6 +187,8 @@ function makeService(
     // which is what an order carrying no store id gets in production.
     { resolveForOrder: resolveStore } as never,
     callQueue as never,
+    // Calls ON (the default): the policy is a straight enqueue.
+    { enqueueOrDefer: enqueueOrder } as never,
     orderCharges as never,
     earlyReservations as never,
     // In credit. The overdrawn path is covered in
