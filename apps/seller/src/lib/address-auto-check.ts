@@ -137,13 +137,103 @@ const tokens = (s: string): string[] =>
  * Returns '' when there is nothing to add, which the caller reads as
  * "no suggestion to offer".
  */
+/**
+ * How far wrong a word may be and still count as the same word.
+ *
+ * Scaled by length because one wrong letter in a four-letter word is a
+ * quarter of it and could easily be a different place, while two in a
+ * ten-letter one is a typo. The short end is deliberately strict:
+ * "Badu" and "Bagu" may well be two villages.
+ */
+function spellingTolerance(word: string): number {
+  if (word.length < 5) return 0;
+  if (word.length < 8) return 1;
+  return 2;
+}
+
+/** Levenshtein, bounded — it only ever runs on single address words. */
+function editDistance(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 2) return 99;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i += 1) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      row[j] = Math.min(
+        (prev[j] ?? 99) + 1,
+        (row[j - 1] ?? 99) + 1,
+        (prev[j - 1] ?? 99) + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    prev = row;
+  }
+  return prev[b.length] ?? 99;
+}
+
+/**
+ * Fix the spelling of words the operator already wrote.
+ *
+ * The ONLY in-place edit this file makes, and it is held to one rule:
+ * a word may be respelt, never added, removed or reordered. "Madhamgram"
+ * becomes "Madhyamgram"; nothing becomes something and something never
+ * becomes nothing.
+ *
+ * ── WHY AMBIGUITY MEANS LEAVE IT ALONE ───────────────────────────────
+ * A word is corrected only when exactly ONE known word is close enough.
+ * Two candidates at the same distance is the case where picking is
+ * guessing, and a confidently wrong village name is worse than a
+ * misspelt one — the misspelt one still looks wrong to a human reading
+ * the label, and the guess does not.
+ *
+ * Capitalisation follows what they returned, since that is the spelling
+ * a label should carry.
+ */
+function correctSpelling(line: string, extracted: Readonly<Record<string, string | null>>): string {
+  const known: string[] = [];
+  for (const value of Object.values(extracted)) {
+    for (const word of (value ?? '').split(/[^A-Za-z]+/)) {
+      if (word.length >= 4) known.push(word);
+    }
+  }
+  if (known.length === 0) return line;
+
+  // Split keeping the separators, so punctuation and spacing survive
+  // untouched — this rewrites words, not the line.
+  return line
+    .split(/([A-Za-z]+)/)
+    .map((piece) => {
+      if (!/^[A-Za-z]+$/.test(piece) || piece.length < 5) return piece;
+      const lower = piece.toLowerCase();
+      // Already a known word: nothing to fix.
+      if (known.some((k) => k.toLowerCase() === lower)) return piece;
+      const tolerance = spellingTolerance(piece);
+      if (tolerance === 0) return piece;
+      let best: string | null = null;
+      let bestAt = tolerance + 1;
+      let tied = false;
+      for (const candidate of known) {
+        const d = editDistance(lower, candidate.toLowerCase());
+        if (d > tolerance) continue;
+        if (d < bestAt) {
+          bestAt = d;
+          best = candidate;
+          tied = false;
+        } else if (d === bestAt && candidate.toLowerCase() !== best?.toLowerCase()) {
+          tied = true;
+        }
+      }
+      return best === null || tied ? piece : best;
+    })
+    .join('');
+}
+
 export function suggestedAddressLine1(
   currentLine1: string,
   extracted: Readonly<Record<string, string | null>> | null | undefined,
 ): string {
   if (extracted === null || extracted === undefined) return '';
-  let line = currentLine1.trim().replace(/[\s,]+$/, '');
-  let added = false;
+  const typed = currentLine1.trim().replace(/[\s,]+$/, '');
+  let line = correctSpelling(typed, extracted);
+  let added = line !== typed;
   for (const { key, prefix } of APPEND_FIELDS) {
     const value = (extracted[key] ?? '').trim();
     if (value === '') continue;
@@ -176,8 +266,22 @@ export function suggestedAddressLine1(
  * punctuation and case cannot trip it — only an actually absent word.
  */
 export function suggestionKeepsEverything(suggested: string, currentLine1: string): boolean {
-  const have = new Set(tokens(suggested));
-  return tokens(currentLine1).every((t) => have.has(t));
+  const have = tokens(suggested);
+  const exact = new Set(have);
+  return tokens(currentLine1).every((t) => {
+    if (exact.has(t)) return true;
+    /*
+      A RESPELT word is still the word.
+
+      Without this the guard blocked every spelling correction — the
+      misspelling is gone by design, so an exact-membership test read
+      it as a dropped word and refused the whole suggestion. A word
+      that was genuinely dropped has no near neighbour, so the guard
+      still catches exactly what it was written for.
+    */
+    const tolerance = spellingTolerance(t);
+    return tolerance > 0 && have.some((h) => editDistance(t, h) <= tolerance);
+  });
 }
 
 /**

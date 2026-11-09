@@ -172,6 +172,51 @@ describe('suggestedAddressLine1', () => {
     expect(next).not.toContain('2 sarani');
   });
 
+  it('corrects a misspelt word the operator already wrote', () => {
+    // Append OR respell — never add or remove meaning (owner, 2026-11-09).
+    expect(
+      suggestedAddressLine1('Nadibhag, Madhamgram', {
+        police_station: 'Madhyamgram',
+        post_office: 'Madhyamgram',
+      }),
+    ).toContain('Madhyamgram');
+  });
+
+  it('respells without adding or dropping a single word', () => {
+    const next = suggestedAddressLine1('Nadibhag, Madhamgram', {
+      police_station: 'Madhyamgram',
+      post_office: 'Madhyamgram',
+    });
+    expect(next.split(/[^A-Za-z]+/).filter((w) => w !== '')).toHaveLength(2);
+    expect(next).toContain('Nadibhag');
+  });
+
+  it('leaves a short word alone, where one letter could be another place', () => {
+    // "Badu" and "Bagu" may well be two villages. Four letters is not
+    // enough evidence to overrule somebody.
+    expect(suggestedAddressLine1('Bagu', { locality: 'Badu' })).toBe('');
+  });
+
+  it('leaves a word alone when two known words are equally close', () => {
+    // Picking here is guessing, and a confidently wrong village name is
+    // worse than a misspelt one: the misspelling still looks wrong to a
+    // human reading the label, and the guess does not.
+    expect(suggestedAddressLine1('Barasal', { sub_district: 'Barasat', locality: 'Barasar' })).toBe(
+      '',
+    );
+  });
+
+  it('keeps punctuation and spacing exactly as the operator left them', () => {
+    const next = suggestedAddressLine1('Nadibhag,  Madhamgram', {
+      police_station: 'Madhyamgram',
+    });
+    expect(next).toBe('Nadibhag,  Madhyamgram');
+  });
+
+  it('does not respell a word that is already right', () => {
+    expect(suggestedAddressLine1('Madhyamgram', { police_station: 'Madhyamgram' })).toBe('');
+  });
+
   it('says nothing when there is nothing to add', () => {
     expect(suggestedAddressLine1(TYPED, null)).toBe('');
     expect(suggestedAddressLine1(TYPED, undefined)).toBe('');
@@ -201,6 +246,21 @@ describe('suggestionKeepsEverything', () => {
 
   it('accepts anything when line 1 is still empty', () => {
     expect(suggestionKeepsEverything('12, Raydighi', '')).toBe(true);
+  });
+
+  it('counts a RESPELT word as kept, not as lost', () => {
+    // Without this the guard blocked every spelling correction: the
+    // misspelling is gone by design, and an exact-membership test read
+    // that as a dropped word.
+    expect(suggestionKeepsEverything('Nadibhag, Madhyamgram', 'Nadibhag, Madhamgram')).toBe(true);
+  });
+
+  it('still catches a word that was genuinely dropped', () => {
+    // "Nadibhag" has no near neighbour in the suggestion, which is the
+    // difference between a correction and a loss.
+    expect(
+      suggestionKeepsEverything('Madhyamgram, North 24 Parganas', 'Nadibhag, Madhamgram'),
+    ).toBe(false);
   });
 });
 
