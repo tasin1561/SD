@@ -146,8 +146,16 @@ const tokens = (s: string): string[] =>
  * "Badu" and "Bagu" may well be two villages.
  */
 function spellingTolerance(word: string): number {
-  if (word.length < 5) return 0;
-  if (word.length < 8) return 1;
+  // Nothing under SEVEN letters is ever corrected. Raised from five
+  // when the guarantee check caught what five allowed: "Mandir" sits
+  // one edit from "Mandi", same first letter, and a landmark quietly
+  // lost its last letter. At one edit a short word is as likely to
+  // become a different word as a corrected one, and edit distance
+  // cannot tell a typo from a truncation. Place names long enough to
+  // be misspelt in practice — Madhyamgram, Barasat, Raydighi,
+  // Parganas — all clear this bar.
+  if (word.length < 7) return 0;
+  if (word.length < 10) return 1;
   return 2;
 }
 
@@ -211,6 +219,12 @@ function correctSpelling(line: string, extracted: Readonly<Record<string, string
       let bestAt = tolerance + 1;
       let tied = false;
       for (const candidate of known) {
+        // SAME FIRST LETTER, always. People misspell the middle of a
+        // word and the end of it; they do not usually get the first
+        // letter wrong. Without this, "Mandir" sits one edit from
+        // "Mandi" and a landmark quietly loses its last letter — a
+        // different word, not a correction.
+        if (candidate[0]?.toLowerCase() !== lower[0]) continue;
         const d = editDistance(lower, candidate.toLowerCase());
         if (d > tolerance) continue;
         if (d < bestAt) {
@@ -224,6 +238,38 @@ function correctSpelling(line: string, extracted: Readonly<Record<string, string
       return best === null || tied ? piece : best;
     })
     .join('');
+}
+
+/**
+ * Is `result` nothing more than `typed` with words respelt and words
+ * added to the end?
+ *
+ * THE GUARANTEE, checked rather than argued (owner, 2026-11-09): no
+ * word of the operator's is replaced by a different word, removed, or
+ * reordered. Everything above is written to honour that, and this is
+ * what makes it true even if something above is wrong — a future edit
+ * to the matching rules cannot quietly start rewriting addresses,
+ * because the suggestion is dropped instead of offered.
+ *
+ * Positional, not set-based. A set test would accept a reordering, and
+ * "12 North Road, Barasat" is not "Barasat Road, 12 North".
+ */
+export function appendOrRespellOnly(typed: string, result: string): boolean {
+  const before = tokens(typed);
+  const after = tokens(result);
+  // Shorter means something was dropped; the tail may only grow.
+  if (after.length < before.length) return false;
+  return before.every((word, i) => {
+    const got = after[i];
+    if (got === undefined) return false;
+    if (got === word) return true;
+    // Changed — allowed ONLY as a respelling, by the same rules that
+    // produced it, first letter included.
+    const tolerance = spellingTolerance(word);
+    if (tolerance === 0) return false;
+    if (got[0] !== word[0]) return false;
+    return editDistance(word, got) <= tolerance;
+  });
 }
 
 export function suggestedAddressLine1(
@@ -248,7 +294,12 @@ export function suggestedAddressLine1(
     line = line === '' ? `${prefix}${value}` : `${line}, ${prefix}${value}`;
     added = true;
   }
-  return added ? line : '';
+  if (!added) return '';
+  // The last word before it leaves this function. If the result is
+  // anything but the operator's line respelt and extended, it is not
+  // offered at all — an address nobody suggested beats an address
+  // somebody rewrote.
+  return appendOrRespellOnly(typed, line) ? line : '';
 }
 
 /**

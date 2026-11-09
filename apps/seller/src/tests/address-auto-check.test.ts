@@ -6,6 +6,7 @@ import {
   suggestedAddressLine1,
   suggestionIsWorthOffering,
   suggestionKeepsEverything,
+  appendOrRespellOnly,
   type AutoCheckInput,
 } from '@/lib/address-auto-check';
 
@@ -300,5 +301,55 @@ describe('the form wires all three senders through the dedupe', () => {
     );
     expect(raw.match(/addressCheck\.mutate\(/g) ?? []).toHaveLength(1);
     expect(raw).toContain('lastAsked.current = addressCheckKey(');
+  });
+});
+
+describe('appendOrRespellOnly — the guarantee, checked rather than argued', () => {
+  it('accepts words added to the end', () => {
+    expect(appendOrRespellOnly('Nadibhag', 'Nadibhag, PO Badu, North 24 Parganas')).toBe(true);
+  });
+
+  it('accepts a respelling', () => {
+    expect(appendOrRespellOnly('Nadibhag, Madhamgram', 'Nadibhag, Madhyamgram')).toBe(true);
+  });
+
+  it('REFUSES a different word, however close', () => {
+    // "Mandi" is one edit from "Mandir" and is not the same place.
+    expect(appendOrRespellOnly('near Hanuman Mandir', 'near Hanuman Mandi')).toBe(false);
+  });
+
+  it('REFUSES a dropped word', () => {
+    expect(appendOrRespellOnly('Nadibhag, Badu Industrial Area', 'Nadibhag, Badu Area')).toBe(
+      false,
+    );
+  });
+
+  it('REFUSES a reordering, which a set test would wave through', () => {
+    expect(appendOrRespellOnly('12 North Road, Barasat', 'Barasat Road, 12 North')).toBe(false);
+  });
+
+  it('REFUSES a change to a word too short to correct', () => {
+    expect(appendOrRespellOnly('Badu', 'Bagu')).toBe(false);
+  });
+
+  it('REFUSES a word whose first letter moved', () => {
+    expect(appendOrRespellOnly('Madhyamgram', 'Nadhyamgram')).toBe(false);
+  });
+});
+
+describe('the whole function keeps the guarantee', () => {
+  it('never returns anything but an append or a respell', () => {
+    // Fed deliberately awkward extractions: words that are near-misses
+    // of each other, a truncation, and a first-letter change.
+    const typed = 'Nadibhag, Badu Industrial Area, Mandir';
+    for (const extracted of [
+      { post_office: 'Mandi', locality: 'Nadibhug', district: 'Industrail' },
+      { post_office: 'Badu', police_station: 'Area', district: 'Nadibhag' },
+      { village_city: 'Madibhag', landmark: 'Mandir', street: 'Industrial' },
+    ]) {
+      const next = suggestedAddressLine1(typed, extracted);
+      if (next !== '')
+        expect(appendOrRespellOnly(typed, next), JSON.stringify(extracted)).toBe(true);
+    }
   });
 });
