@@ -102,41 +102,32 @@ const tokens = (s: string): string[] =>
     .filter((t) => t !== '');
 
 /**
- * Address line 1 with the resolved parts added to the end of it.
+ * The fields whose spelling may correct a word in line 1.
  *
- * ── IT APPENDS. IT DOES NOT REPLACE. (owner, 2026-11-09) ─────────────
- * The first version of this composed a whole new line 1 out of their
- * `extracted` fields, and it never fired once on a real address —
- * because their extraction is not a superset of what the operator
- * typed. A real case: "Nadibhag, Badu Industrial Area" came back as
- * house 48 / street "2 sarani" / locality "Badu" / district "North 24
- * Parganas", with "Nadibhag" and "Industrial Area" nowhere in it. Any
- * replacement would have silently dropped two of the customer's words,
- * so the loss guard refused it, correctly — and the feature was dead
- * code dressed as a safety feature.
+ * ── WHAT IS MISSING, AND WHY IT MATTERS ──────────────────────────────
+ * `state`, `pincode` and `landmark` are NOT here, and leaving them in
+ * was a real bug. The dictionary was every extracted value, so a typed
+ * "Bengali" — seven letters, one edit from the STATE "Bengal", same
+ * first letter — was corrected to "Bengal", and a locality called
+ * Bengali Para became Bengal Para on the parcel. `landmark` is excluded
+ * for the same reason in the other direction: line 2 is the landmark
+ * (ORD-5), so pulling line 1's words toward it corrects across a
+ * boundary this file exists to keep.
  *
- * Appending cannot lose a word, which makes the guard pass by
- * construction instead of by luck.
- *
- * ── WHY `inferred` IS WELCOME HERE ───────────────────────────────────
- * The earlier rule threw away every `inferred` field, and that threw
- * away the whole point: the post office and police station are exactly
- * what the operator did not type and the service worked out. The real
- * rule is narrower than "distrust inferred" — an inferred value must
- * never REPLACE something the operator wrote, but it may ADD a part
- * they never gave. Appending makes that distinction automatic, so the
- * source no longer has to be consulted at all.
- *
- * ── WHY NOT `completed_address` ──────────────────────────────────────
- * Because it always contains the landmark, and line 2 IS the landmark
- * here (ORD-5) — so applying their sentence put the landmark on the
- * parcel twice. Verified live on 2026-11-09: sending the landmark as
- * its own field does not keep it out of their completion either, so
- * there was no way to fix that by asking them differently.
- *
- * Returns '' when there is nothing to add, which the caller reads as
- * "no suggestion to offer".
+ * What remains is the set of things that can legitimately BE a word of
+ * address line 1.
  */
+const SPELLING_FIELDS = [
+  'house',
+  'street',
+  'locality',
+  'village_city',
+  'post_office',
+  'police_station',
+  'sub_district',
+  'district',
+] as const;
+
 /**
  * How far wrong a word may be and still count as the same word.
  *
@@ -197,8 +188,8 @@ function editDistance(a: string, b: string): number {
  */
 function correctSpelling(line: string, extracted: Readonly<Record<string, string | null>>): string {
   const known: string[] = [];
-  for (const value of Object.values(extracted)) {
-    for (const word of (value ?? '').split(/[^A-Za-z]+/)) {
+  for (const field of SPELLING_FIELDS) {
+    for (const word of (extracted[field] ?? '').split(/[^A-Za-z]+/)) {
       if (word.length >= 4) known.push(word);
     }
   }
@@ -209,7 +200,11 @@ function correctSpelling(line: string, extracted: Readonly<Record<string, string
   return line
     .split(/([A-Za-z]+)/)
     .map((piece) => {
-      if (!/^[A-Za-z]+$/.test(piece) || piece.length < 5) return piece;
+      // Only the length floor in `spellingTolerance` decides what is
+      // too short — a second number here would be a second place to
+      // change when that one moves, and it already drifted once when
+      // the floor went from five to seven.
+      if (!/^[A-Za-z]+$/.test(piece)) return piece;
       const lower = piece.toLowerCase();
       // Already a known word: nothing to fix.
       if (known.some((k) => k.toLowerCase() === lower)) return piece;
@@ -272,6 +267,42 @@ export function appendOrRespellOnly(typed: string, result: string): boolean {
   });
 }
 
+/**
+ * Address line 1 with the resolved parts added to the end of it.
+ *
+ * ── IT APPENDS. IT DOES NOT REPLACE. (owner, 2026-11-09) ─────────────
+ * The first version of this composed a whole new line 1 out of their
+ * `extracted` fields, and it never fired once on a real address —
+ * because their extraction is not a superset of what the operator
+ * typed. A real case: "Nadibhag, Badu Industrial Area" came back as
+ * house 48 / street "2 sarani" / locality "Badu" / district "North 24
+ * Parganas", with "Nadibhag" and "Industrial Area" nowhere in it. Any
+ * replacement would have silently dropped two of the customer's words,
+ * so the loss guard refused it, correctly — and the feature was dead
+ * code dressed as a safety feature.
+ *
+ * Appending cannot lose a word, which makes the guard pass by
+ * construction instead of by luck.
+ *
+ * ── WHY `inferred` IS WELCOME HERE ───────────────────────────────────
+ * The earlier rule threw away every `inferred` field, and that threw
+ * away the whole point: the post office and police station are exactly
+ * what the operator did not type and the service worked out. The real
+ * rule is narrower than "distrust inferred" — an inferred value must
+ * never REPLACE something the operator wrote, but it may ADD a part
+ * they never gave. Appending makes that distinction automatic, so the
+ * source no longer has to be consulted at all.
+ *
+ * ── WHY NOT `completed_address` ──────────────────────────────────────
+ * Because it always contains the landmark, and line 2 IS the landmark
+ * here (ORD-5) — so applying their sentence put the landmark on the
+ * parcel twice. Verified live on 2026-11-09: sending the landmark as
+ * its own field does not keep it out of their completion either, so
+ * there was no way to fix that by asking them differently.
+ *
+ * Returns '' when there is nothing to add, which the caller reads as
+ * "no suggestion to offer".
+ */
 export function suggestedAddressLine1(
   currentLine1: string,
   extracted: Readonly<Record<string, string | null>> | null | undefined,

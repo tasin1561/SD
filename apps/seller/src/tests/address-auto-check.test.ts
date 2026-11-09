@@ -353,3 +353,24 @@ describe('the whole function keeps the guarantee', () => {
     }
   });
 });
+
+describe('the correction dictionary excludes what must not reach line 1', () => {
+  it('never corrects a word toward the STATE', () => {
+    // "Bengali" is seven letters, one edit from "Bengal", same first
+    // letter. With `state` in the dictionary a locality called Bengali
+    // Para became Bengal Para on the parcel.
+    expect(suggestedAddressLine1('Bengali Para', { state: 'West Bengal' })).toBe('');
+  });
+
+  it('never corrects a word toward the LANDMARK', () => {
+    // Line 2 is the landmark (ORD-5). Pulling line 1's words toward it
+    // corrects across the boundary this file exists to keep.
+    expect(suggestedAddressLine1('Hanumant Nagar', { landmark: 'Hanuman Mandir' })).toBe('');
+  });
+
+  it('still corrects toward a field that IS part of an address line', () => {
+    expect(suggestedAddressLine1('Madhamgram', { police_station: 'Madhyamgram' })).toContain(
+      'Madhyamgram',
+    );
+  });
+});
