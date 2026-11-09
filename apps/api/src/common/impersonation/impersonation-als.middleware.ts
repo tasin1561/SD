@@ -1,6 +1,7 @@
 import { Injectable, ServiceUnavailableException, type NestMiddleware } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 import { runImpersonated } from './impersonation-context';
+import { fullRequestPath } from './request-path';
 import {
   ImpersonationSessionLoader,
   type ImpersonationVerdict,
@@ -71,7 +72,7 @@ import {
  * Express routes case-blind by default, so a case-sensitive test here
  * would simply not fire on `/auth/Seller/impersonation/end`.
  */
-const SESSION_LIFECYCLE_PATHS = /^\/auth\/(seller|store)\/impersonation(\/|$)/i;
+export const SESSION_LIFECYCLE_PATHS = /^\/auth\/(seller|store)\/impersonation(\/|$)/i;
 
 @Injectable()
 export class ImpersonationAlsMiddleware implements NestMiddleware {
@@ -79,7 +80,7 @@ export class ImpersonationAlsMiddleware implements NestMiddleware {
 
   async use(req: Request, _res: Response, next: NextFunction): Promise<void> {
     // Before the loader runs, so these routes cost nothing either.
-    if (SESSION_LIFECYCLE_PATHS.test(req.path)) {
+    if (SESSION_LIFECYCLE_PATHS.test(fullRequestPath(req))) {
       next();
       return;
     }

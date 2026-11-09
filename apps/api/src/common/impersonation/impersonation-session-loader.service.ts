@@ -8,6 +8,7 @@ import {
 import type { ImpersonationContext } from './impersonation-context';
 import { ActorType } from '@skydrop/db';
 import { AuditLogService } from '../../modules/auth-common/services/audit-log.service';
+import { fullRequestPath } from './request-path';
 import { IMPERSONATION_COOKIE, inspectImpersonationCookie } from './impersonation-cookie';
 
 /** Seller / store authed API surface, optionally behind a /vN prefix. */
@@ -95,7 +96,7 @@ export class ImpersonationSessionLoader {
     cookiePresent: boolean,
   ): Promise<void> {
     try {
-      const path = req.path;
+      const path = fullRequestPath(req);
       const hasBearer = typeof req.headers?.authorization === 'string';
       const isSsrIdentity = SSR_IDENTITY.test(path);
       if (!cookiePresent) {
@@ -177,7 +178,7 @@ export class ImpersonationSessionLoader {
         entityType: 'impersonation_session',
         entityId: sessionId,
         metadata: {
-          path: req.path,
+          path: fullRequestPath(req),
           method: req.method,
           hasBearer: typeof req.headers?.authorization === 'string',
           sequence: seen + 1,
