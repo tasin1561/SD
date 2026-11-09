@@ -12,11 +12,12 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { ToastProvider } from '@skydrop/ui/app/toast';
 import { CallConfirmationPanel } from '@/app/(authed)/settings/orders/_components/call-confirmation-panel';
 import { AwaitingConfirmationIndex } from '@/app/(authed)/orders/awaiting-confirmation/_components/awaiting-confirmation-index';
-import { buildFetchMock, renderWithProviders } from './helpers';
+import { buildFetchMock, makeSeller, renderWithProviders } from './helpers';
 
 const SETTING = /order-defaults\/confirmation-calls/;
 const LIST = /orders\/awaiting-confirmation/;
 const SEND = /orders\/confirmation-calls/;
+const CONFIRM_NOW = /orders\/confirm-without-call/;
 
 function row(n: number, hoursLeft: number) {
   return {
@@ -130,6 +131,60 @@ describe('awaiting confirmation list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send for confirmation call' }));
     expect(await screen.findByText('1 sent, 1 not sent')).toBeInTheDocument();
     expect(screen.getByText(/\[FAILED\] Queue unavailable\./)).toBeInTheDocument();
+  });
+
+  it('confirms without a call only after the intent dialog, and reports the mix honestly', async () => {
+    const fetchImpl = buildFetchMock([
+      { match: SETTING, responses: many({ callsRequired: false, ttlHours: 24, isOwnValue: true }) },
+      { match: LIST, responses: many(page([row(1, 1), row(2, 5)])) },
+      {
+        match: CONFIRM_NOW,
+        responses: [
+          {
+            status: 200,
+            body: {
+              results: [
+                { orderId: 'o1', outcome: 'CONFIRMED', landedStatus: 'confirmed' },
+                { orderId: 'o2', outcome: 'OUT_OF_STOCK', landedStatus: 'out_of_stock' },
+              ],
+            },
+          },
+        ],
+      },
+    ]);
+    renderWithProviders(<AwaitingConfirmationIndex />, { fetchImpl });
+    fireEvent.click(await screen.findByLabelText('Select all orders on this page'));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm now, no call' }));
+
+    // Nothing fires until the operator agrees to skip the call.
+    expect(fetchImpl.mock.calls.some((c) => CONFIRM_NOW.test(String(c[0])))).toBe(false);
+    expect(await screen.findByText('Confirm without calling the customer?')).toBeInTheDocument();
+    expect(screen.getByText(/stock is claimed for each order/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm without a call' }));
+    await waitFor(() => {
+      const call = fetchImpl.mock.calls.find((c) => CONFIRM_NOW.test(String(c[0])));
+      expect(call).toBeDefined();
+      expect(JSON.parse(String((call?.[1] as RequestInit).body))).toEqual({
+        orderIds: ['o1', 'o2'],
+      });
+    });
+    expect(
+      await screen.findByText('1 confirmed and sent to packing, 1 out of stock'),
+    ).toBeInTheDocument();
+  });
+
+  it('a read-only login is not offered the confirm-now control (the server refuses it too)', async () => {
+    const fetchImpl = buildFetchMock([
+      { match: SETTING, responses: many({ callsRequired: false, ttlHours: 24, isOwnValue: true }) },
+      { match: LIST, responses: many(page([row(1, 1)])) },
+    ]);
+    renderWithProviders(<AwaitingConfirmationIndex />, {
+      fetchImpl,
+      identity: makeSeller({ permissions: ['orders.view'] }),
+    });
+    await screen.findByLabelText('Select order SD-1');
+    expect(screen.queryByRole('button', { name: 'Confirm now, no call' })).toBeNull();
   });
 
   it('marks near-expiry rows with a word and an absolute time on the element', async () => {

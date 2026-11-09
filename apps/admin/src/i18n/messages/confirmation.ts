@@ -126,9 +126,52 @@ export const confirmation = defineMessages({
   'awaiting.nothingSent': ['Nothing sent', 'কিছুই পাঠানো হয়নি'],
   'awaiting.sendFailed': ['Not sent — retry', 'পাঠানো হয়নি — আবার চেষ্টা'],
   'awaiting.pickFirst': [
-    'Select orders to send them to the call queue.',
-    'কল কিউতে পাঠাতে অর্ডার নির্বাচন করুন।',
+    'Select orders to send them to the call queue, or to confirm them without a call.',
+    'কল কিউতে পাঠাতে বা কল ছাড়াই কনফার্ম করতে অর্ডার নির্বাচন করুন।',
   ],
+
+  // ── Confirm now, no call ──
+  'awaiting.confirmNow': ['Confirm now, no call', 'এখনই কনফার্ম, কল ছাড়া'],
+  'awaiting.confirming': ['Confirming', 'কনফার্ম হচ্ছে'],
+  'awaiting.confirmedLabel': ['Confirmed', 'কনফার্ম হয়েছে'],
+  'awaiting.confirmNothing': ['Nothing confirmed', 'কিছুই কনফার্ম হয়নি'],
+  'awaiting.confirmFailed': ['Not confirmed — retry', 'কনফার্ম হয়নি — আবার চেষ্টা'],
+  'awaiting.confirmedOf': [
+    '{done} of {total} confirmed',
+    '{total}টির মধ্যে {done}টি কনফার্ম হয়েছে',
+  ],
+  'awaiting.confirmNowTitle': [
+    'Confirm without calling the customer?',
+    'কাস্টমারকে ফোন না করেই কনফার্ম করবেন?',
+  ],
+  'awaiting.confirmNowEntity': ['{n} selected order(s)', 'নির্বাচিত {n}টি অর্ডার'],
+  'awaiting.confirmNowBody': [
+    'Nobody will phone these customers. Stock is claimed for each order straight away and they go on to packing. The COD confirmation call is the step that holds returns down, and the client carries the return cost on anything that comes back.',
+    'এই কাস্টমারদের কেউ ফোন করবে না। প্রতিটি অর্ডারের জন্য সঙ্গে সঙ্গে স্টক ধরে রাখা হয় এবং সেগুলো প্যাকিংয়ে চলে যায়। COD কনফার্মেশন কলই রিটার্ন কমিয়ে রাখে, আর ফেরত এলে রিটার্ন খরচ ক্লায়েন্ট বহন করেন।',
+  ],
+  'awaiting.confirmNowGo': ['Confirm without a call', 'কল ছাড়াই কনফার্ম করুন'],
+  'awaiting.confirmNowCancel': ['Keep waiting', 'অপেক্ষাই চলুক'],
+  'awaiting.confirmNowHint': [
+    'Confirming sends them to packing with no call. The clock is not waited for.',
+    'কনফার্ম করলে কল ছাড়াই প্যাকিংয়ে যায়। ঘড়ির জন্য অপেক্ষা করা হয় না।',
+  ],
+  'awaiting.confirm.allDone': [
+    '{done} confirmed without a call and sent to packing.',
+    'কল ছাড়াই {done}টি কনফার্ম হয়ে প্যাকিংয়ে গেছে।',
+  ],
+  'awaiting.confirm.mixed': [
+    '{done} confirmed, {oos} out of stock, {failed} not confirmed.',
+    '{done}টি কনফার্ম হয়েছে, {oos}টির স্টক নেই, {failed}টি কনফার্ম হয়নি।',
+  ],
+  'awaiting.confirm.noneDone': [
+    'Nothing was confirmed: {oos} out of stock, {failed} not confirmed.',
+    'কিছুই কনফার্ম হয়নি: {oos}টির স্টক নেই, {failed}টি কনফার্ম হয়নি।',
+  ],
+  'awaiting.confirm.oosNote': [
+    'An out-of-stock order holds its place and can be retried once stock arrives.',
+    'স্টক না থাকা অর্ডার নিজের জায়গায় থাকে; স্টক এলে আবার চেষ্টা করা যায়।',
+  ],
+  'awaiting.confirm.refused': ['Not confirmed', 'কনফার্ম হয়নি'],
 
   'awaiting.result.title': ['Result of the last send', 'সর্বশেষ পাঠানোর ফলাফল'],
   'awaiting.result.allSent': ['{sent} sent for a call.', '{sent}টি কলের জন্য পাঠানো হয়েছে।'],

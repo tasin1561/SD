@@ -128,6 +128,70 @@ export function useSendConfirmationCalls(): UseMutationResult<
   });
 }
 
+/**
+ * "Confirm now, no call" — `seller/orders/confirm-without-call`.
+ *
+ * Gated server-side on `orders.create`, the same key as sending for a call:
+ * it commits this company's stock and books a waybill, so a read-only login
+ * (`viewer`, which holds `orders.view` alone) is refused. The screen mirrors
+ * the key only to decide whether to DRAW the control; the server owns the
+ * decision and its `[CODE] message` is shown as written (FE-2).
+ *
+ * One outcome per order: CONFIRMED, OUT_OF_STOCK (the reserve found nothing),
+ * or a refusal with its own code and words.
+ */
+export interface ConfirmWithoutCallOutcome {
+  readonly orderId: string;
+  readonly outcome: string;
+  readonly landedStatus?: string | undefined;
+  readonly code?: string | undefined;
+  readonly message?: string | undefined;
+}
+
+export interface ConfirmWithoutCallResult {
+  readonly results: ReadonlyArray<ConfirmWithoutCallOutcome>;
+}
+
+export function useConfirmWithoutCall(): UseMutationResult<
+  ConfirmWithoutCallResult,
+  Error,
+  { orderIds: string[] }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<ConfirmWithoutCallResult>('/api/seller/orders/confirm-without-call', {
+        method: 'POST',
+        body,
+      }),
+    // Nothing optimistic: the list is re-read from the server either way.
+    // A confirmed order also changes the status counts above the list.
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-awaiting-confirmation'] });
+      void queryClient.invalidateQueries({ queryKey: ['seller-orders'] });
+    },
+  });
+}
+
+/** Tally a confirm-now for honest reporting: no bucket is hidden. */
+export function tallyConfirmations(results: ReadonlyArray<ConfirmWithoutCallOutcome>): {
+  confirmed: number;
+  outOfStock: ReadonlyArray<ConfirmWithoutCallOutcome>;
+  refused: ReadonlyArray<ConfirmWithoutCallOutcome>;
+} {
+  let confirmed = 0;
+  const outOfStock: ConfirmWithoutCallOutcome[] = [];
+  const refused: ConfirmWithoutCallOutcome[] = [];
+  for (const r of results) {
+    const o = r.outcome.toUpperCase();
+    if (o === 'CONFIRMED') confirmed += 1;
+    else if (o === 'OUT_OF_STOCK') outOfStock.push(r);
+    else refused.push(r);
+  }
+  return { confirmed, outOfStock, refused };
+}
+
 /** Tally a send for honest reporting. */
 export function tallyOutcomes(results: ReadonlyArray<ConfirmationCallOutcome>): {
   sent: number;

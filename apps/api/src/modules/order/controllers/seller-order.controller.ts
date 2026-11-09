@@ -44,12 +44,14 @@ import {
 import { OrderReadService } from '../services/order-read.service';
 import { OrderWriteService } from '../services/order-write.service';
 import {
+  ConfirmWithoutCallDto,
   ListAwaitingConfirmationQueryDto,
   SendConfirmationCallsDto,
 } from '../dto/awaiting-confirmation.dto';
 import {
   AwaitingConfirmationService,
   type AwaitingConfirmationRow,
+  type ConfirmWithoutCallResult,
   type SendCallResult,
 } from '../services/awaiting-confirmation.service';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
@@ -134,6 +136,31 @@ export class SellerOrderController {
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<{ results: SendCallResult[] }> {
     return this.awaiting.sendToAgents(body.orderIds, { scopeSellerId: seller.id, ctx });
+  }
+
+  // `orders.create`, the same key as sending for a call, and for the same
+  // reason stated there: this is not a view of the company's own orders,
+  // it is an act that commits their stock and books a waybill. `viewer`
+  // holds `orders.view` and nothing else, so a read-only login is refused
+  // HERE; the screen may mirror the key to decide what it draws, but the
+  // refusal and its words are the server's (FE-2).
+  @Post('confirm-without-call')
+  @RequireSellerPermissions('orders.create')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Confirm chosen orders NOW with no call: your stock is claimed and they go on to packing. An order with nothing in stock comes back OUT_OF_STOCK. Per-order outcome; an order that is not yours reads NOT_FOUND.',
+  })
+  confirmWithoutCall(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Body() body: ConfirmWithoutCallDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<{ results: ConfirmWithoutCallResult[] }> {
+    return this.awaiting.confirmWithoutCall(body.orderIds, {
+      scopeSellerId: seller.id,
+      actor: this.actor(seller),
+      ctx,
+    });
   }
 
   // MUST stay above @Get(':id') — Nest matches in declaration order, so

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AwaitingConfirmationIndex } from '@/app/(authed)/call-center/awaiting-confirmation/_components/awaiting-confirmation-index';
-import { readOutcomes, remainingUntil } from '@/lib/confirmation-hooks';
+import { readConfirmOutcomes, readOutcomes, remainingUntil } from '@/lib/confirmation-hooks';
 import { buildFetchMock, makeStaff, renderWithProviders } from './helpers';
 
 const NOW = Date.now();
@@ -169,9 +169,74 @@ describe('AwaitingConfirmationIndex', () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it('confirms without a call only after the intent dialog, and reports the mix honestly', async () => {
+    const user = userEvent.setup();
+    const fetchImpl = buildFetchMock([
+      {
+        match: /awaiting-confirmation/,
+        responses: [
+          { status: 200, body: PAGE([row('1'), row('2')]) },
+          { status: 200, body: PAGE([]) },
+        ],
+      },
+      {
+        match: /confirm-without-call/,
+        responses: [
+          {
+            status: 200,
+            body: {
+              results: [
+                { orderId: '1', outcome: 'CONFIRMED', landedStatus: 'confirmed' },
+                { orderId: '2', outcome: 'OUT_OF_STOCK', landedStatus: 'out_of_stock' },
+              ],
+            },
+          },
+        ],
+      },
+    ]);
+    renderWithProviders(<AwaitingConfirmationIndex />, { identity: WITH, fetchImpl });
+    await screen.findByText('SD-1');
+    await user.click(screen.getByLabelText('Select SD-1'));
+    await user.click(screen.getByLabelText('Select SD-2'));
+    await user.click(screen.getByRole('button', { name: /confirm now, no call/i }));
+
+    // Nothing has fired yet: the operator has to agree to skip the call.
+    expect(fetchImpl.mock.calls.some((c) => /confirm-without-call/.test(String(c[0])))).toBe(false);
+    expect(await screen.findByText(/Confirm without calling the customer\?/i)).toBeInTheDocument();
+    expect(screen.getByText(/stock is claimed/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^confirm without a call$/i }));
+    await waitFor(() => {
+      const post = fetchImpl.mock.calls.find((c) => /confirm-without-call/.test(String(c[0])));
+      expect(post).toBeDefined();
+      expect(JSON.parse(String((post?.[1] as RequestInit).body))).toEqual({ orderIds: ['1', '2'] });
+    });
+    const status = await screen.findByText(/1 confirmed, 1 out of stock, 0 not confirmed/);
+    expect(status).toBeInTheDocument();
+    expect(
+      within(status.closest('.aw-result') as HTMLElement).getByText('SD-2'),
+    ).toBeInTheDocument();
+  });
 });
 
 describe('helpers', () => {
+  it('buckets confirm-now outcomes', () => {
+    expect(
+      readConfirmOutcomes({
+        results: [
+          { orderId: 'a', outcome: 'CONFIRMED' },
+          { orderId: 'b', outcome: 'OUT_OF_STOCK' },
+          { orderId: 'c', outcome: 'REFUSED', code: 'STALE_ORDER_STATUS', message: 'moved on' },
+        ],
+      }).map((r) => r.kind),
+    ).toEqual(['confirmed', 'outOfStock', 'refused']);
+    expect(
+      readConfirmOutcomes({
+        results: [{ orderId: 'c', outcome: 'REFUSED', code: 'E', message: 'moved on' }],
+      })[0]?.detail,
+    ).toBe('[E] moved on');
+  });
   it('buckets outcomes', () => {
     expect(
       readOutcomes({

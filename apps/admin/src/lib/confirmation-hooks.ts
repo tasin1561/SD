@@ -147,6 +147,71 @@ export function useSendForConfirmationCall(): UseMutationResult<
   });
 }
 
+/**
+ * "Confirm now, no call" — the second action on the same worklist and the
+ * same checkboxes.
+ *
+ *   POST /admin/orders/confirm-without-call   { orderIds } (max 100) ->
+ *                                             one outcome per order
+ *
+ * Gated on the same `callcenter.queue.manage`: deciding NOT to call is the
+ * same decision as sending for one, made the other way. The UI only mirrors
+ * the permission to hide controls (FE-2); the API refuses regardless, and an
+ * order with nothing to reserve comes back OUT_OF_STOCK rather than confirmed.
+ */
+export type ConfirmNowKind = 'confirmed' | 'outOfStock' | 'refused';
+
+export interface ConfirmNowResult {
+  readonly orderId: string;
+  readonly kind: ConfirmNowKind;
+  /** The server's own words for a refusal, shown verbatim. */
+  readonly detail: string | null;
+}
+
+interface RawConfirmOutcome extends RawOutcome {
+  readonly landedStatus?: string;
+}
+
+export function readConfirmOutcomes(body: unknown): readonly ConfirmNowResult[] {
+  const raw: unknown = Array.isArray(body)
+    ? body
+    : ((body as { results?: unknown } | null)?.results ?? []);
+  if (!Array.isArray(raw)) return [];
+  return (raw as RawConfirmOutcome[]).map((o) => {
+    const label = (o.outcome ?? o.status ?? '').toUpperCase();
+    const message = o.message ?? o.error ?? null;
+    const codeWord = o.code ?? (label === '' ? undefined : label);
+    const detail =
+      codeWord !== undefined && message !== null
+        ? `[${codeWord}] ${message}`
+        : (message ?? (codeWord !== undefined ? `[${codeWord}]` : null));
+    const kind: ConfirmNowKind =
+      label === 'CONFIRMED' ? 'confirmed' : label === 'OUT_OF_STOCK' ? 'outOfStock' : 'refused';
+    return { orderId: o.orderId ?? '', kind, detail };
+  });
+}
+
+export function useConfirmWithoutCall(): UseMutationResult<
+  readonly ConfirmNowResult[],
+  Error,
+  readonly string[]
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderIds) =>
+      readConfirmOutcomes(
+        await client.request<unknown>('/api/admin/orders/confirm-without-call', {
+          method: 'POST',
+          body: { orderIds },
+        }),
+      ),
+    // Nothing optimistic: the list is re-read from the server afterwards,
+    // whatever the outcome mix was.
+    onSettled: () => void qc.invalidateQueries({ queryKey: ['admin-awaiting-confirmation'] }),
+  });
+}
+
 export interface Remaining {
   readonly totalMinutes: number;
   readonly hours: number;

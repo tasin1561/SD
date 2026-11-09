@@ -66,6 +66,38 @@ export interface SendConfirmationCallsResponse {
   readonly results: readonly SendConfirmationCallResult[];
 }
 
+/**
+ * "Confirm now, no call" — same 1..100 selection as a send.
+ *
+ *   POST /admin/orders/confirm-without-call   perm: callcenter.queue.manage
+ *   POST /seller/orders/confirm-without-call  perm: orders.create
+ */
+export interface ConfirmWithoutCallRequest {
+  readonly orderIds: readonly string[];
+}
+
+export type ConfirmWithoutCallOutcome =
+  | 'CONFIRMED'
+  | 'OUT_OF_STOCK'
+  | 'NOT_FOUND'
+  | 'NOT_PENDING_CONFIRMATION'
+  | 'REFUSED'
+  | 'FAILED';
+
+export interface ConfirmWithoutCallResult {
+  readonly orderId: string;
+  readonly outcome: ConfirmWithoutCallOutcome;
+  /** The status actually persisted. */
+  readonly landedStatus?: string;
+  /** A guardrail's own code and words — show them verbatim (FE-2). */
+  readonly code?: string;
+  readonly message?: string;
+}
+
+export interface ConfirmWithoutCallResponse {
+  readonly results: readonly ConfirmWithoutCallResult[];
+}
+
 export interface ConfirmationCallsSetting {
   readonly callsRequired: boolean;
   /** 1..168. */

@@ -33,11 +33,13 @@ import {
 } from '../dto/admin-order.dto';
 import {
   AdminListAwaitingConfirmationQueryDto,
+  ConfirmWithoutCallDto,
   SendConfirmationCallsDto,
 } from '../dto/awaiting-confirmation.dto';
 import {
   AwaitingConfirmationService,
   type AwaitingConfirmationRow,
+  type ConfirmWithoutCallResult,
   type SendCallResult,
 } from '../services/awaiting-confirmation.service';
 import { ForceMutationDto } from '../dto/force-mutation.dto';
@@ -119,6 +121,29 @@ export class AdminOrderController {
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<{ results: SendCallResult[] }> {
     return this.awaiting.sendToAgents(body.orderIds, { ctx });
+  }
+
+  // Same key as sending for a call: `callcenter.queue.manage` is the
+  // authority over what happens to an order that is waiting on a call,
+  // and deciding NOT to call is the same decision made the other way.
+  // Deliberately NOT `orders.cancel` and NOT god mode — this is a
+  // sanctioned business action, not a state-machine bypass.
+  @Post('confirm-without-call')
+  @RequirePermissions('callcenter.queue.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Confirm chosen awaiting-confirmation orders NOW with NO call and no waiting for the TTL: stock is claimed and they go on to packing. Runs the same reserve saga, so an order with nothing to reserve comes back OUT_OF_STOCK. Per-order outcome.',
+  })
+  confirmWithoutCall(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Body() body: ConfirmWithoutCallDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<{ results: ConfirmWithoutCallResult[] }> {
+    return this.awaiting.confirmWithoutCall(body.orderIds, {
+      actor: { type: ActorType.STAFF, id: staff.id },
+      ctx,
+    });
   }
 
   @Get(':id')

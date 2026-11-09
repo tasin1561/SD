@@ -1,9 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { OrderStatus, Prisma } from '@skydrop/db';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
+import { ActorType, OrderStatus, Prisma, QueueClosureReason } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { ConfirmationPolicyService } from '../../confirmation-policy/confirmation-policy.service';
+import type { EventActor } from './order-event-writer.service';
+import { OrderWriteService } from './order-write.service';
 
 export interface AwaitingConfirmationRow {
   readonly id: string;
@@ -34,6 +37,35 @@ export interface SendCallResult {
   readonly message?: string;
 }
 
+export type ConfirmWithoutCallOutcome =
+  | 'CONFIRMED'
+  | 'OUT_OF_STOCK'
+  | 'NOT_FOUND'
+  | 'NOT_PENDING_CONFIRMATION'
+  | 'REFUSED'
+  | 'FAILED';
+
+export interface ConfirmWithoutCallResult {
+  readonly orderId: string;
+  readonly outcome: ConfirmWithoutCallOutcome;
+  /** What was actually persisted — CONFIRMED, or OUT_OF_STOCK if nothing could be reserved. */
+  readonly landedStatus?: OrderStatus;
+  /** The server's own refusal code and words, for the UI to show verbatim (FE-2). */
+  readonly code?: string;
+  readonly message?: string;
+}
+
+/**
+ * The `reason` on the STATUS_CHANGED event. Deliberately not the sweeper's
+ * AUTO_CONFIRM_EVENT_TEXT: "a person decided" and "a timer expired" are
+ * different facts and the timeline must not read them as the same one.
+ */
+export const CONFIRMED_WITHOUT_CALL_EVENT_TEXT =
+  'Confirmed by a person without a confirmation call — nobody phoned the customer';
+
+/** The audit action. Distinct from the sweeper's `order.auto_confirmed_ttl`. */
+export const CONFIRMED_WITHOUT_CALL_AUDIT_ACTION = 'order.confirmed_without_call';
+
 /**
  * The "awaiting confirmation" worklist: PENDING_CONFIRMATION orders with
  * no open call-queue entry (calls are off for the client, or the entry
@@ -50,6 +82,11 @@ export class AwaitingConfirmationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly policy: ConfirmationPolicyService,
+    // ORD-3: the only cross-module order-status write.
+    private readonly orderWrite: OrderWriteService,
+    // CC-1: the ONLY cross-module call-queue surface.
+    private readonly callQueue: CallQueueService,
+    private readonly audit: AuditLogService,
   ) {}
 
   async list(opts: {
@@ -145,4 +182,166 @@ export class AwaitingConfirmationService {
     }
     return { results };
   }
+
+  /**
+   * Confirm chosen orders NOW, with no call and without waiting for the TTL.
+   *
+   * The same mechanism the TTL sweeper uses — `transitionStatus` to the
+   * confirmed target with `expectedFrom: PENDING_CONFIRMATION` (ORD-3) — so
+   * the M5 reserve saga runs as always and an order with nothing to reserve
+   * lands OUT_OF_STOCK, reported per order rather than hidden.
+   *
+   * Three deliberate differences from the sweeper:
+   *   • NO `autoConfirmClaim`. That turns the write into a claim on
+   *     `confirmation_deadline_at` being SET AND DUE, which a human press has
+   *     nothing to claim (most of these orders have no clock running at all).
+   *     `expectedFrom` is the concurrency guard; a second press gets the
+   *     normal 409.
+   *   • NOT god mode (ORD-2). This is a sanctioned business action and must
+   *     not set `hasAdminOverride` — that flag means "god mode touched this".
+   *   • The actor is the real human (staff on admin, seller user on client),
+   *     never SYSTEM, and the audit action is its own name.
+   *
+   * The target is `CONFIRMED` directly rather than via
+   * `CallOutcomeMappingService`: that service belongs to the call-centre
+   * module (CC-2) and the order module does not depend on it — the same
+   * choice the existing `retry-stock` admin action makes.
+   *
+   * Per-order outcomes; one order's refusal never fails the batch.
+   */
+  async confirmWithoutCall(
+    orderIds: readonly string[],
+    opts: { actor: EventActor; scopeSellerId?: string; ctx?: ClientContext },
+  ): Promise<{ results: ConfirmWithoutCallResult[] }> {
+    const results: ConfirmWithoutCallResult[] = [];
+    for (const orderId of new Set(orderIds)) {
+      try {
+        const order = await this.prisma.client.order.findFirst({
+          where: {
+            id: orderId,
+            deletedAt: null,
+            ...(opts.scopeSellerId ? { sellerId: opts.scopeSellerId } : {}),
+          },
+          select: { status: true, sellerId: true, orderNumber: true },
+        });
+        if (!order) {
+          results.push({ orderId, outcome: 'NOT_FOUND' });
+          continue;
+        }
+        if (order.status !== OrderStatus.PENDING_CONFIRMATION) {
+          results.push({
+            orderId,
+            outcome: 'NOT_PENDING_CONFIRMATION',
+            code: 'NOT_PENDING_CONFIRMATION',
+            message: `Order is ${order.status}`,
+          });
+          continue;
+        }
+
+        const res = await this.orderWrite.transitionStatus({
+          orderId,
+          to: OrderStatus.CONFIRMED,
+          expectedFrom: OrderStatus.PENDING_CONFIRMATION,
+          actor: opts.actor,
+          reason: CONFIRMED_WITHOUT_CALL_EVENT_TEXT,
+          ...(opts.ctx ? { ctx: opts.ctx } : {}),
+        });
+
+        // An agent must never ring a customer about an order already in
+        // packing. The post-commit exit hook closes the entry too; this
+        // call is idempotent ({dequeued:0}) and makes the guarantee local
+        // to the action rather than a side effect of another module.
+        await this.closeOpenCall(orderId, res.status, opts.ctx);
+        await this.auditConfirmation(order.sellerId, order.orderNumber, orderId, res.status, opts);
+
+        results.push({
+          orderId,
+          outcome: res.status === OrderStatus.CONFIRMED ? 'CONFIRMED' : 'OUT_OF_STOCK',
+          landedStatus: res.status,
+        });
+      } catch (e) {
+        const refusal = readRefusal(e);
+        if (refusal !== null) {
+          // A guardrail spoke (stale status, seller on hold, invalid edge).
+          // Its own words travel to the operator untouched (FE-2).
+          results.push({ orderId, outcome: 'REFUSED', ...refusal });
+          continue;
+        }
+        this.logger.error({ orderId, err: (e as Error).message }, 'Confirm-without-call failed');
+        results.push({ orderId, outcome: 'FAILED', message: (e as Error).message });
+      }
+    }
+    return { results };
+  }
+
+  /** CC-1: through CallQueueService only; never `call_queue_entries`. */
+  private async closeOpenCall(
+    orderId: string,
+    landed: OrderStatus,
+    ctx?: ClientContext,
+  ): Promise<void> {
+    try {
+      await this.callQueue.dequeueOrder(
+        orderId,
+        landed === OrderStatus.CONFIRMED
+          ? QueueClosureReason.ORDER_CONFIRMED
+          : QueueClosureReason.ADMIN_CLOSED,
+        ctx,
+      );
+    } catch (e) {
+      // The status is already persisted; the entry self-heals on the next
+      // dequeue. Never turn a confirmed order into a reported failure.
+      this.logger.error(
+        { orderId, landed, err: (e as Error).message },
+        'Confirm-without-call: call-queue close failed; status persisted',
+      );
+    }
+  }
+
+  private async auditConfirmation(
+    sellerId: string,
+    orderNumber: string,
+    orderId: string,
+    landed: OrderStatus,
+    opts: { actor: EventActor; ctx?: ClientContext },
+  ): Promise<void> {
+    const actorId = opts.actor.id ?? null;
+    await this.audit
+      .log({
+        actorType: opts.actor.type,
+        actorId,
+        ...(opts.actor.type === ActorType.STAFF ? { staffUserId: actorId } : {}),
+        sellerId,
+        action: CONFIRMED_WITHOUT_CALL_AUDIT_ACTION,
+        entityType: 'order',
+        entityId: orderId,
+        // A person chose to skip the COD confirmation call, which is the
+        // step that holds RTO down in this market. Not routine.
+        severity: 'MEDIUM',
+        metadata: {
+          orderNumber,
+          landedStatus: landed,
+          noCallMade: true,
+          reason: CONFIRMED_WITHOUT_CALL_EVENT_TEXT,
+          ipAddress: opts.ctx?.ipAddress ?? null,
+          userAgent: opts.ctx?.userAgent ?? null,
+          requestId: opts.ctx?.requestId ?? null,
+        },
+      })
+      .catch(() => undefined);
+  }
+}
+
+/** A guardrail's `{ code, message }` body, read back for a per-order report. */
+function readRefusal(e: unknown): { code: string; message: string } | null {
+  if (!(e instanceof HttpException)) return null;
+  const body: unknown = e.getResponse();
+  if (typeof body === 'object' && body !== null) {
+    const o = body as { code?: unknown; message?: unknown };
+    return {
+      code: typeof o.code === 'string' ? o.code : 'REFUSED',
+      message: typeof o.message === 'string' ? o.message : e.message,
+    };
+  }
+  return { code: 'REFUSED', message: typeof body === 'string' ? body : e.message };
 }

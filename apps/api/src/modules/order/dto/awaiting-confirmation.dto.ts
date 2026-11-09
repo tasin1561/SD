@@ -45,3 +45,17 @@ export class SendConfirmationCallsDto {
   @IsUUID('7', { each: true })
   orderIds!: string[];
 }
+
+/**
+ * "Confirm now, no call." Same selection shape and same batch ceiling as
+ * sending for a call — the two actions sit side by side on one worklist and
+ * read the same checkboxes.
+ */
+export class ConfirmWithoutCallDto {
+  @ApiProperty({ type: [String], minItems: 1, maxItems: MAX_CONFIRMATION_CALL_ORDERS })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_CONFIRMATION_CALL_ORDERS)
+  @IsUUID('7', { each: true })
+  orderIds!: string[];
+}

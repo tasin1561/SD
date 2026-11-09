@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import { AlertTriangle, Clock, PhoneCall, Settings2 } from 'lucide-react';
+import { AlertTriangle, Clock, PhoneCall, PhoneOff, Settings2 } from 'lucide-react';
 import { PageHeader } from '@skydrop/ui/app/page-header';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { Pagination } from '@skydrop/ui/app/pagination';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
@@ -21,14 +22,19 @@ import {
   useRowSelection,
 } from '@skydrop/ui/app/data-table';
 import { Money } from '@skydrop/ui/components';
+import { useSellerIdentity } from '@skydrop/auth/client';
 import {
+  tallyConfirmations,
   tallyOutcomes,
   useAwaitingConfirmation,
   useCallConfirmationSetting,
+  useConfirmWithoutCall,
   useSendConfirmationCalls,
   type AwaitingConfirmationRow,
   type ConfirmationCallOutcome,
+  type ConfirmWithoutCallOutcome,
 } from '@/lib/call-confirmation-hooks';
+import { can } from '@/lib/page-access';
 import { verdict } from '@/i18n/verdict';
 import { useLocale, useT } from '@/i18n/client';
 import { formatDateTime } from '@/i18n/format';
@@ -52,6 +58,12 @@ interface Report {
   readonly sent: number;
   readonly already: number;
   readonly refused: ReadonlyArray<ConfirmationCallOutcome>;
+}
+
+interface ConfirmReport {
+  readonly confirmed: number;
+  readonly outOfStock: ReadonlyArray<ConfirmWithoutCallOutcome>;
+  readonly refused: ReadonlyArray<ConfirmWithoutCallOutcome>;
 }
 
 function TimeLeft({ row, now }: { row: AwaitingConfirmationRow; now: number }): ReactElement {
@@ -106,6 +118,19 @@ export function AwaitingConfirmationIndex(): ReactElement {
   const [report, setReport] = useState<Report | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
+  // "Confirm now, no call": the same checkboxes, the opposite decision.
+  // `orders.create` is what the SERVER requires (it commits stock and books
+  // a waybill, so a read-only login is refused); mirrored here only to
+  // decide what is drawn, never to pre-empt the answer (FE-2).
+  const mayConfirm = can(useSellerIdentity(), 'orders.create');
+  const confirmNow = useConfirmWithoutCall();
+  const [askConfirm, setAskConfirm] = useState(false);
+  const [confirmReport, setConfirmReport] = useState<ConfirmReport | null>(null);
+  const [confirmFailure, setConfirmFailure] = useState<string | null>(null);
+  // Order numbers snapshotted when the request goes out: a confirmed order
+  // leaves this list, so the report must not fall back to a raw id.
+  const [confirmLabels, setConfirmLabels] = useState<ReadonlyMap<string, string>>(new Map());
+
   const rows = useMemo(() => list.data?.items ?? [], [list.data]);
   const ids = useMemo(() => rows.map((r) => r.id), [rows]);
   const selection = useRowSelection(ids);
@@ -125,6 +150,25 @@ export function AwaitingConfirmationIndex(): ReactElement {
       if (tally.sent === 0 && tally.already === 0) throw new Error('none sent');
     } catch (e) {
       if (!(e instanceof Error && e.message === 'none sent')) setFailure(verdict(e, t));
+      throw e;
+    }
+  }
+
+  async function onConfirmNow(): Promise<void> {
+    const orderIds = [...selection.selected];
+    if (orderIds.length === 0) return;
+    setConfirmFailure(null);
+    setConfirmReport(null);
+    setReport(null);
+    setConfirmLabels(new Map(rows.map((r) => [r.id, r.orderNumber])));
+    try {
+      const res = await confirmNow.mutateAsync({ orderIds });
+      // The mix is reported as the server sent it: an order that could not
+      // be reserved landed OUT_OF_STOCK and is NOT a success.
+      setConfirmReport(tallyConfirmations(res.results));
+      selection.clear();
+    } catch (e) {
+      setConfirmFailure(verdict(e, t));
       throw e;
     }
   }
@@ -151,6 +195,33 @@ export function AwaitingConfirmationIndex(): ReactElement {
       : report.refused.length === 0
         ? 'good'
         : report.sent + report.already > 0
+          ? 'warn'
+          : 'bad';
+
+  const confirmSummary =
+    confirmReport === null
+      ? null
+      : [
+          confirmReport.confirmed > 0
+            ? t('callConfirm.resultConfirmed', { n: confirmReport.confirmed })
+            : null,
+          confirmReport.outOfStock.length > 0
+            ? t('callConfirm.resultOutOfStock', { n: confirmReport.outOfStock.length })
+            : null,
+          confirmReport.refused.length > 0
+            ? t('callConfirm.resultNotConfirmed', { n: confirmReport.refused.length })
+            : null,
+        ]
+          .filter((x): x is string => x !== null)
+          .join(', ');
+  const confirmUnhappy =
+    confirmReport === null ? [] : [...confirmReport.outOfStock, ...confirmReport.refused];
+  const confirmTone: 'good' | 'warn' | 'bad' =
+    confirmReport === null
+      ? 'good'
+      : confirmUnhappy.length === 0
+        ? 'good'
+        : confirmReport.confirmed > 0
           ? 'warn'
           : 'bad';
 
@@ -205,7 +276,51 @@ export function AwaitingConfirmationIndex(): ReactElement {
             )}
           </div>
         )}
+        {(confirmReport !== null || confirmFailure !== null) && (
+          <div className="cc-result" data-tone={confirmFailure !== null ? 'bad' : confirmTone}>
+            {confirmFailure !== null ? (
+              <p>{confirmFailure}</p>
+            ) : (
+              <>
+                <p className="cc-result__summary">{confirmSummary}</p>
+                {confirmReport !== null && confirmReport.outOfStock.length > 0 && (
+                  <p>{t('callConfirm.outOfStockNote')}</p>
+                )}
+                {confirmUnhappy.length > 0 && (
+                  <ul className="cc-result__list">
+                    {confirmUnhappy.map((r) => (
+                      <li key={r.orderId}>
+                        <span className="sk-ident">
+                          {confirmLabels.get(r.orderId) ?? orderLabel(rows, r.orderId)}
+                        </span>{' '}
+                        {r.code !== undefined || r.message !== undefined
+                          ? `[${r.code ?? r.outcome}] ${r.message ?? ''}`.trim()
+                          : r.outcome}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
+
+      <ConfirmDialog
+        open={askConfirm}
+        onOpenChange={(o) => {
+          setAskConfirm(o);
+          if (!o) setConfirmFailure(null);
+        }}
+        title={t('callConfirm.confirmNowTitle')}
+        entity={t('callConfirm.confirmNowEntity', { n: selection.count })}
+        consequence={t('callConfirm.confirmNowBody')}
+        confirmLabel={t('callConfirm.confirmNowGo')}
+        cancelLabel={t('callConfirm.confirmNowCancel')}
+        destructive
+        error={confirmFailure}
+        onConfirm={onConfirmNow}
+      />
 
       {list.isLoading || setting.isLoading ? (
         <SkeletonRows rows={5} label={t('callConfirm.loading')} />
@@ -241,6 +356,22 @@ export function AwaitingConfirmationIndex(): ReactElement {
             >
               {t('callConfirm.clear')}
             </Button>
+            {/* Deliberately the quieter of the two: skipping the COD call is
+                not the routine move, and the dialog restates what it costs. */}
+            {mayConfirm && (
+              <Button
+                variant="secondary"
+                size="md"
+                icon={<PhoneOff size={15} />}
+                disabled={selection.count === 0 || confirmNow.isPending}
+                onClick={() => {
+                  setConfirmFailure(null);
+                  setAskConfirm(true);
+                }}
+              >
+                {t('callConfirm.confirmNow')}
+              </Button>
+            )}
             <AsyncButton
               variant="primary"
               icon={<PhoneCall size={15} />}

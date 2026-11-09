@@ -15,6 +15,9 @@ import { SellerOrderDefaultsController } from './controllers/seller-order-defaul
 import { OrderReadService } from './services/order-read.service';
 import { OrderWriteService } from './services/order-write.service';
 import { OrderRecipientCorrectionService } from './services/order-recipient-correction.service';
+import { AwaitingConfirmationService } from './services/awaiting-confirmation.service';
+import { CallQueueModule } from '../call-queue/call-queue.module';
+import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-policy.module';
 
 /**
  * Module 6 — Order Management (PUBLIC facade).
@@ -70,6 +73,12 @@ import { OrderRecipientCorrectionService } from './services/order-recipient-corr
     // through OrderPostCommitHooksService, provided by OrderCoreModule and
     // shared with god mode (2026-09-12).
     SellerRestrictionModule,
+    // AwaitingConfirmationService (the worklist, "send for a call" and
+    // "confirm now, no call") lives here rather than in OrderCoreModule
+    // because confirming writes through OrderWriteService, provided above.
+    // Both primitives are dependency-free R3 modules (CC-1), so no cycle.
+    CallQueueModule,
+    ConfirmationPolicyModule,
   ],
   controllers: [
     SellerOrderController,
@@ -82,6 +91,7 @@ import { OrderRecipientCorrectionService } from './services/order-recipient-corr
     OrderReadService,
     OrderWriteService,
     OrderRecipientCorrectionService,
+    AwaitingConfirmationService,
     SellerJwtGuard,
     StaffJwtGuard,
   ],

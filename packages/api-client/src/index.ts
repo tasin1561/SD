@@ -254,6 +254,10 @@ export type {
   SendConfirmationCallOutcome,
   SendConfirmationCallResult,
   SendConfirmationCallsResponse,
+  ConfirmWithoutCallRequest,
+  ConfirmWithoutCallOutcome,
+  ConfirmWithoutCallResult,
+  ConfirmWithoutCallResponse,
   ConfirmationCallsSetting,
   SetConfirmationCallsRequest,
 } from './endpoints/awaiting-confirmation';

@@ -29,7 +29,10 @@ import { OrderPostCommitHooksService } from './services/order-post-commit-hooks.
 import { ResellerOrderService } from './services/reseller-order.service';
 import { ResellerOrderRetermService } from './services/reseller-order-reterm.service';
 import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-policy.module';
-import { AwaitingConfirmationService } from './services/awaiting-confirmation.service';
+// AwaitingConfirmationService moved to OrderModule (2026-11-09): its
+// "confirm now, no call" action writes through OrderWriteService, which is
+// provided one level up, and NestJS cannot resolve that downwards without a
+// cycle. Both of its consumers are OrderModule controllers.
 
 /**
  * Module 6 — INTERNAL core (the Module-5 `inventory-shared` analogue).
@@ -120,10 +123,8 @@ import { AwaitingConfirmationService } from './services/awaiting-confirmation.se
     ResellerOrderService,
     // 2026-09-18 — a changed reseller order keeps its own terms.
     ResellerOrderRetermService,
-    AwaitingConfirmationService,
   ],
   exports: [
-    AwaitingConfirmationService,
     // Intra-Module-6 only (the store-order and CSV submodules place a
     // reseller store's order through it).
     ResellerOrderService,

@@ -41,6 +41,16 @@
   color: var(--fg-muted);
   font-size: var(--fs-sm);
 }
+/* Both actions stay together on the right and wrap as one group, so the
+   bar's height is the only thing that can change on a narrow screen. */
+.aw-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  min-width: 0;
+}
 .aw-live:empty {
   display: none;
 }

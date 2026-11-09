@@ -70,6 +70,30 @@ export const callConfirmation = defineMessages({
   'callConfirm.resultAlready': ['{n} already queued', '{n}টি আগে থেকেই সারিতে'],
   'callConfirm.resultRefused': ['{n} not sent', '{n}টি পাঠানো যায়নি'],
   'callConfirm.refusedOrder': ['{order}', '{order}'],
+
+  // ── Confirm now, no call ──────────────────────────────────────────────
+  'callConfirm.confirmNow': ['Confirm now, no call', 'এখনই কনফার্ম, কল ছাড়া'],
+  'callConfirm.confirmNowTitle': [
+    'Confirm without calling the customer?',
+    'কাস্টমারকে ফোন না করেই কনফার্ম করবেন?',
+  ],
+  'callConfirm.confirmNowEntity': ['{n} selected order(s)', 'বাছা {n}টি অর্ডার'],
+  'callConfirm.confirmNowBody': [
+    'Nobody will phone these customers. Your stock is claimed for each order straight away and they go on to packing. The confirmation call is what keeps COD returns down, and a parcel that comes back is charged to you at the usual RTO fee.',
+    'এই কাস্টমারদের কেউ ফোন করবে না। প্রতিটি অর্ডারের জন্য সঙ্গে সঙ্গে আপনার স্টক ধরে রাখা হয় এবং সেগুলো প্যাকিংয়ে চলে যায়। কনফার্মেশন কলই COD রিটার্ন কমিয়ে রাখে, আর কোনো পার্সেল ফেরত এলে চেনা RTO ফি আপনার উপরেই পড়ে।',
+  ],
+  'callConfirm.confirmNowGo': ['Confirm without a call', 'কল ছাড়াই কনফার্ম করুন'],
+  'callConfirm.confirmNowCancel': ['Keep waiting', 'অপেক্ষাই চলুক'],
+  'callConfirm.resultConfirmed': [
+    '{n} confirmed and sent to packing',
+    '{n}টি কনফার্ম হয়ে প্যাকিংয়ে গেছে',
+  ],
+  'callConfirm.resultOutOfStock': ['{n} out of stock', '{n}টির স্টক নেই'],
+  'callConfirm.resultNotConfirmed': ['{n} not confirmed', '{n}টি কনফার্ম হয়নি'],
+  'callConfirm.outOfStockNote': [
+    'An out-of-stock order keeps its place and can be confirmed once the stock is in.',
+    'স্টক না থাকা অর্ডার নিজের জায়গায় থাকে; স্টক এলে কনফার্ম করা যাবে।',
+  ],
   'callConfirm.loading': ['Loading orders', 'অর্ডার লোড হচ্ছে'],
   'callConfirm.loadFailed': ['Could not load the list', 'তালিকা লোড করা যায়নি'],
 
