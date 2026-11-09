@@ -99,67 +99,86 @@ describe('suggestedAddressLine1', () => {
     state: 'West Bengal',
     pincode: '743383',
   };
-  const SOURCE = {
-    house: 'customer',
-    landmark: 'customer',
-    post_office: 'inferred',
-    locality: 'customer',
-    village_city: 'inferred',
-    sub_district: 'pincode',
-    district: 'pincode',
-    state: 'pincode',
-    pincode: 'customer',
-    police_station: 'unknown',
+  // The case that proved the first version was dead code, recorded
+  // from the client console on 2026-11-09. The operator typed
+  // "Nadibhag, Badu Industrial Area" and NEITHER word survives their
+  // extraction — so anything that replaced line 1 would have dropped
+  // them, and the loss guard rightly refused it every single time.
+  const REAL_EXTRACTED = {
+    house: '48',
+    street: '2 sarani',
+    locality: 'Badu',
+    village_city: 'Badu',
+    landmark: null,
+    post_office: 'Badu (North 24 Parganas)',
+    police_station: 'Madhyamgram',
+    sub_district: 'Barasat I',
+    district: 'North 24 Parganas',
+    state: 'West Bengal',
+    pincode: '700128',
   };
+  const TYPED = 'Nadibhag, Badu Industrial Area';
 
-  it('LEAVES THE LANDMARK OUT — the whole point of composing by field', () => {
-    // Line 2 IS the landmark here (ORD-5). Their `completed_address`
-    // always contains it, whichever way it is sent, so taking their
+  it('ADDS the resolved parts and keeps every word the operator typed', () => {
+    expect(suggestedAddressLine1(TYPED, REAL_EXTRACTED)).toBe(
+      'Nadibhag, Badu Industrial Area, PO Badu (North 24 Parganas), PS Madhyamgram',
+    );
+  });
+
+  it('never loses a word, which is what the old version could not promise', () => {
+    const next = suggestedAddressLine1(TYPED, REAL_EXTRACTED);
+    expect(suggestionKeepsEverything(next, TYPED)).toBe(true);
+  });
+
+  it('does not repeat a district already named inside the post office', () => {
+    // "PO Badu (North 24 Parganas)" has it; appending it again would be
+    // noise. With no parenthetical it IS appended — see below.
+    const next = suggestedAddressLine1(TYPED, REAL_EXTRACTED);
+    expect(next.match(/North 24 Parganas/g) ?? []).toHaveLength(1);
+  });
+
+  it('appends the district when the post office does not carry it', () => {
+    expect(
+      suggestedAddressLine1('Nadibhag', { post_office: 'Badu', district: 'North 24 Parganas' }),
+    ).toBe('Nadibhag, PO Badu, North 24 Parganas');
+  });
+
+  it('LEAVES THE LANDMARK OUT — the bug this whole function exists for', () => {
+    // Line 2 IS the landmark here (ORD-5), and their `completed_address`
+    // always contains it whichever way it is sent, so taking their
     // sentence put it on the parcel twice.
-    const line1 = suggestedAddressLine1(EXTRACTED, SOURCE);
-    expect(line1.toLowerCase()).not.toContain('hanuman');
+    const next = suggestedAddressLine1(TYPED, { ...EXTRACTED, district: 'South 24 Parganas' });
+    expect(next.toLowerCase()).not.toContain('hanuman');
   });
 
   it('leaves out the state and the PIN, which the PIN field owns', () => {
-    const line1 = suggestedAddressLine1(EXTRACTED, SOURCE);
-    expect(line1).not.toContain('West Bengal');
-    expect(line1).not.toContain('743383');
+    const next = suggestedAddressLine1(TYPED, REAL_EXTRACTED);
+    expect(next).not.toContain('West Bengal');
+    expect(next).not.toContain('700128');
   });
 
-  it('drops a field they INFERRED rather than reword the customer', () => {
-    // `village_city: "Raydighi Abad"` is inferred from a typed
-    // "Raydighi". Writing it back would be us editing the customer's
-    // address and showing it to the operator as theirs.
-    const line1 = suggestedAddressLine1(EXTRACTED, SOURCE);
-    expect(line1).not.toContain('Raydighi Abad');
-    expect(line1).not.toContain('Raidighi'); // post_office, also inferred
-    expect(line1).toContain('Raydighi'); // locality, from the customer
+  it('takes an INFERRED post office — adding is not rewording', () => {
+    // Both of these came back `inferred` in the real case above, and
+    // they are exactly the value the service adds. An inferred value
+    // may ADD a part nobody typed; it may never REPLACE one.
+    const next = suggestedAddressLine1(TYPED, REAL_EXTRACTED);
+    expect(next).toContain('PO Badu (North 24 Parganas)');
+    expect(next).toContain('PS Madhyamgram');
   });
 
-  it('keeps the fields the customer gave and the PIN decided, in order', () => {
-    expect(suggestedAddressLine1(EXTRACTED, SOURCE)).toBe('12, Raydighi, South 24 Parganas');
+  it('does not touch the house, street or locality the operator wrote', () => {
+    const next = suggestedAddressLine1(TYPED, REAL_EXTRACTED);
+    expect(next).not.toContain('48');
+    expect(next).not.toContain('2 sarani');
   });
 
-  it('labels the post office and police station when they are the customer’s', () => {
-    const line1 = suggestedAddressLine1(
-      { post_office: 'Badu', police_station: 'Madhyamgram' },
-      { post_office: 'customer', police_station: 'customer' },
-    );
-    expect(line1).toBe('PO Badu, PS Madhyamgram');
-  });
-
-  it('takes everything when no field_source came back at all', () => {
-    // A missing map is not evidence of a guess — an older response or a
-    // stub. Refusing every field there would mean never suggesting.
-    const line1 = suggestedAddressLine1({ locality: 'Raydighi', district: 'South 24 Parganas' });
-    expect(line1).toBe('Raydighi, South 24 Parganas');
-  });
-
-  it('reads nothing as nothing', () => {
-    expect(suggestedAddressLine1(null)).toBe('');
-    expect(suggestedAddressLine1(undefined)).toBe('');
-    expect(suggestedAddressLine1({})).toBe('');
-    expect(suggestedAddressLine1({ landmark: 'Hanuman Mandir', state: 'West Bengal' })).toBe('');
+  it('says nothing when there is nothing to add', () => {
+    expect(suggestedAddressLine1(TYPED, null)).toBe('');
+    expect(suggestedAddressLine1(TYPED, undefined)).toBe('');
+    expect(suggestedAddressLine1(TYPED, {})).toBe('');
+    expect(suggestedAddressLine1(TYPED, { state: 'West Bengal', pincode: '700128' })).toBe('');
+    // Already there, in the operator's own words.
+    expect(suggestedAddressLine1('Nadibhag, PO Badu', { post_office: 'Badu' })).toBe('');
   });
 });
 

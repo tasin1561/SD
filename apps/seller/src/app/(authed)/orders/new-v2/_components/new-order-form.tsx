@@ -124,6 +124,11 @@ interface FormState {
  */
 const MAX_ITEMS = 50;
 
+/** Long enough that tabbing between two address fields is one move and
+ *  not a moment of "they have left", short enough that an operator who
+ *  really has moved on does not watch it think. */
+const FOCUS_SETTLE_MS = 250;
+
 const INITIAL: FormState = {
   recipientName: '',
   recipientPhoneE164: IN_DIAL,
@@ -308,6 +313,25 @@ export function NewOrderForm(): ReactElement {
    */
   const refusedSuggestions = useRef<Set<string>>(new Set());
 
+  /**
+   * Is the operator standing in one of the address fields?
+   *
+   * NEVER EDIT A FIELD SOMEBODY IS TYPING IN (owner, 2026-11-09). The
+   * check waits for a pause, but the APPLY used to fire the moment an
+   * answer landed — which can be mid-word in line 2, with the caret
+   * jumping and the text changing underneath. The automatic apply now
+   * waits until the operator has left the address block; the button is
+   * there the whole time for anyone who wants it sooner.
+   *
+   * State, not a ref, deliberately: a blur has to RE-RUN the effect, and
+   * a ref change does not re-render.
+   */
+  const [addressFieldFocused, setAddressFieldFocused] = useState(false);
+  const addressFocusProps = {
+    onFocus: () => setAddressFieldFocused(true),
+    onBlur: () => setAddressFieldFocused(false),
+  };
+
   /*
     Composed from the FIELDS they extracted, not from their
     `completed_address` sentence — that sentence always carries the
@@ -321,7 +345,7 @@ export function NewOrderForm(): ReactElement {
   */
   const suggestedLine1 =
     checkResult !== null && checkResult.available && checkResult.poConfidence === 'high'
-      ? suggestedAddressLine1(checkResult.extracted, checkResult.fieldSource)
+      ? suggestedAddressLine1(form.recipientAddressLine1, checkResult.extracted)
       : '';
   const suggestionOnOffer =
     suggestedLine1 !== '' &&
@@ -352,11 +376,23 @@ export function NewOrderForm(): ReactElement {
   useEffect(() => {
     if (!suggestionOnOffer) return;
     if (suggestionHeld !== null) return;
+    if (addressFieldFocused) return;
     if (refusedSuggestions.current.has(suggestedLine1)) return;
     if (!suggestionIsWorthOffering(suggestedLine1, form.recipientAddressLine1)) return;
-    applyLabelAddress();
+    // A short settle before applying, because tabbing from line 1 to
+    // line 2 is a blur followed by a focus: without this the gap
+    // between them reads as "they have left the address" and the text
+    // changes just as the caret arrives in the next field.
+    const timer = setTimeout(applyLabelAddress, FOCUS_SETTLE_MS);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suggestionOnOffer, suggestedLine1, suggestionHeld, form.recipientAddressLine1]);
+  }, [
+    suggestionOnOffer,
+    suggestedLine1,
+    suggestionHeld,
+    addressFieldFocused,
+    form.recipientAddressLine1,
+  ]);
 
   /*
     An edit by hand ends the arrangement.
@@ -1034,6 +1070,7 @@ export function NewOrderForm(): ReactElement {
               <TextField
                 label={t('orderNew.pinCode')}
                 required
+                {...addressFocusProps}
                 // A WARNING, so `notice` and not `hint`: it is the one
                 // thing on this field the seller did not ask about and
                 // needs anyway. Advisory all the same — it informs and
@@ -1077,6 +1114,7 @@ export function NewOrderForm(): ReactElement {
               <TextField
                 label={t('orderNew.addressLine1')}
                 required
+                {...addressFocusProps}
                 hint={t('guidance.addressLine1Hint')}
                 value={form.recipientAddressLine1}
                 onChange={(e) => set('recipientAddressLine1', e.target.value)}
@@ -1085,6 +1123,7 @@ export function NewOrderForm(): ReactElement {
               <TextField
                 label={t('orderNew.addressLine2The2')}
                 required
+                {...addressFocusProps}
                 hint={t('guidance.addressLine2Hint')}
                 error={
                   linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)

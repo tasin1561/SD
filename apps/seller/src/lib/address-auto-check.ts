@@ -79,79 +79,86 @@ export function shouldAutoCheck(input: AutoCheckInput): boolean {
 export const AUTO_CHECK_PAUSE_MS = 900;
 
 /**
- * The fields that make up address line 1, in the order the field's own
- * hint asks a seller to type them.
+ * What gets APPENDED to address line 1, in the order the field's own
+ * hint asks for them — Post Office, Police Station, District.
  *
- * `landmark` is absent ON PURPOSE — it is line 2's job, and including
- * it is the whole bug this list exists to avoid. `state` and `pincode`
- * are absent because the PIN field owns them and a line 1 ending "West
- * Bengal 700128" prints the PIN on the parcel twice.
+ * These are the parts the operator does not type and the service
+ * resolves: the administrative tail that makes a line routable. The
+ * house, street and locality are NOT here, because the operator has
+ * already written those in their own words; `landmark` is line 2's
+ * job; `state` and `pincode` belong to the PIN field, and a line 1
+ * ending "West Bengal 700128" prints the PIN on the parcel twice.
  */
-const LINE_1_FIELDS = [
-  'house',
-  'street',
-  'locality',
-  'village_city',
-  'post_office',
-  'police_station',
-  'district',
-] as const;
+const APPEND_FIELDS: ReadonlyArray<{ key: string; prefix: string }> = [
+  { key: 'post_office', prefix: 'PO ' },
+  { key: 'police_station', prefix: 'PS ' },
+  { key: 'district', prefix: '' },
+];
+
+const tokens = (s: string): string[] =>
+  s
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t !== '');
 
 /**
- * Fields we will repeat back to the operator.
+ * Address line 1 with the resolved parts added to the end of it.
  *
- * `inferred` is excluded, which is the point of reading `field_source`
- * at all. Probed live 2026-11-09: a typed "Raydighi" came back as
- * `village_city: "Raydighi Abad"` marked `inferred`. Writing that into
- * the form would be us quietly rewording the customer's own address
- * and then showing it to the operator as theirs. `customer` is what
- * they said; `pincode` is what the PIN decides and is not in dispute.
- */
-const TRUSTED_SOURCES: ReadonlySet<string> = new Set(['customer', 'pincode']);
-
-/** Their `post_office` / `police_station` read as an address line when
- *  they carry the prefix a label would print. */
-const FIELD_PREFIX: Readonly<Record<string, string>> = {
-  post_office: 'PO ',
-  police_station: 'PS ',
-};
-
-/**
- * Address line 1, composed from the fields they extracted.
+ * ── IT APPENDS. IT DOES NOT REPLACE. (owner, 2026-11-09) ─────────────
+ * The first version of this composed a whole new line 1 out of their
+ * `extracted` fields, and it never fired once on a real address —
+ * because their extraction is not a superset of what the operator
+ * typed. A real case: "Nadibhag, Badu Industrial Area" came back as
+ * house 48 / street "2 sarani" / locality "Badu" / district "North 24
+ * Parganas", with "Nadibhag" and "Industrial Area" nowhere in it. Any
+ * replacement would have silently dropped two of the customer's words,
+ * so the loss guard refused it, correctly — and the feature was dead
+ * code dressed as a safety feature.
  *
- * ── WHY NOT `completed_address` ───────────────────────────────────────
+ * Appending cannot lose a word, which makes the guard pass by
+ * construction instead of by luck.
+ *
+ * ── WHY `inferred` IS WELCOME HERE ───────────────────────────────────
+ * The earlier rule threw away every `inferred` field, and that threw
+ * away the whole point: the post office and police station are exactly
+ * what the operator did not type and the service worked out. The real
+ * rule is narrower than "distrust inferred" — an inferred value must
+ * never REPLACE something the operator wrote, but it may ADD a part
+ * they never gave. Appending makes that distinction automatic, so the
+ * source no longer has to be consulted at all.
+ *
+ * ── WHY NOT `completed_address` ──────────────────────────────────────
  * Because it always contains the landmark, and line 2 IS the landmark
- * here (ORD-5) — so applying their sentence duplicated it onto the
- * parcel. Verified live on 2026-11-09: sending the landmark as its own
- * field does not keep it out of their completed address, so there was
- * no way to fix this by asking them differently. Composing from the
- * fields leaves the landmark out because it is a field we do not
- * select, not a substring we try to delete afterwards — which is the
- * version that still works when they normalise "Near City Hosp." into
- * "Near City Hospital" and a subtraction would miss.
+ * here (ORD-5) — so applying their sentence put the landmark on the
+ * parcel twice. Verified live on 2026-11-09: sending the landmark as
+ * its own field does not keep it out of their completion either, so
+ * there was no way to fix that by asking them differently.
  *
- * Returns '' when nothing trustworthy came back, which the caller reads
- * as "no suggestion to offer" — so the operator keeps what they typed.
+ * Returns '' when there is nothing to add, which the caller reads as
+ * "no suggestion to offer".
  */
 export function suggestedAddressLine1(
+  currentLine1: string,
   extracted: Readonly<Record<string, string | null>> | null | undefined,
-  fieldSource?: Readonly<Record<string, string>> | null | undefined,
 ): string {
   if (extracted === null || extracted === undefined) return '';
-  const parts: string[] = [];
-  for (const field of LINE_1_FIELDS) {
-    const value = (extracted[field] ?? '').trim();
+  let line = currentLine1.trim().replace(/[\s,]+$/, '');
+  let added = false;
+  for (const { key, prefix } of APPEND_FIELDS) {
+    const value = (extracted[key] ?? '').trim();
     if (value === '') continue;
-    // No `field_source` at all (an older response, a stub) means we
-    // cannot tell inferred from typed — so take the value rather than
-    // refuse everything. A missing map is not evidence of a guess.
-    if (fieldSource !== null && fieldSource !== undefined) {
-      const source = fieldSource[field];
-      if (source !== undefined && !TRUSTED_SOURCES.has(source)) continue;
-    }
-    parts.push(`${FIELD_PREFIX[field] ?? ''}${value}`);
+    // Compared against the line AS IT IS BEING BUILT, so a district
+    // already named inside the post office — "PO Badu (North 24
+    // Parganas)" — is not then repeated on its own. When the post
+    // office carries no such parenthetical the district still gets
+    // appended, which is the behaviour that adapts rather than a rule
+    // that has to be maintained per format.
+    const have = new Set(tokens(line));
+    if (tokens(value).every((t) => have.has(t))) continue;
+    line = line === '' ? `${prefix}${value}` : `${line}, ${prefix}${value}`;
+    added = true;
   }
-  return parts.join(', ');
+  return added ? line : '';
 }
 
 /**
@@ -169,11 +176,6 @@ export function suggestedAddressLine1(
  * punctuation and case cannot trip it — only an actually absent word.
  */
 export function suggestionKeepsEverything(suggested: string, currentLine1: string): boolean {
-  const tokens = (s: string): string[] =>
-    s
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((t) => t !== '');
   const have = new Set(tokens(suggested));
   return tokens(currentLine1).every((t) => have.has(t));
 }
