@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { ActorType } from '@skydrop/db';
 import { AddressCheckService } from '../../src/modules/address-check/services/address-check.service';
 import { SOLUSTATION_ERROR_NAME } from '../../src/modules/address-check/types/solustation.types';
@@ -44,7 +45,9 @@ function solustationError(retryable: boolean, extra: Record<string, unknown> = {
 }
 
 function makeService(
-  opts: { existing?: { validationId: string | null; createdByActorId: string } | null } = {},
+  opts: {
+    existing?: { validationId: string | null; createdByActorId: string | null } | null;
+  } = {},
 ) {
   const findUnique = jest.fn(async () =>
     opts.existing === undefined
@@ -114,15 +117,41 @@ describe('AddressCheckService — validate once, then correct', () => {
     expect(upsert.mock.calls[0]?.[0].update).not.toHaveProperty('validationId');
   });
 
-  it("another actor's reference starts a fresh check, it does not resume theirs", async () => {
-    // A reference id is not a secret. Resuming somebody else's draft
-    // would let one console read another's judgement by guessing.
-    const { svc, validate, correction } = makeService({
+  it("REFUSES another actor's reference: nothing is asked and nothing is written", async () => {
+    /*
+      A reference id is not a secret, and a repeat /v1/validate on one
+      returns their STORED answer — so the old behaviour (force the
+      validation id to null and carry on) sent the victim's reference to
+      Solustation and handed their `completed_address` and `extracted`
+      back in the view, then overwrote their verdict on the way out.
+    */
+    const { svc, validate, correction, upsert } = makeService({
       existing: { validationId: 'val_1', createdByActorId: 'somebody-else' },
     });
-    await svc.check(ACTOR, INPUT);
-    expect(validate).toHaveBeenCalledTimes(1);
+
+    const err = await svc.check(ACTOR, INPUT).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(NotFoundException);
+    // Not found, never forbidden: a 403 would confirm the reference exists.
+    expect((err as NotFoundException).getResponse()).toEqual({
+      code: 'NOT_FOUND',
+      message: 'Not found',
+    });
+    expect(validate).not.toHaveBeenCalled();
     expect(correction).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it('refuses a SYSTEM row too — a backfilled check has no draft to resume', async () => {
+    const { svc, validate, correction, upsert } = makeService({
+      existing: { validationId: 'val_1', createdByActorId: null },
+    });
+    await expect(svc.check(ACTOR, INPUT)).rejects.toBeInstanceOf(NotFoundException);
+    expect(validate).not.toHaveBeenCalled();
+    expect(correction).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
   });
 });
 

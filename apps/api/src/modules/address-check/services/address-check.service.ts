@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ActorType, Prisma } from '@skydrop/db';
+import { isUniqueViolation } from '../../../common/db/unique-violation';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SolustationHttpService } from './solustation-http.service';
 import { retryOnceOnTransient } from './solustation-retry';
@@ -24,6 +25,28 @@ export interface CheckActor {
 interface RecheckTarget {
   readonly id: string;
   readonly sellerId: string;
+  /**
+   * ── TWO CONVENTIONS LIVE ON `address_checks.store_id`, KNOWINGLY ─────
+   * A row BORN FROM AN ORDER (here and in the backfill sweep) carries
+   * `orders.store_id`, which is NOT NULL — the seller's own default
+   * CHANNEL shop for a direct client-console order. A row born as a
+   * DRAFT (`AddressCheckService.check`) carries the console's member
+   * store, and null in the client console.
+   *
+   * They agree for every member-store order and differ only for a direct
+   * one (a shop id here, null there). The draft side is PINNED and must
+   * not be "unified" away: `OrderService.linkAddressCheckAsync` claims a
+   * draft with `where: { referenceId, sellerId, storeId, orderId: null }`
+   * (RS-1), so a draft stamped with the channel shop would stop matching
+   * its own order. Making this side match instead would mean reading
+   * `seller_stores.kind` to tell a member store from a shop, and writing
+   * null over a true value, for a column nothing filters on yet.
+   *
+   * So the rule to apply to any FUTURE filter is: `store_id` names the
+   * member store when there is one, and is otherwise unreliable for
+   * "direct orders" — scope by `seller_id` (always the owner) and join
+   * `orders.store_id` when the shop matters.
+   */
   readonly storeId: string | null;
 }
 
@@ -137,13 +160,37 @@ export class AddressCheckService {
       select: { id: true, validationId: true, createdByActorId: true },
     });
 
-    // The draft belongs to whoever opened it. A reference id is not a
-    // secret, and without this one console could read another's check
-    // by guessing — so ownership is checked, and a miss is treated as a
-    // fresh draft rather than refused, because the only thing a wrong
-    // reference can do is start a new one.
-    const ours = existing !== null && existing.createdByActorId === actor.actorId;
-    const validationId = ours ? existing.validationId : null;
+    /*
+      ── A REFERENCE SOMEBODY ELSE OWNS IS REFUSED ────────────────────────
+      The draft belongs to whoever opened it: `created_by_actor_id` is the
+      ownership rule, as the schema comment on that column says, and a
+      reference id is not a secret.
+
+      This used to force `validationId` to null and carry on, on the
+      grounds that "the only thing a wrong reference can do is start a new
+      one". That was FALSE and it was a cross-tenant leak: a repeat
+      /v1/validate on the same reference returns their STORED answer (the
+      class note above says so), so the other tenant's
+      `completed_address` and `extracted` fields came straight back in
+      `view()` to whoever guessed the reference — and `persist`'s upsert
+      on that same reference then overwrote the owner's verdict.
+
+      So nothing is sent and nothing is written. A row with no actor
+      (`SYSTEM`, from the backfill sweep or a re-check) is owned by
+      nobody and is refused the same way: there is no draft to resume.
+
+      NOT FOUND rather than forbidden, the shape `OrderPageV2GateService`
+      already refuses with — a 403 would confirm that the reference
+      exists, which is the fact being protected.
+    */
+    if (existing !== null && existing.createdByActorId !== actor.actorId) {
+      this.logger.warn(
+        { referenceId: input.referenceId, actorType: actor.actorType, actorId: actor.actorId },
+        'address check refused: that reference belongs to another actor',
+      );
+      throw new NotFoundException({ code: 'NOT_FOUND', message: 'Not found' });
+    }
+    const validationId = existing?.validationId ?? null;
 
     try {
       /*
@@ -271,10 +318,56 @@ export class AddressCheckService {
     // round trip to be told so.
     if (address.length < 3) return null;
 
-    // Stub mode is a supported state. Nothing is asked and nothing is
-    // overwritten; the panel is told the check is unavailable rather
-    // than being handed a verdict about the address before the edit.
-    if (!(await this.http.isLive())) return this.unavailableView(input.referenceId);
+    /*
+      ── THE VINTAGE OF THIS REQUEST ──────────────────────────────────────
+      Taken BEFORE anything is asked, and carried into every write below.
+
+      Two edits in a row are two re-checks in flight and the vendor may
+      answer them out of order; `AddressCheckRetryService` is a third
+      writer on the same row. Nothing used to tie a write to the edit
+      that produced it, so a slow answer about the OLD address could land
+      on top of a newer verdict — silently, because it looks exactly like
+      a re-check that worked.
+
+      `checkedAt` is stamped with this instant rather than with the
+      moment the row is written, because that is what makes the
+      comparison honest: the WRITE time of the request that asked first
+      can be later than the START of the request that asked second, and a
+      write-time comparison would then reject the newer answer. Stored
+      this way, `checkedAt` is "when we asked", which is the vintage of
+      the address the verdict is about.
+    */
+    const askedAt = new Date();
+
+    /*
+      Stub mode is a supported state, and nothing is ASKED in it. But the
+      row still holds the verdict for the address BEFORE the edit, and
+      `storedViewForOrder` would go on serving it — the one failure this
+      method exists to prevent. So the stored state is moved to
+      `unavailable`, which is exactly what the panel is being told.
+    */
+    if (!(await this.http.isLive())) {
+      await this.writeRecheckUnavailable(order, row, input, {
+        err: new Error('address check is in stub mode — nothing was asked'),
+        askedAt,
+        // Nothing was attempted, so the attempt counter does not move:
+        // it counts tries against the vendor, and the retry worker's
+        // give-up threshold reads it.
+        counted: false,
+        /*
+          ON SOMEBODY'S LIST, which is why this is not left at the
+          derived `false`. The backfill sweep's whole gate is
+          `addressCheck: null`, so the row written here would otherwise
+          hide the order from it for ever while no retry was scheduled
+          either — unchecked, and nothing saying so. `AddressCheckRetry`
+          sweeps nothing while stub mode is on and picks this up on the
+          first sweep after the credentials arrive, with the `_asked`
+          address the operator actually typed.
+        */
+        retryable: true,
+      });
+      return this.unavailableView(input.referenceId);
+    }
 
     const validationId = row?.validationId ?? null;
     try {
@@ -306,10 +399,10 @@ export class AddressCheckService {
             ),
         },
       );
-      await this.writeRecheck(order, row, judgement);
+      await this.writeRecheck(order, row, judgement, askedAt);
       return this.view(input.referenceId, judgement, validationId !== null);
     } catch (e) {
-      await this.writeRecheckUnavailable(order, row, input, e);
+      await this.writeRecheckUnavailable(order, row, input, { err: e, askedAt });
       return this.unavailableView(input.referenceId);
     }
   }
@@ -513,6 +606,7 @@ export class AddressCheckService {
     order: RecheckTarget,
     row: RecheckRow | null,
     j: SolustationJudgement,
+    askedAt: Date,
   ): Promise<void> {
     const data = {
       status: j.status ?? 'needs_review',
@@ -520,37 +614,36 @@ export class AddressCheckService {
       score: typeof j.validity_score === 'number' ? j.validity_score : null,
       poConfidence: j.post_office_confidence ?? null,
       result: j as unknown as Prisma.InputJsonValue,
-      checkedAt: new Date(),
+      // When we ASKED, not when we are writing — see `askedAt`.
+      checkedAt: askedAt,
       nextRetryAt: null,
       lastError: null,
       confirmedWithCustomerAt: null,
     };
-    await this.safeWrite(() =>
-      row === null
-        ? this.prisma.client.addressCheck.create({
-            data: {
-              referenceId: order.id,
-              orderId: order.id,
-              sellerId: order.sellerId,
-              storeId: order.storeId,
-              // Nobody owns this draft — there was none. Same shape the
-              // backfill sweep writes (see the schema comment on
-              // `created_by_actor_id`).
-              createdByActorType: ActorType.SYSTEM,
-              createdByActorId: null,
-              validationId: j.validation_id ?? null,
-              ...data,
-            },
-          })
-        : this.prisma.client.addressCheck.update({
-            where: { id: row.id },
-            data: {
-              ...data,
-              ...(row.validationId === null && j.validation_id != null
-                ? { validationId: j.validation_id }
-                : {}),
-            },
-          }),
+    await this.applyRecheck(
+      order,
+      row,
+      askedAt,
+      row !== null && row.validationId === null && j.validation_id != null
+        ? { ...data, validationId: j.validation_id }
+        : data,
+      () =>
+        this.prisma.client.addressCheck.create({
+          data: {
+            referenceId: order.id,
+            orderId: order.id,
+            sellerId: order.sellerId,
+            // The ORDER's store — see `RecheckTarget.storeId`.
+            storeId: order.storeId,
+            // Nobody owns this draft — there was none. Same shape the
+            // backfill sweep writes (see the schema comment on
+            // `created_by_actor_id`).
+            createdByActorType: ActorType.SYSTEM,
+            createdByActorId: null,
+            validationId: j.validation_id ?? null,
+            ...data,
+          },
+        }),
     );
   }
 
@@ -568,10 +661,17 @@ export class AddressCheckService {
     order: RecheckTarget,
     row: RecheckRow | null,
     asked: CheckAddressInput,
-    err: unknown,
+    how: {
+      readonly err: unknown;
+      readonly askedAt: Date;
+      readonly counted?: boolean;
+      readonly retryable?: boolean;
+    },
   ): Promise<void> {
+    const { err, askedAt } = how;
+    const counted = how.counted ?? true;
+    const retryable = how.retryable ?? (isSolustationError(err) ? err.retryable : false);
     const message = err instanceof Error ? err.message : String(err);
-    const retryable = isSolustationError(err) ? err.retryable : false;
     const data = {
       status: 'unavailable',
       action: null,
@@ -586,7 +686,8 @@ export class AddressCheckService {
           paymentType: asked.paymentType,
         },
       } as unknown as Prisma.InputJsonValue,
-      checkedAt: new Date(),
+      // When we ASKED, not when we are writing — see `askedAt`.
+      checkedAt: askedAt,
       lastError: message.slice(0, 1_000),
       lastRequestId: isSolustationError(err) ? (err.requestId ?? null) : null,
       nextRetryAt: retryable ? new Date(Date.now() + FIRST_RETRY_MS) : null,
@@ -596,24 +697,88 @@ export class AddressCheckService {
       // keep asserting it.
       confirmedWithCustomerAt: null,
     };
-    await this.safeWrite(() =>
-      row === null
-        ? this.prisma.client.addressCheck.create({
-            data: {
-              referenceId: order.id,
-              orderId: order.id,
-              sellerId: order.sellerId,
-              storeId: order.storeId,
-              createdByActorType: ActorType.SYSTEM,
-              createdByActorId: null,
-              attempts: 1,
-              ...data,
-            },
-          })
-        : this.prisma.client.addressCheck.update({
-            where: { id: row.id },
-            data: { attempts: { increment: 1 }, ...data },
-          }),
+    await this.applyRecheck(
+      order,
+      row,
+      askedAt,
+      counted ? { attempts: { increment: 1 }, ...data } : data,
+      () =>
+        this.prisma.client.addressCheck.create({
+          data: {
+            referenceId: order.id,
+            orderId: order.id,
+            sellerId: order.sellerId,
+            // The ORDER's store — see `RecheckTarget.storeId`.
+            storeId: order.storeId,
+            createdByActorType: ActorType.SYSTEM,
+            createdByActorId: null,
+            attempts: counted ? 1 : 0,
+            ...data,
+          },
+        }),
+    );
+  }
+
+  /**
+   * One re-check write, guarded by its own vintage.
+   *
+   * ── THE GUARD IS PART OF THE WRITE ───────────────────────────────────
+   * `updateMany` with the vintage in its WHERE is a single statement, so
+   * a slower answer about the address BEFORE an edit cannot land on top
+   * of a newer verdict: the row it would overwrite no longer matches.
+   * A `findUnique` then `update` is the read-then-write shape this
+   * repository has been bitten by, and the two other writers it would
+   * race with are real — a second re-check from the next edit, and
+   * `AddressCheckRetryService` finishing an older one.
+   *
+   * Zero rows updated is NOT an error. It means somebody else has
+   * already stored a fresher verdict about a later address, and theirs is
+   * the one to keep; this request's answer is the stale one.
+   *
+   * ── THE LOSER OF TWO CREATES CONVERGES, IT IS NOT DROPPED ────────────
+   * `address_checks.order_id` is unique, so two concurrent first-ever
+   * re-checks are one winner and one P2002. The loser used to be
+   * swallowed by `safeWrite`, which is how the OLDER verdict could end up
+   * being the stored one; it now re-enters through the same guarded
+   * update and keeps whichever vintage is newer.
+   */
+  private async applyRecheck(
+    order: RecheckTarget,
+    row: RecheckRow | null,
+    askedAt: Date,
+    data: Prisma.AddressCheckUpdateManyMutationInput,
+    create: () => Promise<unknown>,
+  ): Promise<void> {
+    // Null is a row that has never been checked — older than anything.
+    const older: Prisma.AddressCheckWhereInput = {
+      OR: [{ checkedAt: null }, { checkedAt: { lt: askedAt } }],
+    };
+    await this.safeWrite(async () => {
+      if (row !== null) {
+        const { count } = await this.prisma.client.addressCheck.updateMany({
+          where: { id: row.id, ...older },
+          data,
+        });
+        if (count === 0) this.logSuperseded(order.id);
+        return;
+      }
+      try {
+        await create();
+      } catch (e) {
+        if (!isUniqueViolation(e)) throw e;
+        const { count } = await this.prisma.client.addressCheck.updateMany({
+          where: { orderId: order.id, ...older },
+          data,
+        });
+        if (count === 0) this.logSuperseded(order.id);
+      }
+    });
+  }
+
+  private logSuperseded(orderId: string): void {
+    this.logger.debug(
+      { orderId },
+      'address re-check not stored: the row already holds a verdict about a later address',
     );
   }
 

@@ -113,8 +113,21 @@ export class AddressCheckRetryService {
               landmark: asked.landmark,
             });
 
-      await this.prisma.client.addressCheck.update({
-        where: { id: row.id },
+      /*
+        GUARDED IN THE WRITE, not read-then-written.
+
+        This answer is about `_asked` — the address as it was when the
+        failed check was made. An operator may have edited the address
+        since, and `AddressCheckService.recheckOrder` will have stored
+        either a fresh verdict (status no longer `unavailable`) or a fresh
+        failure about the NEW words (`attempts` moved on). Either way this
+        answer is the stale one and must not overwrite theirs, so both
+        facts are in the WHERE: `status` and the attempt count this
+        retry read. Zero rows updated means somebody else got there
+        first, which is not an error.
+      */
+      const { count } = await this.prisma.client.addressCheck.updateMany({
+        where: { id: row.id, status: 'unavailable', attempts: row.attempts },
         data: {
           status: judgement.status ?? 'needs_review',
           action: judgement.recommended_action ?? null,
@@ -129,11 +142,21 @@ export class AddressCheckRetryService {
             : {}),
         },
       });
+      if (count === 0) {
+        this.logger.debug(
+          { referenceId },
+          'retry answer discarded: the row has moved on since it was read',
+        );
+        return;
+      }
       this.logger.log({ referenceId }, 'An unavailable address check now has an answer');
     } catch (e) {
       const retryable = isSolustationError(e) ? e.retryable : false;
-      await this.prisma.client.addressCheck.update({
-        where: { id: row.id },
+      // Guarded for the same reason the success path is: a newer verdict
+      // about a newer address must not be dragged back onto the retry
+      // worklist by an older attempt failing.
+      await this.prisma.client.addressCheck.updateMany({
+        where: { id: row.id, status: 'unavailable', attempts: row.attempts },
         data: {
           attempts: { increment: 1 },
           lastError: (e instanceof Error ? e.message : String(e)).slice(0, 1_000),
