@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { CallAddressCheck } from './call-address-check';
 import { CustomerRiskStrip } from './customer-risk-strip';
 import { RecipientCorrection } from './recipient-correction';
 import { Money, ProductThumb } from '@skydrop/ui/components';
@@ -640,6 +641,7 @@ export function CallCenterStation(): ReactElement {
               customer. */}
           <CustomerRiskStrip orderId={assignment.orderId} />
           <RecipientPanel
+            orderId={assignment.orderId}
             order={assignment.order}
             seller={assignment.seller}
             customerBrand={assignment.customerBrand ?? null}
@@ -781,6 +783,7 @@ export function CallCenterStation(): ReactElement {
 
 function RecipientPanel({
   order,
+  orderId,
   seller,
   customerBrand,
   itemDisplay,
@@ -790,6 +793,8 @@ function RecipientPanel({
   onSaved,
 }: {
   readonly assignmentId: string;
+  /** From the queue entry, so it is there even when the snapshot is not. */
+  readonly orderId: string;
   /** Only a confirmation call corrects the customer's details here. */
   readonly canCorrect: boolean;
   readonly onDirtyChange: (dirty: boolean) => void;
@@ -811,6 +816,14 @@ function RecipientPanel({
     order?.recipient.postalCode ?? null,
     order?.paymentMode === 'PREPAID' ? 'PREPAID' : 'COD',
   );
+  /*
+    Bumped once an ADDRESS field has been saved, which is what asks
+    Solustation again. A counter rather than a boolean: two corrections
+    in one call are two re-checks, and a flag would only fire the first.
+    Held here, above the early return, for the hook-order reason above.
+  */
+  const [recheckToken, setRecheckToken] = useState(0);
+  const onAddressSaved = useCallback(() => setRecheckToken((n) => n + 1), []);
 
   if (order === null) {
     // listCurrent/pullNext log this server-side; the agent still needs
@@ -944,12 +957,18 @@ function RecipientPanel({
           number gets misread. The VALUE carries the weight. */}
       <Facts items={facts} columns={2} />
 
+      {/* Between the address and the edit control, which is the order
+          the agent works in: read the verdict and its questions, ask
+          them, then correct what the customer says is wrong. */}
+      <CallAddressCheck orderId={orderId} recheckToken={recheckToken} />
+
       {canCorrect ? (
         <RecipientCorrection
           assignmentId={assignmentId}
           recipient={r}
           onDirtyChange={onDirtyChange}
           onSaved={onSaved}
+          onAddressSaved={onAddressSaved}
         />
       ) : null}
 

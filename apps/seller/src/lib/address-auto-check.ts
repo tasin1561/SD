@@ -79,34 +79,103 @@ export function shouldAutoCheck(input: AutoCheckInput): boolean {
 export const AUTO_CHECK_PAUSE_MS = 900;
 
 /**
- * Their completed address, trimmed to what address line 1 should hold.
+ * The fields that make up address line 1, in the order the field's own
+ * hint asks a seller to type them.
  *
- * They return ONE string with everything in it — the customer's words,
- * the post office and police station they resolved, then the district,
- * the state and the PIN. The form does not store a state and keeps the
- * PIN in its own field, so the tail has to come off: a line 1 ending
- * "West Bengal 700128" puts the PIN on the parcel twice and asks the
- * operator to maintain the same fact in two places.
- *
- * The rule is positional, not a list of state names: drop the final
- * comma-separated part IF it ends in a six-digit code. That part is
- * "<State> <PIN>" in every answer seen so far, and when it is not —
- * when there is no PIN at the end at all — nothing is dropped, which
- * is the safe direction to be wrong in.
- *
- * Returns '' when there is nothing usable, which the caller reads as
- * "no suggestion to offer".
+ * `landmark` is absent ON PURPOSE — it is line 2's job, and including
+ * it is the whole bug this list exists to avoid. `state` and `pincode`
+ * are absent because the PIN field owns them and a line 1 ending "West
+ * Bengal 700128" prints the PIN on the parcel twice.
  */
-export function suggestedAddressLine1(completedAddress: string | null): string {
-  if (completedAddress === null) return '';
-  const whole = completedAddress.trim();
-  if (whole === '') return '';
-  const parts = whole.split(',');
-  const last = parts[parts.length - 1] ?? '';
-  const trimmed = /\d{6}\s*$/.test(last) && parts.length > 1 ? parts.slice(0, -1).join(',') : whole;
-  // A trailing comma is theirs, not ours — "48, 2 Sarani," came in that
-  // way from the operator and travels through their completion.
-  return trimmed.replace(/[\s,]+$/, '').trim();
+const LINE_1_FIELDS = [
+  'house',
+  'street',
+  'locality',
+  'village_city',
+  'post_office',
+  'police_station',
+  'district',
+] as const;
+
+/**
+ * Fields we will repeat back to the operator.
+ *
+ * `inferred` is excluded, which is the point of reading `field_source`
+ * at all. Probed live 2026-11-09: a typed "Raydighi" came back as
+ * `village_city: "Raydighi Abad"` marked `inferred`. Writing that into
+ * the form would be us quietly rewording the customer's own address
+ * and then showing it to the operator as theirs. `customer` is what
+ * they said; `pincode` is what the PIN decides and is not in dispute.
+ */
+const TRUSTED_SOURCES: ReadonlySet<string> = new Set(['customer', 'pincode']);
+
+/** Their `post_office` / `police_station` read as an address line when
+ *  they carry the prefix a label would print. */
+const FIELD_PREFIX: Readonly<Record<string, string>> = {
+  post_office: 'PO ',
+  police_station: 'PS ',
+};
+
+/**
+ * Address line 1, composed from the fields they extracted.
+ *
+ * ── WHY NOT `completed_address` ───────────────────────────────────────
+ * Because it always contains the landmark, and line 2 IS the landmark
+ * here (ORD-5) — so applying their sentence duplicated it onto the
+ * parcel. Verified live on 2026-11-09: sending the landmark as its own
+ * field does not keep it out of their completed address, so there was
+ * no way to fix this by asking them differently. Composing from the
+ * fields leaves the landmark out because it is a field we do not
+ * select, not a substring we try to delete afterwards — which is the
+ * version that still works when they normalise "Near City Hosp." into
+ * "Near City Hospital" and a subtraction would miss.
+ *
+ * Returns '' when nothing trustworthy came back, which the caller reads
+ * as "no suggestion to offer" — so the operator keeps what they typed.
+ */
+export function suggestedAddressLine1(
+  extracted: Readonly<Record<string, string | null>> | null | undefined,
+  fieldSource?: Readonly<Record<string, string>> | null | undefined,
+): string {
+  if (extracted === null || extracted === undefined) return '';
+  const parts: string[] = [];
+  for (const field of LINE_1_FIELDS) {
+    const value = (extracted[field] ?? '').trim();
+    if (value === '') continue;
+    // No `field_source` at all (an older response, a stub) means we
+    // cannot tell inferred from typed — so take the value rather than
+    // refuse everything. A missing map is not evidence of a guess.
+    if (fieldSource !== null && fieldSource !== undefined) {
+      const source = fieldSource[field];
+      if (source !== undefined && !TRUSTED_SOURCES.has(source)) continue;
+    }
+    parts.push(`${FIELD_PREFIX[field] ?? ''}${value}`);
+  }
+  return parts.join(', ');
+}
+
+/**
+ * Would taking their composition LOSE something the operator typed?
+ *
+ * Their extraction is not lossless — probed live 2026-11-09, a typed
+ * "H.No 12" came back as `house: "12"`, and `street` was null against
+ * an address that had no street to give. Replacing line 1 with a
+ * composition that has quietly dropped a word is worse than leaving it
+ * alone, because the operator sees a tidier line and no sign anything
+ * went missing.
+ *
+ * So: every run of letters and digits in the current line 1 must still
+ * appear somewhere in the suggestion. Compared as normalised tokens, so
+ * punctuation and case cannot trip it — only an actually absent word.
+ */
+export function suggestionKeepsEverything(suggested: string, currentLine1: string): boolean {
+  const tokens = (s: string): string[] =>
+    s
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t !== '');
+  const have = new Set(tokens(suggested));
+  return tokens(currentLine1).every((t) => have.has(t));
 }
 
 /**

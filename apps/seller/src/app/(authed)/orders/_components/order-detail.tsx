@@ -53,6 +53,7 @@ import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { OrderTicketsPanel } from '../[id]/_components/order-tickets-panel';
 import { ConsigneePanel } from '../[id]/_components/consignee-panel';
+import { OrderAddressCheckPanel } from '../[id]/_components/address-check-panel';
 import { ResellerMoneyPanel } from '../[id]/_components/reseller-money-panel';
 import { UnreachableCustomerPanel } from '../[id]/_components/unreachable-customer-panel';
 import { useT, useLocale } from '@/i18n/client';
@@ -630,6 +631,11 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                   />
                 </div>
               </OrdSection>
+
+              {/* The verdict on that address, directly under it — the
+                  two are read together or not at all. Absent on an
+                  order that was never checked. */}
+              <OrderAddressCheckPanel orderId={orderId} />
 
               {/* Six facts do not need two bordered boxes and two
                   heads, so they are one section and one list that

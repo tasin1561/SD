@@ -119,3 +119,34 @@ export function useCheckAddress(): UseMutationResult<AddressCheckView, Error, Ch
       }),
   });
 }
+
+/**
+ * The STORED verdict on an order this company already placed.
+ *
+ * A query, unlike `useCheckAddress`, and safely so: it reads the row
+ * the order carries and never reaches the vendor, so nothing here can
+ * be billed by a re-render.
+ *
+ * A 404 means "this order has no check" — true of most orders placed
+ * before the integration existed — so it resolves to `null` rather than
+ * an error and is never retried. The server answers the same 404 for an
+ * order belonging to somebody else, which is the point: the page cannot
+ * tell the two apart and neither can anybody poking at it.
+ */
+export function useOrderAddressCheck(orderId: string): UseQueryResult<AddressCheckView | null> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['order-address-check', orderId],
+    retry: false,
+    queryFn: async (): Promise<AddressCheckView | null> => {
+      try {
+        return await client.request<AddressCheckView>(
+          `/api/seller/orders/${orderId}/address-check`,
+        );
+      } catch (e) {
+        if ((e as { status?: number } | null)?.status === 404) return null;
+        throw e;
+      }
+    },
+  });
+}

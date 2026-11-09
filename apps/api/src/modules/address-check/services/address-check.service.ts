@@ -20,6 +20,20 @@ export interface CheckActor {
   readonly storeId?: string | undefined;
 }
 
+/** The order a re-check is about — named scalars only (see `recheckOrder`). */
+interface RecheckTarget {
+  readonly id: string;
+  readonly sellerId: string;
+  readonly storeId: string | null;
+}
+
+/** The one `address_checks` row that order already has, if any. */
+interface RecheckRow {
+  readonly id: string;
+  readonly referenceId: string;
+  readonly validationId: string | null;
+}
+
 export interface CheckAddressInput {
   readonly referenceId: string;
   readonly address: string;
@@ -173,6 +187,129 @@ export class AddressCheckService {
       return this.view(input.referenceId, judgement, validationId !== null);
     } catch (e) {
       await this.persistUnavailable(actor, input.referenceId, e, input);
+      return this.unavailableView(input.referenceId);
+    }
+  }
+
+  /**
+   * Re-check a SAVED order's address because somebody edited it.
+   *
+   * The call-bench case: an agent has the customer on the line, is told
+   * the flat number is wrong, fixes it, and the verdict on screen is now
+   * about words the customer has just corrected. Showing the old score
+   * next to the new address is the one failure worth avoiding here — it
+   * reads as "we checked this", so the whole stored verdict is replaced,
+   * including by `unavailable` when the answer never came.
+   *
+   * ── IT CANNOT UNDO THE EDIT ──────────────────────────────────────────
+   * The edit is already committed by the time this runs: it is a
+   * separate call, after the correction's own transaction, and every
+   * failure path here ends in a stored `unavailable` and a view that
+   * says so. Nothing in this method can refuse, reverse or delay the
+   * operator's edit, and nothing in it throws.
+   *
+   * ── ONE ROW, NEVER A SECOND ──────────────────────────────────────────
+   * `address_checks.order_id` is unique: one check per order. So this
+   * UPDATES the row the order already has (by its id, whatever its
+   * reference is — a claimed `draft-<uuid>` as much as an order id) and
+   * only ever creates one when the order has none. An upsert keyed on
+   * the order id as the reference would have created a SECOND row for
+   * every order whose check came from the v2 page, and the unique index
+   * is what would have found out.
+   *
+   * Returns null when there is nothing to check: no such order, or not
+   * an India one.
+   */
+  async recheckOrder(orderId: string): Promise<AddressCheckView | null> {
+    const order = await this.prisma.client.order.findFirst({
+      where: { id: orderId, deletedAt: null },
+      select: {
+        id: true,
+        sellerId: true,
+        storeId: true,
+        recipientCountryCode: true,
+        recipientAddressLine1: true,
+        recipientAddressLine2: true,
+        recipientLandmark: true,
+        recipientPostalCode: true,
+        codAmountInr: true,
+      },
+    });
+    // India only — it is an Indian address service.
+    if (order === null || order.recipientCountryCode !== 'IN') return null;
+
+    const row = await this.prisma.client.addressCheck.findUnique({
+      where: { orderId },
+      select: { id: true, referenceId: true, validationId: true },
+    });
+
+    /*
+      Built field by field from named scalars, like every other request
+      body in this module: the recipient's name, phone and email are on
+      the row in scope and Solustation refuses them with
+      `422 unknown_field`, so there must be no object here that could
+      carry one by being forwarded.
+    */
+    const address = [order.recipientAddressLine1, order.recipientAddressLine2]
+      .map((part) => (part ?? '').trim())
+      .filter((part) => part !== '')
+      .join(', ');
+    const landmark = (order.recipientLandmark ?? '').trim();
+    const input: CheckAddressInput = {
+      // The reference the order's check already answers under. Their
+      // billing is one unit per reference per month, so re-using it is
+      // free; minting a new one would be charged and would orphan the
+      // validation chain.
+      referenceId: row?.referenceId ?? order.id,
+      address,
+      pincode: order.recipientPostalCode,
+      ...(landmark === '' ? {} : { landmark }),
+      paymentType: order.codAmountInr !== null && !order.codAmountInr.isZero() ? 'cod' : 'prepaid',
+    };
+    // Their floor is 3 characters, and an order cannot be saved without
+    // line 1 — unreachable in practice, and still better than spending a
+    // round trip to be told so.
+    if (address.length < 3) return null;
+
+    // Stub mode is a supported state. Nothing is asked and nothing is
+    // overwritten; the panel is told the check is unavailable rather
+    // than being handed a verdict about the address before the edit.
+    if (!(await this.http.isLive())) return this.unavailableView(input.referenceId);
+
+    const validationId = row?.validationId ?? null;
+    try {
+      const judgement = await retryOnceOnTransient(
+        async () =>
+          validationId === null
+            ? // No validation id means the first check never landed, so
+              // there is no stored answer to be handed back and
+              // /v1/validate is the honest call.
+              await this.http.validate({
+                referenceId: input.referenceId,
+                address: input.address,
+                pincode: input.pincode,
+                landmark: input.landmark,
+                paymentType: input.paymentType,
+              })
+            : await this.http.correction({
+                validationId,
+                source: 'operator_fixed',
+                address: input.address,
+                pincode: input.pincode,
+                landmark: input.landmark,
+              }),
+        {
+          onRetry: (delayMs, failure) =>
+            this.logger.warn(
+              { orderId, delayMs, failure },
+              'Solustation re-check failed transiently — retrying once',
+            ),
+        },
+      );
+      await this.writeRecheck(order, row, judgement);
+      return this.view(input.referenceId, judgement, validationId !== null);
+    } catch (e) {
+      await this.writeRecheckUnavailable(order, row, input, e);
       return this.unavailableView(input.referenceId);
     }
   }
@@ -348,6 +485,135 @@ export class AddressCheckService {
         },
         update: { attempts: { increment: 1 }, ...data },
       }),
+    );
+  }
+
+  /**
+   * The re-checked verdict, in place of the old one.
+   *
+   * Every judgement field is written, none is merged: a score from the
+   * address before the edit sitting beside a status from after it would
+   * be read as one verdict. `validationId` is filled only when the row
+   * had none — the FIRST check's id is what every later correction
+   * carries, so replacing it would send the next edit back to
+   * /v1/validate and show the operator a stored answer.
+   *
+   * ── THE CUSTOMER CONFIRMATION GOES WITH IT (owner's call, 2026-11-09)
+   * `confirmedWithCustomerAt` records that somebody read the address
+   * back to the customer and the customer said yes. Once the address is
+   * edited, that yes was about words the customer never heard, and a
+   * stored timestamp saying otherwise is a claim nobody made. So it is
+   * cleared and the tick has to be earned again — the same rule the v2
+   * order page already follows, where every re-check unticks the box.
+   *
+   * On the call bench this costs an agent one extra tick while they are
+   * still on the phone, which is the cheapest possible place to pay it.
+   */
+  private async writeRecheck(
+    order: RecheckTarget,
+    row: RecheckRow | null,
+    j: SolustationJudgement,
+  ): Promise<void> {
+    const data = {
+      status: j.status ?? 'needs_review',
+      action: j.recommended_action ?? null,
+      score: typeof j.validity_score === 'number' ? j.validity_score : null,
+      poConfidence: j.post_office_confidence ?? null,
+      result: j as unknown as Prisma.InputJsonValue,
+      checkedAt: new Date(),
+      nextRetryAt: null,
+      lastError: null,
+      confirmedWithCustomerAt: null,
+    };
+    await this.safeWrite(() =>
+      row === null
+        ? this.prisma.client.addressCheck.create({
+            data: {
+              referenceId: order.id,
+              orderId: order.id,
+              sellerId: order.sellerId,
+              storeId: order.storeId,
+              // Nobody owns this draft — there was none. Same shape the
+              // backfill sweep writes (see the schema comment on
+              // `created_by_actor_id`).
+              createdByActorType: ActorType.SYSTEM,
+              createdByActorId: null,
+              validationId: j.validation_id ?? null,
+              ...data,
+            },
+          })
+        : this.prisma.client.addressCheck.update({
+            where: { id: row.id },
+            data: {
+              ...data,
+              ...(row.validationId === null && j.validation_id != null
+                ? { validationId: j.validation_id }
+                : {}),
+            },
+          }),
+    );
+  }
+
+  /**
+   * A re-check that could not be made.
+   *
+   * The verdict is cleared rather than left standing, because the
+   * address it described no longer exists — `unavailable` is the true
+   * answer and the panel says so. The EDITED request is stored as
+   * `_asked`, which is what lets `AddressCheckRetryService` finish the
+   * job later with the text the customer actually gave, and
+   * `nextRetryAt` is what puts it on that worklist.
+   */
+  private async writeRecheckUnavailable(
+    order: RecheckTarget,
+    row: RecheckRow | null,
+    asked: CheckAddressInput,
+    err: unknown,
+  ): Promise<void> {
+    const message = err instanceof Error ? err.message : String(err);
+    const retryable = isSolustationError(err) ? err.retryable : false;
+    const data = {
+      status: 'unavailable',
+      action: null,
+      score: null,
+      poConfidence: null,
+      result: {
+        _asked: {
+          referenceId: asked.referenceId,
+          address: asked.address,
+          pincode: asked.pincode,
+          ...(asked.landmark === undefined ? {} : { landmark: asked.landmark }),
+          paymentType: asked.paymentType,
+        },
+      } as unknown as Prisma.InputJsonValue,
+      checkedAt: new Date(),
+      lastError: message.slice(0, 1_000),
+      lastRequestId: isSolustationError(err) ? (err.requestId ?? null) : null,
+      nextRetryAt: retryable ? new Date(Date.now() + FIRST_RETRY_MS) : null,
+      // Cleared here too, for the reason it is cleared on a successful
+      // re-check: the address changed, so a confirmation about the old
+      // one is a claim nobody made. A vendor outage is not a reason to
+      // keep asserting it.
+      confirmedWithCustomerAt: null,
+    };
+    await this.safeWrite(() =>
+      row === null
+        ? this.prisma.client.addressCheck.create({
+            data: {
+              referenceId: order.id,
+              orderId: order.id,
+              sellerId: order.sellerId,
+              storeId: order.storeId,
+              createdByActorType: ActorType.SYSTEM,
+              createdByActorId: null,
+              attempts: 1,
+              ...data,
+            },
+          })
+        : this.prisma.client.addressCheck.update({
+            where: { id: row.id },
+            data: { attempts: { increment: 1 }, ...data },
+          }),
     );
   }
 

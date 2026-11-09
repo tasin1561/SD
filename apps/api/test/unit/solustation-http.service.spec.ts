@@ -84,6 +84,44 @@ describe('the request body carries ONLY what the brief allows', () => {
     expect(Object.keys(body).sort()).toEqual([...VALIDATE_BODY_KEYS].sort());
   });
 
+  /*
+    ── THEY ADD "near " THEMSELVES ───────────────────────────────────
+    Verified against the live API on 2026-11-09: whatever arrives in
+    `landmark` is written into `completed_address` behind the word
+    "near". Send "near Hanuman Mandir" and the completed address reads
+    "near near Hanuman Mandir". A seller typing "near X" into a
+    landmark box is the normal case, and the field reaches them from
+    the member-store and associate consoles and from the backfill
+    sweep, so this was on real parcels.
+  */
+  it('strips the leading "near" they prepend themselves', () => {
+    expect(
+      buildValidateBody({ ...VALIDATE_INPUT, landmark: 'near Hanuman Mandir' })['landmark'],
+    ).toBe('Hanuman Mandir');
+    expect(
+      buildCorrectionBody({
+        validationId: 'val_1',
+        source: 'operator_fixed',
+        address: 'a new address',
+        pincode: '743383',
+        landmark: 'Near the high school',
+      })['landmark'],
+    ).toBe('the high school');
+  });
+
+  it('leaves a landmark that merely starts with those letters alone', () => {
+    // "Nearby Traders" is a shop, not a preposition.
+    expect(buildValidateBody({ ...VALIDATE_INPUT, landmark: 'Nearby Traders' })['landmark']).toBe(
+      'Nearby Traders',
+    );
+  });
+
+  it('never empties the field over the prefix rule', () => {
+    // A landmark that is only the word is still a landmark to whoever
+    // typed it; dropping the field would be a worse bug than "near near".
+    expect(buildValidateBody({ ...VALIDATE_INPUT, landmark: 'Near' })['landmark']).toBe('Near');
+  });
+
   it('validate omits landmark entirely when there is none', () => {
     // Omitted, not empty: the brief says "landmark if entered
     // separately; omit otherwise", and '' is a value they would score.

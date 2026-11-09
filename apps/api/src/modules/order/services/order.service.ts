@@ -839,7 +839,12 @@ export class OrderService {
     await this.computeChargesAsync(created.id);
 
     // Order page v2: tie the address check to the order it produced.
-    await this.linkAddressCheckAsync(created.id, sellerId, input.addressCheckReferenceId);
+    await this.linkAddressCheckAsync(
+      created.id,
+      sellerId,
+      reseller?.storeId ?? null,
+      input.addressCheckReferenceId,
+    );
 
     return created;
   }
@@ -865,12 +870,30 @@ export class OrderService {
   private async linkAddressCheckAsync(
     orderId: string,
     sellerId: string,
+    storeId: string | null,
     referenceId: string | undefined,
   ): Promise<void> {
     if (referenceId === undefined) return;
     try {
       const { count } = await this.prisma.client.addressCheck.updateMany({
-        where: { referenceId, sellerId, orderId: null },
+        /*
+          ── THE STORE IS PART OF THE OWNER, NOT JUST THE SELLER ───────
+          Scoped to the seller since this was written, which left two
+          member stores of the SAME seller able to claim each other's
+          drafts: `CreateStoreOrderDto` inherits
+          `addressCheckReferenceId`, so store B quoting store A's
+          reference took A's check, A's own order then got none, the
+          courier-feedback sweep reported B's events against A's
+          `validation_id`, and the store read endpoint showed B a
+          judgement about an address it never checked. B needs A's
+          session-storage uuid to do it, so it was a gap rather than an
+          open door — and a gap between two separate businesses is
+          still the kind worth closing (RS-1).
+
+          `null` matches `null`, so a direct seller order and its own
+          draft still find each other.
+        */
+        where: { referenceId, sellerId, storeId, orderId: null },
         data: { orderId },
       });
       if (count === 0) {

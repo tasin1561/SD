@@ -1,6 +1,16 @@
 import { defineMessages } from '../define';
 
 export const cc = defineMessages({
+  'callCenterCallAddressCheck.rechecking': [
+    'Re-checking the edited address…',
+    'সম্পাদিত ঠিকানা আবার যাচাই করা হচ্ছে…',
+    'बदले हुए पते की दोबारा जाँच हो रही है…',
+  ],
+  'callCenterCallAddressCheck.recheckFailed': [
+    'The edited address could not be re-checked. The details you saved are safe; the score below is not about them.',
+    'সম্পাদিত ঠিকানা আবার যাচাই করা যায়নি। আপনার সংরক্ষিত তথ্য ঠিক আছে; নিচের স্কোর সেটির নয়।',
+    'बदले हुए पते की दोबारा जाँच नहीं हो सकी। आपने जो जानकारी सेव की है वह सुरक्षित है; नीचे दिया स्कोर उसका नहीं है।',
+  ],
   'callCenterRecipientCorrection.edit': ['Edit details', 'তথ্য সম্পাদনা'],
   'callCenterRecipientCorrection.title': [
     'Correct the customer’s details',

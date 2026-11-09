@@ -55,6 +55,7 @@ import { useStoreCallReviews } from '@/lib/review-hooks';
 import { CallReviewDecision } from '@/components/call-review-decision';
 import { OrderMoney } from './_components/order-money';
 import { StoreConsigneePanel } from './_components/store-consignee-panel';
+import { OrderAddressCheckPanel } from './_components/address-check-panel';
 import { OrderActions } from './_components/order-actions';
 import { AddressCorrection } from './_components/address-correction';
 import { BackLink, ConfirmSubject, Facts, Notice, RoSection } from '../_components/orders-parts';
@@ -249,6 +250,10 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
           </div>
         </RoSection>
       </div>
+
+      {/* The verdict on the address above. Reading material (FE-2), and
+          absent on an order that was never checked. */}
+      <OrderAddressCheckPanel orderId={o.id} />
 
       <RoSection title={t('ordd.products')} flush>
         <Table caption={t('ordd.products')}>

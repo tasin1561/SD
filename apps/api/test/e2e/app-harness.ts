@@ -733,6 +733,17 @@ export async function resetOrderState(prisma: PrismaClient): Promise<void> {
         // on a cascade is how a table survives a reset the day somebody
         // changes the FK.
         'order_reattempt_requests',
+        // Order page v2 address checks. `order_id` is a NULLABLE FK to
+        // orders, so the truncate below reaches this table by CASCADE —
+        // which is exactly the implicit dependency MUST #12 forbids
+        // relying on: the day that column becomes a soft reference, the
+        // cascade stops and checks start leaking between suites with
+        // nothing failing to say so. Worse than most leaks because
+        // `reference_id` is UNIQUE and rows with a NULL `order_id` are
+        // the normal resting state: a leftover draft would make a later
+        // suite's seed 23505 on a reference it never created, or let an
+        // order claim a check from a previous file.
+        'address_checks',
         'order_events',
         'order_recipient_address_cache',
         'order_items',

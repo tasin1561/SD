@@ -151,6 +151,13 @@ const ORDERS_VIEW_GETS: Readonly<Record<string, Readonly<Record<string, string>>
     ':orderId/consignee': 'orders.view',
     ':orderId/consignee/history': 'orders.view',
   },
+  // The stored address-check verdict on the seller's own order. Reading
+  // material about where a parcel is going, so it sits with the rest of
+  // the order's facts rather than behind a key of its own — and it
+  // discloses nothing about another tenant: the lookup is scoped on
+  // `sellerId` in the WHERE clause and a miss is the same 404 as an
+  // order that was never checked.
+  'seller-order-address-check.controller.ts': { ':orderId/address-check': 'orders.view' },
   // The fee this company would be charged — its own number, which the
   // order form shows before anything is placed.
   'seller-order-defaults.controller.ts': {

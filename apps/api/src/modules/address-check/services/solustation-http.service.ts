@@ -97,9 +97,39 @@ export function buildValidateBody(input: ValidateInput): Record<string, string> 
   };
   // Omitted rather than sent empty: the brief says "landmark if entered
   // separately; omit otherwise", and an empty string is a value.
-  const landmark = (input.landmark ?? '').trim();
+  const landmark = landmarkForWire(input.landmark);
   if (landmark !== '') body['landmark'] = landmark;
   return body;
+}
+
+/**
+ * The landmark as THEY want it — without the word they add themselves.
+ *
+ * Verified live on 2026-11-09: they compose `completed_address` by
+ * writing "near " in front of whatever arrives in the `landmark` field.
+ * Send "near Hanuman Mandir" and the completed address reads
+ * "...Vill Raydighi, near near Hanuman Mandir, South 24 Parganas...".
+ *
+ * A seller typing "near X" into a landmark box is the normal case, not
+ * the odd one, so this reaches a parcel: the member-store and associate
+ * consoles both send the field, and so does the backfill sweep from
+ * `order.recipientLandmark`.
+ *
+ * ONLY the leading word is removed, and only when WHITESPACE follows
+ * it — which is what separates the preposition from a name that merely
+ * begins with those letters. "Nearby Traders" is a shop, and an earlier
+ * version of this regex turned it into "Traders"; the test below is
+ * what found that.
+ *
+ * A landmark that is the word on its own ("Near", whatever that meant
+ * to the person who typed it) keeps its value rather than being
+ * emptied — dropping a field over a prefix rule would be a worse bug
+ * than the one being fixed.
+ */
+export function landmarkForWire(raw: string | undefined): string {
+  const landmark = (raw ?? '').trim();
+  const withoutNear = landmark.replace(/^near\s+(?:to\s+)?/i, '').trim();
+  return withoutNear === '' ? landmark : withoutNear;
 }
 
 export const CORRECTION_BODY_KEYS = [
@@ -117,7 +147,7 @@ export function buildCorrectionBody(input: CorrectionInput): Record<string, stri
     address: input.address,
     pincode: input.pincode,
   };
-  const landmark = (input.landmark ?? '').trim();
+  const landmark = landmarkForWire(input.landmark);
   if (landmark !== '') body['landmark'] = landmark;
   return body;
 }

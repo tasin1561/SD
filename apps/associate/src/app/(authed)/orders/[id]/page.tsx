@@ -22,6 +22,7 @@ import { verdict } from '@/i18n/verdict';
 import { useCancelOrder, useMyOrder, useMyOrderEvents } from '@/lib/order-hooks';
 import { BackLink, Facts, LinkButton, Notice, Section } from '../../_components/parts';
 import { Reattempt } from './_components/reattempt';
+import { OrderAddressCheckPanel } from './_components/address-check-panel';
 import '../../_components/as.css';
 
 /** Where a customer looks their own parcel up. */
@@ -210,6 +211,10 @@ export default function OrderDetailPage(): ReactElement {
           />
         </Section>
       </div>
+
+      {/* The verdict on that address. Reading material (FE-2), and
+          absent on an order that was never checked. */}
+      <OrderAddressCheckPanel orderId={o.id} />
 
       <div className="as-split">
         <Section title={t('order.paidFor')}>

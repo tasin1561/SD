@@ -1,0 +1,43 @@
+/* The address verdict on the bench. Tokens only (FE-6); the re-check
+   line animates opacity and rotation and reserves its own row, so the
+   panel under it never moves while the answer is being fetched. */
+.cc-ac {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.cc-ac__busy {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 1.25rem;
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  animation: cc-ac-in var(--dur) var(--ease-out) both;
+}
+.cc-ac__spin {
+  flex: none;
+  animation: cc-ac-spin 900ms linear infinite;
+}
+@keyframes cc-ac-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes cc-ac-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-ac__busy,
+  .cc-ac__spin {
+    animation: none;
+  }
+}

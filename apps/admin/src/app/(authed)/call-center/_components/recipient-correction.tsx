@@ -54,17 +54,40 @@ export function draftFrom(r: CallOrderSnapshot['recipient']): RecipientDraft {
 
 const PIN = /^\d{6}$/;
 
+/**
+ * The fields Solustation is asked about. A name-only correction is not
+ * an address change, and asking them again about the same words would
+ * spend a round trip to be told what we already know.
+ */
+const ADDRESS_FIELDS = [
+  'addressLine1',
+  'addressLine2',
+  'city',
+  'stateProvince',
+  'postalCode',
+] as const satisfies ReadonlyArray<keyof RecipientDraft>;
+
 export function RecipientCorrection({
   assignmentId,
   recipient,
   onDirtyChange,
   onSaved,
+  onAddressSaved,
 }: {
   readonly assignmentId: string;
   readonly recipient: CallOrderSnapshot['recipient'];
   readonly onDirtyChange: (dirty: boolean) => void;
   /** Re-reads the held call; resolves once the panel shows the server's version. */
   readonly onSaved: () => Promise<void>;
+  /**
+   * An ADDRESS field was saved — the address check is now about words
+   * the customer has corrected, so it is asked again.
+   *
+   * Called strictly AFTER the save has succeeded, outside the try, and
+   * it must never throw: nothing about the verdict may put the
+   * operator's committed edit in doubt.
+   */
+  readonly onAddressSaved?: (() => void) | undefined;
 }): ReactElement | null {
   const tr = useT();
   const allowed = usePermission('callcenter.work');
@@ -135,9 +158,12 @@ export function RecipientCorrection({
     if (draft.stateProvince !== base.stateProvince)
       body.recipientStateProvince = draft.stateProvince;
     if (draft.postalCode !== base.postalCode) body.recipientPostalCode = draft.postalCode;
+    const addressChanged = ADDRESS_FIELDS.some((k) => draft[k] !== base[k]);
+    let savedOk = false;
     try {
       await correct.mutateAsync({ assignmentId, body });
       await onSaved();
+      savedOk = true;
       setSaved(true);
       setAnnounce(tr('callCenterRecipientCorrection.savedAnnounce'));
       setOpen(false);
@@ -145,6 +171,10 @@ export function RecipientCorrection({
       // Verbatim `[CODE] message` — the server is the law (FE-2).
       setServerError(serverVerdict(err, tr('callCenterCallCenterStation.operationFailed')));
     }
+    // OUTSIDE the try on purpose. The edit is already committed by here,
+    // so a re-check must not be able to paint it as a failure — and a
+    // failed save must not trigger one about an address nobody stored.
+    if (savedOk && addressChanged) onAddressSaved?.();
   }
 
   return (

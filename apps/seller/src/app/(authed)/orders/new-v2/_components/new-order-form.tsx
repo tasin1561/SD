@@ -40,6 +40,7 @@ import {
   shouldAutoCheck,
   suggestedAddressLine1,
   suggestionIsWorthOffering,
+  suggestionKeepsEverything,
 } from '@/lib/address-auto-check';
 import './order-v2.css';
 import { BackLink, Notice, OrdSection } from '../../_components/orders-parts';
@@ -307,13 +308,27 @@ export function NewOrderForm(): ReactElement {
    */
   const refusedSuggestions = useRef<Set<string>>(new Set());
 
-  const suggestedLine1 = suggestedAddressLine1(
+  /*
+    Composed from the FIELDS they extracted, not from their
+    `completed_address` sentence — that sentence always carries the
+    landmark, and line 2 is the landmark here, so applying it put the
+    landmark on the parcel twice. Probed live 2026-11-09: sending the
+    landmark as its own field does not keep it out of their completion
+    either, so there was no way to fix it by asking them differently.
+
+    Still only at `high` post-office confidence, the same bar the panel
+    uses before it will show a label address at all.
+  */
+  const suggestedLine1 =
     checkResult !== null && checkResult.available && checkResult.poConfidence === 'high'
-      ? checkResult.completedAddress
-      : null,
-  );
+      ? suggestedAddressLine1(checkResult.extracted, checkResult.fieldSource)
+      : '';
   const suggestionOnOffer =
     suggestedLine1 !== '' &&
+    // Never offer a tidier line that has quietly lost a word the
+    // operator typed: their extraction is not lossless, and the
+    // operator would have no sign anything went missing.
+    suggestionKeepsEverything(suggestedLine1, form.recipientAddressLine1) &&
     (suggestionHeld !== null ||
       suggestionIsWorthOffering(suggestedLine1, form.recipientAddressLine1));
 
@@ -335,13 +350,13 @@ export function NewOrderForm(): ReactElement {
   // itself: only when it actually says something different, and never
   // one the operator has already undone.
   useEffect(() => {
-    if (suggestedLine1 === '') return;
+    if (!suggestionOnOffer) return;
     if (suggestionHeld !== null) return;
     if (refusedSuggestions.current.has(suggestedLine1)) return;
     if (!suggestionIsWorthOffering(suggestedLine1, form.recipientAddressLine1)) return;
     applyLabelAddress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suggestedLine1, suggestionHeld, form.recipientAddressLine1]);
+  }, [suggestionOnOffer, suggestedLine1, suggestionHeld, form.recipientAddressLine1]);
 
   /*
     An edit by hand ends the arrangement.

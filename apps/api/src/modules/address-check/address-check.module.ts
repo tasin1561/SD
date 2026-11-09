@@ -2,8 +2,11 @@ import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { AdminAddressCheckController } from './controllers/admin-address-check.controller';
 import { SellerAddressCheckController } from './controllers/seller-address-check.controller';
+import { SellerOrderAddressCheckController } from './controllers/seller-order-address-check.controller';
 import { StoreAddressCheckController } from './controllers/store-address-check.controller';
+import { StoreOrderAddressCheckController } from './controllers/store-order-address-check.controller';
 import { AddressCheckService } from './services/address-check.service';
+import { OrderAddressCheckReadService } from './services/order-address-check-read.service';
 import { OrderPageV2GateService } from './services/order-page-v2-gate.service';
 import { SolustationHttpService } from './services/solustation-http.service';
 import { AddressCheckQueue } from './queue/address-check.queue';
@@ -41,10 +44,15 @@ import { SystemIssuesModule } from '../system-issues/system-issues.module';
     AdminAddressCheckController,
     SellerAddressCheckController,
     StoreAddressCheckController,
+    // The three tenant consoles READING the stored verdict on an order
+    // they own. Display only, and they spend nothing at the vendor.
+    SellerOrderAddressCheckController,
+    StoreOrderAddressCheckController,
   ],
   providers: [
     SolustationHttpService,
     AddressCheckService,
+    OrderAddressCheckReadService,
     OrderPageV2GateService,
     // The background half: re-asking a check that could not be made,
     // and telling Solustation what the courier did. Neither has
