@@ -1,4 +1,11 @@
-import { Controller, Get, Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Module,
+  type MiddlewareConsumer,
+  type NestModule,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import type { NextFunction, Request, Response } from 'express';
@@ -47,7 +54,7 @@ class C {
     ctxInHandler = currentImpersonation();
     return 'ok';
   }
-  @Get('auth/seller/impersonation/end')
+  @Post('auth/seller/impersonation/end')
   end() {
     ctxInHandler = currentImpersonation();
     return 'ok';
@@ -140,7 +147,7 @@ describe('impersonation middleware sees the REAL request path', () => {
     const app = await boot();
     sessions.loadUsableSession.mockClear();
     await request(app.getHttpServer())
-      .get('/auth/seller/impersonation/end')
+      .post('/auth/seller/impersonation/end')
       .set('Cookie', goodCookie());
     expect(ctxInHandler).toBeNull();
     expect(sessions.loadUsableSession).not.toHaveBeenCalled();
