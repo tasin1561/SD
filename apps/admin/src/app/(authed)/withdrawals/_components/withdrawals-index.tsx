@@ -29,6 +29,7 @@ import {
   WithdrawalChip,
 } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { ClientFilter } from '@/components/client-filter';
 
 const PAGE_SIZE = 25;
 
@@ -44,6 +45,7 @@ const PAGE_SIZE = 25;
 export function WithdrawalsIndex(): ReactElement {
   const t = useT();
   const [status, setStatus] = useState<string>(WithdrawalRequestStatus.PENDING);
+  const [sellerId, setSellerId] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<WithdrawalRequestView | null>(null);
   // The row whose approval is being confirmed. Approving was one click
@@ -54,6 +56,7 @@ export function WithdrawalsIndex(): ReactElement {
 
   const list = useWithdrawalsList({
     ...(status === '' ? {} : { status }),
+    ...(sellerId === '' ? {} : { sellerId }),
     page,
     pageSize: PAGE_SIZE,
   });
@@ -153,6 +156,15 @@ export function WithdrawalsIndex(): ReactElement {
             </option>
           ))}
         </Select>
+        {/* Self-gates on `sellers.view`; renders nothing without it. */}
+        <ClientFilter
+          id="wd-client"
+          value={sellerId}
+          onChange={(v) => {
+            setSellerId(v);
+            setPage(1);
+          }}
+        />
       </div>
 
       {list.isError ? (

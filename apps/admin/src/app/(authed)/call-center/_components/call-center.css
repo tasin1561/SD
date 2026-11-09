@@ -328,7 +328,7 @@
 }
 @media (min-width: 640px) {
   .cc-filters {
-    grid-template-columns: minmax(0, 14rem) minmax(0, 18rem);
+    grid-template-columns: minmax(0, 14rem) minmax(0, 18rem) minmax(0, 18rem);
   }
 }
 .cc-row-actions {

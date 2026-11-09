@@ -33,6 +33,7 @@ import {
   type CallQueueRow,
 } from '@/lib/callcenter-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { ClientFilter } from '@/components/client-filter';
 import { ForceOutcomePanel } from './force-outcome-panel';
 import { useRouter } from 'next/navigation';
 import { useT } from '@/i18n/client';
@@ -67,6 +68,7 @@ export function QueueIndex(): ReactElement {
   // entry and made a working retry look like a duplicate.
   const [status, setStatus] = useState('OPEN');
   const [agentId, setAgentId] = useState('');
+  const [sellerId, setSellerId] = useState('');
   const [page, setPage] = useState(1);
   const [reassigning, setReassigning] = useState<CallQueueRow | null>(null);
   const [rescheduling, setRescheduling] = useState<CallQueueRow | null>(null);
@@ -75,6 +77,7 @@ export function QueueIndex(): ReactElement {
   const list = useCallQueue({
     ...(status === '' ? {} : { status }),
     ...(agentId === '' ? {} : { agentId }),
+    ...(sellerId === '' ? {} : { sellerId }),
     page,
     pageSize: PAGE_SIZE,
   });
@@ -165,6 +168,12 @@ export function QueueIndex(): ReactElement {
             </option>
           ))}
         </Select>
+        {/* Self-gates on `sellers.view` and renders nothing without it. */}
+        <ClientFilter
+          id="q-client"
+          value={sellerId}
+          onChange={(v) => change(() => setSellerId(v))}
+        />
       </div>
 
       {list.isLoading ? (

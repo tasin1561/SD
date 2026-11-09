@@ -18,6 +18,7 @@ import { useRetryWebhookDelivery, useWebhookDeliveriesList } from '@/lib/api-hoo
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useT } from '@/i18n/client';
+import { ClientFilter } from '@/components/client-filter';
 
 const STATUSES = [
   '',
@@ -33,10 +34,12 @@ export function WebhookDeliveriesIndex(): ReactElement {
   const t = useT();
   const canRetry = usePermission('webhooks.retry');
   const [status, setStatus] = useState<string>('');
+  const [sellerId, setSellerId] = useState('');
   const list = useWebhookDeliveriesList({
     page: 1,
     pageSize: 100,
     ...(status ? { status } : {}),
+    ...(sellerId ? { sellerId } : {}),
   });
   const retry = useRetryWebhookDelivery();
   const toast = useToast();
@@ -89,6 +92,8 @@ export function WebhookDeliveriesIndex(): ReactElement {
               </option>
             ))}
           </Select>
+          {/* Self-gates on `sellers.view`; renders nothing without it. */}
+          <ClientFilter id="wh-client" value={sellerId} onChange={setSellerId} />
         </div>
       </AfCard>
 

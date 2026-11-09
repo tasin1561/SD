@@ -38,6 +38,7 @@ import {
 } from '../../_components/stock-kit';
 import { NewAdjustmentPanel } from './new-adjustment-panel';
 import { useT } from '@/i18n/client';
+import { ClientFilter } from '@/components/client-filter';
 
 const PAGE_SIZE = 25;
 
@@ -63,11 +64,13 @@ export function AdjustmentsIndex({
 } = {}): ReactElement {
   const t = useT();
   const [status, setStatus] = useState<string>('PENDING');
+  const [sellerId, setSellerId] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<StockAdjustmentView | null>(null);
 
   const list = useAdjustmentsList({
     ...(status === '' ? {} : { status }),
+    ...(sellerId === '' ? {} : { sellerId }),
     page,
     pageSize: PAGE_SIZE,
   });
@@ -130,6 +133,15 @@ export function AdjustmentsIndex({
               </option>
             ))}
           </Select>
+          {/* Self-gates on `sellers.view`; renders nothing without it. */}
+          <ClientFilter
+            id="adj-client"
+            value={sellerId}
+            onChange={(v) => {
+              setSellerId(v);
+              setPage(1);
+            }}
+          />
         </Toolbar>
 
         {list.isLoading ? (

@@ -51,7 +51,7 @@
 }
 @media (min-width: 1100px) {
   .tk-filters {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.6fr);
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   }
 }
 

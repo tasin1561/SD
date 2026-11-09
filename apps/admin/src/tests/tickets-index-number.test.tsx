@@ -20,6 +20,8 @@ vi.mock('@/lib/ops-hooks', () => ({
   },
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+// The Client filter reads the signed-in identity; this spec is about ticket numbers.
+vi.mock('@/components/client-filter', () => ({ ClientFilter: () => null }));
 
 import { TicketsIndex } from '../app/(authed)/tickets/_components/tickets-index';
 

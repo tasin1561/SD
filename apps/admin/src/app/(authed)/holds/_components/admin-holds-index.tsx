@@ -18,6 +18,8 @@ import { EarlyReservationReviewStatus } from '@skydrop/db';
 import { useAdminHoldReviews } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useT, useLocale } from '@/i18n/client';
+import { usePermission } from '@/lib/use-permission';
+import { ClientFilter } from '@/components/client-filter';
 
 /** Whole days a hold has been sitting, for the ageing column. */
 function ageDays(iso: string): number {
@@ -47,7 +49,12 @@ export function AdminHoldsIndex(): ReactElement {
   const locale = useLocale();
   const t = useT();
   const [status, setStatus] = useState<string>(EarlyReservationReviewStatus.OPEN);
-  const list = useAdminHoldReviews(status === '' ? {} : { status });
+  const [sellerId, setSellerId] = useState('');
+  const maySeeClients = usePermission('sellers.view');
+  const list = useAdminHoldReviews({
+    ...(status === '' ? {} : { status }),
+    ...(sellerId === '' ? {} : { sellerId }),
+  });
 
   const rows = list.data ?? [];
   const open = rows.filter((r) => r.status === EarlyReservationReviewStatus.OPEN);
@@ -93,7 +100,15 @@ export function AdminHoldsIndex(): ReactElement {
         flush
       >
         <div className="oo-card__pad">
-          <FilterBar activeCount={status === EarlyReservationReviewStatus.OPEN ? 0 : 1}>
+          <FilterBar
+            activeCount={
+              (status === EarlyReservationReviewStatus.OPEN ? 0 : 1) + (sellerId === '' ? 0 : 1)
+            }
+            onReset={() => {
+              setStatus(EarlyReservationReviewStatus.OPEN);
+              setSellerId('');
+            }}
+          >
             <FilterField>
               <Select
                 id="admin-hold-status"
@@ -109,6 +124,12 @@ export function AdminHoldsIndex(): ReactElement {
                 ))}
               </Select>
             </FilterField>
+            {/* The field is drawn only with `sellers.view`, so an empty box never stands in for it. */}
+            {maySeeClients && (
+              <FilterField>
+                <ClientFilter id="admin-hold-client" value={sellerId} onChange={setSellerId} />
+              </FilterField>
+            )}
           </FilterBar>
         </div>
 

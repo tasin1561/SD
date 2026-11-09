@@ -1,6 +1,9 @@
 /* Webhook deliveries. Tokens only. */
 .wh-filter {
-  max-width: 18rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 18rem));
+  gap: var(--sp-3);
+  min-width: 0;
 }
 .wh-url {
   display: block;

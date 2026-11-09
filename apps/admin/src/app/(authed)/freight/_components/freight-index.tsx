@@ -22,6 +22,7 @@ import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { FreightChip, MkCallout, MkCard } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { ClientFilter } from '@/components/client-filter';
 import { richMessage } from '@/i18n/client';
 
 /**
@@ -40,9 +41,13 @@ export function FreightIndex(): ReactElement {
   const [openId, setOpenId] = useState<string | null>(null);
   const canWrite = usePermission('money.freight.manage');
   const [status, setStatus] = useState<string>('');
+  const [sellerId, setSellerId] = useState('');
   const [recording, setRecording] = useState(false);
 
-  const list = useFreightList(status === '' ? {} : { status });
+  const list = useFreightList({
+    ...(status === '' ? {} : { status }),
+    ...(sellerId === '' ? {} : { sellerId }),
+  });
   const rows = useMemo(() => list.data ?? [], [list.data]);
 
   // A WITHDRAWN bill still reports total − settled as outstanding — the
@@ -116,6 +121,8 @@ export function FreightIndex(): ReactElement {
             </option>
           ))}
         </Select>
+        {/* Self-gates on `sellers.view`; renders nothing without it. */}
+        <ClientFilter id="freight-client" value={sellerId} onChange={setSellerId} />
       </div>
 
       {list.isError ? (

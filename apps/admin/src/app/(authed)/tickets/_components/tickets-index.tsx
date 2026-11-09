@@ -19,6 +19,7 @@ import { AfCard } from '@/app/(authed)/system/_components/af-parts';
 import { TicketHandlingChip, TicketStatusChip } from './ticket-chips';
 import './tickets.css';
 import { useT } from '@/i18n/client';
+import { ClientFilter } from '@/components/client-filter';
 
 const PAGE_SIZE = 25;
 
@@ -46,6 +47,7 @@ export function TicketsIndex(): ReactElement {
   // usually asking is "what must I pick up", and before this there was
   // no way to ask it.
   const [handling, setHandling] = useState<string>('');
+  const [sellerId, setSellerId] = useState('');
   const [page, setPage] = useState(1);
   // Search by the number a seller quotes (TK-…), the subject, or the
   // order / parcel / waybill. Waits for typing to stop; a new term goes
@@ -67,6 +69,7 @@ export function TicketsIndex(): ReactElement {
     ...(status === '' ? {} : { stage: status }),
     ...(ticketType === '' ? {} : { ticketType }),
     ...(handling === '' ? {} : { handling }),
+    ...(sellerId === '' ? {} : { sellerId }),
     ...(debounced === '' ? {} : { search: debounced }),
     page,
     pageSize: PAGE_SIZE,
@@ -181,6 +184,13 @@ export function TicketsIndex(): ReactElement {
             <option value="MANUAL">{tr('ticketsTicketsIndex.manualNeedsAPerson')}</option>
             <option value="AUTO">{tr('ticketsTicketsIndex.autoSoftwareIsCarryingIt')}</option>
           </Select>
+
+          {/* Self-gates on `sellers.view`; renders nothing without it. */}
+          <ClientFilter
+            id="ticket-client"
+            value={sellerId}
+            onChange={(v) => changeFilter(() => setSellerId(v))}
+          />
 
           <TextField
             type="search"
