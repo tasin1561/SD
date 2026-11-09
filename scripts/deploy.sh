@@ -213,6 +213,34 @@ else
   echo "── no migrations in this change — skipping ──"
 fi
 
+# ── 4b. Regenerate the Prisma client ─────────────────────────────────
+#
+# UNCONDITIONAL, and that is the point. This step did not exist, and on
+# 2026-11-09 the client running in production was found to be twelve
+# days stale — generated 28 October, with no knowledge of any column
+# added since. Migrations HAD been applied; `migrate deploy` is above
+# and had done its job. So the database had the column and the API
+# could not see it, and every read that selected one came back as a 500
+# reading `Invalid prisma.order.findMany() invocation`. The first screen
+# anybody happened to open with a newer column was how we found out.
+#
+# The two artifacts are separate and only one of them is in git: the
+# schema is committed, the generated client is not. Applying a migration
+# does not regenerate, and nothing else in this script did either — the
+# client survived as long as it did only because some earlier
+# `pnpm install` happened to run the postinstall.
+#
+# No `did_change` gate on purpose. It costs ~8s, writes nothing outside
+# `node_modules`, and opens no transaction against production — so the
+# gating argument above does not apply. Against that: the failure it
+# prevents is SILENT, survives every deploy, and looks like a product
+# bug rather than a deploy problem. A conditional here would be one more
+# thing to get subtly wrong (a schema edit that lands without a
+# migration, a cache restored from another commit), and getting it wrong
+# is invisible until a customer-facing page breaks.
+echo "── prisma generate (always) ──"
+pnpm --filter @skydrop/db exec prisma generate
+
 # ── 5. Seed (idempotent, only when seed changed) ─────────────────────
 if [ "$SEED_TOUCHED" = true ]; then
   echo "── reseed (seed.ts or schema.prisma touched) ──"
