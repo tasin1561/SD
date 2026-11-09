@@ -19,10 +19,8 @@ import {
 } from '../auth/require-store-permissions.decorator';
 import { resolveRoles, roleNamesFor } from '../auth/role-union';
 import { storeOrderScope } from '../auth/store-order-scope';
-import {
-  currentImpersonation,
-  type ImpersonationContext,
-} from '../impersonation/impersonation-context';
+import { currentImpersonation } from '../impersonation/impersonation-context';
+import { resolveImpersonatedStoreUserId } from '../impersonation/impersonated-user';
 
 /** Every role this person holds, oldest grant first — see the staff guard. */
 const STORE_ROLE_ASSIGNMENTS = {
@@ -133,7 +131,7 @@ export class StoreJwtGuard implements CanActivate {
     const impersonation = currentImpersonation();
     let claims: { sub: string; jti: string | null };
     if (impersonation !== null) {
-      claims = { sub: await this.impersonatedStoreUserId(impersonation), jti: null };
+      claims = { sub: await resolveImpersonatedStoreUserId(this.prisma, impersonation), jti: null };
     } else {
       if (token === null) {
         throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Bearer token required' });
@@ -282,54 +280,6 @@ export class StoreJwtGuard implements CanActivate {
       ordersPausedAt: user.ordersPausedAt,
     };
     return true;
-  }
-
-  /**
-   * Which StoreUser a support session acts as.
-   *
-   * ── WHY A USER AT ALL, WHEN THE SESSION NAMES A STORE ───────────────
-   * `impersonation_sessions` records the STORE, because a store is what
-   * support is asked to look at. Permissions, though, hang off a USER's
-   * roles — so "what this store can do" has to resolve to somebody's
-   * actual grants, or it becomes a second authorisation model with its
-   * own bugs and its own blind spots. The store's OWNER user is that
-   * somebody: the one whose answer to "may I?" is the store's answer and
-   * not one member's narrower view of it.
-   *
-   * Refuses rather than falling back to any other member when there is no
-   * owner. A store support cannot enter is a ticket somebody fixes; a
-   * store support entered as the wrong person is an audit trail nobody
-   * can read straight afterwards.
-   *
-   * Only the ID is returned, on purpose: the store's status, the seller
-   * behind it and the permission gate are then applied by the SAME code
-   * the ordinary path runs.
-   */
-  private async impersonatedStoreUserId(ctx: ImpersonationContext): Promise<string> {
-    if (ctx.subject.kind !== 'STORE') {
-      throw new ForbiddenException({
-        code: 'IMPERSONATION_WRONG_SUBJECT',
-        message: 'This support session is inside a client account, not a store.',
-      });
-    }
-    const owner = await this.prisma.client.storeUser.findFirst({
-      where: {
-        storeId: ctx.subject.id,
-        deletedAt: null,
-        roles: { some: { role: { isOwner: true, deletedAt: null } } },
-      },
-      // Oldest first, so the session resolves to the same person on every
-      // request even where a store has more than one owner.
-      orderBy: { createdAt: 'asc' },
-      select: { id: true },
-    });
-    if (owner === null) {
-      throw new UnauthorizedException({
-        code: 'IMPERSONATION_SUBJECT_UNAVAILABLE',
-        message: 'This store has no owner account to act as, so the session cannot be used.',
-      });
-    }
-    return owner.id;
   }
 }
 

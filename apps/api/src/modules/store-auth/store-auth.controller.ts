@@ -13,6 +13,9 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
+import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { currentImpersonation } from '../../common/impersonation/impersonation-context';
+import { resolveImpersonatedStoreUserId } from '../../common/impersonation/impersonated-user';
 import { Public } from '../../common/decorators/public.decorator';
 import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { CurrentStoreUser } from '../../common/decorators/current-store-user.decorator';
@@ -59,6 +62,7 @@ export class StoreAuthController {
     private readonly svc: StoreAuthService,
     private readonly jwt: JwtService,
     private readonly refreshTokens: RefreshTokenService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Public()
@@ -212,6 +216,12 @@ export class StoreAuthController {
   }
 
   private async resolveStoreUserId(req: Request): Promise<string> {
+    // Support session first, as in StoreJwtGuard (this route is @Public so
+    // the guard never runs). One request, one identity.
+    const impersonation = currentImpersonation();
+    if (impersonation !== null) {
+      return resolveImpersonatedStoreUserId(this.prisma, impersonation);
+    }
     const bearer = extractBearer(req.header('authorization'));
     if (bearer !== null) return this.jwt.verifyStoreAccess(bearer).sub;
     const cookie = readRefreshCookie(req);

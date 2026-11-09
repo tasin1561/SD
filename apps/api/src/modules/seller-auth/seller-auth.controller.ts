@@ -19,6 +19,8 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentSeller } from '../../common/decorators/current-seller.decorator';
 import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
+import { currentImpersonation } from '../../common/impersonation/impersonation-context';
+import { resolveImpersonatedSellerUserId } from '../../common/impersonation/impersonated-user';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../common/types/request';
@@ -248,6 +250,14 @@ export class SellerAuthController {
   }
 
   private async resolveSellerUserId(req: Request): Promise<string> {
+    // A support session wins over EVERY other credential, exactly as in
+    // SellerJwtGuard (this route is @Public so the guard never runs): one
+    // request, one identity. The session carries no bearer and no refresh
+    // cookie by design, so without this it always fell through to 401.
+    const impersonation = currentImpersonation();
+    if (impersonation !== null) {
+      return resolveImpersonatedSellerUserId(this.prisma, impersonation);
+    }
     const bearer = extractBearer(req.header('authorization'));
     if (bearer !== null) {
       const claims = this.jwt.verifySellerAccess(bearer);

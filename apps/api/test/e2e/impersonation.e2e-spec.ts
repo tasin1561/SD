@@ -456,6 +456,31 @@ describe('support impersonation (e2e)', () => {
       expect(profile.body.email).toBe(seller.email);
       expect(profile.body.companyName).toBe(seller.companyName);
     });
+
+    /**
+     * The regression that shipped: GET /auth/seller/me is @Public and
+     * authenticates inline, so SellerJwtGuard never saw the support
+     * session and the SSR layout bounced the staff member to /login.
+     * Cookie only — no bearer, no refresh cookie, which is exactly what
+     * a support session carries.
+     */
+    it('GET /auth/seller/me answers 200 with only the impersonation cookie', async () => {
+      const { cookie, sessionId } = await enter(admin, { kind: 'SELLER', id: seller.sellerId });
+      const me = await request(h.baseUrl).get('/auth/seller/me').set('Cookie', cookie).expect(200);
+      expect(me.body.email).toBe(seller.email);
+      expect(me.body.impersonation).toMatchObject({ sessionId });
+    });
+
+    it('GET /auth/store/me answers 200 with only the impersonation cookie', async () => {
+      const store = await makeStore('me-route');
+      const { cookie } = await enter(admin, { kind: 'STORE', id: store.storeId });
+      const me = await request(h.baseUrl).get('/auth/store/me').set('Cookie', cookie).expect(200);
+      expect(me.body.id).toBe(store.ownerUserId);
+    });
+
+    it('GET /auth/seller/me is still 401 with no credential at all', async () => {
+      await request(h.baseUrl).get('/auth/seller/me').expect(401);
+    });
   });
 
   // ── 2. the audit is right ───────────────────────────────────────────

@@ -26,10 +26,8 @@ import {
   sellerAuthorizationVerdict,
 } from '../auth/seller-authorization';
 import { resolveRoles, roleNamesFor } from '../auth/role-union';
-import {
-  currentImpersonation,
-  type ImpersonationContext,
-} from '../impersonation/impersonation-context';
+import { currentImpersonation } from '../impersonation/impersonation-context';
+import { resolveImpersonatedSellerUserId } from '../impersonation/impersonated-user';
 
 /** Every role this person holds, oldest grant first — see the staff guard. */
 const SELLER_ROLE_ASSIGNMENTS = {
@@ -132,7 +130,7 @@ export class SellerJwtGuard implements CanActivate {
     // One request, one identity.
     const impersonation = currentImpersonation();
     if (impersonation !== null) {
-      subjectId = await this.impersonatedSellerUserId(impersonation);
+      subjectId = await resolveImpersonatedSellerUserId(this.prisma, impersonation);
     } else if (token === null) {
       // ── NO BEARER: a browser NAVIGATION, not a fetch ───────────────
       // The access token lives in JS memory (FE-1) and the ApiClient
@@ -318,58 +316,6 @@ export class SellerJwtGuard implements CanActivate {
       fullName: user.fullName,
     };
     return true;
-  }
-
-  /**
-   * Which SellerUser a support session acts as.
-   *
-   * ── WHY A USER AT ALL, WHEN THE SESSION NAMES A COMPANY ─────────────
-   * `impersonation_sessions` records a SELLER — the company — because
-   * that is what support is asked to look at. But every permission in
-   * this system hangs off a USER's roles, and "what the seller can do"
-   * has to resolve to somebody's actual grants or it is a second
-   * authorisation model with its own bugs. So the session resolves to the
-   * company's OWNER user: the one identity whose answer to "may I?" is
-   * the account's own answer rather than one department's view of it.
-   *
-   * The owner role is a safe thing to lean on here — the schema
-   * guarantees exactly one per seller and forbids moving its last holder
-   * off it, precisely so a company cannot be left with nobody who can
-   * act for it. If that ever fails anyway, this refuses rather than
-   * falling back to some other user: an account support cannot enter is
-   * a ticket, and an account support enters as the wrong person is a
-   * mystery in the audit log.
-   *
-   * It returns only the ID. Everything after this — the user row, the
-   * deleted checks, the seller status gate, the roles, the permission
-   * verdict — is the SAME code the ordinary path runs, which is what
-   * keeps a support session from being a route around any of it.
-   */
-  private async impersonatedSellerUserId(ctx: ImpersonationContext): Promise<string> {
-    if (ctx.subject.kind !== 'SELLER') {
-      throw new ForbiddenException({
-        code: 'IMPERSONATION_WRONG_SUBJECT',
-        message: 'This support session is inside a store, not a client account.',
-      });
-    }
-    const owner = await this.prisma.client.sellerUser.findFirst({
-      where: {
-        sellerId: ctx.subject.id,
-        deletedAt: null,
-        roles: { some: { role: { isOwner: true, deletedAt: null } } },
-      },
-      // Oldest first, so the same session resolves to the same person on
-      // every request even if the company has more than one owner.
-      orderBy: { createdAt: 'asc' },
-      select: { id: true },
-    });
-    if (owner === null) {
-      throw new UnauthorizedException({
-        code: 'IMPERSONATION_SUBJECT_UNAVAILABLE',
-        message: 'This client has no owner account to act as, so the session cannot be used.',
-      });
-    }
-    return owner.id;
   }
 }
 
