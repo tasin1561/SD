@@ -1,6 +1,45 @@
 import { defineMessages } from '../define';
 
 export const cc = defineMessages({
+  'callCenterRecipientCorrection.edit': ['Edit details', 'তথ্য সম্পাদনা'],
+  'callCenterRecipientCorrection.title': [
+    'Correct the customer’s details',
+    'গ্রাহকের তথ্য সংশোধন করুন',
+  ],
+  'callCenterRecipientCorrection.landmark': [
+    'Landmark / address line 2',
+    'ল্যান্ডমার্ক / ঠিকানার দ্বিতীয় লাইন',
+  ],
+  'callCenterRecipientCorrection.landmarkWhy': [
+    'Required — the landmark is what lets the driver find the house.',
+    'আবশ্যক — ল্যান্ডমার্ক দেখেই ড্রাইভার বাড়িটি খুঁজে পায়।',
+  ],
+  'callCenterRecipientCorrection.city': ['City', 'শহর'],
+  'callCenterRecipientCorrection.state': ['State', 'রাজ্য'],
+  'callCenterRecipientCorrection.pin': ['PIN', 'PIN'],
+  'callCenterRecipientCorrection.phoneWhy': [
+    'The phone cannot be changed here — it identifies the customer.',
+    'এখানে ফোন নম্বর বদলানো যায় না — এটি গ্রাহককে শনাক্ত করে।',
+  ],
+  'callCenterRecipientCorrection.nameRequired': ['Enter the name.', 'নাম লিখুন।'],
+  'callCenterRecipientCorrection.addressRequired': ['Enter the address.', 'ঠিকানা লিখুন।'],
+  'callCenterRecipientCorrection.landmarkRequired': [
+    'The landmark cannot be left empty.',
+    'ল্যান্ডমার্ক খালি রাখা যাবে না।',
+  ],
+  'callCenterRecipientCorrection.pinShape': ['A PIN is 6 digits.', 'PIN হলো 6 সংখ্যার।'],
+  'callCenterRecipientCorrection.save': ['Save details', 'তথ্য সংরক্ষণ করুন'],
+  'callCenterRecipientCorrection.saving': ['Saving…', 'সংরক্ষণ হচ্ছে…'],
+  'callCenterRecipientCorrection.discard': ['Discard changes', 'পরিবর্তন বাতিল'],
+  'callCenterRecipientCorrection.saved': ['Details saved', 'তথ্য সংরক্ষিত'],
+  'callCenterRecipientCorrection.savedAnnounce': [
+    'Customer details saved. You can now choose an outcome.',
+    'গ্রাহকের তথ্য সংরক্ষিত হয়েছে। এখন ফলাফল বেছে নিতে পারেন।',
+  ],
+  'callCenterRecipientCorrection.unsavedHold': [
+    'You have unsaved changes to the customer’s details. Save or discard them before choosing an outcome.',
+    'গ্রাহকের তথ্যে অসংরক্ষিত পরিবর্তন আছে। ফলাফল বেছে নেওয়ার আগে সংরক্ষণ বা বাতিল করুন।',
+  ],
   'callCenterCallCenterStation.theClientOrTheStore': [
     'The client or the store that sold it has just changed something. What is on this screen is the new version — read the address and the items again before you confirm anything.',
     'ক্লায়েন্ট বা যে স্টোর এটি বিক্রি করেছে তারা এইমাত্র কিছু বদলেছে। এই স্ক্রিনে যা আছে তা নতুন সংস্করণ — কিছু নিশ্চিত করার আগে ঠিকানা ও আইটেমগুলো আবার পড়ুন।',

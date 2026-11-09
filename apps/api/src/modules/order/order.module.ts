@@ -14,6 +14,7 @@ import { ResellerOrderGateModule } from '../reseller-order-gate/reseller-order-g
 import { SellerOrderDefaultsController } from './controllers/seller-order-defaults.controller';
 import { OrderReadService } from './services/order-read.service';
 import { OrderWriteService } from './services/order-write.service';
+import { OrderRecipientCorrectionService } from './services/order-recipient-correction.service';
 
 /**
  * Module 6 — Order Management (PUBLIC facade).
@@ -77,7 +78,15 @@ import { OrderWriteService } from './services/order-write.service';
     AdminOrderController,
     SellerOrderDefaultsController,
   ],
-  providers: [OrderReadService, OrderWriteService, SellerJwtGuard, StaffJwtGuard],
-  exports: [OrderReadService, OrderWriteService],
+  providers: [
+    OrderReadService,
+    OrderWriteService,
+    OrderRecipientCorrectionService,
+    SellerJwtGuard,
+    StaffJwtGuard,
+  ],
+  // OrderRecipientCorrectionService (2026-11-09): the call bench's one door to
+  // correct a customer's details mid-call; it delegates to OrderService.
+  exports: [OrderReadService, OrderWriteService, OrderRecipientCorrectionService],
 })
 export class OrderModule {}

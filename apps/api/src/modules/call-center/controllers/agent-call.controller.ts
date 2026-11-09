@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   ParseUUIDPipe,
   Post,
   Query,
@@ -25,6 +26,8 @@ import {
   type RecordAttemptInput,
   type RecordAttemptResult,
 } from '../services/call-attempt.service';
+import { CallRecipientCorrectionService } from '../services/call-recipient-correction.service';
+import { CorrectCallRecipientDto } from '../dto/correct-call-recipient.dto';
 import { RecordCallAttemptDto } from '../dto/record-call-attempt.dto';
 import { CallHistoryQueryDto } from '../dto/call-history-query.dto';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
@@ -45,6 +48,7 @@ export class AgentCallController {
   constructor(
     private readonly assignment: CallAssignmentService,
     private readonly attempts: CallAttemptService,
+    private readonly corrections: CallRecipientCorrectionService,
   ) {}
 
   @Post('next')
@@ -98,6 +102,21 @@ export class AgentCallController {
       ...(body.suspicionReason !== undefined ? { suspicionReason: body.suspicionReason } : {}),
     };
     return this.attempts.recordAttempt(input);
+  }
+
+  @Patch(':assignmentId/recipient')
+  @ApiOperation({
+    summary:
+      'Correct the customer’s name / address / city / state / PIN during the call. Never the phone (ORD-7). Saved before the outcome is chosen; routed by recipientChangeRoute.',
+  })
+  correctRecipient(
+    @Param('assignmentId', new ParseUUIDPipe({ version: '7' }))
+    assignmentId: string,
+    @Body() body: CorrectCallRecipientDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<{ saved: true }> {
+    return this.corrections.correct(assignmentId, staff.id, body, ctx);
   }
 
   @Get('current')

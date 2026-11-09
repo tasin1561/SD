@@ -1263,6 +1263,29 @@ export function useRecordCallAttempt(): UseMutationResult<
   });
 }
 
+/**
+ * Correct the customer's details during the call. Saved BEFORE the outcome
+ * is chosen; not part of the record-attempt write (CC-3).
+ */
+export function useCorrectCallRecipient(): UseMutationResult<
+  { saved: true },
+  Error,
+  { assignmentId: string; body: Partial<Record<string, string>> }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ assignmentId, body }) =>
+      client.request<{ saved: true }>(`/api/agent/calls/${assignmentId}/recipient`, {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['agent-calls'] });
+    },
+  });
+}
+
 export function useReleaseCall(): UseMutationResult<
   { released: boolean },
   Error,

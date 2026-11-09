@@ -11,6 +11,7 @@ import { CallHoldService } from './services/call-hold.service';
 import { CallCapService } from './services/call-cap.service';
 import { AgentPresenceQueue } from './queue/agent-presence.queue';
 import { AgentPresenceWorker } from './queue/agent-presence.worker';
+import { CallRecipientCorrectionService } from './services/call-recipient-correction.service';
 import { CallAssignmentService } from './services/call-assignment.service';
 import { CallAttemptService } from './services/call-attempt.service';
 import { AgentSettingsService } from './services/agent-settings.service';
@@ -78,6 +79,7 @@ import { EarlyReservationModule } from '../early-reservation/early-reservation.m
     AgentPresenceQueue,
     AgentPresenceWorker,
     CallAssignmentService,
+    CallRecipientCorrectionService,
     CallAttemptService,
     AgentSettingsService,
     AdminCallQueueService,

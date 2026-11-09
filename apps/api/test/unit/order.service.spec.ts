@@ -56,6 +56,8 @@ function makeService(
     overdrawn?: boolean;
     /** An agent holding this order right now, if a test needs one. */
     activeCall?: { assignedAgentId: string | null; assignedAt: Date | null } | null;
+    /** The order's live parcel for `recipientChangeRoute`, if a test needs one. */
+    liveShipment?: { status: string; awbNumber: string | null } | null;
   } = {},
 ) {
   const orderCreate = jest.fn(async (args: { data: AnyArgs }) => ({
@@ -104,6 +106,7 @@ function makeService(
       findUnique: typeof orderFindUnique;
     };
     systemSetting: { findUnique: typeof systemSettingFindUnique };
+    orderShipment: { findFirst: () => Promise<unknown> };
   };
   // Attach $transaction AFTER the literal (CLAUDE testing note: avoids
   // TS7024 implicit-any from self-reference).
@@ -115,6 +118,9 @@ function makeService(
     findUnique: orderFindUnique,
   };
   client.systemSetting = { findUnique: systemSettingFindUnique };
+  client.orderShipment = {
+    findFirst: async () => (opts.liveShipment ? { shipment: opts.liveShipment } : null),
+  };
 
   const numbering = { nextOrderNumber: jest.fn(async () => 'SD-2026-26-000001') };
   const customers = {
@@ -601,6 +607,108 @@ describe('OrderService.edit', () => {
     await expect(svc.edit('s1', 'o1', {}, ACTOR, CTX)).rejects.toMatchObject({
       response: { code: 'NOTHING_TO_UPDATE' },
     });
+  });
+});
+
+describe('OrderService.correctRecipientOnCall — an agent fixes the details mid-call', () => {
+  const CALL = { assignmentId: 'call-1', agentId: 'agent-1' };
+  const pending = (over: AnyArgs = {}): AnyArgs =>
+    existingOrder({
+      status: OrderStatus.PENDING_CONFIRMATION,
+      recipientAddressLine1: '12 MG Road',
+      recipientAddressLine2: 'Near the temple',
+      recipientCity: 'Bengaluru',
+      ...over,
+    });
+
+  it('DIRECT route: writes the fields and an order event naming before -> after and the call', async () => {
+    const { svc, orderUpdate, events, audit } = makeService({ existing: pending() });
+    await svc.correctRecipientOnCall(
+      'o1',
+      { recipientAddressLine1: '14 MG Road', recipientPostalCode: '560002' },
+      CALL,
+      CTX,
+    );
+    expect(orderUpdate.mock.calls[0]![0].data).toMatchObject({
+      recipientAddressLine1: '14 MG Road',
+      recipientPostalCode: '560002',
+    });
+    const [, orderId, description, actor, visible] = events.note.mock.calls[0]!;
+    expect(orderId).toBe('o1');
+    expect(description).toContain('call call-1');
+    expect(description).toContain('Address: 12 MG Road → 14 MG Road');
+    expect(description).toContain('PIN code: 560001 → 560002');
+    expect(actor).toEqual({ type: ActorType.STAFF, id: 'agent-1' });
+    expect(visible).toBe(true);
+    expect((audit.log.mock.calls as unknown as unknown[][])[0]![0]).toMatchObject({
+      metadata: expect.objectContaining({ correctedOnCall: true, assignmentId: 'call-1' }),
+    });
+  });
+
+  it('a COURIER route (an AWB exists) is refused by name and nothing is written', async () => {
+    const { svc, orderUpdate, events } = makeService({
+      existing: pending(),
+      liveShipment: { status: 'BOOKED', awbNumber: 'AWB123' },
+    });
+    await expect(
+      svc.correctRecipientOnCall('o1', { recipientAddressLine1: '14 MG Road' }, CALL, CTX),
+    ).rejects.toMatchObject({ response: { code: 'COURIER_MUST_ACCEPT_ADDRESS_CHANGE' } });
+    expect(orderUpdate).not.toHaveBeenCalled();
+    expect(events.note).not.toHaveBeenCalled();
+  });
+
+  it('a terminal order is refused', async () => {
+    const { svc, orderUpdate } = makeService({
+      existing: pending({ status: OrderStatus.CANCELLED }),
+    });
+    await expect(
+      svc.correctRecipientOnCall('o1', { recipientAddressLine1: '14 MG Road' }, CALL, CTX),
+    ).rejects.toMatchObject({ response: { code: 'NOT_EDITABLE' } });
+    expect(orderUpdate).not.toHaveBeenCalled();
+  });
+
+  it('clearing address line 2 (the landmark) is refused', async () => {
+    const { svc, orderUpdate } = makeService({ existing: pending() });
+    await expect(
+      svc.correctRecipientOnCall('o1', { recipientAddressLine2: '   ' }, CALL, CTX),
+    ).rejects.toMatchObject({ response: { code: 'LANDMARK_REQUIRED' } });
+    expect(orderUpdate).not.toHaveBeenCalled();
+  });
+
+  it('an empty city and state are accepted (ORD-5: they store the empty string)', async () => {
+    const { svc, orderUpdate, addressValidation } = makeService({ existing: pending() });
+    addressValidation.assertValid.mockResolvedValueOnce('');
+    await svc.correctRecipientOnCall(
+      'o1',
+      { recipientCity: '', recipientStateProvince: '' },
+      CALL,
+      CTX,
+    );
+    expect(orderUpdate.mock.calls[0]![0].data).toMatchObject({
+      recipientCity: '',
+      recipientStateProvince: '',
+    });
+  });
+
+  it('cannot change the phone: a smuggled phone is ignored and the customer is not re-linked', async () => {
+    const { svc, orderUpdate, customers } = makeService({ existing: pending() });
+    await svc.correctRecipientOnCall(
+      'o1',
+      { recipientCity: 'Mysuru', recipientPhoneE164: '+919811111111' } as never,
+      CALL,
+      CTX,
+    );
+    const data = orderUpdate.mock.calls[0]![0].data as AnyArgs;
+    expect(data).not.toHaveProperty('recipientPhoneE164');
+    expect(customers.findOrCreate).not.toHaveBeenCalled();
+  });
+
+  it('saving with nothing moved is refused rather than writing a noise event', async () => {
+    const { svc, events } = makeService({ existing: pending() });
+    await expect(
+      svc.correctRecipientOnCall('o1', { recipientAddressLine1: '12 MG Road' }, CALL, CTX),
+    ).rejects.toMatchObject({ response: { code: 'NOTHING_TO_UPDATE' } });
+    expect(events.note).not.toHaveBeenCalled();
   });
 });
 

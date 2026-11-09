@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { CustomerRiskStrip } from './customer-risk-strip';
+import { RecipientCorrection } from './recipient-correction';
 import { Money, ProductThumb } from '@skydrop/ui/components';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
@@ -353,13 +354,29 @@ export function CallCenterStation(): ReactElement {
     about a change nobody made. A content signature never false-alarms.
   */
   const [changedUnderMe, setChangedUnderMe] = useState(false);
+  const selfSavedRef = useRef(false);
+  /** Edits to the customer's details not yet saved: outcomes wait for them. */
+  const [unsavedEdits, setUnsavedEdits] = useState(false);
+  const onDirtyChange = useCallback((d: boolean) => setUnsavedEdits(d), []);
+  /** Re-read the held call after a save; nothing optimistic. */
+  const onSaved = useCallback(async (): Promise<void> => {
+    selfSavedRef.current = true;
+    const r = await current.refetch();
+    const fresh = r.data?.assignments.find((a) => a.orderId === assignment?.orderId);
+    if (fresh !== undefined) setAssignment(fresh);
+    selfSavedRef.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, assignment?.orderId]);
   useEffect(() => {
     if (!current.isSuccess || assignment === null) return;
     const fresh = current.data.assignments.find((a) => a.orderId === assignment.orderId);
     if (fresh === undefined) return;
     if (callSignature(fresh) === callSignature(assignment)) return;
     setAssignment(fresh);
-    setChangedUnderMe(true);
+    // The agent's OWN saved correction is not "somebody changed it under
+    // you" — the warning is for changes they did not make.
+    if (selfSavedRef.current) selfSavedRef.current = false;
+    else setChangedUnderMe(true);
   }, [current.isSuccess, current.data, assignment]);
 
   const idleRef = useRef(false);
@@ -400,7 +417,7 @@ export function CallCenterStation(): ReactElement {
   }, [assignment, isConfirmationCall, outcome]);
 
   async function onRecord(): Promise<void> {
-    if (!assignment || !outcome) return;
+    if (!assignment || !outcome || unsavedEdits) return;
     setError(null);
     const startedAt = assignment.assignedAt;
     const endedAt = new Date().toISOString();
@@ -627,6 +644,10 @@ export function CallCenterStation(): ReactElement {
             seller={assignment.seller}
             customerBrand={assignment.customerBrand ?? null}
             itemDisplay={assignment.itemDisplay}
+            assignmentId={assignment.assignmentId}
+            canCorrect={isConfirmationCall}
+            onDirtyChange={onDirtyChange}
+            onSaved={onSaved}
           />
           {/* Above the outcome form on purpose: the agent needs the
               last conversation BEFORE they dial, not after they have
@@ -634,10 +655,18 @@ export function CallCenterStation(): ReactElement {
           <PriorAttempts attempts={assignment.priorAttempts} />
 
           <div className="cc-form">
+            {unsavedEdits ? (
+              <div className="cc-outcome-hold" data-testid="outcome-hold">
+                <Notice tone="warn" role="status" icon={<TriangleAlert size={16} />}>
+                  <p className="oo-p">{tr('callCenterRecipientCorrection.unsavedHold')}</p>
+                </Notice>
+              </div>
+            ) : null}
             <Select
               label={tr('callCenterCallCenterStation.outcome')}
               requiredMark
               value={outcome}
+              disabled={unsavedEdits}
               onChange={(e) => setOutcome(e.target.value as CallOutcome | '')}
             >
               <option value="">{tr('callCenterCallCenterStation.selectAnOutcome')}</option>
@@ -735,7 +764,7 @@ export function CallCenterStation(): ReactElement {
                   idle: tr('callCenterCallCenterStation.recordOutcome'),
                   busy: tr('callCenterCallCenterStation.recording'),
                 }}
-                disabled={record.isPending || !outcome}
+                disabled={record.isPending || !outcome || unsavedEdits}
                 onClick={() => void onRecord()}
               />
             </div>
@@ -755,7 +784,16 @@ function RecipientPanel({
   seller,
   customerBrand,
   itemDisplay,
+  assignmentId,
+  canCorrect,
+  onDirtyChange,
+  onSaved,
 }: {
+  readonly assignmentId: string;
+  /** Only a confirmation call corrects the customer's details here. */
+  readonly canCorrect: boolean;
+  readonly onDirtyChange: (dirty: boolean) => void;
+  readonly onSaved: () => Promise<void>;
   readonly order: CallOrderSnapshot | null;
   readonly seller: PulledAssignment['seller'];
   readonly customerBrand: NonNullable<PulledAssignment['customerBrand']> | null;
@@ -905,6 +943,15 @@ function RecipientPanel({
           talking, and small grey text is where a digit or a house
           number gets misread. The VALUE carries the weight. */}
       <Facts items={facts} columns={2} />
+
+      {canCorrect ? (
+        <RecipientCorrection
+          assignmentId={assignmentId}
+          recipient={r}
+          onDirtyChange={onDirtyChange}
+          onSaved={onSaved}
+        />
+      ) : null}
 
       {order.items.length > 0 && (
         <div>

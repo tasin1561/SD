@@ -80,6 +80,20 @@ export const CONTENTS_EDITABLE_STATUSES: ReadonlySet<OrderStatus> = new Set([
 ]);
 
 /**
+ * What an agent may correct during a confirmation call. The phone is
+ * absent on purpose (ORD-7): it is what tells one customer from another,
+ * and the number being called stays the number on the order.
+ */
+export interface CallRecipientCorrection {
+  readonly recipientName?: string;
+  readonly recipientAddressLine1?: string;
+  readonly recipientAddressLine2?: string;
+  readonly recipientCity?: string;
+  readonly recipientStateProvince?: string;
+  readonly recipientPostalCode?: string;
+}
+
+/**
  * The recipient block — WHERE the parcel is going.
  *
  * Named `STORE_EDITABLE_KEYS` until 2026-09-18, when it stopped being
@@ -1082,6 +1096,13 @@ export class OrderService {
      * one that drifted would be the one nobody was testing.
      */
     storeScope?: { readonly storeId: string },
+    /**
+     * Set ONLY by `correctRecipientOnCall`: the edit is a customer-details
+     * correction made by an agent during a confirmation call. It changes
+     * what the order event says (before → after, and which call), nothing
+     * about what is allowed.
+     */
+    onCall?: { readonly assignmentId: string; readonly agentId: string },
   ): Promise<OrderView> {
     const order = await this.loadOwned(sellerId, id);
 
@@ -1538,12 +1559,19 @@ export class OrderService {
         await this.events.note(
           tx,
           id,
-          `Order edited (${changed.join(', ')})${phoneChanged ? '; customer re-linked' : ''}` +
-            // Whoever picks this order up later — the agent, the seller,
-            // Skydrop — has to be able to see that the order moved while
-            // somebody had the customer on the phone. It is no longer
-            // refused (owner decision 4), so the record is the safeguard.
-            (activeCall === null ? '' : ' — WHILE AN AGENT WAS ON THE CALL'),
+          onCall === undefined
+            ? `Order edited (${changed.join(', ')})${phoneChanged ? '; customer re-linked' : ''}` +
+                // Whoever picks this order up later — the agent, the seller,
+                // Skydrop — has to be able to see that the order moved while
+                // somebody had the customer on the phone. It is no longer
+                // refused (owner decision 4), so the record is the safeguard.
+                (activeCall === null ? '' : ' — WHILE AN AGENT WAS ON THE CALL')
+            : // ORD-6: a correction the customer gave on the phone. Names the
+              // call (the attempt that follows carries the same assignment id)
+              // and every field old → new, so the correction and the call can
+              // be read together later.
+              `Customer details corrected during a confirmation call (call ${onCall.assignmentId}):\n` +
+                describeOrderChanges(order, input, changed),
           actor,
           true,
         );
@@ -1561,6 +1589,9 @@ export class OrderService {
               changed,
               phoneChanged,
               duringCall: activeCall !== null,
+              ...(onCall === undefined
+                ? {}
+                : { correctedOnCall: true, assignmentId: onCall.assignmentId }),
               ...(sellerEditingResellerOrder
                 ? { resellerStoreId: order.storeId, supersededAddressChanges }
                 : {}),
@@ -1611,6 +1642,119 @@ export class OrderService {
       }
       throw e;
     }
+  }
+
+  /**
+   * An agent corrects the customer's details DURING a confirmation call
+   * (2026-11-09). Name, address line 1, the landmark line, city, state and
+   * PIN — and nothing else: the phone is not a parameter (ORD-7), so no
+   * request can reach it through here.
+   *
+   * It is a thin layer over `edit`, not a second writer: the stage gate,
+   * the canonical state casing, ORD-5 revalidation, the event and the audit
+   * row all come from there. What this adds is the one thing `edit` skips
+   * while an order is still PENDING_CONFIRMATION — `recipientChangeRoute`
+   * is asked FIRST, always, so a parcel the courier already holds can never
+   * be rewritten behind its back.
+   *
+   * The call itself is the caller's to prove (CC-1: queue tables belong to
+   * the call-center module); this only records which one.
+   */
+  async correctRecipientOnCall(
+    orderId: string,
+    patch: CallRecipientCorrection,
+    call: { readonly assignmentId: string; readonly agentId: string },
+    ctx: ClientContext,
+  ): Promise<OrderView> {
+    const owner = await this.prisma.client.order.findFirst({
+      where: { id: orderId, deletedAt: null },
+      select: { sellerId: true },
+    });
+    if (!owner) throw new NotFoundException(`Order ${orderId} not found`);
+    const order = await this.loadOwned(owner.sellerId, orderId);
+
+    const route = recipientChangeRoute({
+      orderStatus: order.status,
+      isTerminal: this.stateMachine.isTerminal(order.status),
+      liveShipment: await this.liveShipmentForRoute(orderId),
+    });
+    if (route.kind === 'REFUSED') {
+      throw new ConflictException({ code: 'NOT_EDITABLE', message: route.reason });
+    }
+    if (route.kind === 'COURIER') {
+      throw new ConflictException({
+        code: 'COURIER_MUST_ACCEPT_ADDRESS_CHANGE',
+        message:
+          'The courier already has this parcel’s address, so it cannot be corrected from the call ' +
+          'bench. The correction has to go to the courier, and is only stored if they accept it. ' +
+          route.reason,
+        details: { courierWillAccept: route.courierWillAccept },
+      });
+    }
+
+    // Built field by field so nothing else — least of all the phone —
+    // can ride in on the object the caller handed us.
+    const input: UpdateOrderDto = {};
+    if (patch.recipientName !== undefined) {
+      if (patch.recipientName.trim() === '') {
+        throw new BadRequestException({
+          code: 'RECIPIENT_NAME_REQUIRED',
+          message: 'The customer’s name may not be blank',
+        });
+      }
+      input.recipientName = patch.recipientName.trim();
+    }
+    if (patch.recipientAddressLine1 !== undefined) {
+      if (patch.recipientAddressLine1.trim() === '') {
+        throw new BadRequestException({
+          code: 'ADDRESS_LINE1_REQUIRED',
+          message: 'The street address may not be blank',
+        });
+      }
+      input.recipientAddressLine1 = patch.recipientAddressLine1.trim();
+    }
+    if (patch.recipientAddressLine2 !== undefined) {
+      // ORD-5: the landmark may not be cleared.
+      if (patch.recipientAddressLine2.trim() === '') {
+        throw new BadRequestException({
+          code: 'LANDMARK_REQUIRED',
+          message:
+            'recipientAddressLine2 (landmark) may not be cleared — it is what makes the address findable',
+        });
+      }
+      input.recipientAddressLine2 = patch.recipientAddressLine2.trim();
+    }
+    // City and state are optional and may be '' (ORD-5, amended 2026-08-07).
+    if (patch.recipientCity !== undefined) input.recipientCity = patch.recipientCity.trim();
+    if (patch.recipientStateProvince !== undefined) {
+      input.recipientStateProvince = patch.recipientStateProvince.trim();
+    }
+    if (patch.recipientPostalCode !== undefined) {
+      input.recipientPostalCode = patch.recipientPostalCode.trim();
+    }
+
+    // A form round-trips every field; saving with nothing moved is not a
+    // correction, and an event saying so would be noise on the timeline.
+    // The name compares against the stored one with the seller code on it,
+    // exactly as `edit` will store it, so an untouched name is not "moved".
+    if (
+      describeOrderChanges(order, input, ['recipient']) === 'Nothing on the order itself changed.'
+    ) {
+      throw new BadRequestException({
+        code: 'NOTHING_TO_UPDATE',
+        message: 'Nothing was changed — the details already read this way',
+      });
+    }
+
+    return this.edit(
+      owner.sellerId,
+      orderId,
+      input,
+      { type: ActorType.STAFF, id: call.agentId },
+      ctx,
+      undefined,
+      call,
+    );
   }
 
   /**
