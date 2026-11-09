@@ -129,6 +129,71 @@ describe('ImpersonationSessionLoader diagnostics', () => {
   });
 });
 
+describe('ImpersonationSessionLoader SSR /me diagnostics', () => {
+  const make = () => {
+    const log = jest.fn().mockResolvedValue('id');
+    const loader = new ImpersonationSessionLoader(
+      { jwtSigningKey: KEY } as never,
+      { loadUsableSession: jest.fn() } as never,
+      { log } as never,
+    );
+    return { loader, log };
+  };
+  const me = (cookies: Record<string, unknown> | undefined, cookieHeader?: string) =>
+    ({
+      cookies,
+      path: '/auth/seller/me',
+      method: 'GET',
+      headers: cookieHeader === undefined ? {} : { cookie: cookieHeader },
+      ip: '127.0.0.1',
+    }) as never;
+
+  it('no Cookie header: row with hasCookieHeader=false', async () => {
+    const { loader, log } = make();
+    await loader.verdictFor(me({}));
+    const arg = log.mock.calls[0][0];
+    expect(arg.action).toBe('impersonation.cookie_missing');
+    expect(arg.metadata).toMatchObject({
+      path: '/auth/seller/me',
+      hasCookieHeader: false,
+      cookieHeaderLength: 0,
+      cookiesParsed: true,
+      cookieNames: [],
+    });
+  });
+
+  it('Cookie header without the impersonation key: names and length, never the value', async () => {
+    const { loader, log } = make();
+    const header = 'other=secretvalue123; theme=dark';
+    await loader.verdictFor(me({ other: 'secretvalue123', theme: 'dark' }, header));
+    const arg = log.mock.calls[0][0];
+    expect(arg.metadata).toMatchObject({
+      hasCookieHeader: true,
+      cookieHeaderLength: header.length,
+      cookieNames: ['other', 'theme'],
+    });
+    expect(JSON.stringify(arg)).not.toContain('secretvalue123');
+  });
+
+  it('records cookiesParsed=false when the parser did not run', async () => {
+    const { loader, log } = make();
+    await loader.verdictFor(me(undefined, 'a=b'));
+    expect(log.mock.calls[0][0].metadata).toMatchObject({
+      cookiesParsed: false,
+      hasCookieHeader: true,
+    });
+  });
+
+  it('throttles repeats, and does not widen to other /auth paths', async () => {
+    const { loader, log } = make();
+    await loader.verdictFor(me({}));
+    await loader.verdictFor(me({}));
+    expect(log).toHaveBeenCalledTimes(1);
+    await loader.verdictFor({ ...(me({}) as object), path: '/auth/seller/login' } as never);
+    expect(log).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('ImpersonationSessionLoader success-path diagnostics', () => {
   const claim = {
     sessionId: 'sess-1',

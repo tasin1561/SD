@@ -12,6 +12,12 @@ import { IMPERSONATION_COOKIE, inspectImpersonationCookie } from './impersonatio
 
 /** Seller / store authed API surface, optionally behind a /vN prefix. */
 const AUTHED_SURFACE = /^\/(v\d+\/)?(seller|store)\//i;
+/**
+ * The SSR identity endpoint. Not under AUTHED_SURFACE (it lives at /auth/..),
+ * but it is the one hop where Next forwards the support cookie. Deliberately
+ * NOT widened to all of /auth/**, which would log every anonymous login.
+ */
+const SSR_IDENTITY = /^\/(v\d+\/)?auth\/(seller|store)\/me\/?$/i;
 const ABSENT_THROTTLE_MS = 60_000;
 const ABSENT_THROTTLE_MAX_KEYS = 5_000;
 /**
@@ -60,6 +66,7 @@ export type ImpersonationVerdict =
 export class ImpersonationSessionLoader {
   private readonly logger = new Logger(ImpersonationSessionLoader.name);
   private readonly absentSeenAt = new Map<string, number>();
+  private readonly absentMeSeenAt = new Map<string, number>();
   private readonly servedCount = new Map<string, number>();
 
   constructor(
@@ -90,16 +97,32 @@ export class ImpersonationSessionLoader {
     try {
       const path = req.path;
       const hasBearer = typeof req.headers?.authorization === 'string';
+      const isSsrIdentity = SSR_IDENTITY.test(path);
       if (!cookiePresent) {
-        if (!AUTHED_SURFACE.test(path) || hasBearer) return;
-        const key = req.ip ?? 'unknown';
-        const now = Date.now();
-        const last = this.absentSeenAt.get(key);
-        if (last !== undefined && now - last < ABSENT_THROTTLE_MS) return;
-        if (this.absentSeenAt.size >= ABSENT_THROTTLE_MAX_KEYS) this.absentSeenAt.clear();
-        this.absentSeenAt.set(key, now);
+        if (isSsrIdentity) {
+          // Own map and own key space: SSR /me fires on every authed page
+          // render from one server IP, so it must not share (or starve) the
+          // authed-surface throttle. One row per source IP per minute.
+          const key = req.ip ?? 'unknown';
+          const now = Date.now();
+          const last = this.absentMeSeenAt.get(key);
+          if (last !== undefined && now - last < ABSENT_THROTTLE_MS) return;
+          if (this.absentMeSeenAt.size >= ABSENT_THROTTLE_MAX_KEYS) this.absentMeSeenAt.clear();
+          this.absentMeSeenAt.set(key, now);
+        } else {
+          if (!AUTHED_SURFACE.test(path) || hasBearer) return;
+          const key = req.ip ?? 'unknown';
+          const now = Date.now();
+          const last = this.absentSeenAt.get(key);
+          if (last !== undefined && now - last < ABSENT_THROTTLE_MS) return;
+          if (this.absentSeenAt.size >= ABSENT_THROTTLE_MAX_KEYS) this.absentSeenAt.clear();
+          this.absentSeenAt.set(key, now);
+        }
       }
       const jar = (req as unknown as { cookies?: Record<string, unknown> }).cookies;
+      // Presence and length of the raw Cookie header only; never its value.
+      const rawCookieHeader = req.headers?.cookie;
+      const headerLen = typeof rawCookieHeader === 'string' ? rawCookieHeader.length : 0;
       const metadata = {
         reason,
         path,
@@ -108,6 +131,7 @@ export class ImpersonationSessionLoader {
         cookiesParsed: jar !== undefined && jar !== null,
         // Names only, never values.
         cookieNames: jar ? Object.keys(jar).slice(0, 20) : [],
+        ...(isSsrIdentity ? { hasCookieHeader: headerLen > 0, cookieHeaderLength: headerLen } : {}),
         host: req.headers?.host ?? null,
         ipAddress: req.ip ?? null,
       };
