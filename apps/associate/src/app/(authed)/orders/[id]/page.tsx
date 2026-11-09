@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { notFound, useParams } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 import { ArrowLeft, ExternalLink, MessagesSquare, OctagonX, Truck } from 'lucide-react';
 import { useStoreIdentity } from '@skydrop/auth/client';
+import { looksLikeOrderId } from '@/lib/order-id';
 import { Money, ProductThumb } from '@skydrop/ui/components';
 import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
 import { PageHeader } from '@skydrop/ui/app/page-header';
@@ -57,7 +58,13 @@ export default function OrderDetailPage(): ReactElement {
   const locale = useLocale();
   const when = (iso: string): string => formatDateTime(iso, locale);
   const params = useParams<{ id: string }>();
-  const id = typeof params.id === 'string' ? params.id : '';
+  // `[id]` matches any segment, so a guessed or stale URL reached the
+  // API as an order id and came back as "Validation failed (uuid v 7 is
+  // expected)". An empty id keeps the queries from firing at all; the
+  // `notFound()` runs after every hook, so the order of hooks is the
+  // same on every render (see `looksLikeOrderId`).
+  const raw = typeof params.id === 'string' ? params.id : '';
+  const id = looksLikeOrderId(raw) ? raw : '';
   const me = useStoreIdentity();
   const toast = useToast();
   const order = useMyOrder(id);
@@ -68,6 +75,9 @@ export default function OrderDetailPage(): ReactElement {
   const [error, setError] = useState<string | null>(null);
   /** Set when a cancel was HELD rather than applied — the reply said so. */
   const [held, setHeld] = useState<string | null>(null);
+
+  // After every hook, so the hook order is identical on every render.
+  if (!looksLikeOrderId(raw)) notFound();
 
   if (order.isPending) {
     return (

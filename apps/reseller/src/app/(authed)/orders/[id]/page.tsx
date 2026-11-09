@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { notFound, useParams } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 import {
   ArrowLeft,
@@ -16,6 +16,7 @@ import {
 import { OrderStatus, type ShipmentStatus } from '@skydrop/db';
 import type { Locale } from '@skydrop/ui/app/i18n';
 import { useStoreIdentity } from '@skydrop/auth/client';
+import { looksLikeOrderId } from '@/lib/order-id';
 // The layout mounts the legacy <Toaster>; the app `useToast` would throw
 // outside its own provider, so this keeps the legacy hook (same API).
 import { Money, ProductThumb, useToast } from '@skydrop/ui/components';
@@ -69,9 +70,16 @@ import { BackLink, ConfirmSubject, Facts, Notice, RoSection } from '../_componen
  */
 export default function StoreOrderPage(): ReactElement {
   const params = useParams<{ id: string }>();
-  const id = params?.id ?? '';
+  // `[id]` matches any segment, so a guessed or stale URL reached the
+  // API as an order id and came back as "Validation failed (uuid v 7 is
+  // expected)". An empty id keeps the query from firing at all; the
+  // `notFound()` below runs after every hook, so the order of hooks is
+  // the same on every render (see `looksLikeOrderId`).
+  const raw = params?.id ?? '';
+  const id = looksLikeOrderId(raw) ? raw : '';
   const order = useStoreOrder(id);
   const t = useT();
+  if (!looksLikeOrderId(raw)) notFound();
 
   return (
     <div className="ro-page">
