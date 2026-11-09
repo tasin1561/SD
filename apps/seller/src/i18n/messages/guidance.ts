@@ -3,8 +3,8 @@ import { defineMessages } from '../define';
 /** Copy owned by the "guidance" feature. */
 export const guidance = defineMessages({
   'guidance.addressLine1Hint': [
-    'The address only, in this order — Village/City, Post Office, Police Station, District. No extra words; the PIN below decides the rest.',
-    'শুধু ঠিকানা, এই ক্রমে — গ্রাম/শহর, পোস্ট অফিস, থানা, জেলা। বাড়তি কোনো শব্দ নয়; বাকিটা নিচের পিন ঠিক করে দেয়।',
+    'The address only, in this order — Village/City, Post Office, Police Station, District. No extra words; the PIN above decides the rest.',
+    'শুধু ঠিকানা, এই ক্রমে — গ্রাম/শহর, পোস্ট অফিস, থানা, জেলা। বাড়তি কোনো শব্দ নয়; বাকিটা উপরের পিন ঠিক করে দেয়।',
   ],
   'guidance.addressLine2Hint': [
     'The landmark only — a hospital, school or shop nearby. Nothing else, and never a copy of line 1: an order with both lines the same is held.',

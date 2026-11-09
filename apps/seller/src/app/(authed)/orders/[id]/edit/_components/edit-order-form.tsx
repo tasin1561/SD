@@ -633,6 +633,19 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             })}
             inputClassName="sk-figure"
           />
+          {/* PIN FIRST, then the two address lines (owner, 2026-11-09) —
+              same order as the create forms, and the shared line-1 hint
+              says "the PIN above", so this field has to be above. */}
+          <TextField
+            label={t('orderEdit.pinCode')}
+            required
+            value={form.recipientPostalCode}
+            onChange={(e) =>
+              set('recipientPostalCode', e.target.value.replace(/\D/g, '').slice(0, 6))
+            }
+            inputMode="numeric"
+            inputClassName="sk-figure"
+          />
           <div className="ord-span-2">
             <TextField
               label={t('orderEdit.addressLine1')}
@@ -658,16 +671,6 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               maxLength={200}
             />
           </div>
-          <TextField
-            label={t('orderEdit.pinCode')}
-            required
-            value={form.recipientPostalCode}
-            onChange={(e) =>
-              set('recipientPostalCode', e.target.value.replace(/\D/g, '').slice(0, 6))
-            }
-            inputMode="numeric"
-            inputClassName="sk-figure"
-          />
         </div>
       </OrdSection>
 

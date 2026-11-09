@@ -130,6 +130,33 @@ describe('both order forms read the same copy', () => {
     expect(src).toContain('the landmark) is required');
   });
 
+  /**
+   * THE PIN COMES FIRST — and the line-1 hint says so out loud ("the PIN
+   * above decides the rest"), which is why this is a test and not a
+   * preference. The PIN is what Delhivery routes on and what settles the
+   * district and state, so it is the field that tells an operator
+   * whether the address they are about to type is even the right part of
+   * the country; asking for it last means finding out afterwards.
+   *
+   * Read from the SOURCE rather than rendered, because what can regress
+   * here is somebody copying a form (v2 is itself a copy of v1) and
+   * putting the fields back in the old order. A behavioural test would
+   * not notice, and the hint would quietly start pointing the wrong way.
+   */
+  const orderedForms = [
+    ...forms,
+    'app/(authed)/orders/new-v2/_components/new-order-form.tsx',
+  ] as const;
+
+  it.each(orderedForms)('%s puts the PIN field above address line 1', (rel) => {
+    const raw = readFileSync(join(__dirname, '../', rel), 'utf8');
+    const pin = raw.search(/\.pinCode'\)/);
+    const line1 = raw.search(/\.addressLine1'\)/);
+    expect(pin).toBeGreaterThan(-1);
+    expect(line1).toBeGreaterThan(-1);
+    expect(pin).toBeLessThan(line1);
+  });
+
   it('the edit form gates BOTH of its submit paths', () => {
     // "Save + submit" ran no validation at all, so it was a way around
     // the phone and address rules that "Save" enforces.

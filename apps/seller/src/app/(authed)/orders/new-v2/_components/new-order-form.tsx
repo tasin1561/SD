@@ -874,27 +874,15 @@ export function NewOrderForm(): ReactElement {
                 })}
                 inputClassName="sk-figure"
               />
-              <TextField
-                label={t('orderNew.addressLine1')}
-                required
-                hint={t('guidance.addressLine1Hint')}
-                value={form.recipientAddressLine1}
-                onChange={(e) => set('recipientAddressLine1', e.target.value)}
-                maxLength={200}
-              />
-              <TextField
-                label={t('orderNew.addressLine2The2')}
-                required
-                hint={t('guidance.addressLine2Hint')}
-                error={
-                  linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
-                    ? t('guidance.duplicateLines')
-                    : undefined
-                }
-                value={form.recipientAddressLine2}
-                onChange={(e) => set('recipientAddressLine2', e.target.value)}
-                maxLength={200}
-              />
+              {/* PIN FIRST, then the two address lines (owner, 2026-11-09).
+                  The PIN is what the courier actually routes on, and it
+                  settles the district and state — so it is the thing that
+                  tells the operator whether the address they are about to
+                  type is even the right part of the country. Typing it
+                  last means discovering a wrong PIN after the address is
+                  already in. The district/state line below travels WITH
+                  the field: that answer is only useful before the address
+                  is typed, not three fields later. */}
               <TextField
                 label={t('orderNew.pinCode')}
                 required
@@ -916,28 +904,50 @@ export function NewOrderForm(): ReactElement {
                 inputMode="numeric"
                 inputClassName="sk-figure"
               />
+
+              {/*
+                What the PIN code itself says.
+
+                READ-ONLY and not stored (ORD-5): the form still sends no
+                city or state, exactly as the old page does, because
+                writing them would start the allowed-states check running
+                on v2 orders that cannot run on v1 orders — so the new
+                page would refuse an order the old page accepts. Shown
+                because it tells the operator at a glance that they typed
+                the PIN they meant.
+              */}
+              {pincodeInfo.data?.valid === true ? (
+                <p className="ord-pin-facts">
+                  {pincodeInfo.data.district ?? '—'}
+                  {pincodeInfo.data.state === null ? '' : `, ${pincodeInfo.data.state}`}
+                  <span>{t('orderNew.fromPinCode')}</span>
+                </p>
+              ) : pincodeInfo.data?.valid === false ? (
+                <Notice tone="warn">{t('orderNew.thatPinCodeDoes')}</Notice>
+              ) : null}
+
+              <TextField
+                label={t('orderNew.addressLine1')}
+                required
+                hint={t('guidance.addressLine1Hint')}
+                value={form.recipientAddressLine1}
+                onChange={(e) => set('recipientAddressLine1', e.target.value)}
+                maxLength={200}
+              />
+              <TextField
+                label={t('orderNew.addressLine2The2')}
+                required
+                hint={t('guidance.addressLine2Hint')}
+                error={
+                  linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
+                    ? t('guidance.duplicateLines')
+                    : undefined
+                }
+                value={form.recipientAddressLine2}
+                onChange={(e) => set('recipientAddressLine2', e.target.value)}
+                maxLength={200}
+              />
             </div>
-
-            {/*
-              What the PIN code itself says.
-
-              READ-ONLY and not stored (ORD-5): the form still sends no
-              city or state, exactly as the old page does, because
-              writing them would start the allowed-states check running
-              on v2 orders that cannot run on v1 orders — so the new
-              page would refuse an order the old page accepts. Shown
-              because it tells the operator at a glance that they typed
-              the PIN they meant.
-            */}
-            {pincodeInfo.data?.valid === true ? (
-              <p className="ord-pin-facts">
-                {pincodeInfo.data.district ?? '—'}
-                {pincodeInfo.data.state === null ? '' : `, ${pincodeInfo.data.state}`}
-                <span>{t('orderNew.fromPinCode')}</span>
-              </p>
-            ) : pincodeInfo.data?.valid === false ? (
-              <Notice tone="warn">{t('orderNew.thatPinCodeDoes')}</Notice>
-            ) : null}
 
             <AddressCheckPanel
               result={checkResult}

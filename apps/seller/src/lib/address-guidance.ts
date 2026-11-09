@@ -26,8 +26,14 @@
  * cannot start telling sellers different things.
  */
 
+/**
+ * "the PIN ABOVE" — the PIN field sits before line 1 on all three forms
+ * (create, create v2, edit) since 2026-11-09. If one of them ever moves
+ * the field back under the address lines, this sentence becomes a lie
+ * and has to move with it.
+ */
 export const ADDRESS_LINE_1_HINT =
-  'The address only, in this order — Village/City, Post Office, Police Station, District. No extra words; the PIN below decides the rest.';
+  'The address only, in this order — Village/City, Post Office, Police Station, District. No extra words; the PIN above decides the rest.';
 
 export const ADDRESS_LINE_2_HINT =
   'The landmark only — a hospital, school or shop nearby. Nothing else, and never a copy of line 1: an order with both lines the same is held.';

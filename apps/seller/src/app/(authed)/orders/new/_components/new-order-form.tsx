@@ -737,27 +737,13 @@ export function NewOrderForm(): ReactElement {
                 })}
                 inputClassName="sk-figure"
               />
-              <TextField
-                label={t('orderNew.addressLine1')}
-                required
-                hint={t('guidance.addressLine1Hint')}
-                value={form.recipientAddressLine1}
-                onChange={(e) => set('recipientAddressLine1', e.target.value)}
-                maxLength={200}
-              />
-              <TextField
-                label={t('orderNew.addressLine2The2')}
-                required
-                hint={t('guidance.addressLine2Hint')}
-                error={
-                  linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
-                    ? t('guidance.duplicateLines')
-                    : undefined
-                }
-                value={form.recipientAddressLine2}
-                onChange={(e) => set('recipientAddressLine2', e.target.value)}
-                maxLength={200}
-              />
+              {/* PIN FIRST, then the two address lines (owner, 2026-11-09).
+                  The PIN is what the courier actually routes on, and it
+                  settles the district and state — so it is the thing that
+                  tells the operator whether the address they are about to
+                  type is even the right part of the country. Typing it
+                  last means discovering a wrong PIN after the address is
+                  already in. */}
               <TextField
                 label={t('orderNew.pinCode')}
                 required
@@ -778,6 +764,27 @@ export function NewOrderForm(): ReactElement {
                 placeholder="560001"
                 inputMode="numeric"
                 inputClassName="sk-figure"
+              />
+              <TextField
+                label={t('orderNew.addressLine1')}
+                required
+                hint={t('guidance.addressLine1Hint')}
+                value={form.recipientAddressLine1}
+                onChange={(e) => set('recipientAddressLine1', e.target.value)}
+                maxLength={200}
+              />
+              <TextField
+                label={t('orderNew.addressLine2The2')}
+                required
+                hint={t('guidance.addressLine2Hint')}
+                error={
+                  linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
+                    ? t('guidance.duplicateLines')
+                    : undefined
+                }
+                value={form.recipientAddressLine2}
+                onChange={(e) => set('recipientAddressLine2', e.target.value)}
+                maxLength={200}
               />
             </div>
           </OrdSection>
