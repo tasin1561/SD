@@ -300,7 +300,8 @@ describe('the form wires all three senders through the dedupe', () => {
       'utf8',
     );
     expect(raw.match(/addressCheck\.mutate\(/g) ?? []).toHaveLength(1);
-    expect(raw).toContain('lastAsked.current = addressCheckKey(');
+    expect(raw).toContain('lastAsked.current = key;');
+    expect(raw).toContain('const key = addressCheckKey(');
   });
 });
 
@@ -309,8 +310,10 @@ describe('appendOrRespellOnly — the guarantee, checked rather than argued', ()
     expect(appendOrRespellOnly('Nadibhag', 'Nadibhag, PO Badu, North 24 Parganas')).toBe(true);
   });
 
-  it('accepts a respelling', () => {
-    expect(appendOrRespellOnly('Nadibhag, Madhamgram', 'Nadibhag, Madhyamgram')).toBe(true);
+  it('accepts a respelling onto a word the service returned', () => {
+    expect(
+      appendOrRespellOnly('Nadibhag, Madhamgram', 'Nadibhag, Madhyamgram', ['Madhyamgram']),
+    ).toBe(true);
   });
 
   it('REFUSES a different word, however close', () => {
@@ -372,5 +375,54 @@ describe('the correction dictionary excludes what must not reach line 1', () => 
     expect(suggestedAddressLine1('Madhamgram', { police_station: 'Madhyamgram' })).toContain(
       'Madhyamgram',
     );
+  });
+});
+
+describe('the cases a review proved were wrong', () => {
+  it('does not turn Sonapur into Sonarpur', () => {
+    // Two real places one letter apart. Seven letters cleared the old
+    // floor, which is the Bengali/Bengal shape exactly: the restraint
+    // was about how CLOSE a word is, and closeness is the one thing two
+    // different nearby places always have.
+    expect(suggestedAddressLine1('Sonapur Road', { village_city: 'Sonarpur' })).toBe('');
+  });
+
+  it('does not turn Hanumant into Hanuman', () => {
+    expect(suggestedAddressLine1('Hanumant Nagar', { village_city: 'Hanuman' })).toBe('');
+  });
+
+  it('still corrects the long name the feature was asked for', () => {
+    expect(suggestedAddressLine1('Madhamgram', { police_station: 'Madhyamgram' })).toContain(
+      'Madhyamgram',
+    );
+  });
+});
+
+describe('appendOrRespellOnly needs the dictionary to mean anything', () => {
+  it('REFUSES a near word that the service never returned', () => {
+    // Without the dictionary term this returned true, because "Bengal"
+    // IS one edit from "Bengali". A distance bound cannot tell a
+    // correction from a substitution — both are small edits.
+    expect(appendOrRespellOnly('Bengali Para', 'Bengal Para')).toBe(false);
+  });
+
+  it('accepts a changed word that IS one the service returned', () => {
+    expect(
+      appendOrRespellOnly('Nadibhag, Madhamgram', 'Nadibhag, Madhyamgram', ['Madhyamgram']),
+    ).toBe(true);
+  });
+});
+
+describe('addresses that are not written in ASCII', () => {
+  it('sees Bangla words instead of treating every letter as a separator', () => {
+    // The ASCII split tokenised a Bangla line to NOTHING, and an empty
+    // token list makes every() vacuously true — so a post office
+    // returned in Bangla read as "already present" and was dropped.
+    const next = suggestedAddressLine1('12 Main Road, Bagbazar', { post_office: 'বাগবাজার' });
+    expect(next).toContain('বাগবাজার');
+  });
+
+  it('does not claim to already have a value it cannot compare', () => {
+    expect(suggestedAddressLine1('বাগবাজার', { post_office: 'বাগবাজার' })).toBe('');
   });
 });

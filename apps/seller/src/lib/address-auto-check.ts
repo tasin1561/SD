@@ -95,10 +95,20 @@ const APPEND_FIELDS: ReadonlyArray<{ key: string; prefix: string }> = [
   { key: 'district', prefix: '' },
 ];
 
+/**
+ * The words of a line, for comparison.
+ *
+ * `\p{L}\p{N}` and not `a-z0-9`: the ASCII version treated every Bangla
+ * and Devanagari letter as a separator, so a line written in Bangla
+ * tokenised to NOTHING. That was not merely a blind spot — an empty
+ * token list makes `every()` vacuously true, so a post office returned
+ * in Bangla read as "already present" and was silently dropped from the
+ * suggestion. Half this product's operators type in Bangla.
+ */
 const tokens = (s: string): string[] =>
   s
     .toLowerCase()
-    .split(/[^a-z0-9]+/)
+    .split(/[^\p{L}\p{N}]+/u)
     .filter((t) => t !== '');
 
 /**
@@ -145,8 +155,19 @@ function spellingTolerance(word: string): number {
   // cannot tell a typo from a truncation. Place names long enough to
   // be misspelt in practice — Madhyamgram, Barasat, Raydighi,
   // Parganas — all clear this bar.
-  if (word.length < 7) return 0;
-  if (word.length < 10) return 1;
+  // RAISED AGAIN, to ten. Seven was still wrong, and a review proved it
+  // with a second real pair: "Sonapur Road" became "Sonarpur Road",
+  // because Sonapur and Sonarpur are both real places one letter apart
+  // and seven letters is long enough to clear the old floor. That is
+  // the Bengali/Bengal shape exactly — the restraint was about how
+  // close a word is, and closeness is the one thing two different
+  // nearby places always have.
+  //
+  // Below ten letters nothing is corrected at all. What survives is the
+  // case the feature was asked for: a long name mistyped by one or two
+  // letters, where no other real place is that close.
+  if (word.length < 10) return 0;
+  if (word.length < 13) return 1;
   return 2;
 }
 
@@ -186,13 +207,20 @@ function editDistance(a: string, b: string): number {
  * Capitalisation follows what they returned, since that is the spelling
  * a label should carry.
  */
-function correctSpelling(line: string, extracted: Readonly<Record<string, string | null>>): string {
+/** Every word the service returned for a field that can BE part of
+ *  address line 1 — the only words a typed word may be corrected to,
+ *  and the same set the guarantee checks against. */
+function spellingDictionary(extracted: Readonly<Record<string, string | null>>): string[] {
   const known: string[] = [];
   for (const field of SPELLING_FIELDS) {
     for (const word of (extracted[field] ?? '').split(/[^A-Za-z]+/)) {
       if (word.length >= 4) known.push(word);
     }
   }
+  return known;
+}
+
+function correctSpelling(line: string, known: readonly string[]): string {
   if (known.length === 0) return line;
 
   // Split keeping the separators, so punctuation and spacing survive
@@ -249,17 +277,36 @@ function correctSpelling(line: string, extracted: Readonly<Record<string, string
  * Positional, not set-based. A set test would accept a reordering, and
  * "12 North Road, Barasat" is not "Barasat Road, 12 North".
  */
-export function appendOrRespellOnly(typed: string, result: string): boolean {
+export function appendOrRespellOnly(
+  typed: string,
+  result: string,
+  known: readonly string[] = [],
+): boolean {
   const before = tokens(typed);
   const after = tokens(result);
   // Shorter means something was dropped; the tail may only grow.
   if (after.length < before.length) return false;
+  const dictionary = new Set(known.map((w) => w.toLowerCase()));
   return before.every((word, i) => {
     const got = after[i];
     if (got === undefined) return false;
     if (got === word) return true;
-    // Changed — allowed ONLY as a respelling, by the same rules that
-    // produced it, first letter included.
+    /*
+      Changed — allowed ONLY as a respelling.
+
+      ── THE DICTIONARY TERM IS THE LOAD-BEARING ONE ──────────────────
+      An earlier version checked only the distance, and a review proved
+      it worthless: `appendOrRespellOnly("Bengali Para", "Bengal Para")`
+      returned true, because "Bengal" IS one edit from "Bengali". A
+      distance bound cannot tell a correction from a substitution — both
+      are small edits — so on its own it guaranteed nothing, and the
+      commit that introduced it said otherwise. That was overclaimed.
+
+      What makes it a guarantee is that the new word must be one the
+      SERVICE returned for a line 1 field. Then a changed word is not
+      merely near something, it is the thing the service named.
+    */
+    if (!dictionary.has(got)) return false;
     const tolerance = spellingTolerance(word);
     if (tolerance === 0) return false;
     if (got[0] !== word[0]) return false;
@@ -309,7 +356,8 @@ export function suggestedAddressLine1(
 ): string {
   if (extracted === null || extracted === undefined) return '';
   const typed = currentLine1.trim().replace(/[\s,]+$/, '');
-  let line = correctSpelling(typed, extracted);
+  const known = spellingDictionary(extracted);
+  let line = correctSpelling(typed, known);
   let added = line !== typed;
   for (const { key, prefix } of APPEND_FIELDS) {
     const value = (extracted[key] ?? '').trim();
@@ -321,7 +369,11 @@ export function suggestedAddressLine1(
     // appended, which is the behaviour that adapts rather than a rule
     // that has to be maintained per format.
     const have = new Set(tokens(line));
-    if (tokens(value).every((t) => have.has(t))) continue;
+    const valueWords = tokens(value);
+    // `every()` on an empty list is TRUE, which read as "already
+    // present" and dropped the part. A value with no tokens we can
+    // compare is a value we must not claim to have.
+    if (valueWords.length > 0 && valueWords.every((t) => have.has(t))) continue;
     line = line === '' ? `${prefix}${value}` : `${line}, ${prefix}${value}`;
     added = true;
   }
@@ -330,7 +382,7 @@ export function suggestedAddressLine1(
   // anything but the operator's line respelt and extended, it is not
   // offered at all — an address nobody suggested beats an address
   // somebody rewrote.
-  return appendOrRespellOnly(typed, line) ? line : '';
+  return appendOrRespellOnly(typed, line, known) ? line : '';
 }
 
 /**

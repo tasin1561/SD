@@ -183,7 +183,10 @@ export function NewOrderForm(): ReactElement {
   const { referenceId, clear: clearDraft } = useDraftReference();
   const pincodeInfo = usePincodeLookup(form.recipientPostalCode);
   const addressCheck = useCheckAddress();
-  const [checkResult, setCheckResult] = useState<AddressCheckView | null>(null);
+  /** The verdict, carrying the question it answers — see `sendAddressCheck`. */
+  const [checkResult, setCheckResult] = useState<(AddressCheckView & { askedKey: string }) | null>(
+    null,
+  );
   const [confirmedWithCustomer, setConfirmedWithCustomer] = useState(false);
 
   /*
@@ -219,12 +222,19 @@ export function NewOrderForm(): ReactElement {
    *  button, and applying a suggestion — so the dedupe key cannot be
    *  updated by one path and missed by another. */
   function sendAddressCheck(address: string, pincode: string): void {
-    lastAsked.current = addressCheckKey(pincode, paymentTypeForCheck, address);
+    const key = addressCheckKey(pincode, paymentTypeForCheck, address);
+    lastAsked.current = key;
     addressCheck.mutate(
       { referenceId, address, pincode, paymentType: paymentTypeForCheck },
       {
         onSuccess: (r) => {
-          setCheckResult(r);
+          // The ANSWER IS STORED WITH THE QUESTION IT ANSWERS. Without
+          // this the verdict for one PIN could be applied under
+          // another: change the PIN to a different district, tab out
+          // while the new check is still in flight, and the old
+          // district was appended to line 1 with nothing to revert it.
+          // A verdict is only ever about the text it was asked about.
+          setCheckResult({ ...r, askedKey: key });
           // A re-check answers the question the tick was about, so the
           // operator has to mean it again.
           setConfirmedWithCustomer(false);
@@ -343,8 +353,28 @@ export function NewOrderForm(): ReactElement {
     Still only at `high` post-office confidence, the same bar the panel
     uses before it will show a label address at all.
   */
+  /*
+    ── ONLY A VERDICT ABOUT THE TEXT THAT IS THERE NOW ────────────────
+    The stored answer carries the question it answered, and it is used
+    only while that question is still the one the form is asking. A
+    verdict about a PIN in another district must never append that
+    district to a line 1 the operator has since re-pinned — and the
+    window for it was real: change the PIN, leave the address block
+    while the new check is in flight, and the old answer landed 250ms
+    later with nothing to revert it.
+  */
+  const currentQuestion = addressCheckKey(
+    form.recipientPostalCode.trim(),
+    paymentTypeForCheck,
+    addressForCheck,
+  );
+  const verdictIsCurrent =
+    checkResult !== null && checkResult.askedKey === currentQuestion && !addressCheck.isPending;
   const suggestedLine1 =
-    checkResult !== null && checkResult.available && checkResult.poConfidence === 'high'
+    verdictIsCurrent &&
+    checkResult !== null &&
+    checkResult.available &&
+    checkResult.poConfidence === 'high'
       ? suggestedAddressLine1(form.recipientAddressLine1, checkResult.extracted)
       : '';
   const suggestionOnOffer =
