@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Header,
   HttpCode,
@@ -106,11 +107,38 @@ export class SellerOrderCsvImportController {
 
   @Post('process')
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Create the import job + enqueue the worker' })
+  @ApiOperation({
+    summary: 'Create the import job + enqueue the worker',
+    description:
+      'Refuses with IMPORT_OVERSELLS_HELD_STOCK when the client holds stock at placement and ' +
+      'the file orders more than they have. `switchToConfirmationHold: true` is the answer to ' +
+      'that refusal and needs holds.manage.',
+  })
   process(
     @Body() body: ProcessOrderCsvDto,
     @CurrentSeller() seller: AuthenticatedSeller,
   ): Promise<BulkOrderUploadView> {
+    /*
+      Importing is `orders.import`; CHANGING a client's stock-hold setting
+      is `holds.manage` — the same permission the early-reservation
+      decisions sit behind. The class-level decorator cannot express "both"
+      (its several keys mean ANY of them), and a handler-level decorator
+      OVERRIDES rather than adds, so declaring `holds.manage` here would
+      let somebody who cannot import orders import orders. Hence the
+      explicit check: the extra right is demanded only of the request that
+      exercises it.
+
+      FE-2: the console does NOT hide the button over this. It sends the
+      answer, and this refusal is what it shows.
+    */
+    if (body.switchToConfirmationHold === true && !seller.permissions.includes('holds.manage')) {
+      throw new ForbiddenException({
+        code: 'INSUFFICIENT_PERMISSION',
+        message:
+          'Switching “Book Stock At Order Placement” off needs: holds.manage. Ask someone on ' +
+          'your team who holds it, or reduce the quantities in the file and upload it again.',
+      });
+    }
     return this.svc.createAndEnqueue(seller.id, body, {
       type: ActorType.SELLER,
       sellerId: seller.id,

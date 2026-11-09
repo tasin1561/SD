@@ -15,9 +15,16 @@ export interface AutoImportPreview {
   readonly missingRequired: readonly string[];
   readonly exceedsRowLimit: boolean;
   readonly rowsWithProblems?: number;
+  /**
+   * ORDERS ONLY. The server's own verdict on this file's stock
+   * (`blocksImport`), never re-derived here — reading the flag is not
+   * re-implementing the rule (FE-2), and `/process` enforces it whatever
+   * this decides.
+   */
+  readonly stockCheck?: { readonly blocksImport: boolean } | null;
 }
 
-export type AutoImportStop = 'missing' | 'blocked' | 'none';
+export type AutoImportStop = 'missing' | 'blocked' | 'none' | 'oversell';
 
 export type AutoImportDecision =
   | { readonly auto: true }
@@ -49,6 +56,14 @@ export function decideAutoImport(
   if (kind !== 'orders') return { auto: false, reason: null };
   if (preview.missingRequired.length > 0) return { auto: false, reason: 'missing' };
   if (preview.exceedsRowLimit) return { auto: false, reason: 'blocked' };
+  /*
+    A file the server would REFUSE is never sent without a click: the only
+    way past that refusal switches the client's stock-hold setting for
+    every future order, and nothing account-wide and lasting happens
+    automatically. The shortcut exists for files with nothing to decide,
+    and this is the opposite of that.
+  */
+  if (preview.stockCheck?.blocksImport === true) return { auto: false, reason: 'oversell' };
   const importable = preview.orderCount ?? preview.rowCount;
   if (importable <= 0) return { auto: false, reason: 'none' };
   return { auto: true };

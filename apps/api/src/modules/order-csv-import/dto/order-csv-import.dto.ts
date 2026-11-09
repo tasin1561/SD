@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsInt,
   IsObject,
   IsOptional,
@@ -55,6 +56,27 @@ export class ProcessOrderCsvDto {
   @IsOptional()
   @IsObject()
   mappingOverride?: Record<string, string>;
+
+  /**
+   * The client's deliberate answer to `IMPORT_OVERSELLS_HELD_STOCK`.
+   *
+   * Sending `true` is ONE act with two steps, in this order: it switches
+   * this client's `inventory.early_reservation_enabled` override to false
+   * — account-wide and lasting, which the refusal says in its own
+   * sentence — and then imports the file. It is honoured ONLY when the
+   * file really does oversell and the setting really is on; otherwise it
+   * is ignored, so a stale flag from an earlier preview can never change
+   * an account on its own.
+   */
+  @ApiProperty({
+    required: false,
+    description:
+      'Switch "Book Stock At Order Placement" off for this client and then import. Only ' +
+      'honoured when the file oversells and that setting is on; needs the holds.manage permission.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  switchToConfirmationHold?: boolean;
 }
 
 export class ListOrderCsvUploadsQueryDto {

@@ -31,7 +31,16 @@ const OWNER_TEMPLATE =
   'SD-1003,COD,Skydrop,Surface,Priya Menon,9700112233,priya@example.com,8 Residency Road,Beside Jyothi Theatre,Kochi,Kerala,682016,CAP-001-NAVY,1,850,,2350,Flyer,15,10,5,110,YES,,,,,\n';
 
 const parser = new OrderCsvParserService();
-const template = new OrderCsvImportService(UNUSED, UNUSED, UNUSED, UNUSED, UNUSED, UNUSED);
+const template = new OrderCsvImportService(
+  UNUSED,
+  UNUSED,
+  UNUSED,
+  UNUSED,
+  UNUSED,
+  UNUSED,
+  UNUSED,
+  UNUSED,
+);
 
 describe('the owner order template (buildTemplate)', () => {
   const csv = template.buildTemplate();

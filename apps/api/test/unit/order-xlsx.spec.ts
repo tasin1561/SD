@@ -10,7 +10,7 @@ import {
 } from '../../src/modules/order-csv-import/order-xlsx';
 
 const U = undefined as never;
-const svc = new OrderCsvImportService(U, U, U, U, U, U);
+const svc = new OrderCsvImportService(U, U, U, U, U, U, U, U);
 const parser = new OrderCsvParserService();
 
 async function sheetBuffer(

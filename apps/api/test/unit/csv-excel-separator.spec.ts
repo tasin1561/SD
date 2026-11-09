@@ -19,7 +19,7 @@ const buf = (s: string): Buffer => Buffer.from(s, 'utf8');
 
 const templates: Array<{ name: string; csv: string }> = [
   { name: 'catalog', csv: new CsvImportService(U, U, U, U, U, U, U).buildTemplate() },
-  { name: 'seller orders', csv: new OrderCsvImportService(U, U, U, U, U, U).buildTemplate() },
+  { name: 'seller orders', csv: new OrderCsvImportService(U, U, U, U, U, U, U, U).buildTemplate() },
   {
     name: 'store orders',
     csv: new StoreOrderCsvImportService(U, U, U, U, U, U, U).buildTemplate(),

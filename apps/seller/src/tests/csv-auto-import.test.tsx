@@ -77,6 +77,16 @@ describe('decideAutoImport', () => {
   it('never applies to the catalogue importer', () => {
     expect(decideAutoImport('catalog', ok)).toEqual({ auto: false, reason: null });
   });
+  // Nothing account-wide and lasting happens without a click: the only way
+  // past this refusal switches the client's stock-hold setting.
+  it('stops when the server says this file would be refused over stock', () => {
+    expect(decideAutoImport('orders', { ...ok, stockCheck: { blocksImport: true } })).toMatchObject(
+      { reason: 'oversell' },
+    );
+    expect(decideAutoImport('orders', { ...ok, stockCheck: { blocksImport: false } })).toEqual({
+      auto: true,
+    });
+  });
 });
 
 describe('the panel', () => {
@@ -135,6 +145,78 @@ describe('the panel', () => {
     const dlg = await screen.findByRole('dialog');
     expect(within(dlg).getByText(/no order in this file can be created/)).toBeTruthy();
     expect(processCalls(f)).toBe(0);
+  });
+
+  /*
+    The oversell refusal, as a client meets it. The SENTENCES are the
+    server's and are shown verbatim (FE-2) — this asserts they are shown,
+    not what they say — and the button says what pressing it does.
+  */
+  const REFUSED = {
+    ...base,
+    orderCount: 5,
+    missingRequired: [],
+    stockCheck: {
+      holdsAtPlacement: true,
+      blocksImport: true,
+      oversold: [{ skuCode: 'AVIATO-BLAC', requested: 500, available: 3 }],
+      headline: 'Your account is set to Book Stock At Order Placement.',
+      waysForward: 'Either reduce the quantities, or import anyway.',
+      lasting: 'That switch applies to EVERY FUTURE ORDER.',
+      message: 'all three joined',
+    },
+  };
+
+  it('does not auto-import an overselling file, and shows the server’s own sentences', async () => {
+    const f = await uploadWith(REFUSED);
+    const dlg = await screen.findByRole('dialog');
+    expect(processCalls(f)).toBe(0);
+    expect(
+      within(dlg).getByText(/your account is set to book stock at order placement/i),
+    ).toBeTruthy();
+    expect(within(dlg).getByText(/either reduce the quantities/i)).toBeTruthy();
+    // The account-wide, lasting consequence is on screen, emphasised.
+    expect(within(dlg).getByText(/every future order/i).tagName).toBe('STRONG');
+    // Named SKU and both numbers.
+    expect(within(dlg).getByText('AVIATO-BLAC')).toBeTruthy();
+    expect(within(dlg).getByText('500 ordered, 3 available')).toBeTruthy();
+  });
+
+  it('the button says what it does, and proceeding sends the switch', async () => {
+    const f = await uploadWith(REFUSED);
+    const dlg = await screen.findByRole('dialog');
+    const button = within(dlg).getByRole('button', { name: /switch and import 5 orders/i });
+    await userEvent.setup().click(button);
+    await waitFor(() => expect(processCalls(f)).toBe(1));
+    const call = f.mock.calls.find((c) => /\/process$/.test(String(c[0])));
+    expect(JSON.parse(String((call?.[1] as RequestInit).body))).toMatchObject({
+      switchToConfirmationHold: true,
+    });
+  });
+
+  it('a WARNING names the shortfall and still imports with no click', async () => {
+    const f = await uploadWith({
+      ...base,
+      orderCount: 5,
+      missingRequired: [],
+      stockCheck: {
+        holdsAtPlacement: false,
+        blocksImport: false,
+        oversold: [{ skuCode: 'AVIATO-BLAC', requested: 500, available: 3 }],
+        headline: 'This file orders more units than you have available.',
+        waysForward: null,
+        lasting: null,
+        message: 'This file orders more units than you have available.',
+      },
+    });
+    const dlg = await screen.findByRole('dialog');
+    // The server's own sentence, not the title above it.
+    expect(within(dlg).getByText(/this file orders more units/i)).toBeTruthy();
+    await waitFor(() => expect(processCalls(f)).toBe(1));
+    const call = f.mock.calls.find((c) => /\/process$/.test(String(c[0])));
+    expect(JSON.parse(String((call?.[1] as RequestInit).body))).not.toHaveProperty(
+      'switchToConfirmationHold',
+    );
   });
 
   it('keeps the click for the catalogue importer', async () => {

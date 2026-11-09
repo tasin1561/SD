@@ -1,10 +1,18 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, BulkUploadStatus, type Prisma } from '@skydrop/db';
+import { ActorType, BulkUploadStatus, SettingValueType, type Prisma } from '@skydrop/db';
+import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
+import {
+  EARLY_RESERVATION_KEY,
+  EARLY_RESERVATION_LABEL,
+  OrderCsvStockCheckService,
+  type OrderCsvStockCheck,
+} from './order-csv-stock-check.service';
 import { EnvService } from '../../../config/env.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
@@ -236,6 +244,16 @@ export interface OrderCsvPreviewResult {
   problems: Array<{ rowNumber: number; field: string; reason: string }>;
   exceedsRowLimit: boolean;
   rowLimit: number;
+  /**
+   * Whether this file orders more units than the client holds, summed per
+   * variant across the whole file — and whether that is a warning or a
+   * refusal (see `OrderCsvStockCheckService`). `null` = nothing to say.
+   *
+   * The console surfaces these sentences VERBATIM and re-implements none
+   * of the rule (FE-2): `blocksImport` is the server's own verdict, and
+   * `/process` enforces it whatever the console does with it.
+   */
+  stockCheck: OrderCsvStockCheck | null;
 }
 
 /** At most this many problem rows come back — it is a warning, not the report. */
@@ -284,6 +302,8 @@ export class OrderCsvImportService {
     private readonly parser: OrderCsvParserService,
     private readonly audit: AuditLogService,
     private readonly queue: OrderCsvImportQueue,
+    private readonly stock: OrderCsvStockCheckService,
+    private readonly settings: SettingsResolverService,
   ) {}
 
   /** The same sheet as the CSV, as `.xlsx`, with the phone column formatted as Text. */
@@ -327,6 +347,7 @@ export class OrderCsvImportService {
     const mapping = this.resolveMapping(parsed.headers, detected.mapping, input.mappingOverride);
     const missingRequired = ORDER_CSV_REQUIRED_FIELDS.filter((f) => mapping[f] === undefined);
     const dry = this.parser.groupRows(parsed.rows, mapping);
+    const stockCheck = await this.stock.check(sellerId, dry.groups);
     return {
       rowCount: parsed.rowCount,
       orderCount: dry.groups.length,
@@ -344,6 +365,7 @@ export class OrderCsvImportService {
       })),
       exceedsRowLimit: parsed.rowCount > this.env.csvMaxRows,
       rowLimit: this.env.csvMaxRows,
+      stockCheck,
     };
   }
 
@@ -374,6 +396,86 @@ export class OrderCsvImportService {
       throw new BadRequestException({
         code: 'TOO_MANY_ROWS',
         message: `CSV has ${parsed.rowCount} rows; the limit is ${this.env.csvMaxRows}`,
+      });
+    }
+
+    /*
+      ── AN OVERSELL IS A REFUSAL ONLY WHEN WE PROMISED TO HOLD ──────────
+      Owner, 2026-11-09. `inventory.early_reservation_enabled` decides WHEN
+      stock is claimed, and that decides what an overselling file MEANS.
+
+      With it OFF (the default) stock is claimed at CONFIRMED (ORD-10), and
+      placing orders ahead of stock is ordinary trade here — an Indian COD
+      order is phoned before it is confirmed, so the file may legitimately
+      run ahead of the warehouse. `stockCheck` carries the warning to the
+      preview and the import runs.
+
+      With it ON the client has asked us to hold stock the moment an order
+      lands, and a file that oversells is asking for something we cannot
+      do. So nothing is enqueued and nothing is staged — the refusal lands
+      before the job exists.
+
+      It is NOT a dead end: the client may take the second way forward
+      from the import page (`switchToConfirmationHold`), which writes their
+      own override of the setting to false and then imports. The switch is
+      account-wide and lasting, which is why the refusal says so in its own
+      sentence and why only a request that carries the acknowledgement
+      performs it.
+    */
+    const stockCheck = await this.stock.check(
+      sellerId,
+      this.parser.groupRows(parsed.rows, mapping).groups,
+    );
+    if (stockCheck?.blocksImport === true) {
+      if (input.switchToConfirmationHold !== true) {
+        throw new ConflictException({
+          code: 'IMPORT_OVERSELLS_HELD_STOCK',
+          message: stockCheck.message,
+        });
+      }
+      /*
+        ORDER MATTERS, and this order is the safe one. The setting write
+        commits FIRST, in its own transaction, so a failure between the two
+        leaves the setting changed and the import not run — repeatable (the
+        client presses the button again), and never the reverse, which
+        would place orders we then could not hold stock for.
+
+        SET-1: `SettingsResolverService` is the sole writer of
+        `seller_setting_overrides`, it audits with the real actor
+        (`sellerActor` ⇒ ActorType.SELLER + the audit row's own sellerId),
+        and the SYSTEM-WIDE default row is untouched — this is one
+        client's override, not a change to what we ship.
+      */
+      await this.settings.setOverride(
+        sellerId,
+        EARLY_RESERVATION_KEY,
+        {
+          valueType: SettingValueType.BOOLEAN,
+          value: false,
+          note: `Switched off by the client while importing "${input.fileName}": the file ordered more units than were available to hold at placement.`,
+        },
+        // The REAL actor: a staff member importing on a client's behalf is
+        // recorded as themselves, never as the client and never as SYSTEM.
+        actor.staffId === undefined ? { sellerActor: true } : { staffId: actor.staffId },
+      );
+      await this.audit.log({
+        actorType: actor.type,
+        sellerId,
+        ...(actor.staffId === undefined ? {} : { staffUserId: actor.staffId }),
+        action: 'order.csv_import.early_reservation_switched_off',
+        entityType: 'seller_setting_override',
+        entityId: sellerId,
+        metadata: {
+          key: EARLY_RESERVATION_KEY,
+          setting: EARLY_RESERVATION_LABEL,
+          fileName: input.fileName,
+          oversold: stockCheck.oversold.map((s) => ({
+            skuCode: s.skuCode,
+            requested: s.requested,
+            available: s.available,
+          })),
+        },
+        severity: 'MEDIUM',
       });
     }
 

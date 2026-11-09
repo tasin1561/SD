@@ -92,6 +92,10 @@ describe('order CSV import — CSV_MAX_BYTES', () => {
       new OrderCsvParserService(),
       { log: jest.fn(async () => 'a1') } as never,
       { enqueueProcess: jest.fn(async () => 'job-1') } as never,
+      // The size guard runs before the file is ever read, so neither the
+      // stock check nor the settings writer is reached here.
+      { check: jest.fn(async () => null) } as never,
+      { setOverride: jest.fn() } as never,
     );
     return { svc, spaces };
   }

@@ -296,6 +296,34 @@ export const orderImport = defineMessages({
     'Every other row will import. You can fix the rejected ones afterwards from the import’s own page.',
     'বাকি সব সারি ইম্পোর্ট হবে। বাতিল সারিগুলো পরে ইম্পোর্টের নিজস্ব পেজ থেকে ঠিক করতে পারবেন।',
   ],
+  // ── stock: what this file asks for against what you hold ────────────
+  // The SENTENCES come from the server and are shown verbatim (FE-2) —
+  // only the chrome around them is translated here. A client-side copy of
+  // the rule, or of its wording, is exactly what FE-2 forbids.
+  'orderImport.stockRefusalTitle': [
+    'This file orders more than you have in stock',
+    'এই ফাইলে আপনার স্টকের চেয়ে বেশি অর্ডার আছে',
+  ],
+  'orderImport.stockWarningTitle': [
+    'More units than you have available',
+    'আপনার কাছে যা আছে তার চেয়ে বেশি ইউনিট',
+  ],
+  'orderImport.stockShortfallRow': [
+    '{requested} ordered, {available} available',
+    '{requested} অর্ডার করা, {available} আছে',
+  ],
+  'orderImport.autoStopOversell': [
+    'Not imported automatically: this file orders more than you have in stock, and your account holds stock when an order is placed.',
+    'স্বয়ংক্রিয়ভাবে ইম্পোর্ট হয়নি: এই ফাইলে আপনার স্টকের চেয়ে বেশি অর্ডার আছে, আর আপনার অ্যাকাউন্টে অর্ডার করার সময়েই স্টক আটকে রাখা হয়।',
+  ],
+  'orderImport.switchAndImportOne': [
+    'Switch and import {count} order',
+    '{count}টি অর্ডার সুইচ করে ইম্পোর্ট করুন',
+  ],
+  'orderImport.switchAndImportMany': [
+    'Switch and import {count} orders',
+    '{count}টি অর্ডার সুইচ করে ইম্পোর্ট করুন',
+  ],
   'orderImport.reviewClose': ['Close', 'বন্ধ করুন'],
   'orderImport.reviewOpen': ['Open the check result', 'যাচাইয়ের ফলাফল খুলুন'],
 });

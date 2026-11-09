@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   FileWarning,
   History,
+  PackageX,
   ShieldCheck,
   Upload,
   X,
@@ -115,20 +116,98 @@ interface CsvPreview {
   readonly problems?: ReadonlyArray<{ rowNumber: number; field: string; reason: string }>;
   readonly exceedsRowLimit: boolean;
   readonly rowLimit: number;
+  /**
+   * ORDERS ONLY. What the server says about this file against the stock
+   * the client holds — `null` when there is nothing to say.
+   *
+   * The three sentences are the SERVER's and are rendered verbatim
+   * (FE-2). `blocksImport` is its verdict, not ours: the panel reads it to
+   * decide whether to ASK, and `/process` enforces it either way.
+   */
+  readonly stockCheck?: {
+    readonly holdsAtPlacement: boolean;
+    readonly blocksImport: boolean;
+    readonly oversold: ReadonlyArray<{
+      readonly skuCode: string;
+      readonly requested: number;
+      readonly available: number;
+    }>;
+    readonly headline: string;
+    readonly waysForward: string | null;
+    readonly lasting: string | null;
+    readonly message: string;
+  } | null;
 }
 
 /** "12 orders" for the order importer, "12 rows" for the catalogue one. */
 function importLabel(t: Translate<MessageKey>, kind: Kind, preview: CsvPreview): string {
   const n = kind === 'orders' ? (preview.orderCount ?? preview.rowCount) : preview.rowCount;
-  if (kind === 'orders')
+  if (kind === 'orders') {
+    // The button has to SAY what pressing it does. Importing this file
+    // also switches the client's stock-hold setting, so the label is not
+    // "Import" — a primary action whose consequence is bigger than its
+    // label is the one thing a confirmation step cannot fix.
+    if (preview.stockCheck?.blocksImport === true) {
+      return t(n === 1 ? 'orderImport.switchAndImportOne' : 'orderImport.switchAndImportMany', {
+        count: n,
+      });
+    }
     return t(n === 1 ? 'orderImport.importOrderOne' : 'orderImport.importOrderMany', { count: n });
+  }
   return t(n === 1 ? 'orderImport.importRowOne' : 'orderImport.importRowMany', { count: n });
+}
+
+/**
+ * What this file asks for against what the client holds — the server's own
+ * sentences, in the server's own order, rendered verbatim (FE-2).
+ *
+ * `lasting` is the sentence that must not be glossed: switching the hold
+ * off is account-wide and does not revert on its own. It is emphasised
+ * rather than reworded — the words are still the server's.
+ */
+function StockCheckNotice({
+  t,
+  check,
+}: {
+  readonly t: Translate<MessageKey>;
+  readonly check: NonNullable<CsvPreview['stockCheck']>;
+}): ReactElement {
+  return (
+    <Notice
+      tone={check.blocksImport ? 'bad' : 'warn'}
+      icon={<PackageX size={16} />}
+      title={t(
+        check.blocksImport ? 'orderImport.stockRefusalTitle' : 'orderImport.stockWarningTitle',
+      )}
+    >
+      <div className="ord-stack ord-stack--tight">
+        <span>{check.headline}</span>
+        <ul className="imp-review__list">
+          {check.oversold.map((s) => (
+            <li key={s.skuCode} className="imp-review__item">
+              <span className="imp-review__row sk-ident">{s.skuCode}</span>
+              <span className="imp-review__why sk-figure">
+                {t('orderImport.stockShortfallRow', {
+                  requested: s.requested,
+                  available: s.available,
+                })}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {check.waysForward !== null && <span>{check.waysForward}</span>}
+        {check.lasting !== null && <strong className="ord-strong">{check.lasting}</strong>}
+      </div>
+    </Notice>
+  );
 }
 
 const STOP_KEYS: Record<AutoImportStop, MessageKey> = {
   missing: 'orderImport.autoStopMissing',
   blocked: 'orderImport.autoStopBlocked',
   none: 'orderImport.autoStopNone',
+  // Nothing account-wide and lasting happens without a click.
+  oversell: 'orderImport.autoStopOversell',
 };
 
 export function CsvImportPanel({
@@ -405,7 +484,10 @@ export function CsvImportPanel({
   }
 
   async function confirmImport(
-    target: { spacesKey: string; fileName: string } | null = pending,
+    // The PREVIEW travels with the target rather than being read from
+    // `pending`: the automatic path calls this in the same tick as
+    // `setPending`, where that state is still the PREVIOUS file's.
+    target: { spacesKey: string; fileName: string; preview?: CsvPreview } | null = pending,
     auto = false,
   ): Promise<void> {
     if (target === null || processing.current) return;
@@ -413,9 +495,23 @@ export function CsvImportPanel({
     setError(null);
     setBusy('processing');
     try {
+      /*
+        The ANSWER to the server's own refusal, and only ever that: the
+        flag goes out when THIS checked file is one the server said it
+        would refuse, and the server ignores it when the file turns out
+        not to oversell after all. The dialog above the button is where
+        the consequence is stated — it is account-wide and lasting — and
+        pressing the button is the whole of the consent. Nothing here
+        re-implements the rule (FE-2); it relays an answer.
+      */
+      const switching = target.preview?.stockCheck?.blocksImport === true;
       const job = await client.request<CsvUploadJob>(`${endpointBase}/process`, {
         method: 'POST',
-        body: { spacesKey: target.spacesKey, fileName: target.fileName },
+        body: {
+          spacesKey: target.spacesKey,
+          fileName: target.fileName,
+          ...(switching ? { switchToConfirmationHold: true } : {}),
+        },
       });
       toast.success(t('orderImport.importQueuedRefreshTo'));
       // After an automatic import the dialog stays up with the past-tense
@@ -817,6 +913,10 @@ export function CsvImportPanel({
               </Notice>
             )}
 
+            {pending.preview.stockCheck != null && (
+              <StockCheckNotice t={t} check={pending.preview.stockCheck} />
+            )}
+
             {/* The importer's own grouping, run over the whole file.
                 Column mapping was all this used to check, and a file
                 from another system does not get the columns wrong — it
@@ -958,6 +1058,9 @@ export function CsvImportPanel({
           stopReason={stopReason === null ? undefined : t(STOP_KEYS[stopReason])}
           blockers={
             <>
+              {pending.preview.stockCheck != null && (
+                <StockCheckNotice t={t} check={pending.preview.stockCheck} />
+              )}
               {pending.preview.missingRequired.length > 0 && (
                 <Notice
                   tone="bad"

@@ -23,7 +23,16 @@ import { StoreOrderCsvImportService } from '../../src/modules/order-csv-import/s
 /** `never` is assignable to every parameter, so nothing here claims a shape. */
 const UNUSED = undefined as never;
 function buildSellerTemplateForTest(): string {
-  return new OrderCsvImportService(UNUSED, UNUSED, UNUSED, UNUSED, UNUSED, UNUSED).buildTemplate();
+  return new OrderCsvImportService(
+    UNUSED,
+    UNUSED,
+    UNUSED,
+    UNUSED,
+    UNUSED,
+    UNUSED,
+    UNUSED,
+    UNUSED,
+  ).buildTemplate();
 }
 function buildStoreTemplateForTest(): string {
   return new StoreOrderCsvImportService(

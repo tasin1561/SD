@@ -170,6 +170,13 @@ export class StoreOrderCsvImportService {
       })),
       exceedsRowLimit: parsed.rowCount > this.env.csvMaxRows,
       rowLimit: this.env.csvMaxRows,
+      // A RESELLER store's order takes no at-placement hold at all (R5 /
+      // RS-5), so there is no promise here that an oversell could break.
+      // What a store may not do is order more than it is SHOWN, and that
+      // is already refused at create by name (`RESELLER_QTY_EXCEEDS_VISIBLE`,
+      // ORD-10) — a second count here would be a different number for the
+      // same question.
+      stockCheck: null,
     };
   }
 

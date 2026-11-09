@@ -37,8 +37,13 @@ describe('the preview happens before the import', () => {
   });
 
   it('/process is reached only by an explicit confirm', () => {
-    const confirm = src.slice(src.indexOf('async function confirmImport('));
-    expect(confirm.slice(0, 800)).toContain('`${endpointBase}/process`');
+    // The WHOLE of `confirmImport`, not its first 800 bytes: a fixed
+    // window measures the comments above the call rather than where the
+    // call is, and it went red the first time one of them grew.
+    const from = src.indexOf('async function confirmImport(');
+    const next = src.indexOf('async function ', from + 1);
+    const confirm = src.slice(from, next === -1 ? undefined : next);
+    expect(confirm).toContain('`${endpointBase}/process`');
   });
 });
 
