@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { EnvService } from '../../../config/env.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import {
@@ -9,6 +9,7 @@ import {
   type SolustationFailure,
   type SolustationJudgement,
   type SolustationPincode,
+  type SolustationBatchJob,
 } from '../types/solustation.types';
 
 /** Where their API lives. Host-allow-listed in `URL_VALUED_STRING_KEYS`
@@ -33,6 +34,9 @@ const ADDRESS_MAX = 500;
 
 /** Enough of a body to diagnose, never enough to be a copy of it. */
 const LOG_BODY_CHARS = 400;
+
+/** Their documented ceiling for `POST /v1/validate/batch`. */
+export const BATCH_MAX_ITEMS = 1_000;
 
 export interface ValidateInput {
   readonly referenceId: string;
@@ -135,8 +139,20 @@ export function buildFeedbackBody(input: FeedbackInput): Record<string, unknown>
     status: input.status,
     event_time: input.eventTime,
   };
-  const reasons = (input.ndrReasons ?? []).map((r) => r.trim()).filter((r) => r !== '');
-  if (reasons.length > 0) body['ndr_reasons'] = reasons;
+  /*
+    `undefined` and `[]` mean DIFFERENT things here, and collapsing them
+    was a bug.
+
+    `undefined` is "this is not a failed attempt, the field does not
+    apply". `[]` is "this IS a failed attempt and the courier gave no
+    reason" — which is a fact about the delivery, not an absence of one,
+    and their model is entitled to hear it. An earlier version dropped
+    any empty array, so a silent NDR arrived looking identical to a
+    delivery scan that simply has no reasons field.
+  */
+  if (input.ndrReasons !== undefined) {
+    body['ndr_reasons'] = input.ndrReasons.map((r) => r.trim()).filter((r) => r !== '');
+  }
   return body;
 }
 
@@ -160,7 +176,7 @@ export function buildFeedbackBody(input: FeedbackInput): Record<string, unknown>
  * URL. Never import its code, read its database or touch its files.
  */
 @Injectable()
-export class SolustationHttpService {
+export class SolustationHttpService implements OnModuleInit {
   private readonly logger = new Logger(SolustationHttpService.name);
 
   constructor(
@@ -212,6 +228,48 @@ export class SolustationHttpService {
     await this.request<unknown>('POST', '/v1/feedback', buildFeedbackBody(input));
   }
 
+  /**
+   * `POST /v1/validate/batch` — up to 1,000 addresses, one job.
+   *
+   * For a backlog: a CSV import of 400 orders is 400 checks, and 400
+   * single calls is 400 round trips inside one sweep tick. The batch is
+   * billed identically per item, so this is purely about not holding a
+   * worker open for ten minutes.
+   *
+   * Answers `202 { job_id }` — the results are collected later by
+   * `batchJob` / `batchResults`.
+   */
+  async validateBatch(items: readonly ValidateInput[]): Promise<{ job_id: string }> {
+    if (items.length === 0 || items.length > BATCH_MAX_ITEMS) {
+      throw this.fail(`batch must hold 1-${BATCH_MAX_ITEMS} items, got ${items.length}`, {
+        classification: 'BAD_REQUEST',
+        retryable: false,
+      });
+    }
+    for (const item of items) this.assertAddressLength(item.address);
+    return this.request<{ job_id: string }>('POST', '/v1/validate/batch', {
+      items: items.map(buildValidateBody),
+    });
+  }
+
+  /** `GET /v1/jobs/{id}` — `status` reaches `done` and then stays. */
+  async batchJob(jobId: string): Promise<SolustationBatchJob> {
+    return this.request<SolustationBatchJob>('GET', `/v1/jobs/${encodeURIComponent(jobId)}`);
+  }
+
+  /**
+   * One page of a finished batch, 100 per page, 1-indexed.
+   *
+   * Paged rather than whole because a 1,000-item job answered in one
+   * body is a megabyte of JSON held in a worker's memory for no reason.
+   */
+  async batchResults(jobId: string, page: number): Promise<SolustationBatchJob> {
+    return this.request<SolustationBatchJob>(
+      'GET',
+      `/v1/jobs/${encodeURIComponent(jobId)}?page=${String(page)}`,
+    );
+  }
+
   // ---------- internal ----------
 
   private assertAddressLength(address: string): void {
@@ -226,12 +284,81 @@ export class SolustationHttpService {
     });
   }
 
+  /**
+   * Env first, the system setting as a one-release fallback.
+   *
+   * `SOLUSTATION_ADDRESS_URL` is the source of truth from 2026-11-03.
+   * The setting is still read when env is empty so an un-updated droplet
+   * keeps working through the deploy; when the fallback goes, so does
+   * this branch and the `systemSetting` read with it.
+   */
   private async baseUrl(): Promise<string> {
+    const fromEnv = this.env.soladdrBaseUrl;
+    if (fromEnv !== '') return fromEnv;
     const row = await this.prisma.client.systemSetting.findUnique({
       where: { key: BASE_URL_SETTING },
       select: { valueString: true },
     });
     return (row?.valueString ?? '').trim().replace(/\/+$/, '');
+  }
+
+  /**
+   * Say out loud, once, which configuration is actually in force.
+   *
+   * A fallback that works is invisible, and that is the danger: the day
+   * the old names are removed, a droplet still relying on them stops
+   * checking addresses and the only symptom is every order quietly
+   * reporting `unavailable`. One line at boot makes the difference
+   * between "configured" and "configured the old way" legible before
+   * then. Logs the key's first 8 characters — never more, and never the
+   * key itself.
+   */
+  async onModuleInit(): Promise<void> {
+    const keySource = this.env.soladdrKeySource;
+    if (keySource === null) {
+      this.logger.warn(
+        'Solustation Address is in STUB mode: neither SOLUSTATION_ADDRESS_KEY nor ' +
+          'SOLADDR_API_KEY is set. Address checks will report `unavailable`; orders still save.',
+      );
+      return;
+    }
+
+    const urlSource = this.env.soladdrBaseUrl !== '' ? 'SOLUSTATION_ADDRESS_URL' : BASE_URL_SETTING;
+    this.logger.log(
+      {
+        keySource,
+        keyPrefix: this.env.soladdrKeyPrefix,
+        urlSource,
+        baseUrl: await this.baseUrl(),
+      },
+      'Solustation Address configured',
+    );
+
+    if (keySource === 'SOLADDR_API_KEY') {
+      this.logger.warn(
+        'Solustation key came from the DEPRECATED SOLADDR_API_KEY. Set ' +
+          'SOLUSTATION_ADDRESS_KEY; the fallback is removed next release.',
+      );
+    }
+    if (urlSource === BASE_URL_SETTING) {
+      this.logger.warn(
+        `Solustation base URL came from the DEPRECATED \`${BASE_URL_SETTING}\` setting. ` +
+          'Set SOLUSTATION_ADDRESS_URL; the fallback is removed next release.',
+      );
+    }
+    /*
+      A test key in production is the quietest possible wrong answer:
+      every call returns 200 with a plausible verdict derived from FAKE
+      map providers, nothing is billed, and no error is ever raised. It
+      has already happened once on a dev machine, where `.env.local`
+      shadowed `.env` — hence an error-level line rather than a warning.
+    */
+    if (this.env.soladdrKeyIsTestInProduction) {
+      this.logger.error(
+        `Solustation key ${this.env.soladdrKeyPrefix} is a TEST key and NODE_ENV=production. ` +
+          'Every verdict is coming from fake map providers. Replace it with an sa_live_ key.',
+      );
+    }
   }
 
   private async request<T>(

@@ -3751,8 +3751,16 @@ model AddressCheck {
   storeId            String?   @map("store_id") @db.Uuid
   /// Who was at the screen. Ownership of the row for read/update: only
   /// the actor who opened the draft may go on checking it.
+  ///
+  /// NULL when nobody was at a screen. A check the backfill sweep made
+  /// for an order placed through the seller API, a member store, or a
+  /// CSV import has `SYSTEM` and no id — there is no draft to own and
+  /// no operator to go on checking it. Nullable rather than a sentinel
+  /// uuid because "no actor" is the truth, and a fake id would match
+  /// nobody while looking like somebody (the same reason `audit_logs`
+  /// leaves `actor_id` null for its own SYSTEM rows).
   createdByActorType ActorType @map("created_by_actor_type")
-  createdByActorId   String    @map("created_by_actor_id") @db.Uuid
+  createdByActorId   String?   @map("created_by_actor_id") @db.Uuid
 
   /// Their id for the FIRST check. Every re-check of an edited address
   /// goes to /v1/corrections carrying this, because re-sending

@@ -42,6 +42,8 @@ export interface AddressCheckView {
   readonly rtoRisk: number | null;
   readonly rtoRiskStatus: string | null;
   readonly rechecked: boolean;
+  readonly questions: ReadonlyArray<{ field: string; text: string; options?: readonly string[] }>;
+  readonly providersUsed: readonly string[];
 }
 
 export interface PincodeView {

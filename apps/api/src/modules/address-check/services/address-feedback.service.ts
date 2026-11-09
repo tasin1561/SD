@@ -132,9 +132,11 @@ export class AddressFeedbackService {
       select: {
         eventAt: true,
         status: true,
-        // The courier's own words for this scan, used only for an NDR.
-        rawCourierStatus: true,
         courierCode: true,
+        // The two halves of the join to the courier's REMARK — see
+        // `ndrRemarks`. The remark does not live on the scan.
+        shipmentId: true,
+        webhookId: true,
         shipment: { select: { awbNumber: true, courierCode: true } },
       },
       // TRK-3: `eventAt` is the SCAN time, not our intake. It is what
@@ -143,6 +145,8 @@ export class AddressFeedbackService {
       take: MAX_EVENTS_PER_CHECK,
     });
     if (events.length === 0) return 0;
+
+    const remarks = await this.ndrRemarks(events);
 
     let sent = 0;
     let watermark = check.feedbackWatermarkAt;
@@ -156,12 +160,21 @@ export class AddressFeedbackService {
           courier: e.courierCode ?? e.shipment.courierCode,
           awb: e.shipment.awbNumber,
           status,
-          // The courier's OWN words, and only for a failed attempt.
-          // Nothing of ours goes in here — it is the field their model
-          // reads as the courier speaking.
-          ...(status === 'ndr' && e.rawCourierStatus != null
-            ? { ndrReasons: [e.rawCourierStatus] }
-            : {}),
+          /*
+            The courier's OWN words, and only for a failed attempt.
+
+            This is `delivery_attempts.failure_notes` — the remark text
+            as the courier wrote it ("Address incomplete", "Customer not
+            available"). It is NOT `rawCourierStatus`, which an earlier
+            version sent: that is the STATUS string ("UD", "Undelivered")
+            and it already travels in `status`. Sending it twice told
+            their model nothing and cost it the one free-text signal the
+            NDR carries — the whole reason the field exists.
+
+            An NDR with no remark sends `[]`, not nothing: see
+            `buildFeedbackBody`.
+          */
+          ...(status === 'ndr' ? { ndrReasons: remarks.for(e) } : {}),
           eventTime: e.eventAt.toISOString(),
         });
         sent += 1;
@@ -176,5 +189,67 @@ export class AddressFeedbackService {
       });
     }
     return sent;
+  }
+
+  /**
+   * The courier's remark for each failed-attempt scan in this batch.
+   *
+   * ── WHY IT IS A SEPARATE LOOKUP ──────────────────────────────────────
+   * A scan and its remark are written by the same saga but to DIFFERENT
+   * tables: `tracking_events` carries what happened, `delivery_attempts`
+   * carries why it failed, and `failure_notes` on the latter is the only
+   * place the courier's free text survives (TRK's visible-vs-silent
+   * ordering writes the attempt FIRST, precisely so the reason is durable
+   * even if the scan write fails). There is no column on the scan to read.
+   *
+   * ── MATCHED BY WEBHOOK FIRST, THEN BY TIME ───────────────────────────
+   * A webhook-sourced pair shares a `webhookId`, which is exact. A
+   * POLL-sourced pair has no webhook at all, so it falls back to
+   * `(shipmentId, attemptedAt)` — the processor passes the scan's own
+   * `eventAt` as `attemptedAt`, so the two are equal by construction.
+   * A miss returns `[]` rather than guessing: an adjacent attempt's
+   * remark attached to the wrong scan would be worse than silence.
+   *
+   * One query per sweep batch, not one per scan.
+   */
+  private async ndrRemarks(
+    events: ReadonlyArray<{
+      readonly status: ShipmentStatus;
+      readonly shipmentId: string;
+      readonly webhookId: string | null;
+      readonly eventAt: Date;
+    }>,
+  ): Promise<{
+    for: (e: { webhookId: string | null; shipmentId: string; eventAt: Date }) => string[];
+  }> {
+    const failed = events.filter((e) => FEEDBACK_STATUS[e.status] === 'ndr');
+    const byWebhook = new Map<string, string>();
+    const byScan = new Map<string, string>();
+    const scanKey = (shipmentId: string, at: Date): string => `${shipmentId}|${at.toISOString()}`;
+
+    if (failed.length > 0) {
+      const attempts = await this.prisma.client.deliveryAttempt.findMany({
+        where: {
+          shipmentId: { in: [...new Set(failed.map((e) => e.shipmentId))] },
+          attemptedAt: { in: failed.map((e) => e.eventAt) },
+          failureNotes: { not: null },
+        },
+        select: { shipmentId: true, webhookId: true, attemptedAt: true, failureNotes: true },
+      });
+      for (const a of attempts) {
+        const note = (a.failureNotes ?? '').trim();
+        if (note === '') continue;
+        if (a.webhookId !== null) byWebhook.set(a.webhookId, note);
+        byScan.set(scanKey(a.shipmentId, a.attemptedAt), note);
+      }
+    }
+
+    return {
+      for: (e): string[] => {
+        const byId = e.webhookId === null ? undefined : byWebhook.get(e.webhookId);
+        const note = byId ?? byScan.get(scanKey(e.shipmentId, e.eventAt));
+        return note === undefined ? [] : [note];
+      },
+    };
   }
 }

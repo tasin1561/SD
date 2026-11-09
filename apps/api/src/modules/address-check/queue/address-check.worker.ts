@@ -5,14 +5,28 @@ import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { AddressCheckRetryService } from '../services/address-check-retry.service';
 import { AddressFeedbackService } from '../services/address-feedback.service';
+import { OrderAddressCheckBackfillService } from '../services/order-address-check-backfill.service';
 import {
   ADDRESS_CHECK_QUEUE_NAME,
   AddressCheckQueue,
+  JOB_BACKFILL_CHECKS,
+  JOB_COLLECT_BATCH,
   JOB_RETRY_CHECK,
   JOB_SEND_FEEDBACK,
   RETRY_BACKOFF_MS,
+  type CollectBatchJob,
   type RetryCheckJob,
 } from './address-check.queue';
+
+/**
+ * How many times a batch is asked whether it is finished.
+ *
+ * 24 polls at 5 seconds is two minutes, which is generous for a job the
+ * vendor answers in about a second per item. Bounded because an
+ * unbounded poll chain on a job that never completes is a queue that
+ * never empties.
+ */
+const MAX_BATCH_POLLS = 24;
 
 /**
  * The address check's background half: re-asking about a check that
@@ -36,6 +50,7 @@ export class AddressCheckWorker implements OnModuleInit, OnModuleDestroy {
     private readonly queue: AddressCheckQueue,
     private readonly retry: AddressCheckRetryService,
     private readonly feedback: AddressFeedbackService,
+    private readonly backfill: OrderAddressCheckBackfillService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -60,6 +75,20 @@ export class AddressCheckWorker implements OnModuleInit, OnModuleDestroy {
             return;
           }
           await this.retry.retryOne(referenceId);
+          return;
+        }
+        if (job.name === JOB_BACKFILL_CHECKS) {
+          const result = await this.backfill.sweep();
+          if (result.found > 0) this.logger.log(result, 'Backfilled order address checks');
+          // A batch was opened rather than checked one at a time, so
+          // somebody has to go back for the answers.
+          if (result.batchJobId !== null) {
+            await this.queue.enqueueCollect({ jobId: result.batchJobId, polls: 0 });
+          }
+          return;
+        }
+        if (job.name === JOB_COLLECT_BATCH) {
+          await this.collectBatch(job.data as CollectBatchJob);
           return;
         }
         this.logger.warn({ name: job.name }, 'Unknown address-check job; ignoring');
@@ -93,5 +122,38 @@ export class AddressCheckWorker implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     await this.worker?.close();
+  }
+
+  /**
+   * Ask whether a batch is done; if not, ask again later.
+   *
+   * ── WHY IT RE-ENQUEUES INSTEAD OF LOOPING ────────────────────────────
+   * A 1,000-item job takes as long as it takes, and a worker sitting in
+   * a sleep loop is a worker not sending feedback or re-asking a failed
+   * check. Each poll is its own short job, so the concurrency-2 worker
+   * stays available throughout.
+   *
+   * ── AND WHY GIVING UP IS SAFE ────────────────────────────────────────
+   * After `MAX_BATCH_POLLS` it stops asking and says so. Nothing is lost:
+   * the orders in that batch still have no `address_checks` row, so the
+   * next backfill sweep finds them and opens a new batch carrying the
+   * SAME reference ids — which Solustation answers from storage, free.
+   * That is the same recovery path as a dropped job or a restart, which
+   * is why none of those cases needs its own handling.
+   */
+  private async collectBatch(data: CollectBatchJob): Promise<void> {
+    const { done, stored } = await this.backfill.collectBatch(data.jobId);
+    if (done) {
+      if (stored > 0) this.logger.log({ jobId: data.jobId, stored }, 'Batch checks stored');
+      return;
+    }
+    if (data.polls + 1 >= MAX_BATCH_POLLS) {
+      this.logger.warn(
+        { jobId: data.jobId, polls: data.polls + 1 },
+        'Batch still not done; giving up — the next backfill sweep will re-open it',
+      );
+      return;
+    }
+    await this.queue.enqueueCollect({ jobId: data.jobId, polls: data.polls + 1 });
   }
 }

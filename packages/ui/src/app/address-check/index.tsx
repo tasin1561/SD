@@ -9,6 +9,8 @@ import {
   MapPin,
   RefreshCw,
   ShieldCheck,
+  Undo2,
+  WandSparkles,
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
@@ -112,6 +114,10 @@ export interface AddressCheckResult {
   readonly rtoRisk: number | null;
   readonly rtoRiskStatus: string | null;
   readonly rechecked: boolean;
+  /** What to ask the customer, in the order to ask it. Shown verbatim. */
+  readonly questions: ReadonlyArray<{ field: string; text: string; options?: readonly string[] }>;
+  /** Data providers behind the answer; `ola` requires attribution. */
+  readonly providersUsed: readonly string[];
 }
 
 export interface AddressCheckPanelProps {
@@ -136,6 +142,22 @@ export interface AddressCheckPanelProps {
   readonly confirmedWithCustomer?: boolean;
   readonly onConfirmedWithCustomerChange?: (next: boolean) => void;
   readonly className?: string;
+  /** Display only: suggestions render as plain chips, nothing is clickable. */
+  readonly readOnly?: boolean;
+  /**
+   * ── THE SUGGESTED LABEL ADDRESS, AS SOMETHING YOU CAN TAKE ─────────
+   * Opt-in, and only the client's order page opts in today. A console
+   * that passes neither callback gets exactly the panel it had: the
+   * suggested address as text, with nothing to press.
+   *
+   * `labelAddressApplied` is the state of ONE toggle, so the panel can
+   * only ever offer the action that is not already true — Undo when it
+   * is in the form, "use it" when it is not. A panel that offered both
+   * would be asking the operator to work out which one they are in.
+   */
+  readonly labelAddressApplied?: boolean;
+  readonly onApplyLabelAddress?: (() => void) | undefined;
+  readonly onUndoLabelAddress?: (() => void) | undefined;
 }
 
 /** The three verdicts mapped onto the status kinds the brand already
@@ -204,6 +226,10 @@ export function AddressCheckPanel({
   confirmedWithCustomer = false,
   onConfirmedWithCustomerChange,
   className,
+  readOnly = false,
+  labelAddressApplied = false,
+  onApplyLabelAddress,
+  onUndoLabelAddress,
 }: AddressCheckPanelProps): ReactElement {
   const t = useUiT();
   const kind = result === null ? 'neutral' : result.available ? ACTION_KIND[result.action] : 'held';
@@ -254,6 +280,10 @@ export function AddressCheckPanel({
             allPostOffices={allPostOffices}
             confirmed={confirmedWithCustomer}
             onConfirmedChange={onConfirmedWithCustomerChange}
+            readOnly={readOnly}
+            labelAddressApplied={labelAddressApplied}
+            onApplyLabelAddress={onApplyLabelAddress}
+            onUndoLabelAddress={onUndoLabelAddress}
           />
         )}
       </div>
@@ -315,12 +345,20 @@ function Verdict({
   allPostOffices,
   confirmed,
   onConfirmedChange,
+  readOnly,
+  labelAddressApplied,
+  onApplyLabelAddress,
+  onUndoLabelAddress,
 }: {
+  readOnly: boolean;
   result: AddressCheckResult;
   onApplySuggestion?: ((field: string, value: string) => void) | undefined;
   allPostOffices?: ReadonlyArray<{ name: string; type: string | null }> | undefined;
   confirmed: boolean;
   onConfirmedChange?: ((next: boolean) => void) | undefined;
+  labelAddressApplied: boolean;
+  onApplyLabelAddress?: (() => void) | undefined;
+  onUndoLabelAddress?: (() => void) | undefined;
 }): ReactElement {
   const t = useUiT();
   const Icon = ACTION_ICON[result.action];
@@ -342,8 +380,37 @@ function Verdict({
         </ul>
       ) : null}
 
+      {result.questions.length > 0 ? (
+        <div className="sk-ac__qs">
+          <p className="sk-ac__qs-title">{t('ui.ac.questions.title')}</p>
+          <ol className="sk-ac__qs-list">
+            {result.questions.map((q, i) => (
+              <li className="sk-ac__q" key={`${q.field}-${i}`}>
+                {result.questions.length > 1 ? (
+                  <span className="sk-ac__q-n" aria-hidden="true">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                ) : null}
+                <span className="sk-ac__q-body">
+                  <span className="sk-ac__q-text">{q.text}</span>
+                  {q.options !== undefined && q.options.length > 0 ? (
+                    <span className="sk-ac__sugg-list">
+                      {q.options.map((o) => (
+                        <span key={o} className="sk-ac__cand sk-ac__cand--static">
+                          {o}
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
+
       {result.suggestions.map((s) =>
-        CONFIRM_ONLY_FIELDS.has(s.field) ? (
+        CONFIRM_ONLY_FIELDS.has(s.field) || readOnly ? (
           <div className="sk-ac__sugg sk-ac__sugg--confirm" key={s.field}>
             <span className="sk-ac__sugg-label">
               <AlertTriangle size={13} aria-hidden="true" />
@@ -421,13 +488,42 @@ function Verdict({
           words go on the parcel — a label address we are unsure of is
           how a deliverable parcel reaches the wrong post office. */}
       {result.poConfidence === 'high' && result.completedAddress !== null ? (
-        <p className="sk-ac__label-addr">
-          <ShieldCheck size={14} aria-hidden="true" />
-          <span>
-            <strong>{t('ui.ac.labelAddress')}</strong>
-            {result.completedAddress}
-          </span>
-        </p>
+        <div className="sk-ac__label-addr">
+          <p className="sk-ac__label-addr-text">
+            <ShieldCheck size={14} aria-hidden="true" />
+            <span>
+              <strong>{t('ui.ac.labelAddress')}</strong>
+              {result.completedAddress}
+            </span>
+          </p>
+          {/* ONE action, never both — the panel knows which state the
+              form is in, so the operator does not have to work it out.
+              Nothing renders at all for a console that passed no
+              callbacks, which is every console but the client's. */}
+          {labelAddressApplied && onUndoLabelAddress !== undefined ? (
+            <p className="sk-ac__label-addr-act">
+              <span className="sk-ac__label-addr-done">
+                <CheckCircle2 size={13} aria-hidden="true" />
+                {t('ui.ac.labelApplied')}
+              </span>
+              <button type="button" className="sk-ac__label-btn" onClick={onUndoLabelAddress}>
+                <Undo2 size={13} aria-hidden="true" />
+                {t('ui.ac.labelUndo')}
+              </button>
+            </p>
+          ) : !labelAddressApplied && onApplyLabelAddress !== undefined ? (
+            <p className="sk-ac__label-addr-act">
+              <button
+                type="button"
+                className="sk-ac__label-btn sk-ac__label-btn--go"
+                onClick={onApplyLabelAddress}
+              >
+                <WandSparkles size={13} aria-hidden="true" />
+                {t('ui.ac.labelUse')}
+              </button>
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       <p className="sk-ac__rto">
@@ -438,6 +534,10 @@ function Verdict({
 
       {result.action === 'confirm_with_customer' && onConfirmedChange !== undefined ? (
         <ConfirmBox confirmed={confirmed} onChange={onConfirmedChange} />
+      ) : null}
+
+      {result.providersUsed.some((p) => p.toLowerCase() === 'ola') ? (
+        <p className="sk-ac__attr">{t('ui.ac.attribution.ola')}</p>
       ) : null}
     </>
   );

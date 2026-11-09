@@ -100,13 +100,52 @@ export class EnvService {
     return this.env.CHATWOOT_HMAC_SECRET;
   }
 
-  // Order page v2 — Solustation Address. Stub mode when the key is
-  // empty: checks report `unavailable` and nothing is ever blocked.
+  /*
+    ── SOLUSTATION ADDRESS: NEW NAMES WIN, OLD NAMES STILL WORK ────────
+    `SOLUSTATION_ADDRESS_KEY` / `_URL` are the source of truth as of
+    2026-11-03. `SOLADDR_API_KEY` (and, for the URL, the
+    `address_check.base_url` system setting read by the HTTP client)
+    remain as a fallback for ONE release so that a droplet whose env has
+    not been updated keeps checking addresses instead of silently going
+    to stub mode — which looks exactly like a working deploy.
+
+    `soladdrKeySource` exists so the boot log can say WHICH it used.
+    Without that, a fallback is indistinguishable from a correct
+    configuration until the fallback is removed and checks stop.
+  */
   get soladdrApiKey(): string {
-    return this.env.SOLADDR_API_KEY;
+    const preferred = this.env.SOLUSTATION_ADDRESS_KEY.trim();
+    return preferred !== '' ? preferred : this.env.SOLADDR_API_KEY;
   }
   get hasSoladdrApiKey(): boolean {
-    return this.env.SOLADDR_API_KEY.trim() !== '';
+    return this.soladdrApiKey.trim() !== '';
+  }
+  /** Which variable supplied the key, or null when neither did. */
+  get soladdrKeySource(): 'SOLUSTATION_ADDRESS_KEY' | 'SOLADDR_API_KEY' | null {
+    if (this.env.SOLUSTATION_ADDRESS_KEY.trim() !== '') return 'SOLUSTATION_ADDRESS_KEY';
+    if (this.env.SOLADDR_API_KEY.trim() !== '') return 'SOLADDR_API_KEY';
+    return null;
+  }
+  /** Empty when env carries no URL — the client then falls back to the
+   *  `address_check.base_url` setting. */
+  get soladdrBaseUrl(): string {
+    return this.env.SOLUSTATION_ADDRESS_URL.trim().replace(/\/+$/, '');
+  }
+  /**
+   * The ONLY part of the key that may ever be printed.
+   *
+   * Eight characters is what Solustation itself stores beside the hash,
+   * so it is the agreed-safe identifier for "which key is this" — and it
+   * is enough to tell `sa_live_` from `sa_test_`, which is the mistake
+   * worth catching.
+   */
+  get soladdrKeyPrefix(): string {
+    return this.soladdrApiKey.trim().slice(0, 8);
+  }
+  /** A test key in production means every answer came from fake map
+   *  providers while looking entirely normal. */
+  get soladdrKeyIsTestInProduction(): boolean {
+    return this.isProduction && this.soladdrKeyPrefix.startsWith('sa_test_');
   }
 
   get sellerAppUrl(): string {

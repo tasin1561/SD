@@ -13,23 +13,48 @@ const CHECK = {
   feedbackWatermarkAt: null as Date | null,
 };
 
+const SCAN_AT = new Date('2026-10-28T11:04:00.000Z');
+
 function event(status: ShipmentStatus, over: Record<string, unknown> = {}) {
   return {
-    eventAt: new Date('2026-10-28T11:04:00.000Z'),
+    eventAt: SCAN_AT,
     status,
-    rawCourierStatus: null,
     courierCode: 'delhivery',
+    // The join to the courier's remark: a webhook-sourced scan matches
+    // its attempt by `webhookId`, a poll-sourced one by shipment + time.
+    shipmentId: 's-1',
+    webhookId: null,
     shipment: { awbNumber: '38061110571491', courierCode: 'delhivery' },
     ...over,
   };
 }
 
-function makeService(opts: { events?: unknown[]; checks?: unknown[]; live?: boolean } = {}) {
+/**
+ * A `delivery_attempts` row — where `failure_notes` actually lives.
+ *
+ * The remark is NOT on the scan; these two tables are written by the
+ * same saga and joined after the fact, so a fake that omits this model
+ * makes every NDR look like a courier that said nothing.
+ */
+function attempt(over: Record<string, unknown> = {}) {
+  return {
+    shipmentId: 's-1',
+    webhookId: null,
+    attemptedAt: SCAN_AT,
+    failureNotes: 'Address incomplete',
+    ...over,
+  };
+}
+
+function makeService(
+  opts: { events?: unknown[]; checks?: unknown[]; live?: boolean; attempts?: unknown[] } = {},
+) {
   const update = jest.fn(async () => ({}));
   const prisma = {
     client: {
       addressCheck: { findMany: jest.fn(async () => opts.checks ?? [CHECK]), update },
       trackingEvent: { findMany: jest.fn(async () => opts.events ?? []) },
+      deliveryAttempt: { findMany: jest.fn(async () => opts.attempts ?? []) },
     },
   } as unknown as PrismaService;
   // Typed args so `mock.calls[0][0]` is readable — a bare
@@ -80,21 +105,66 @@ describe('AddressFeedbackService — the mapping is a training signal', () => {
     expect(feedback).not.toHaveBeenCalled();
   });
 
-  it('the courier’s own words go in ndr_reasons, and only for an NDR', async () => {
+  /*
+    ── THE REMARK, NOT THE STATUS ───────────────────────────────────────
+    `ndr_reasons` is the one free-text signal a failed delivery carries,
+    and for a while it was being fed the STATUS string — which already
+    travels in `status`, so their model received the same word twice and
+    never learned why the parcel bounced. These four tests pin the
+    corrected contract from both ends.
+  */
+  it('ndr_reasons carries the courier’s remark from delivery_attempts', async () => {
     const { svc, feedback } = makeService({
-      events: [
-        event(ShipmentStatus.DELIVERY_ATTEMPTED, { rawCourierStatus: 'Customer not available' }),
-      ],
+      events: [event(ShipmentStatus.DELIVERY_ATTEMPTED, { webhookId: 'wh-1' })],
+      attempts: [attempt({ webhookId: 'wh-1', failureNotes: 'Customer not available' })],
     });
     await svc.sweep();
     expect(feedback).toHaveBeenCalledWith(
-      expect.objectContaining({ ndrReasons: ['Customer not available'] }),
+      expect.objectContaining({ status: 'ndr', ndrReasons: ['Customer not available'] }),
     );
   });
 
-  it('a delivered scan carries no ndr_reasons even when the courier said something', async () => {
+  it('a poll-sourced NDR, which has no webhook, matches on shipment and scan time', async () => {
     const { svc, feedback } = makeService({
-      events: [event(ShipmentStatus.DELIVERED, { rawCourierStatus: 'Left with neighbour' })],
+      events: [event(ShipmentStatus.DELIVERY_ATTEMPTED)],
+      attempts: [attempt({ failureNotes: 'Premises locked' })],
+    });
+    await svc.sweep();
+    expect(feedback).toHaveBeenCalledWith(
+      expect.objectContaining({ ndrReasons: ['Premises locked'] }),
+    );
+  });
+
+  it('an NDR whose courier gave no remark sends an empty list, not nothing', async () => {
+    // `[]` is a fact about the delivery — "it failed and nobody said
+    // why". Dropping the field would make it indistinguishable from a
+    // scan to which the question does not apply.
+    const { svc, feedback } = makeService({
+      events: [event(ShipmentStatus.DELIVERY_ATTEMPTED)],
+      attempts: [],
+    });
+    await svc.sweep();
+    expect(feedback).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'ndr', ndrReasons: [] }),
+    );
+  });
+
+  it('the status string never leaks into ndr_reasons', async () => {
+    const { svc, feedback } = makeService({
+      events: [event(ShipmentStatus.DELIVERY_ATTEMPTED)],
+      attempts: [attempt({ failureNotes: 'Address incomplete' })],
+    });
+    await svc.sweep();
+    const sent = feedback.mock.calls[0]?.[0];
+    expect(sent?.ndrReasons).toEqual(['Address incomplete']);
+    expect(sent?.ndrReasons).not.toContain('Undelivered');
+    expect(sent?.ndrReasons).not.toContain(ShipmentStatus.DELIVERY_ATTEMPTED);
+  });
+
+  it('a delivered scan carries no ndr_reasons even when an attempt row exists', async () => {
+    const { svc, feedback } = makeService({
+      events: [event(ShipmentStatus.DELIVERED)],
+      attempts: [attempt({ failureNotes: 'Left with neighbour' })],
     });
     await svc.sweep();
     expect(feedback.mock.calls[0]?.[0]).not.toHaveProperty('ndrReasons');

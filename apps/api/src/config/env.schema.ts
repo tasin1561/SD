@@ -214,7 +214,27 @@ export const envSchema = z.object({
   // unavailable" and every order still saves. An address check is
   // advice about a delivery, and a delivery that was going to be
   // attempted is still attempted.
+  // DEPRECATED, one release only. Superseded by
+  // SOLUSTATION_ADDRESS_KEY below; still read as a fallback so a deploy
+  // that has not had its env updated yet keeps working. Remove both
+  // this and the `address_check.base_url` fallback together.
   SOLADDR_API_KEY: z.string().optional().default(''),
+
+  // --- Solustation Address (2026-11-03) ------------------------------
+  // The owner's chosen spelling, and the source of truth from now on.
+  // The base URL moves OUT of system_settings and into env to join the
+  // key: a value every single request needs should not cost a DB read,
+  // and the pair is easier to get right when both halves live in one
+  // file. `address_check.base_url` stays as a fallback for one release.
+  //
+  // Both empty is still valid and still means STUB — an address check is
+  // advice about a delivery, and a delivery that was going to be
+  // attempted is still attempted.
+  SOLUSTATION_ADDRESS_KEY: z.string().optional().default(''),
+  SOLUSTATION_ADDRESS_URL: z
+    .union([z.string().url(), z.literal('')])
+    .optional()
+    .default(''),
 
   // --- Phase 1B #2 — Bank account number encryption ------------------
   // AES-256-GCM key (32 bytes / 64 hex chars) for encrypting the

@@ -30,6 +30,7 @@ import { StuckOrderRecovery } from './stuck-order-recovery';
 import { useOrderJourney } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { ConsigneePanel } from './consignee-panel';
+import { OrderAddressCheckPanel } from './address-check-panel';
 import { ResellerOrderPanel } from './reseller-order-panel';
 import { ResellerMoneyPanel } from './reseller-money-panel';
 import { BackLink, Facts, OoSection } from './order-ops-parts';
@@ -283,6 +284,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               {/* Correcting the consignee sits with the parcel: it is only
                   ever done while looking at a delivery about to go wrong. */}
               <ConsigneePanel orderId={orderId} />
+              <OrderAddressCheckPanel orderId={orderId} />
             </div>
           </section>
 

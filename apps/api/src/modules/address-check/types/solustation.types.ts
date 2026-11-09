@@ -53,7 +53,32 @@ export type SolustationPoConfidence = 'high' | 'medium';
  * The answer from `POST /v1/validate` and `POST /v1/corrections` — the
  * same shape, which is why one type serves both.
  */
+/**
+ * `GET /v1/jobs/{id}` — a batch of validations in flight, then done.
+ *
+ * `results` is present only once `status` is `done`, and is paged 100 at
+ * a time. Each entry carries the `reference_id` it was asked about,
+ * which for a backfilled order IS the order id — that is how a result
+ * finds its way home without the job remembering any of our ids.
+ */
+export interface SolustationBatchJob {
+  readonly job_id: string;
+  readonly status: 'queued' | 'running' | 'done' | 'failed' | string;
+  readonly total?: number;
+  readonly page?: number;
+  readonly pages?: number;
+  readonly results?: ReadonlyArray<
+    { readonly reference_id: string } & Partial<SolustationJudgement>
+  >;
+}
+
 export interface SolustationJudgement {
+  /** Scripted questions for the caller to put to the customer, in order. */
+  readonly questions?: ReadonlyArray<{
+    field: string;
+    text: string;
+    options?: readonly string[];
+  }>;
   readonly status?: SolustationStatus;
   readonly recommended_action?: SolustationAction;
   readonly validity_score?: number;

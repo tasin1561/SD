@@ -7,14 +7,47 @@ export const ADDRESS_CHECK_QUEUE_NAME = 'address-check';
 export const JOB_RETRY_CHECK = 'retry-check';
 /** Tell Solustation what the courier did with an address. */
 export const JOB_SEND_FEEDBACK = 'send-feedback';
+/**
+ * Check an India order that came in by a door with no order page —
+ * the seller API, a member store, a CSV import, the staged-row queue.
+ */
+export const JOB_BACKFILL_CHECKS = 'backfill-checks';
+/** Collect a `POST /v1/validate/batch` job once it is done. */
+export const JOB_COLLECT_BATCH = 'collect-batch';
 /** Every 12 minutes — inside the owner's "every 10-15 min" window. */
 export const FEEDBACK_SWEEP_CRON = '*/12 * * * *';
 /** Hourly: the unavailable checks whose turn has come. */
 export const RETRY_SWEEP_CRON = '7 * * * *';
+/**
+ * Every 2 minutes.
+ *
+ * Far tighter than the other two sweeps because this one stands between
+ * an order being placed and anybody being able to see a verdict on it,
+ * and the brief asks for the check to happen "after the order row is
+ * committed, in the background" — two minutes is the closest a sweep
+ * gets to that without becoming a poll. It is cheap when idle: one
+ * indexed query that returns nothing.
+ */
+export const BACKFILL_SWEEP_CRON = '*/2 * * * *';
+/** How long to wait before asking a batch job whether it is done. */
+export const BATCH_POLL_DELAY_MS = 5_000;
 
 export interface RetryCheckJob {
   /** Nothing else: the row holds the address, and the row is the truth. */
   referenceId: string;
+}
+
+export interface CollectBatchJob {
+  /**
+   * Their job id, and the ONLY state a batch keeps.
+   *
+   * Deliberately not a table: a lost job costs nothing, because the next
+   * backfill sweep sees the same unchecked orders and opens a new batch
+   * carrying the same reference ids — which Solustation answers for free.
+   */
+  jobId: string;
+  /** Guards against polling a job that never finishes. */
+  polls: number;
 }
 
 /**
@@ -89,6 +122,24 @@ export class AddressCheckQueue implements OnModuleInit, OnModuleDestroy {
     return String(job.id);
   }
 
+  /**
+   * Ask again, later, whether a batch job has finished.
+   *
+   * Delayed rather than looped inside the worker: a 1,000-item job can
+   * take a while, and a worker sleeping through it is a worker not doing
+   * anything else. The job id is in the payload, so nothing of ours has
+   * to remember it.
+   */
+  async enqueueCollect(data: CollectBatchJob, delayMs = BATCH_POLL_DELAY_MS): Promise<string> {
+    const job = await this.queue.add(JOB_COLLECT_BATCH, data, {
+      // Per job id AND per poll, so a re-poll is a new job rather than
+      // BullMQ handing back the completed previous one.
+      jobId: `collect:${data.jobId}:${String(data.polls)}`,
+      delay: delayMs,
+    });
+    return String(job.id);
+  }
+
   /** The repeatables. Registered on boot; BullMQ dedupes by name. */
   async registerSweeps(): Promise<void> {
     await this.queue.add(
@@ -100,6 +151,11 @@ export class AddressCheckQueue implements OnModuleInit, OnModuleDestroy {
       JOB_RETRY_CHECK,
       { referenceId: '' },
       { repeat: { pattern: RETRY_SWEEP_CRON }, jobId: 'retry-sweep' },
+    );
+    await this.queue.add(
+      JOB_BACKFILL_CHECKS,
+      {},
+      { repeat: { pattern: BACKFILL_SWEEP_CRON }, jobId: 'backfill-sweep' },
     );
   }
 

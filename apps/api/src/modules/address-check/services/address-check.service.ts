@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ActorType, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SolustationHttpService } from './solustation-http.service';
+import { retryOnceOnTransient } from './solustation-retry';
 import {
   isSolustationError,
   type SolustationJudgement,
@@ -56,6 +57,10 @@ export interface AddressCheckView {
   /** True when this answer came from /v1/corrections rather than a
    *  first check — the page says "re-checked" rather than "checked". */
   readonly rechecked: boolean;
+  /** What to ask the customer, in order. Verbatim from the vendor. */
+  readonly questions: ReadonlyArray<{ field: string; text: string; options?: readonly string[] }>;
+  /** Which data providers produced the answer (`ola` needs attribution). */
+  readonly providersUsed: readonly string[];
 }
 
 /**
@@ -127,22 +132,42 @@ export class AddressCheckService {
     const validationId = ours ? existing.validationId : null;
 
     try {
-      const judgement =
-        validationId === null
-          ? await this.http.validate({
-              referenceId: input.referenceId,
-              address: input.address,
-              pincode: input.pincode,
-              landmark: input.landmark,
-              paymentType: input.paymentType,
-            })
-          : await this.http.correction({
-              validationId,
-              source: 'operator_fixed',
-              address: input.address,
-              pincode: input.pincode,
-              landmark: input.landmark,
-            });
+      /*
+        ONE immediate second attempt on a transient failure, from the
+        brief. Free and idempotent: the reference id is the same, so
+        Solustation bills nothing and returns the stored answer if the
+        first attempt in fact got through.
+
+        Still inside the operator's wait, which is why it is capped at
+        one and why a long `Retry-After` declines to wait at all — the
+        60-second sweep is the patient path. A throw from here lands
+        `unavailable`, which never approves anything.
+      */
+      const judgement = await retryOnceOnTransient(
+        async () =>
+          validationId === null
+            ? await this.http.validate({
+                referenceId: input.referenceId,
+                address: input.address,
+                pincode: input.pincode,
+                landmark: input.landmark,
+                paymentType: input.paymentType,
+              })
+            : await this.http.correction({
+                validationId,
+                source: 'operator_fixed',
+                address: input.address,
+                pincode: input.pincode,
+                landmark: input.landmark,
+              }),
+        {
+          onRetry: (delayMs, failure) =>
+            this.logger.warn(
+              { referenceId: input.referenceId, delayMs, failure },
+              'Solustation check failed transiently — retrying once',
+            ),
+        },
+      );
 
       await this.persist(actor, input.referenceId, judgement);
       return this.view(input.referenceId, judgement, validationId !== null);
@@ -190,7 +215,23 @@ export class AddressCheckService {
       rtoRisk: j.rto_risk_status === 'shown' && typeof j.rto_risk === 'number' ? j.rto_risk : null,
       rtoRiskStatus: j.rto_risk_status ?? null,
       rechecked,
+      questions: j.questions ?? [],
+      providersUsed: j.providers_used ?? [],
     };
+  }
+
+  /**
+   * READ-ONLY: the stored check for a saved order, projected like a
+   * live answer. Null when the order has none (normal, not an error).
+   * Never calls the vendor.
+   */
+  async storedViewForOrder(orderId: string): Promise<AddressCheckView | null> {
+    const row = await this.prisma.client.addressCheck.findUnique({ where: { orderId } });
+    if (row === null) return null;
+    if (row.result === null || row.status === 'unavailable') {
+      return this.unavailableView(row.referenceId);
+    }
+    return this.view(row.referenceId, row.result as unknown as SolustationJudgement, false);
   }
 
   private unavailableView(referenceId: string): AddressCheckView {
@@ -209,6 +250,8 @@ export class AddressCheckService {
       rtoRisk: null,
       rtoRiskStatus: null,
       rechecked: false,
+      questions: [],
+      providersUsed: [],
     };
   }
 

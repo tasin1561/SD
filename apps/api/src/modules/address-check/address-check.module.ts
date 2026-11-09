@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
+import { AdminAddressCheckController } from './controllers/admin-address-check.controller';
 import { SellerAddressCheckController } from './controllers/seller-address-check.controller';
 import { StoreAddressCheckController } from './controllers/store-address-check.controller';
 import { AddressCheckService } from './services/address-check.service';
@@ -9,6 +10,7 @@ import { AddressCheckQueue } from './queue/address-check.queue';
 import { AddressCheckWorker } from './queue/address-check.worker';
 import { AddressCheckRetryService } from './services/address-check-retry.service';
 import { AddressFeedbackService } from './services/address-feedback.service';
+import { OrderAddressCheckBackfillService } from './services/order-address-check-backfill.service';
 import { SystemIssuesModule } from '../system-issues/system-issues.module';
 
 /**
@@ -35,7 +37,11 @@ import { SystemIssuesModule } from '../system-issues/system-issues.module';
  */
 @Module({
   imports: [AuthCommonModule, SystemIssuesModule],
-  controllers: [SellerAddressCheckController, StoreAddressCheckController],
+  controllers: [
+    AdminAddressCheckController,
+    SellerAddressCheckController,
+    StoreAddressCheckController,
+  ],
   providers: [
     SolustationHttpService,
     AddressCheckService,
@@ -46,6 +52,10 @@ import { SystemIssuesModule } from '../system-issues/system-issues.module';
     AddressCheckQueue,
     AddressCheckRetryService,
     AddressFeedbackService,
+    // Every India order gets a check, whichever of the five creation
+    // paths it came in by — see the class note for why this is a sweep
+    // over the orders table rather than a hook in `OrderService`.
+    OrderAddressCheckBackfillService,
     AddressCheckWorker,
   ],
   exports: [SolustationHttpService, AddressCheckService, OrderPageV2GateService],

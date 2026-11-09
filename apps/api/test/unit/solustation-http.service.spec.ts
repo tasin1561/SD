@@ -128,16 +128,45 @@ describe('the request body carries ONLY what the brief allows', () => {
     }
   });
 
-  it('feedback drops empty NDR reasons rather than sending blanks', () => {
+  /*
+    `undefined` and `[]` are different answers to different questions,
+    and the body builder has to keep them apart — see the comment in
+    `buildFeedbackBody`. Blank strings inside a list are still dropped;
+    an empty list is not.
+  */
+  it('feedback OMITS ndr_reasons when the caller passes nothing', () => {
     const body = buildFeedbackBody({
       validationId: 'val_1',
       courier: 'delhivery',
       awb: 'A1',
       status: 'delivered',
-      ndrReasons: ['', '  '],
       eventTime: '2026-10-28T11:04:00+05:30',
     });
     expect(Object.keys(body)).not.toContain('ndr_reasons');
+  });
+
+  it('feedback SENDS an empty ndr_reasons when the courier gave no remark', () => {
+    const body = buildFeedbackBody({
+      validationId: 'val_1',
+      courier: 'delhivery',
+      awb: 'A1',
+      status: 'ndr',
+      ndrReasons: [],
+      eventTime: '2026-10-28T11:04:00+05:30',
+    });
+    expect(body['ndr_reasons']).toEqual([]);
+  });
+
+  it('feedback strips blank strings but keeps the list', () => {
+    const body = buildFeedbackBody({
+      validationId: 'val_1',
+      courier: 'delhivery',
+      awb: 'A1',
+      status: 'ndr',
+      ndrReasons: ['', '  ', 'Address incomplete'],
+      eventTime: '2026-10-28T11:04:00+05:30',
+    });
+    expect(body['ndr_reasons']).toEqual(['Address incomplete']);
   });
 });
 

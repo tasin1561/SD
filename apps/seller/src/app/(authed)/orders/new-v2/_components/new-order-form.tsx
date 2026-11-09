@@ -34,6 +34,13 @@ import { Checkbox } from '@skydrop/ui/app/checkbox';
 import { useToast } from '@skydrop/ui/app/toast';
 import { useUatField } from '@skydrop/ui/app/uat-fields';
 import { AddressCheckPanel, useDraftReference } from '@skydrop/ui/app/address-check';
+import {
+  AUTO_CHECK_PAUSE_MS,
+  addressCheckKey,
+  shouldAutoCheck,
+  suggestedAddressLine1,
+  suggestionIsWorthOffering,
+} from '@/lib/address-auto-check';
 import './order-v2.css';
 import { BackLink, Notice, OrdSection } from '../../_components/orders-parts';
 import {
@@ -190,15 +197,25 @@ export function NewOrderForm(): ReactElement {
     addressForCheck.length >= 3 &&
     /^[1-9]\d{5}$/.test(form.recipientPostalCode.trim());
 
-  function runAddressCheck(): void {
-    if (!canCheckAddress) return;
+  const paymentTypeForCheck = form.paymentMode === 'COD' ? 'cod' : 'prepaid';
+
+  /**
+   * The exact question last put to Solustation.
+   *
+   * THE DEDUPE, and the whole reason the automatic check below is safe
+   * to leave running. Every re-render re-evaluates the effect; without
+   * this, ticking a checkbox or picking a product would re-ask a
+   * question already answered.
+   */
+  const lastAsked = useRef<string | null>(null);
+
+  /** One sender for all three callers — the automatic check, the manual
+   *  button, and applying a suggestion — so the dedupe key cannot be
+   *  updated by one path and missed by another. */
+  function sendAddressCheck(address: string, pincode: string): void {
+    lastAsked.current = addressCheckKey(pincode, paymentTypeForCheck, address);
     addressCheck.mutate(
-      {
-        referenceId,
-        address: addressForCheck,
-        pincode: form.recipientPostalCode.trim(),
-        paymentType: form.paymentMode === 'COD' ? 'cod' : 'prepaid',
-      },
+      { referenceId, address, pincode, paymentType: paymentTypeForCheck },
       {
         onSuccess: (r) => {
           setCheckResult(r);
@@ -212,6 +229,132 @@ export function NewOrderForm(): ReactElement {
       },
     );
   }
+
+  function runAddressCheck(): void {
+    if (!canCheckAddress) return;
+    // The BUTTON means "ask again", so it clears the dedupe first: the
+    // one time an operator presses it with the text unchanged is when
+    // the last answer was `unavailable` and they want another go.
+    lastAsked.current = null;
+    sendAddressCheck(addressForCheck, form.recipientPostalCode.trim());
+  }
+
+  /*
+    ── CHECK WITHOUT BEING ASKED (owner, 2026-11-09) ─────────────────
+    As soon as the PIN, line 1 and line 2 all hold something, the check
+    runs on its own and keeps itself current as the operator edits.
+    Pressing a button to find out whether an address is deliverable is
+    a step that only ever had one right answer, and the answer is most
+    useful while the address is still being typed.
+
+    What keeps it from becoming a storm lives in `shouldAutoCheck` —
+    four conditions, each with a reason written next to it — plus the
+    pause below, which restarts on every keystroke so one question is
+    asked per edit rather than per character.
+
+    Still ADVICE, not a gate (FE-2): this changes when the answer is
+    fetched and nothing about what it means. No button is disabled by
+    it, and a failed or pending check never stands between an operator
+    and a submit.
+  */
+  useEffect(() => {
+    const pincode = form.recipientPostalCode.trim();
+    const ask = shouldAutoCheck({
+      canCheck: canCheckAddress,
+      addressLine2: form.recipientAddressLine2,
+      busy: addressCheck.isPending,
+      lastAsked: lastAsked.current,
+      key: addressCheckKey(pincode, paymentTypeForCheck, addressForCheck),
+    });
+    if (!ask) return;
+    const timer = setTimeout(() => sendAddressCheck(addressForCheck, pincode), AUTO_CHECK_PAUSE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    canCheckAddress,
+    addressForCheck,
+    form.recipientAddressLine2,
+    form.recipientPostalCode,
+    paymentTypeForCheck,
+    addressCheck.isPending,
+  ]);
+
+  /*
+    ── TAKING THEIR SUGGESTED LABEL ADDRESS (owner, 2026-11-09) ───────
+    When the check comes back with a completed address it is tidied
+    into line 1 by itself, with an Undo beside it; undo puts back what
+    was typed and leaves a "Use this address" in its place.
+
+    `suggestionHeld` is BOTH the toggle and the undo buffer, which is
+    why it is one piece of state and not two. Two could disagree — a
+    button offering to undo to something that was never saved is the
+    kind of bug that only shows up after the order has gone out.
+  */
+  const [suggestionHeld, setSuggestionHeld] = useState<{
+    readonly applied: string;
+    readonly beforeLine1: string;
+  } | null>(null);
+
+  /**
+   * Suggestions the operator has already undone.
+   *
+   * ONCE REFUSED, NEVER FORCED AGAIN. Applying changes line 1, which
+   * starts a fresh check, which returns a suggestion — so without this
+   * an Undo would be overruled a second later by the same text, and
+   * the operator would be holding a button that does nothing. The
+   * "Use this address" button stays, so refusing is not permanent;
+   * it just stops being automatic.
+   */
+  const refusedSuggestions = useRef<Set<string>>(new Set());
+
+  const suggestedLine1 = suggestedAddressLine1(
+    checkResult !== null && checkResult.available && checkResult.poConfidence === 'high'
+      ? checkResult.completedAddress
+      : null,
+  );
+  const suggestionOnOffer =
+    suggestedLine1 !== '' &&
+    (suggestionHeld !== null ||
+      suggestionIsWorthOffering(suggestedLine1, form.recipientAddressLine1));
+
+  function applyLabelAddress(): void {
+    if (suggestedLine1 === '') return;
+    refusedSuggestions.current.delete(suggestedLine1);
+    setSuggestionHeld({ applied: suggestedLine1, beforeLine1: form.recipientAddressLine1 });
+    set('recipientAddressLine1', suggestedLine1);
+  }
+
+  function undoLabelAddress(): void {
+    if (suggestionHeld === null) return;
+    refusedSuggestions.current.add(suggestionHeld.applied);
+    set('recipientAddressLine1', suggestionHeld.beforeLine1);
+    setSuggestionHeld(null);
+  }
+
+  // Apply it without being asked, under the same restraint as the check
+  // itself: only when it actually says something different, and never
+  // one the operator has already undone.
+  useEffect(() => {
+    if (suggestedLine1 === '') return;
+    if (suggestionHeld !== null) return;
+    if (refusedSuggestions.current.has(suggestedLine1)) return;
+    if (!suggestionIsWorthOffering(suggestedLine1, form.recipientAddressLine1)) return;
+    applyLabelAddress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestedLine1, suggestionHeld, form.recipientAddressLine1]);
+
+  /*
+    An edit by hand ends the arrangement.
+
+    If the operator types over line 1 after a suggestion went in, the
+    Undo would restore text from two edits ago — so the hold is dropped
+    as soon as line 1 stops being what was applied, and the panel goes
+    back to offering the suggestion rather than offering to undo it.
+  */
+  useEffect(() => {
+    if (suggestionHeld === null) return;
+    if (form.recipientAddressLine1 !== suggestionHeld.applied) setSuggestionHeld(null);
+  }, [form.recipientAddressLine1, suggestionHeld]);
 
   /**
    * Apply one of their suggested values, then ask again.
@@ -264,20 +407,10 @@ export function NewOrderForm(): ReactElement {
     const nextPincode =
       field === 'pincode' ? value.replace(/\D/g, '').slice(0, 6) : form.recipientPostalCode.trim();
     if (referenceId === '' || nextAddress.length < 3 || !/^[1-9]\d{5}$/.test(nextPincode)) return;
-    addressCheck.mutate(
-      {
-        referenceId,
-        address: nextAddress,
-        pincode: nextPincode,
-        paymentType: form.paymentMode === 'COD' ? 'cod' : 'prepaid',
-      },
-      {
-        onSuccess: (r) => {
-          setCheckResult(r);
-          setConfirmedWithCustomer(false);
-        },
-      },
-    );
+    // Through the shared sender, so the dedupe key records this ask. It
+    // has to: the automatic check sees the edited text on the very next
+    // render and would otherwise send the same question again.
+    sendAddressCheck(nextAddress, nextPincode);
   }
   // Pre-select the default once the list arrives, and only while the
   // field is untouched: a seller who has already picked a shopfront
@@ -960,6 +1093,12 @@ export function NewOrderForm(): ReactElement {
               allPostOffices={pincodeInfo.data?.post_offices}
               confirmedWithCustomer={confirmedWithCustomer}
               onConfirmedWithCustomerChange={setConfirmedWithCustomer}
+              // The callbacks go in only when there is something to take:
+              // with neither passed the panel renders the suggested
+              // address as the plain text every other console sees.
+              labelAddressApplied={suggestionHeld !== null}
+              onApplyLabelAddress={suggestionOnOffer ? applyLabelAddress : undefined}
+              onUndoLabelAddress={suggestionHeld !== null ? undoLabelAddress : undefined}
             />
           </OrdSection>
 

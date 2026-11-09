@@ -114,8 +114,12 @@ const en = {
   'ui.ac.go': 'Check address',
   'ui.ac.again': 'Check again',
   'ui.ac.checking': 'Checking…',
-  'ui.ac.hint':
-    'Fill in the address and PIN code, then check it. The customer sees nothing of this.',
+  // No "then check it": on the client's order page the check runs by
+  // itself once the PIN and both address lines hold something, and the
+  // button is there to ask again. The consoles that still check on
+  // demand have that button in front of them, so the sentence does not
+  // need to name it for them either.
+  'ui.ac.hint': 'Fill in the address and PIN code. The customer sees nothing of this.',
   'ui.ac.score': 'Validity score {n} out of 100',
   'ui.ac.unavailable': 'Address check unavailable',
   'ui.ac.unavailableBody':
@@ -142,6 +146,11 @@ const en = {
   'ui.ac.field.state': 'State',
   'ui.ac.field.pincode': 'PIN code',
   'ui.ac.labelAddress': 'Suggested label address',
+  // Past tense and a fact, not praise: it says what happened to the
+  // form so the operator can tell at a glance which state they are in.
+  'ui.ac.labelApplied': 'Put into address line 1',
+  'ui.ac.labelUndo': 'Undo',
+  'ui.ac.labelUse': 'Use this address',
   'ui.ac.rto': 'Return risk: {pct}%',
   'ui.ac.rtoNone': 'Return risk: not enough data yet',
   'ui.ac.questions.title': 'Ask the customer',
@@ -268,7 +277,7 @@ const bn: Record<UiMessageKey, string> = {
   'ui.ac.go': 'ঠিকানা যাচাই করুন',
   'ui.ac.again': 'আবার যাচাই করুন',
   'ui.ac.checking': 'যাচাই হচ্ছে…',
-  'ui.ac.hint': 'ঠিকানা ও পিন কোড পূরণ করে যাচাই করুন। গ্রাহক এর কিছুই দেখতে পান না।',
+  'ui.ac.hint': 'ঠিকানা ও পিন কোড পূরণ করুন। গ্রাহক এর কিছুই দেখতে পান না।',
   'ui.ac.score': 'বৈধতার স্কোর 100-এর মধ্যে {n}',
   'ui.ac.unavailable': 'ঠিকানা যাচাই এখন পাওয়া যাচ্ছে না',
   'ui.ac.unavailableBody':
@@ -295,6 +304,9 @@ const bn: Record<UiMessageKey, string> = {
   'ui.ac.field.state': 'রাজ্য',
   'ui.ac.field.pincode': 'পিন কোড',
   'ui.ac.labelAddress': 'প্রস্তাবিত লেবেলের ঠিকানা',
+  'ui.ac.labelApplied': 'ঠিকানার 1ম লাইনে বসানো হয়েছে',
+  'ui.ac.labelUndo': 'ফিরিয়ে নিন',
+  'ui.ac.labelUse': 'এই ঠিকানা ব্যবহার করুন',
   'ui.ac.rto': 'ফেরতের ঝুঁকি: {pct}%',
   'ui.ac.rtoNone': 'ফেরতের ঝুঁকি: এখনো যথেষ্ট তথ্য নেই',
   'ui.ac.questions.title': 'গ্রাহককে জিজ্ঞেস করুন',
@@ -436,7 +448,7 @@ const hi: Partial<Record<UiMessageKey, string>> = {
   'ui.ac.go': 'पता जाँचें',
   'ui.ac.again': 'फिर जाँचें',
   'ui.ac.checking': 'जाँच हो रही है…',
-  'ui.ac.hint': 'पता और PIN code भरकर उसे जाँचें। ग्राहक को इसका कुछ नहीं दिखता।',
+  'ui.ac.hint': 'पता और PIN code भरें। ग्राहक को इसका कुछ नहीं दिखता।',
   'ui.ac.score': '100 में से वैधता स्कोर {n}',
   'ui.ac.unavailable': 'पता जाँच अभी उपलब्ध नहीं',
   'ui.ac.unavailableBody':
@@ -463,6 +475,9 @@ const hi: Partial<Record<UiMessageKey, string>> = {
   'ui.ac.field.state': 'राज्य',
   'ui.ac.field.pincode': 'PIN code',
   'ui.ac.labelAddress': 'लेबल के लिए सुझाया गया पता',
+  'ui.ac.labelApplied': 'पता लाइन 1 में डाल दिया गया',
+  'ui.ac.labelUndo': 'वापस लें',
+  'ui.ac.labelUse': 'यही पता इस्तेमाल करें',
   'ui.ac.rto': 'वापसी का जोखिम: {pct}%',
   'ui.ac.rtoNone': 'वापसी का जोखिम: अभी इतना डेटा नहीं है',
   'ui.ac.questions.title': 'ग्राहक से पूछें',

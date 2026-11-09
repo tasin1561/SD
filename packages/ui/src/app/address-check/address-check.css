@@ -208,8 +208,8 @@
 
 .sk-ac__label-addr {
   display: flex;
-  align-items: flex-start;
-  gap: 7px;
+  flex-direction: column;
+  gap: 6px;
   margin: 0;
   padding: 8px 10px;
   border-radius: var(--r-md);
@@ -217,9 +217,85 @@
   font-size: var(--fs-xs);
   line-height: 1.5;
 }
+.sk-ac__label-addr-text {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  /* The address can be one long unbroken run; it must wrap inside this
+     box rather than push the panel wide. */
+  min-width: 0;
+}
+.sk-ac__label-addr-text > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .sk-ac__label-addr strong {
   display: block;
   color: var(--fg-strong);
+}
+
+.sk-ac__label-addr-act {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 0;
+}
+.sk-ac__label-addr-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--st-confirmed-fg);
+  font-size: var(--fs-2xs);
+}
+
+.sk-ac__label-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  /* A full touch target without a full button's worth of ink: the
+     padding keeps it reading as a control beside the text, and the
+     pseudo-element carries the rest of the hit area. */
+  position: relative;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--fg-body);
+  font: inherit;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.sk-ac__label-btn::after {
+  content: '';
+  position: absolute;
+  inset: -9px -4px;
+}
+.sk-ac__label-btn:hover {
+  border-color: var(--ac-line);
+  color: var(--fg-strong);
+}
+.sk-ac__label-btn:active {
+  transform: translateY(1px);
+}
+.sk-ac__label-btn--go {
+  border-color: var(--ac-line);
+  color: var(--ac-fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk-ac__label-btn {
+    transition: none;
+  }
+  .sk-ac__label-btn:active {
+    transform: none;
+  }
 }
 
 .sk-ac__rto {
@@ -288,4 +364,57 @@
   width: 100%;
   max-width: 340px;
   margin-block-start: 2px;
+}
+
+/* ── questions to put to the customer (read-only) ──────────────────── */
+.sk-ac__qs {
+  display: grid;
+  gap: 6px;
+}
+.sk-ac__qs-title {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sk-ac__qs-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sk-ac__q {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.sk-ac__q-n {
+  flex: none;
+  color: var(--fg-muted);
+  font-size: var(--fs-2xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.9;
+}
+.sk-ac__q-body {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.sk-ac__q-text {
+  color: var(--fg-strong);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Vendor attribution (Ola Maps terms). */
+.sk-ac__attr {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-2xs);
+  text-align: end;
 }
