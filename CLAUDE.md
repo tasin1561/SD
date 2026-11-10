@@ -308,3 +308,9 @@ Rules:
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 - A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.
+
+## Local machine limits (16 GB laptop, WSL capped at 8 GB)
+- Run at most ONE background agent at a time. Never run agents in parallel.
+- Never run `pnpm gate` / `GATE_ALL` while any agent or other heavy shell is running.
+- Use `pnpm gate:serial` locally, not `pnpm gate` or `GATE_ALL=1 pnpm gate`.
+- Before starting a gate, stop dev servers and watchers.
