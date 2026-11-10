@@ -59,6 +59,13 @@ function makeService(
     otherParcel?: boolean;
     /** A variant of a DIFFERENT client carrying the scanned code. */
     foreign?: { skuCode: string; companyName: string };
+    /** The bin the foreign goods live in; null = none with stock on hand. */
+    foreignShelf?: string | null;
+    /** The bin a foreign SERIAL sits in; null = the piece records no bin. */
+    unitBin?: string | null;
+    /** The warehouse this parcel was picked in; null = cannot be established
+     *  (no picked line, so no bin may be named). */
+    pickWarehouse?: string | null;
     /** Whose bench the box is on, as their email_display. */
     heldBy?: string;
     /** The box's status, for the come-back-from-lunch refusals. */
@@ -91,6 +98,7 @@ function makeService(
       status: u.status,
       sellerId: u.sellerId,
       seller: { companyName: u.companyName },
+      bin: opts.unitBin === undefined || opts.unitBin === null ? null : { code: opts.unitBin },
       shipmentItem:
         u.shipmentId === null
           ? null
@@ -105,7 +113,11 @@ function makeService(
     if (typeof w['sellerId'] === 'string') return null;
     return opts.foreign === null || opts.foreign === undefined
       ? null
-      : { skuCode: opts.foreign.skuCode, seller: { companyName: opts.foreign.companyName } };
+      : {
+          id: 'v-foreign',
+          skuCode: opts.foreign.skuCode,
+          seller: { companyName: opts.foreign.companyName },
+        };
   });
 
   const client: AnyArgs = {
@@ -137,6 +149,21 @@ function makeService(
           : { shipmentId: u.shipmentId, shipment: { awbNumber: u.awbNumber } };
       }),
       findMany: jest.fn(async () => [{ skuCode: 'SKU-A', quantity: 1 }]),
+      // The warehouse a bin may be named in: this parcel's own pick batch.
+      // `pickWarehouse: null` is the parcel nothing was picked for, where
+      // naming a bin would risk naming one in the other warehouse.
+      findFirst: jest.fn(async () =>
+        opts.pickWarehouse === null
+          ? null
+          : { pickedBatch: { warehouseId: opts.pickWarehouse ?? 'wh-1' } },
+      ),
+    },
+    stockLevel: {
+      findFirst: jest.fn(async () =>
+        opts.foreignShelf === undefined || opts.foreignShelf === null
+          ? null
+          : { bin: { code: opts.foreignShelf } },
+      ),
     },
     orderShipment: { findFirst: jest.fn(async () => ({ order: { sellerId: SELLER } })) },
     productVariant: {
@@ -230,6 +257,76 @@ describe('PackBoxService.scan — the refusal names the mistake', () => {
     expect(refusal.message).not.toContain('Menev Store');
     expect(refusal.message).not.toContain('MST-SUNG-01');
     expect(JSON.stringify(refusal.details ?? {})).not.toContain('Menev');
+  });
+
+  it('names the BIN the foreign goods belong in — a shelf, never the client', async () => {
+    const { svc } = makeService({
+      foreign: { skuCode: 'MST-SUNG-01', companyName: 'Menev Store' },
+      foreignShelf: 'A-12',
+      pickWarehouse: 'wh-1',
+    });
+    const refusal = await refusalOf(svc.scan(BOX, 'BAR-OTHER', STAFF));
+
+    expect(refusal.code).toBe('PACK_PRODUCT_OTHER_CLIENT');
+    // Where to put it down. A bin code is OUR layout, so it is outside
+    // what the no-client-name rule protects — and it is the one thing
+    // "hand it to the stock team" leaves the packer without.
+    expect(refusal.details?.['shelf']).toBe('A-12');
+    // Naming the bin must not have smuggled the owner in with it.
+    expect(JSON.stringify(refusal.details ?? {})).not.toContain('Menev');
+    expect(JSON.stringify(refusal.details ?? {})).not.toContain('MST-SUNG-01');
+  });
+
+  it('omits the shelf when the goods are on hand in no bin we can see', async () => {
+    const { svc } = makeService({
+      foreign: { skuCode: 'MST-SUNG-01', companyName: 'Menev Store' },
+      foreignShelf: null,
+      pickWarehouse: 'wh-1',
+    });
+    const refusal = await refusalOf(svc.scan(BOX, 'BAR-OTHER', STAFF));
+
+    expect(refusal.code).toBe('PACK_PRODUCT_OTHER_CLIENT');
+    // ABSENT, not an empty string: the bench copy keeps the clause in an
+    // optional segment, and a blank value must drop it rather than print
+    // "It belongs on shelf ." at a packer.
+    expect(refusal.details).not.toHaveProperty('shelf');
+    expect(refusal.details?.['item']).toBe('BAR-OTHER');
+  });
+
+  it('omits the shelf when the parcel has no picked line, so no warehouse is known', async () => {
+    const { svc, client } = makeService({
+      foreign: { skuCode: 'MST-SUNG-01', companyName: 'Menev Store' },
+      foreignShelf: 'A-12',
+      pickWarehouse: null,
+    });
+    const refusal = await refusalOf(svc.scan(BOX, 'BAR-OTHER', STAFF));
+
+    expect(refusal.code).toBe('PACK_PRODUCT_OTHER_CLIENT');
+    // A-12 exists, and is deliberately NOT named: unscoped it could be a
+    // shelf in the other warehouse, and walking a packer to another city
+    // is worse than saying nothing. The stock lookup is never even made.
+    expect(refusal.details).not.toHaveProperty('shelf');
+    expect((client['stockLevel'] as { findFirst: jest.Mock }).findFirst).not.toHaveBeenCalled();
+  });
+
+  it('a foreign SERIAL names the bin the piece itself sits in', async () => {
+    const { svc, client } = makeService({
+      unit: {
+        status: StockUnitStatus.IN_STOCK,
+        sellerId: 'seller-other',
+        companyName: 'Menev Store',
+        shipmentId: null,
+        awbNumber: null,
+      },
+      unitBin: 'B-07',
+    });
+    const refusal = await refusalOf(svc.scan(BOX, 'SER-OTHER', STAFF));
+
+    expect(refusal.code).toBe('PACK_PRODUCT_OTHER_CLIENT');
+    expect(refusal.details?.['shelf']).toBe('B-07');
+    expect(JSON.stringify(refusal.details ?? {})).not.toContain('Menev');
+    // A serialized piece records its own bin, so this costs no lookup.
+    expect((client['stockLevel'] as { findFirst: jest.Mock }).findFirst).not.toHaveBeenCalled();
   });
 
   it('a serial for another parcel that is not PICKED reaches PACK_UNIT_WRONG_PARCEL, not “unknown”', async () => {

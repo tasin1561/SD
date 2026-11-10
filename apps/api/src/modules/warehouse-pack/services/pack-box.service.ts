@@ -741,13 +741,19 @@ export class PackBoxService {
       select: {
         status: true,
         sellerId: true,
+        // A serialized piece records its OWN bin, so where to put it down
+        // costs nothing here — no lookup, and it is the location of the
+        // actual piece rather than of its variant in general.
+        bin: { select: { code: true } },
         shipmentItem: {
           select: { shipmentId: true, shipment: { select: { awbNumber: true } } },
         },
       },
     });
     if (unit !== null) {
-      if (unit.sellerId !== sellerId) return this.otherClientRefusal(code);
+      if (unit.sellerId !== sellerId) {
+        return this.otherClientRefusal(code, unit.bin?.code ?? null);
+      }
       if (unit.shipmentItem?.shipmentId === box.shipmentId) {
         const state = unit.status.toLowerCase().replace(/_/g, ' ');
         return new ConflictException({
@@ -776,13 +782,17 @@ export class PackBoxService {
         deletedAt: null,
         OR: [{ barcode: code }, { skuCode: code }],
       },
-      // Existence only. NOT the owning client's name and NOT their SKU:
-      // a refusal on this bench may name a colleague (same employer) but
-      // never another client's details. The code the packer scanned is
-      // echoed instead — it is already in their hand, so it leaks nothing.
+      // Existence AND nothing else. NOT the owning client's name and NOT
+      // their SKU: a refusal on this bench may name a colleague (same
+      // employer) but never another client's details. The code the packer
+      // scanned is echoed instead — it is already in their hand, so it
+      // leaks nothing. The bin comes from a separate, warehouse-scoped
+      // lookup below for the same reason: a bin code is OUR layout.
       select: { id: true },
     });
-    if (foreign !== null) return this.otherClientRefusal(code);
+    if (foreign !== null) {
+      return this.otherClientRefusal(code, await this.shelfFor(foreign.id, box.shipmentId));
+    }
 
     // 5 — nothing, anywhere. The original code, now telling the truth.
     return new NotFoundException({
@@ -798,13 +808,51 @@ export class PackBoxService {
    * staff colleague (same warehouse, same employer) but never another
    * CLIENT's company or product name, and the stock team can identify the
    * item from the code the packer is holding.
+   *
+   * It DOES name the bin, when we know it (owner, 2026-11-10). A bin code
+   * is this warehouse's own layout and says nothing about whose goods sit
+   * in it, so it is outside what the paragraph above protects — while
+   * being the one thing the packer still needs, because "hand it to the
+   * stock team" otherwise leaves them holding the item until somebody is
+   * free. `shelf` is omitted rather than guessed; the bench copy carries
+   * the clause in an optional `[[ … ]]` segment that simply drops.
    */
-  private otherClientRefusal(scanned: string): ConflictException {
+  private otherClientRefusal(scanned: string, shelf: string | null): ConflictException {
     return new ConflictException({
       code: 'PACK_PRODUCT_OTHER_CLIENT',
       message: `${scanned} is another client's stock, not this parcel's. Hand it to the stock team; it cannot go in this box.`,
-      details: { item: scanned },
+      details: { item: scanned, ...(shelf === null ? {} : { shelf }) },
     });
+  }
+
+  /**
+   * Which bin another client's goods belong in, or null.
+   *
+   * Scoped to the warehouse THIS parcel was picked in, read from its own
+   * pick batch. Unscoped it would eventually name a bin in the other
+   * warehouse, and sending a packer to walk to a shelf in another city is
+   * worse than saying nothing at all — so when the warehouse cannot be
+   * established the shelf is omitted and the sentence loses the clause.
+   *
+   * Highest on-hand wins when the goods sit in several bins: with the item
+   * split, the fullest bin is the one worth walking to.
+   *
+   * Two queries, and only ever on a refusal that has already been decided
+   * — the happy path never reaches here.
+   */
+  private async shelfFor(variantId: string, shipmentId: string): Promise<string | null> {
+    const picked = await this.prisma.client.shipmentItem.findFirst({
+      where: { shipmentId, pickedBatchId: { not: null } },
+      select: { pickedBatch: { select: { warehouseId: true } } },
+    });
+    const warehouseId = picked?.pickedBatch?.warehouseId ?? null;
+    if (warehouseId === null) return null;
+    const level = await this.prisma.client.stockLevel.findFirst({
+      where: { variantId, warehouseId, qtyOnHand: { gt: 0 } },
+      orderBy: { qtyOnHand: 'desc' },
+      select: { bin: { select: { code: true } } },
+    });
+    return level?.bin.code ?? null;
   }
 
   /**

@@ -374,6 +374,34 @@ describe('pack bench — a refusal that carries a value', () => {
       expect(line.textContent).toContain('BAR-OTHER');
     }
     expect(dialog).toHaveTextContent("[PACK_PRODUCT_OTHER_CLIENT] BAR-OTHER is another client's");
+    // With no shelf in `details` the optional clause must vanish WHOLE.
+    // Asserted on the clause, not on the word "shelf": the main sentence
+    // says "put it back on their shelf" regardless, so a bare word search
+    // here passes against broken output. The bug this guards is a
+    // dangling "It belongs on shelf ." printed at a packer.
+    const fix = dialog.querySelector('.wh-fix');
+    expect(fix?.textContent).not.toContain('belongs on shelf');
+    expect(fix?.textContent).not.toContain('এটির জায়গা');
+    expect(fix?.textContent).not.toContain('इसकी जगह');
+  });
+
+  it('names the shelf in all three languages when the server sends one', async () => {
+    const dialog = await refuse(
+      'PACK_PRODUCT_OTHER_CLIENT',
+      "BAR-OTHER is another client's stock, not this parcel's.",
+      { item: 'BAR-OTHER', shelf: 'A-12' },
+    );
+
+    // Where to put it down, in every line of the fix — an illiterate
+    // packer reads whichever of the three they can, so a bin code that
+    // appears in only one of them is of no use to them.
+    const fixLines = [...dialog.querySelectorAll('.wh-fix .wh-tri__line')];
+    expect(fixLines.length).toBe(3);
+    for (const line of fixLines) {
+      expect(line.textContent).toContain('A-12');
+    }
+    // The bin, and still not the owner.
+    expect(dialog.textContent).not.toContain('Menev');
   });
 
   it('a held box tells them WHO, WHEN, WHY and THE FIX — in all three languages', async () => {

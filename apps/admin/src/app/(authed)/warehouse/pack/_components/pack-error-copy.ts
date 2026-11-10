@@ -180,9 +180,9 @@ export const PACK_ERROR_COPY: Readonly<Record<string, PackErrorCopy>> = {
       hi: 'हर क्लाइंट का स्टॉक अलग रखा जाता है; एक शेल्फ का सामान दूसरे के पार्सल में नहीं जाएगा।',
     },
     fix: {
-      en: 'Hand it to the stock team[[ with the code {item}]] and scan the next item on the list.',
-      bn: 'এটি স্টক টিমকে দিয়ে দিন[[ — কোড {item}]] এবং তালিকার পরের জিনিসটি স্ক্যান করুন।',
-      hi: 'इसे स्टॉक टीम को दें[[ — कोड {item}]] और सूची का अगला सामान स्कैन करें।',
+      en: 'Hand it to the stock team[[ with the code {item}]] and scan the next item on the list.[[ It belongs on shelf {shelf}.]]',
+      bn: 'এটি স্টক টিমকে দিয়ে দিন[[ — কোড {item}]] এবং তালিকার পরের জিনিসটি স্ক্যান করুন।[[ এটির জায়গা {shelf} তাকে।]]',
+      hi: 'इसे स्टॉक टीम को दें[[ — कोड {item}]] और सूची का अगला सामान स्कैन करें।[[ इसकी जगह शेल्फ {shelf} है।]]',
     },
   },
   // The box's own label, scanned into the product field. The bench
