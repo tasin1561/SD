@@ -352,7 +352,24 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       // "Pickup for reverse shipments, COD or Prepaid for forward".
       payment_mode: req.isReverse === true ? 'Pickup' : isCod ? 'COD' : 'Prepaid',
       cod_amount: isCod ? str(req.codAmountInr) : '',
-      total_amount: str(req.declaredValueInr),
+      /*
+        ── WHAT PRINTS AS "Total" ON THE LABEL (owner, 2026-11-10) ─────
+        On a COD parcel this is the amount being COLLECTED, not the
+        declared value. The two differ — a ₹1,400 parcel collected at
+        ₹1,100 printed 1400 here — and the owner wants the driver and
+        the customer to see the figure actually being handed over.
+
+        THE TRADE IS REAL AND WAS MADE DELIBERATELY. Delhivery treat
+        `total_amount` as the invoice value, and a loss or damage claim
+        is assessed against it. Sending the COD amount on a parcel worth
+        more than it collects understates any claim by the difference.
+        That is the owner's call, made with the consequence stated.
+
+        PREPAID keeps the declared value: nothing is being collected, so
+        "the amount collected" would be zero, and a label reading 0 for
+        a real parcel is worse than one reading its worth.
+      */
+      total_amount: isCod ? str(req.codAmountInr) : str(req.declaredValueInr),
       products_desc: sanitiseForDelhivery(req.itemDescription).slice(0, 250),
       quantity: String(req.quantity ?? 1),
       weight: str(req.totalWeightGrams),
