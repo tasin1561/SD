@@ -36,6 +36,7 @@ import {
   PickBatchQueryDto,
   ProductLocationQueryDto,
   QueueQueryDto,
+  RecordShortPickDto,
   ReleasePickBatchDto,
   ReprintLabelsDto,
   ShipmentSelectionDto,
@@ -197,6 +198,26 @@ export class WarehousePrintingController {
     skipped: ReadonlyArray<{ shipmentNumber: string; reason: string }>;
   }> {
     return this.batches.markPicked(id, staff.id, ctx);
+  }
+
+  @Post('pick-batches/:id/short-pick')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Record that the picker found fewer than the sheet asked for. A record only — it moves no stock and blocks nothing; it shows on the order page',
+  })
+  recordShortPick(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
+    @Body() body: RecordShortPickDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<{ shipmentNumber: string; expected: number; found: number }> {
+    return this.batches.recordShortPick(
+      id,
+      staff.id,
+      { shipmentItemId: body.shipmentItemId, qtyFound: body.qtyFound },
+      ctx,
+    );
   }
 
   @Post('pick-batches/:id/cancel')

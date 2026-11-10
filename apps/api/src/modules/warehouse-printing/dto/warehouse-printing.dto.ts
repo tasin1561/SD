@@ -118,3 +118,19 @@ export class ReleasePickBatchDto {
   @MaxLength(500)
   reason!: string;
 }
+
+/**
+ * A short pick: the sheet said N, the shelf held fewer. The expected
+ * count is NOT accepted — the server reads it from the line.
+ */
+export class RecordShortPickDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID('7')
+  shipmentItemId!: string;
+
+  @ApiProperty({ minimum: 0, maximum: 100000, description: 'How many were actually on the shelf' })
+  @IsInt()
+  @Min(0)
+  @Max(100000)
+  qtyFound!: number;
+}

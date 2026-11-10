@@ -8,6 +8,7 @@ import {
   FileCheck2,
   Hand,
   PackageCheck,
+  PackageMinus,
   PackageOpen,
   Printer,
   RotateCcw,
@@ -53,6 +54,7 @@ const ICONS: Readonly<Record<ParcelActivityKind, ReactElement>> = {
   PICK_BATCH_CREATED: <ClipboardList size={14} aria-hidden />,
   PICK_BATCH_PRINTED: <Printer size={14} aria-hidden />,
   PICK_CLAIMED: <Hand size={14} aria-hidden />,
+  PICKED_SHORT: <PackageMinus size={14} aria-hidden />,
   PICKED: <PackageCheck size={14} aria-hidden />,
   PACK_BOX_OPENED: <PackageOpen size={14} aria-hidden />,
   PACK_BOX_CLOSED: <Boxes size={14} aria-hidden />,
@@ -69,6 +71,7 @@ const ICONS: Readonly<Record<ParcelActivityKind, ReactElement>> = {
 
 /** Which steps read as a warning rather than ordinary progress. */
 const TONE: Partial<Readonly<Record<ParcelActivityKind, 'warn' | 'good'>>> = {
+  PICKED_SHORT: 'warn',
   PACK_BOX_CANCELLED: 'warn',
   RTO_RECEIVED: 'warn',
   PACKED: 'good',
@@ -221,6 +224,8 @@ function Details({ event }: { readonly event: ParcelActivityEvent }): ReactEleme
     chips.push(t('activity.detail.sheets', { count: d['sheets'] }));
   if (typeof d['printed'] === 'number' && d['printed'] > 1)
     chips.push(t('activity.detail.printed', { count: d['printed'] }));
+  if (typeof d['found'] === 'number' && typeof d['expected'] === 'number')
+    chips.push(t('activity.detail.shortOf', { found: d['found'], expected: d['expected'] }));
   if (typeof d['lines'] === 'number') chips.push(t('activity.detail.lines', { count: d['lines'] }));
   if (chips.length === 0) return null;
   return (

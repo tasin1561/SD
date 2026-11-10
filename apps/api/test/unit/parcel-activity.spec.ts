@@ -37,6 +37,7 @@ const iso = (s: string): Date => new Date(s);
 function makeTrail(opts: {
   shipments?: unknown[];
   events?: unknown[];
+  shortRows?: unknown[];
   staff?: unknown[];
   order?: unknown;
 }): { svc: ParcelActivityService; staffFind: jest.Mock } {
@@ -52,6 +53,7 @@ function makeTrail(opts: {
       },
       shipment: { findMany: jest.fn(async () => opts.shipments ?? []) },
       orderEvent: { findMany: jest.fn(async () => opts.events ?? []) },
+      auditLog: { findMany: jest.fn(async () => opts.shortRows ?? []) },
       staffUser: { findMany: staffFind },
     },
   } as unknown as PrismaService;
@@ -559,5 +561,57 @@ describe('the permission a reader must hold', () => {
       const path: unknown = Reflect.getMetadata('path', ctor);
       expect(String(path).startsWith('admin/')).toBe(true);
     }
+  });
+});
+
+describe('a short pick shows on the trail', () => {
+  const shortRow = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    entityId: 'ship-1',
+    actorType: ActorType.STAFF,
+    actorId: STAFF_A,
+    createdAt: iso('2026-09-03T10:00:00Z'),
+    metadata: { shipmentItemId: 'item-1', expected: 3, found: 2 },
+    ...over,
+  });
+  const staff = [{ id: STAFF_A, emailDisplay: 'karim@skydrop.global', email: '', deletedAt: null }];
+
+  it('reads "2 of 3" with the picker named, ahead of the picked step', async () => {
+    const { svc } = makeTrail({
+      shipments: [shipmentRow({ pickCompletedAt: iso('2026-09-03T10:00:00Z') })],
+      shortRows: [shortRow()],
+      staff,
+    });
+    const trail = await svc.forOrder(ORDER);
+    const kinds = trail.events.map((e) => e.kind);
+    expect(kinds).toEqual(['PICKED_SHORT', 'PICKED']);
+    expect(trail.events[0]).toMatchObject({
+      detail: { found: 2, expected: 3 },
+      actor: { kind: 'STAFF' },
+    });
+  });
+
+  it('keeps only the latest statement for a line, so a correction supersedes', async () => {
+    const { svc } = makeTrail({
+      shipments: [shipmentRow()],
+      shortRows: [
+        shortRow(),
+        shortRow({
+          createdAt: iso('2026-09-03T10:05:00Z'),
+          metadata: { shipmentItemId: 'item-1', expected: 3, found: 1 },
+        }),
+      ],
+      staff,
+    });
+    const trail = await svc.forOrder(ORDER);
+    expect(trail.events).toHaveLength(1);
+    expect(trail.events[0]?.detail).toEqual({ found: 1, expected: 3 });
+  });
+
+  it('ignores a malformed row rather than inventing a count', async () => {
+    const { svc } = makeTrail({
+      shipments: [shipmentRow()],
+      shortRows: [shortRow({ metadata: { shipmentItemId: 'item-1' } })],
+    });
+    expect((await svc.forOrder(ORDER)).events).toHaveLength(0);
   });
 });

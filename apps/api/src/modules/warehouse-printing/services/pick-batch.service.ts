@@ -18,6 +18,7 @@ import { OrderWriteService } from '../../order/services/order-write.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { PickBatchNumberingService } from './pick-batch-numbering.service';
 import { PickListPdfService, type PickListLine } from './pick-list-pdf.service';
+import { SHORT_PICK_ACTION } from './short-pick';
 import { scannableCodeFor } from './sku-label.service';
 
 export interface PickBatchView {
@@ -657,6 +658,88 @@ export class PickBatchService {
         );
       }
     }
+  }
+
+  /**
+   * The picker could not find everything: the sheet said `expected`, the
+   * shelf held `found`. This RECORDS that and does nothing else.
+   *
+   * ── A RECORD, NOT A GATE ─────────────────────────────────────────
+   * It moves no stock, changes no order status and blocks nothing: where
+   * the system cannot prevent a pick/stock divergence it warns at print
+   * time, not at the shelf. The fact lands in the append-only audit log
+   * (entity = the parcel, metadata carries the line), and the parcel
+   * activity trail reads it back onto the order page. A later row for
+   * the same line supersedes an earlier one (the picker found more).
+   *
+   * `expected` is read from the line here, never taken from the client.
+   * The batch must be PRINTED (the walk is in progress) and the line must
+   * sit on a parcel of THIS batch.
+   */
+  async recordShortPick(
+    batchId: string,
+    staffId: string,
+    input: { shipmentItemId: string; qtyFound: number },
+    ctx?: ClientContext,
+  ): Promise<{ shipmentNumber: string; expected: number; found: number }> {
+    const batch = await this.prisma.client.pickBatch.findUnique({
+      where: { id: batchId },
+      select: { batchNumber: true, status: true },
+    });
+    if (batch === null) {
+      throw new BadRequestException({ code: 'BATCH_NOT_FOUND', message: 'No such batch' });
+    }
+    if (batch.status !== PickBatchStatus.PRINTED) {
+      throw new ConflictException({
+        code: 'BATCH_NOT_PRINTED',
+        message: 'A short pick is recorded while the printed sheet is being walked',
+      });
+    }
+    const item = await this.prisma.client.shipmentItem.findUnique({
+      where: { id: input.shipmentItemId },
+      select: {
+        quantity: true,
+        shipment: { select: { id: true, shipmentNumber: true, pickBatchId: true } },
+      },
+    });
+    if (item === null || item.shipment.pickBatchId !== batchId) {
+      throw new BadRequestException({
+        code: 'SHIPMENT_ITEM_NOT_ON_BATCH',
+        message: 'That line is not on this batch',
+      });
+    }
+    if (
+      !Number.isInteger(input.qtyFound) ||
+      input.qtyFound < 0 ||
+      input.qtyFound >= item.quantity
+    ) {
+      throw new BadRequestException({
+        code: 'NOT_A_SHORT_PICK',
+        message: `A short pick must be a whole number from 0 to ${item.quantity - 1}; the sheet asked for ${item.quantity}`,
+      });
+    }
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      actorId: staffId,
+      action: SHORT_PICK_ACTION,
+      entityType: 'shipment',
+      entityId: item.shipment.id,
+      severity: 'MEDIUM',
+      metadata: {
+        shipmentItemId: input.shipmentItemId,
+        batchNumber: batch.batchNumber,
+        expected: item.quantity,
+        found: input.qtyFound,
+        ipAddress: ctx?.ipAddress ?? null,
+        userAgent: ctx?.userAgent ?? null,
+        requestId: ctx?.requestId ?? null,
+      },
+    });
+    return {
+      shipmentNumber: item.shipment.shipmentNumber,
+      expected: item.quantity,
+      found: input.qtyFound,
+    };
   }
 
   /** Abandon a batch that was never printed — the parcels go back. */

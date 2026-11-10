@@ -39,6 +39,9 @@ function makeService(opts: {
   batchUpdateCount?: number;
   /** What CatalogReadService can name, for the shortfall warning. */
   namedVariants?: Map<string, { skuCode: string }>;
+  /** What a shipment-item lookup returns, for the short-pick record. */
+  item?: Any | null;
+  audit?: jest.Mock;
 }) {
   const shipments = opts.shipments ?? [shipment()];
   const shipmentUpdateMany = jest.fn(async () => ({
@@ -84,7 +87,10 @@ function makeService(opts: {
       update: jest.fn(async () => ({ printCount: 1 })),
     },
     stockReservation: { findMany: jest.fn(async () => opts.reservations ?? []) },
-    shipmentItem: { updateMany: jest.fn(async () => ({ count: 1 })) },
+    shipmentItem: {
+      updateMany: jest.fn(async () => ({ count: 1 })),
+      findUnique: jest.fn(async () => opts.item ?? null),
+    },
     orderShipment: { findMany: jest.fn(async () => [{ orderId: 'o1', shipmentId: 's1' }]) },
     staffUser: { findUnique: jest.fn(async () => ({ emailDisplay: 'ops', email: 'ops' })) },
     $transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)),
@@ -95,7 +101,7 @@ function makeService(opts: {
   const render = jest.spyOn(pdf, 'render');
   const svc = new PickBatchService(
     { client } as unknown as PrismaService,
-    { log: jest.fn() } as unknown as AuditLogService,
+    { log: opts.audit ?? jest.fn() } as unknown as AuditLogService,
     {
       nextBatchNumber: jest.fn(async () => 'PB-2026-09-000001'),
     } as unknown as PickBatchNumberingService,
@@ -514,5 +520,61 @@ describe('PickBatchService.releasePrinted — a printed batch nobody will walk',
     await expect(svc.releasePrinted('b1', 'sup-1', 'lost')).rejects.toMatchObject({
       response: { code: 'BATCH_RELEASE_REASON_REQUIRED' },
     });
+  });
+});
+
+describe('PickBatchService.recordShortPick — a record, never a gate', () => {
+  const onBatch = (qty = 3, batchId: string | null = 'b1'): Any => ({
+    quantity: qty,
+    shipment: { id: 's1', shipmentNumber: 'SH-1', pickBatchId: batchId },
+  });
+  const printed = (svc: ReturnType<typeof makeService>): void => {
+    (svc.client.pickBatch.findUnique as jest.Mock).mockImplementation(async () => ({
+      batchNumber: 'PB-1',
+      status: PickBatchStatus.PRINTED,
+    }));
+  };
+
+  it('writes one attributable audit row carrying expected and found', async () => {
+    const audit = jest.fn();
+    const m = makeService({ item: onBatch(), audit });
+    printed(m);
+    const r = await m.svc.recordShortPick('b1', 'staff-1', { shipmentItemId: 'i1', qtyFound: 2 });
+    expect(r).toEqual({ shipmentNumber: 'SH-1', expected: 3, found: 2 });
+    expect(audit).toHaveBeenCalledTimes(1);
+    expect(audit.mock.calls[0]?.[0]).toMatchObject({
+      actorId: 'staff-1',
+      action: 'warehouse.pick.short',
+      entityType: 'shipment',
+      entityId: 's1',
+      metadata: { shipmentItemId: 'i1', expected: 3, found: 2 },
+    });
+    // A record only: no stock, no status, no stamp.
+    expect(m.shipmentUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses a count that is not short', async () => {
+    const m = makeService({ item: onBatch() });
+    printed(m);
+    for (const qtyFound of [3, 4, -1, 1.5]) {
+      await expect(
+        m.svc.recordShortPick('b1', 'staff-1', { shipmentItemId: 'i1', qtyFound }),
+      ).rejects.toMatchObject({ response: { code: 'NOT_A_SHORT_PICK' } });
+    }
+  });
+
+  it('refuses a line from another batch', async () => {
+    const m = makeService({ item: onBatch(3, 'other') });
+    printed(m);
+    await expect(
+      m.svc.recordShortPick('b1', 'staff-1', { shipmentItemId: 'i1', qtyFound: 0 }),
+    ).rejects.toMatchObject({ response: { code: 'SHIPMENT_ITEM_NOT_ON_BATCH' } });
+  });
+
+  it('refuses a batch that is not being walked', async () => {
+    const m = makeService({ item: onBatch() });
+    await expect(
+      m.svc.recordShortPick('b1', 'staff-1', { shipmentItemId: 'i1', qtyFound: 0 }),
+    ).rejects.toMatchObject({ response: { code: 'BATCH_NOT_PRINTED' } });
   });
 });

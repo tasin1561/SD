@@ -49,6 +49,11 @@ export const activity = defineMessages({
     'पिकिंग शीट प्रिंट',
   ],
   'activity.step.PICK_CLAIMED': ['Picking started', 'পিকিং শুরু', 'पिकिंग शुरू'],
+  'activity.step.PICKED_SHORT': [
+    'Picked short — shelf had fewer',
+    'কম পাওয়া গেছে — শেলফে কম ছিল',
+    'कम मिला — शेल्फ़ पर कम था',
+  ],
   'activity.step.PICKED': ['Picked from the shelf', 'শেলফ থেকে নেওয়া', 'शेल्फ़ से लिया'],
   'activity.step.PACK_BOX_OPENED': ['Box opened', 'বক্স খোলা', 'बॉक्स खुला'],
   'activity.step.PACK_BOX_CLOSED': ['Box closed', 'বক্স বন্ধ', 'बॉक्स बंद'],
@@ -111,6 +116,11 @@ export const activity = defineMessages({
   'activity.detail.batch': ['Sheet {value}', 'শিট {value}', 'शीट {value}'],
   'activity.detail.manifest': ['Manifest {value}', 'ম্যানিফেস্ট {value}', 'मैनिफ़ेस्ट {value}'],
   'activity.detail.version': ['Label v{value}', 'লেবেল v{value}', 'लेबल v{value}'],
+  'activity.detail.shortOf': [
+    '{found} of {expected} found',
+    '{expected}টির মধ্যে {found}টি পাওয়া গেছে',
+    '{expected} में से {found} मिले',
+  ],
   'activity.detail.lines': ['{count} lines', '{count} লাইন', '{count} लाइन'],
   'activity.detail.scanned': ['{count} scanned in', '{count} স্ক্যান হয়েছে', '{count} स्कैन हुए'],
   'activity.detail.printed': ['printed {count}x', '{count}x প্রিন্ট', '{count}x प्रिंट'],

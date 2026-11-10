@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { OrderStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { SHORT_PICK_ACTION } from '../../warehouse-printing/services/short-pick';
 import {
   actorForEvent,
   actorForStaffId,
@@ -42,6 +43,7 @@ export type ParcelActivityKind =
   | 'PICK_BATCH_CREATED'
   | 'PICK_BATCH_PRINTED'
   | 'PICK_CLAIMED'
+  | 'PICKED_SHORT'
   | 'PICKED'
   | 'PACK_BOX_OPENED'
   | 'PACK_BOX_CLOSED'
@@ -111,19 +113,29 @@ const RANK: Readonly<Record<ParcelActivityKind, number>> = {
   PICK_BATCH_CREATED: 2,
   PICK_BATCH_PRINTED: 3,
   PICK_CLAIMED: 4,
-  PICKED: 5,
-  PACK_BOX_OPENED: 6,
-  PACK_BOX_CANCELLED: 7,
-  PACK_BOX_CLOSED: 8,
-  PACKED: 9,
-  COURIER_CHOSEN: 10,
-  MANIFEST_CLOSED: 11,
-  MANIFEST_HANDOFF_CONFIRMED: 12,
-  HANDOVER_SCANNED: 13,
-  COURIER_PICKED_UP: 14,
-  RTO_RECEIVED: 15,
-  RTO_INSPECTED: 16,
+  PICKED_SHORT: 5,
+  PICKED: 6,
+  PACK_BOX_OPENED: 7,
+  PACK_BOX_CANCELLED: 8,
+  PACK_BOX_CLOSED: 9,
+  PACKED: 10,
+  COURIER_CHOSEN: 11,
+  MANIFEST_CLOSED: 12,
+  MANIFEST_HANDOFF_CONFIRMED: 13,
+  HANDOVER_SCANNED: 14,
+  COURIER_PICKED_UP: 15,
+  RTO_RECEIVED: 16,
+  RTO_INSPECTED: 17,
 };
+
+/** The line a short-pick audit row describes, or null if it is malformed. */
+function shortLine(metadata: unknown): { itemId: string; found: number; expected: number } | null {
+  if (typeof metadata !== 'object' || metadata === null) return null;
+  const { shipmentItemId, found, expected } = metadata as Record<string, unknown>;
+  if (typeof shipmentItemId !== 'string') return null;
+  if (typeof found !== 'number' || typeof expected !== 'number') return null;
+  return { itemId: shipmentItemId, found, expected };
+}
 
 const COURIER_ACTOR: TrailActor = { kind: 'COURIER', name: null };
 
@@ -223,6 +235,24 @@ export class ParcelActivityService {
       orderBy: { createdAt: 'asc' },
       select: { toStatus: true, actorType: true, actorId: true },
     });
+    // Short picks: written by the picker as append-only audit rows (the
+    // parcel is the entity, the line is in the metadata). Read-only here.
+    // Newest row per line wins — a picker who found more later supersedes.
+    const shortRows = await this.prisma.client.auditLog.findMany({
+      where: {
+        action: SHORT_PICK_ACTION,
+        entityType: 'shipment',
+        entityId: { in: shipments.map((s) => s.id) },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { entityId: true, actorType: true, actorId: true, metadata: true, createdAt: true },
+    });
+    const shortByLine = new Map<string, (typeof shortRows)[number]>();
+    for (const r of shortRows) {
+      const line = shortLine(r.metadata);
+      if (line !== null && r.entityId !== null) shortByLine.set(`${r.entityId}:${line.itemId}`, r);
+    }
+
     const lastTransition = (to: OrderStatus): (typeof transitions)[number] | null => {
       const matching = transitions.filter((e) => e.toStatus === to);
       return matching[matching.length - 1] ?? null;
@@ -244,6 +274,7 @@ export class ParcelActivityService {
         ...s.items.map((i) => i.rtoDisposedByStaffId),
       ]),
       ...transitions.map((e) => e.actorId),
+      ...[...shortByLine.values()].map((r) => r.actorId),
     ]);
 
     const events: ParcelActivityEvent[] = [];
@@ -300,6 +331,20 @@ export class ParcelActivityService {
         );
       }
       push('PICK_CLAIMED', s.pickStartedAt, actorForStaffId(s.pickStartedByStaffId, names), null);
+      // A short pick is the picker's own statement. The actor is the
+      // audit row's, shown as recorded — never inferred from the claim.
+      for (const [lineKey, row] of shortByLine) {
+        if (!lineKey.startsWith(`${s.id}:`)) continue;
+        const line = shortLine(row.metadata);
+        if (line === null) continue;
+        push(
+          'PICKED_SHORT',
+          row.createdAt,
+          actorForEvent(row.actorType, row.actorId, names),
+          { found: line.found, expected: line.expected },
+          line.itemId,
+        );
+      }
       // No `pickCompletedByStaffId` exists. The PICKED transition row is
       // the record; with neither, the step reads as unrecorded rather
       // than guessing at the person who claimed it.

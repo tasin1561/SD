@@ -39,6 +39,7 @@ export type ParcelActivityKind =
   | 'PICK_BATCH_CREATED'
   | 'PICK_BATCH_PRINTED'
   | 'PICK_CLAIMED'
+  | 'PICKED_SHORT'
   | 'PICKED'
   | 'PACK_BOX_OPENED'
   | 'PACK_BOX_CLOSED'
