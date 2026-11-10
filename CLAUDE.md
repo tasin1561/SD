@@ -198,25 +198,90 @@ Three rules, each written against a failure from the day they were added — thr
 
 ## Gate rules
 
-**`pnpm gate` is the pre-commit gate. Run it whole; never a subset (2026-08-06).**
-It is `gate:clean` (delete every `.tsbuildinfo` — see the stale-cache trap below)
-then typecheck → lint → `format:check` → the full unit suite, which is exactly
-what CI's `static` and `unit` jobs run. **Do not substitute a filtered test run
-for it.** Running `jest test/unit/delhivery test/unit/courier` after a change
+**`pnpm gate` is the pre-commit gate. It is now AFFECTED-ONLY and PARALLEL
+(2026-10-28), and `scripts/gate.mjs` is the whole of it.** It deletes every
+`.tsbuildinfo` (the stale-cache trap below), then runs typecheck, lint,
+`format:check`, the unit suite and two always-on phases **concurrently**, lets
+every one of them finish, and reports all failures together. Flags:
+
+| | |
+|---|---|
+| `pnpm gate` | affected packages only, parallel. The default. |
+| `GATE_ALL=1 pnpm gate` | every package — the old whole-repo run, what CI does. |
+| `GATE_SERIAL=1 pnpm gate` | one phase at a time, when a parallel run looks flaky. |
+| `GATE_BASE=ref` | what "affected" is measured against (default `main`). |
+
+**The scope is chosen by `turbo --affected`, never by hand**, which is the
+difference that makes it safe: it walks the dependency graph, so a
+`packages/db` edit comes back as all twelve packages and a seller edit as one.
+A hand-typed filter cannot do that, and the rule below is still law for one.
+
+**`pnpm gate` is no longer sufficient proof on its own. CI is the merge gate.**
+Say which scope a run used before calling it green, and when a change is
+subtle, cross-cutting, or touches money, run `GATE_ALL=1` and wait for CI.
+
+Two holes the affected run has, both deliberate and both covered:
+
+- **Specs that read another package's SOURCE** are owned by one package and
+  guard another, so `--affected` is blind to them in the worst direction. The
+  gate finds them by reading the tree (`[./]<app>[/'"`]` across every spec) and
+  runs those files in their owning package — the `guards:<pkg>` phases. Never a
+  hardcoded list; a list would rot silently at spec seventeen.
+- **`app-module-boots.spec.ts` and the two `*-threading` specs** live in
+  `@skydrop/api`, which a frontend change never selects. They run every time,
+  whatever changed, as the `always-on` phase. 9 seconds.
+
+**A HAND-TYPED filter is still forbidden.** Running
+`jest test/unit/delhivery test/unit/courier` after a change
 that touched shared code shipped two failing tests in `awb-generation.service.spec.ts`
 on 2026-08-05 — the file matched neither prefix, so the gate reported green on
-a suite it had never executed. The failure mode is not "I picked the wrong
-filter", it is that a filter exists at all: the set of affected files is
-exactly what you cannot know in advance, which is the whole reason the change
-needed a gate. A subset run is only ever a fast inner loop, never the thing you
-commit on.
+a suite it had never executed.
+
+This used to read "the failure mode is that a filter exists at all: the set of
+affected files is exactly what you cannot know in advance." **AMENDED
+2026-10-28.** The second half is the true half and it is the whole argument —
+*you* cannot know the affected set in advance. The dependency graph can, and
+`turbo --affected` reads it. What 2026-08-05 actually proves is narrower than
+it was written as: a filter a HUMAN typed encodes a guess about blast radius,
+and the guess is wrong precisely when the change was interesting. A filter
+DERIVED from the graph encodes no guess.
+
+What survives unchanged is the standard of evidence: a green run proves only
+what it executed, so name the scope when you report it. A hand-picked subset
+run is still only ever a fast inner loop, never the thing you commit on.
 
 **Two suites must never be filtered out of a local run**, whatever the change
 looked like: `app-module-boots.spec.ts` (one test, a few seconds, and the only
 thing that proves the app starts — the cheapest value-per-second in the
 repository and the easiest to lose to a path filter) and any `*-threading` or
 structural spec that reads sources rather than behaviour, because those exist
-precisely to catch what a behavioural test cannot see.
+precisely to catch what a behavioural test cannot see. **This is no longer
+something to remember** — `scripts/gate.mjs` enforces both as the `always-on`
+and `guards:<pkg>` phases. Keep the rule written down anyway: the day someone
+replaces the gate script, this is the requirement they have to carry over.
+
+### When the gate has to come BEFORE the push (2026-10-28)
+
+The gate is now fast enough that it no longer has to be a gate in the
+sequential sense. For **ordinary changes — not money, not courier, not auth,
+not migrations** — push to a PR branch immediately and let CI be the gate. Run
+`pnpm gate` locally in PARALLEL with the push, not in front of it. The point is
+that the slow, authoritative check (CI, 18 jobs) starts earlier; the local run
+is then an early-warning signal, and if it goes red you push the fix on top
+before CI has even finished.
+
+For the four risk areas — **wallet/ledger/remittance/COD amounts, courier
+integrations, auth/RBAC, and DB migrations** — run `GATE_ALL=1 pnpm gate` and
+wait for it before pushing. Not because CI would miss something, but because
+those are the diffs where a red run means "think again", not "fix the typo",
+and the right moment to think again is before the change exists anywhere but
+your machine.
+
+Two things this does not change. `main` still gets the files shown before a
+push, and a red PR still does not get merged — "CI is the gate" means CI
+decides, not that the decision is skipped. And it only works if you actually
+watch the run: pushing early and walking away is worse than the old order,
+because now nothing has checked the code at all.
 
 **Do not push onto an unverified head (2026-08-06).** If a previous commit's
 CI has not gone green, WAIT — or push the fix for it first. A commit stacked on
