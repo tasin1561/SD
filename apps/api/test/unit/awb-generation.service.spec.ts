@@ -995,3 +995,42 @@ describe('AwbGenerationService — waiting for a carrier to be chosen', () => {
     expect(arg).not.toHaveProperty('courierCompanyId');
   });
 });
+
+/**
+ * The seller's own reference reaches the courier, because it is what
+ * Delhivery captions the label's second barcode with (owner,
+ * 2026-11-10). Loaded from the ORDER — the shipment does not hold it —
+ * so the select is the half that silently breaks.
+ */
+describe('AwbGenerationService — the seller’s own order reference', () => {
+  it('passes it to the dispatcher when the order carries one', async () => {
+    const { svc, generate } = makeService({
+      shipment: shipmentRow({
+        orderShipments: [{ order: { sellerId: 'seller-1', sellerOrderRef: 'INV-1042' } }],
+      }),
+    });
+
+    await svc.generateForShipment(SHIP, { type: ActorType.SYSTEM });
+
+    expect(generate.mock.calls[0]?.[0].sellerOrderRef).toBe('INV-1042');
+  });
+
+  it('passes null when the order has none — the adapter falls back to the shipment number', async () => {
+    const { svc, generate } = makeService();
+
+    await svc.generateForShipment(SHIP, { type: ActorType.SYSTEM });
+
+    // The default fixture's order has no reference at all.
+    expect(generate.mock.calls[0]?.[0].sellerOrderRef).toBeNull();
+  });
+
+  it('passes null when the shipment has no order link at all', async () => {
+    const { svc, generate } = makeService({
+      shipment: shipmentRow({ orderShipments: [] }),
+    });
+
+    await svc.generateForShipment(SHIP, { type: ActorType.SYSTEM });
+
+    expect(generate.mock.calls[0]?.[0].sellerOrderRef).toBeNull();
+  });
+});

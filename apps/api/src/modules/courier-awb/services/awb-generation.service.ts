@@ -198,6 +198,9 @@ export class AwbGenerationService {
               select: {
                 sellerId: true,
                 orderNumber: true,
+                // The seller's OWN reference, which is what the label's
+                // second barcode is captioned from (owner, 2026-11-10).
+                sellerOrderRef: true,
                 paymentMode: true,
                 // RS-10 — who the customer bought from ("sold by").
                 ...CUSTOMER_BRAND_ORDER_SELECT,
@@ -357,6 +360,27 @@ export class AwbGenerationService {
       shipmentId,
       shipmentNumber: shipment.shipmentNumber,
       orderNumber: shipment.orderShipments[0]?.order.orderNumber ?? shipment.shipmentNumber,
+      /*
+        ── WHAT THE LABEL'S SECOND BARCODE IS CAPTIONED FROM ──────────
+        The owner's reference label shows the SELLER'S own order
+        reference there, not our shipment number (owner, 2026-11-10).
+        Passed as the seller's ref when the order carries one; the
+        adapter falls back to the shipment number when it does not, so
+        a barcode is never captioned with an empty string.
+
+        It is NOT a scannable identity for us: `sellerOrderRef` is
+        unique only per (seller, store) — ORD-9 — so two sellers can
+        both use "INV-1". Verified before shipping this that nothing
+        scans it: the pack bench (`PackBoxService.open`) and the
+        handover bench (`DispatchHandoffService.recordHandoverScan`)
+        both look up `awbNumber` and nothing else, no scan path
+        resolves a `shipmentNumber`, and the Delhivery tracking parser
+        matches on `Shipment.AWB` (its `ReferenceNo` is declared and
+        never read). The dispatcher also discards Delhivery's echoed
+        `refnum` (`courierShipmentId: null` in `viaDelhivery`), so
+        nothing persists it either.
+      */
+      sellerOrderRef: shipment.orderShipments[0]?.order.sellerOrderRef ?? null,
       recipientName: shipment.destRecipientName,
       recipientPhoneE164: shipment.destRecipientPhoneE164,
       addressLine1: shipment.destAddressLine1,

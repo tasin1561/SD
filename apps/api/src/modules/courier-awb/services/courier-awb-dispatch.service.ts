@@ -20,6 +20,19 @@ export interface DispatchAwbInput {
   readonly shipmentId: string;
   readonly shipmentNumber: string;
   readonly orderNumber: string;
+  /**
+   * The SELLER'S own order reference, when the order carries one.
+   *
+   * Delhivery captions the label's second barcode from the reference we
+   * send as `order`, and the owner wants the seller's own reference
+   * there rather than our shipment number (2026-11-10). Optional, and
+   * absent/null means the shipment number exactly as before — a reverse
+   * pickup, for instance, has no seller reference to send.
+   *
+   * It is a CAPTION, not an identity: it is unique only per (seller,
+   * store) per ORD-9, so nothing may ever scan or match on it.
+   */
+  readonly sellerOrderRef?: string | null;
   readonly recipientName: string;
   readonly recipientPhoneE164: string;
   readonly addressLine1: string;
@@ -341,6 +354,12 @@ export class CourierAwbDispatchService {
       // Delhivery's reverse IS a booking with payment_mode 'Pickup'.
       ...(input.isReverse === true ? { isReverse: true } : {}),
       shipmentNumber: input.shipmentNumber,
+      // The label's second barcode caption. Spread conditionally so a
+      // caller that does not set it (the reverse-pickup booking) sends
+      // a payload byte-identical to before.
+      ...(input.sellerOrderRef === undefined || input.sellerOrderRef === null
+        ? {}
+        : { sellerOrderRef: input.sellerOrderRef }),
       recipientName: input.recipientName,
       recipientPhoneE164: input.recipientPhoneE164,
       addressLine1: input.addressLine1,

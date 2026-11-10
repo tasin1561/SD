@@ -16,6 +16,21 @@ import type { ShipmentStatus } from '@skydrop/db';
  *  from the order + shipment snapshot (R3 snapshot-DTO discipline). */
 export interface DelhiveryAwbRequest {
   shipmentNumber: string;
+  /**
+   * The SELLER'S own order reference, when the order has one.
+   *
+   * Delhivery's `order` key is a free-text REFERENCE and is what their
+   * label captions the second barcode with; the owner's reference label
+   * shows the seller's own reference there (2026-11-10). Absent ⇒ the
+   * shipment number, exactly as before.
+   *
+   * A CAPTION, never an identity — `orders.sellerOrderRef` is unique
+   * only per (seller, store) per ORD-9, so two sellers can both use
+   * "INV-1". Nothing in the pack, handover or dispatch benches scans
+   * this barcode or reads the reference back (they key on `awbNumber`),
+   * and the AWB dispatcher discards Delhivery's echoed `refnum`.
+   */
+  sellerOrderRef?: string;
   recipientName: string;
   recipientPhoneE164: string;
   addressLine1: string;

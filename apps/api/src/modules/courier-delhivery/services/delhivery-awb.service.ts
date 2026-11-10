@@ -106,6 +106,27 @@ export function toNationalPhone(e164: string): string {
   return m?.[1] ?? e164.trim();
 }
 
+/**
+ * What goes in Delhivery's `order` key — the reference their 4R label
+ * captions the SECOND barcode with.
+ *
+ * The seller's own reference when the order has one, our shipment
+ * number when it does not. Sanitised FIRST and re-checked after, because
+ * a reference made entirely of their rejected characters (`"###"`)
+ * sanitises to an empty string, and an empty `order` is a barcode with
+ * no caption at all — strictly worse than the shipment number.
+ *
+ * Exported so the fallback can be pinned without going through a live
+ * create.
+ */
+export function labelReference(req: {
+  readonly sellerOrderRef?: string;
+  readonly shipmentNumber: string;
+}): string {
+  const sellerRef = sanitiseForDelhivery(req.sellerOrderRef ?? '');
+  return sellerRef !== '' ? sellerRef : sanitiseForDelhivery(req.shipmentNumber);
+}
+
 const OMIT_BLANK_SETTING = 'courier.delhivery_omit_blank_seller_fields';
 const OMITTABLE_BLANK_KEYS = [
   'seller_add',
@@ -328,7 +349,32 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       // delete it on the strength of a theory this comment no longer
       // makes; see phase-1a-debt.
       waybill: '',
-      order: sanitiseForDelhivery(req.shipmentNumber),
+      /*
+        ── WHAT CAPTIONS THE LABEL'S SECOND BARCODE (owner, 2026-11-10) ─
+        Their `order` key is a free-text reference, and their 4R label
+        prints it under the second barcode. The owner's reference label
+        shows the SELLER'S OWN order reference there; ours showed
+        `SH-2026-11-000057`, which means nothing to the seller whose
+        parcel it is.
+
+        The fallback is NOT cosmetic: `sellerOrderRef` is nullable, an
+        empty `order` is a barcode with no caption, and the shipment
+        number is the one reference every parcel always has.
+
+        A CAPTION, NOT AN IDENTITY. `SH-…` is unique per shipment;
+        `sellerOrderRef` is unique only per (seller, store) — ORD-9 —
+        so two sellers can both send "INV-1". That is acceptable here
+        ONLY because nothing of ours reads this barcode back: the pack
+        bench and the handover bench both resolve a scan through
+        `awbNumber` alone, no scan path looks up a shipment number, the
+        Delhivery scan parser matches on `Shipment.AWB` (its
+        `ReferenceNo` is declared and never read), and
+        `CourierAwbDispatchService.viaDelhivery` returns
+        `courierShipmentId: null`, so their echoed `refnum` is not
+        persisted either. If anything ever starts scanning it, this has
+        to go back to the shipment number.
+      */
+      order: labelReference(req),
       name: sanitiseForDelhivery(req.recipientName),
       add: sanitiseForDelhivery([req.addressLine1, req.addressLine2].filter(Boolean).join(', ')),
       pin: req.postalCode,

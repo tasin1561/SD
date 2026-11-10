@@ -396,3 +396,76 @@ describe('DelhiveryAwbService — omit blank seller/return fields', () => {
     expect('return_add' in on).toBe(false);
   });
 });
+
+/**
+ * ── THE LABEL'S SECOND BARCODE (owner, 2026-11-10) ───────────────────
+ * Delhivery captions it from the `order` key. The owner's reference
+ * label shows the SELLER'S OWN reference there; ours showed our
+ * shipment number, which means nothing to the seller.
+ *
+ * The fallback is the load-bearing half: `sellerOrderRef` is nullable
+ * and an empty `order` is a barcode with no caption.
+ */
+describe('DelhiveryAwbService — `order` captions the second barcode', () => {
+  const OK = { success: true, packages: [{ waybill: 'DLV1', refnum: 'ref' }] };
+
+  async function shipmentFor(over: Partial<DelhiveryAwbRequest> = {}) {
+    const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
+    request.mockResolvedValueOnce(OK);
+    await svc.generateAwb(awbReq(over));
+    return request.mock.calls[0][0].body.shipments[0] as Record<string, unknown>;
+  }
+
+  it('sends the seller’s own reference when the order carries one', async () => {
+    const s = await shipmentFor({ sellerOrderRef: 'INV-1042' });
+    expect(s.order).toBe('INV-1042');
+  });
+
+  it('falls back to the shipment number when the order has no reference', async () => {
+    for (const over of [{}, { sellerOrderRef: '' }, { sellerOrderRef: '   ' }]) {
+      const s = await shipmentFor(over);
+      expect(s.order).toBe('SH-2026-05-000042');
+    }
+  });
+
+  it('sanitises the reference, and falls back when sanitising empties it', async () => {
+    // ';' and '#' are on Delhivery's rejected-character list — a
+    // reference carrying one must not fail the create.
+    expect((await shipmentFor({ sellerOrderRef: 'INV#7; A' })).order).toBe('INV 7 A');
+    // Nothing survives sanitising ⇒ a caption-less barcode, so the
+    // shipment number wins rather than ''.
+    expect((await shipmentFor({ sellerOrderRef: '###' })).order).toBe('SH-2026-05-000042');
+  });
+
+  it('changes NO other key — the reference is the whole diff', async () => {
+    const plain = await shipmentFor();
+    const withRef = await shipmentFor({ sellerOrderRef: 'INV-1042' });
+    const { order: _a, ...restRef } = withRef;
+    const { order: _b, ...restPlain } = plain;
+    void _a;
+    void _b;
+    expect(JSON.stringify(restRef)).toBe(JSON.stringify(restPlain));
+  });
+
+  /*
+    ── NO ITEM / SKU ARRAY ON THE SINGLE-PIECE CREATE ────────────────
+    The owner also wants a `SKU:` line under the product name. Their
+    documented B2C create carries NO item array and NO SKU field: the
+    only product key is `products_desc`, and their own FAQ says to pass
+    a comma-separated string there for a single-container order
+    (docs/vendor/delhivery-b2c-api-raw.md). The MPS path sends
+    `products_desc` per BOX, also with no SKU. The `items`/`sku` array
+    on DispatchAwbInput is SHIPROCKET'S `order_items`.
+
+    Pinned because the next person to read the reference label will
+    reach for a field name, and an invented one is a REFUSED MANIFEST
+    on real parcels.
+  */
+  it('sends products_desc and no invented item array', async () => {
+    const s = await shipmentFor();
+    expect(s.products_desc).toBe('Widget x2');
+    for (const k of ['items', 'order_items', 'sku', 'product_details', 'item_name']) {
+      expect(k in s).toBe(false);
+    }
+  });
+});
