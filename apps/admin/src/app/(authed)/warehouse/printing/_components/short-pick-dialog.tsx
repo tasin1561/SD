@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Check, Minus, Plus } from 'lucide-react';
+import { Check, ClipboardList, Minus, Plus } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
 import { Dialog } from '@skydrop/ui/app/dialog';
 import { useRecordShortPick, type PickBatchView } from '@/lib/ops-hooks';
@@ -90,12 +90,19 @@ export function ShortPickDialog({
                       {it.variantLabel !== null ? ` · ${it.variantLabel}` : ''}
                     </span>
                   </div>
+                  {/* The sheet's count. It carries the clipboard so it
+                      cannot be confused with the found count beside it —
+                      two naked numbers in one row told a packer who
+                      cannot read the words nothing about which was
+                      which, which a browser pass at 360px made obvious
+                      and five passing tests did not. */}
                   <div
                     className="wh-sp__ask"
                     aria-label={t('warehousePrintingPrintingStation.sheetAsked', {
                       expected: it.quantity,
                     })}
                   >
+                    <ClipboardList size={18} aria-hidden="true" />
                     <span className="wh-sp__big">{it.quantity}</span>
                   </div>
                   <div className="wh-sp__step">
@@ -107,8 +114,18 @@ export function ShortPickDialog({
                       aria-label={t('warehousePrintingPrintingStation.oneLess')}
                       icon={<Minus size={22} />}
                     />
-                    <span className="wh-sp__big wh-sp__found" aria-live="polite">
-                      {value}
+                    {/* Found AND asked-for, side by side, so the
+                        comparison is one glance rather than a number
+                        here and another number across the row. Reads the
+                        same as the "1 / 3" the saved row shows, so the
+                        before and after look like the same fact. */}
+                    <span className="wh-sp__pair">
+                      <span className="wh-sp__big wh-sp__found" aria-live="polite">
+                        {value}
+                      </span>
+                      <span className="wh-sp__of" aria-hidden="true">
+                        / {it.quantity}
+                      </span>
                     </span>
                     <Button
                       variant="secondary"

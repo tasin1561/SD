@@ -1441,6 +1441,25 @@ p.wh-alert {
 }
 .wh-sp__ask {
   justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--fg-muted);
+}
+/* Found / asked-for as ONE figure. The found half keeps the strong
+   colour and the full size; the "/ 3" is muted and smaller, so the
+   number the packer is changing is the one that reads first. */
+.wh-sp__pair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+.wh-sp__of {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+  white-space: nowrap;
 }
 .wh-sp__big {
   font-size: var(--fs-xl);
