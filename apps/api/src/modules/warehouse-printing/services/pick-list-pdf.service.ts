@@ -157,8 +157,14 @@ export class PickListPdfService {
     y += 6;
 
     for (const line of p.lines) {
-      // A row is ~34pt; start a new page rather than run off the bottom.
-      if (y > doc.page.height - 70) {
+      /*
+        A row is AT LEAST 34pt and may be taller when its shipment refs
+        wrap, so the guard reserves the worst case rather than the
+        typical one. Reserving the typical height is how the last row of
+        a page ends up half on the paper and half off it — the same
+        fixed-height assumption that sliced the refs themselves.
+      */
+      if (y > doc.page.height - 70 - MAX_ROW_OVERFLOW) {
         doc.addPage();
         y = 40;
       }
@@ -278,10 +284,10 @@ export class PickListPdfService {
       .stroke();
 
     doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000');
-    doc.text(line.binCode, cols.loc, y, { width: cols.locWidth, ellipsis: true });
+    doc.text(line.binCode, cols.loc, y, oneLine(doc, cols.locWidth));
     if (line.zoneName !== null) {
       doc.fontSize(6).font('Helvetica').fillColor('#666666');
-      doc.text(line.zoneName, cols.loc, y + 13, { width: cols.locWidth, ellipsis: true });
+      doc.text(line.zoneName, cols.loc, y + 13, oneLine(doc, cols.locWidth));
     }
 
     doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000');
@@ -290,11 +296,11 @@ export class PickListPdfService {
     const drewImage = showImages && this.drawImageCell(doc, line.imagePng, cols.image, y);
 
     doc.fontSize(9).font('Helvetica-Bold');
-    doc.text(line.skuCode, cols.sku, y, { width: cols.skuWidth, ellipsis: true });
+    doc.text(line.skuCode, cols.sku, y, oneLine(doc, cols.skuWidth));
     doc.fontSize(8).font('Helvetica').fillColor('#333333');
     const name =
       line.variantName === null ? line.productName : `${line.productName} — ${line.variantName}`;
-    doc.text(name, cols.sku, y + 11, { width: cols.skuWidth, ellipsis: true });
+    doc.text(name, cols.sku, y + 11, oneLine(doc, cols.skuWidth));
 
     const drawsBars = showBarcodes && !line.strict;
     if (drawsBars) {
@@ -309,19 +315,42 @@ export class PickListPdfService {
     // Which parcels need it — small, and only when it is short enough to
     // be useful. A line for fourteen parcels is noise on paper.
     const hasShipmentLine = line.forShipments.length > 0 && line.forShipments.length <= 4;
+    /*
+      ── THE REFS ARE MEASURED, NOT ASSUMED (2026-11-10) ───────────────
+      Four shipment numbers do not fit on one line of this column, so
+      they wrap — and the row was a fixed height, so the second line was
+      drawn straight through the divider below it and came out of the
+      printer sliced in half. A picker reading `SH-2026-11-0000` with
+      the rest cut off has to go and look the parcel up, which is the
+      one thing this line exists to save them.
+
+      `ellipsis: true` did NOT prevent it. In pdfkit an ellipsis is only
+      applied when the text is constrained — with `lineBreak` left at
+      its default the string simply wraps and the option does nothing.
+      That is the same trap `oneLine` exists for on the cells above,
+      and it was silently in effect on every one of them.
+
+      Here the refs must stay WHOLE, so instead of truncating we measure
+      what they will occupy and let the row grow to hold them.
+    */
+    let refsBottom = 0;
     if (hasShipmentLine) {
+      const refs = line.forShipments.join('  ');
       doc.fontSize(6).font('Helvetica').fillColor('#666666');
-      doc.text(line.forShipments.join('  '), cols.sku, y + 21, {
-        width: cols.skuWidth,
-        ellipsis: true,
-      });
+      const refsHeight = doc.heightOfString(refs, { width: cols.skuWidth });
+      doc.text(refs, cols.sku, y + 21, { width: cols.skuWidth });
+      refsBottom = y + 21 + refsHeight;
     }
 
     // A row that draws bars is always full height: the bars plus the
     // value printed under them need it, and a row that shrinks to fit
     // would put the next line's location on top of this one's barcode.
     // A strict row draws none, so the old height stands.
-    const next = y + (drawsBars || hasShipmentLine || drewImage ? ROW_HEIGHT : 28);
+    const base = y + (drawsBars || hasShipmentLine || drewImage ? ROW_HEIGHT : 28);
+    // Never shorter than the fixed height, and never shorter than the
+    // refs actually drawn — whichever is taller wins, with room for the
+    // divider to sit clear of the last line's descenders.
+    const next = Math.max(base, refsBottom + 6);
     doc
       .moveTo(left, next - 4)
       .lineTo(right, next - 4)
@@ -442,6 +471,43 @@ const IMAGE_COLUMN_WIDTH = 28;
 const IMAGE_HEIGHT = 28;
 const BAR_HEIGHT = 17;
 const ROW_HEIGHT = 34;
+
+/**
+ * How much taller than `ROW_HEIGHT` a row can get.
+ *
+ * Only the shipment-reference line grows, it is capped at four refs,
+ * and at 6pt four of them wrap to at most two lines — so one extra
+ * line, plus the gap the divider needs. The page-break guard reserves
+ * this so a tall last row cannot run off the bottom of the sheet.
+ */
+const MAX_ROW_OVERFLOW = 14;
+
+/**
+ * Text options for a cell that must occupy exactly ONE line.
+ *
+ * ── `ellipsis` NEEDS `height`, AND NOTHING ELSE WILL DO ──────────────
+ * pdfkit applies an ellipsis only inside
+ * `if (this.height != null && this.ellipsis && …)` (pdfkit 0.15.2,
+ * js/pdfkit.js:3118). With `width` and `ellipsis` but no `height` the
+ * option is dead code and the string simply wraps — which is what every
+ * single-line cell on this sheet was doing, and why a long product name
+ * ran down into the shipment references below it.
+ *
+ * `lineBreak: false` does NOT fix it either; that was tried first and
+ * the name still wrapped. The height is the switch.
+ *
+ * Call it AFTER the font and size are set: `currentLineHeight()` is
+ * read from whatever is active, so asking too early measures the
+ * previous cell's font.
+ */
+const oneLine = (
+  doc: InstanceType<typeof PDFDocument>,
+  width: number,
+): { width: number; height: number; ellipsis: true } => ({
+  width,
+  height: doc.currentLineHeight(),
+  ellipsis: true,
+});
 /** ~0.19mm, the narrowest bar a warehouse scanner reads reliably off a
  *  laser print. Below this we print the value and no symbol. */
 const MIN_MODULE_PT = 0.55;
