@@ -148,7 +148,27 @@ function makeService(
     movementCounter += 1;
     return { movementId: `mv-${movementCounter}` };
   });
-  const runWithRetry = jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({}));
+  /*
+    The tx client the writing transaction actually gets.
+
+    It used to be `{}`, which was honest when the idempotency check sat
+    OUTSIDE the transaction. The check and the advisory lock now run
+    INSIDE it, so the stub has to carry them — and a `{}` here would
+    fail loudly, which is the point: the shape of this stub is the
+    evidence that the guard moved.
+  */
+  const txExecuteRaw = jest.fn(async () => 1);
+  // Same `existingMovement` option the outer stub honours, so every
+  // fixture written against the old (outside-the-tx) read keeps meaning
+  // what it meant — only WHERE the question is asked has changed.
+  const txMovementFindFirst = jest.fn(
+    async () => (opts.existingMovement === undefined ? null : opts.existingMovement) as AnyArgs,
+  );
+  const txClient = {
+    $executeRaw: txExecuteRaw,
+    stockMovement: { findFirst: txMovementFindFirst },
+  };
+  const runWithRetry = jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(txClient));
   const mutation = { apply, runWithRetry };
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
   const audit = { log: auditLog };
@@ -212,6 +232,8 @@ function makeService(
   );
   return {
     svc,
+    txExecuteRaw,
+    txMovementFindFirst,
     stockMovementFindFirst,
     stockMovementFindMany,
     transitionStatus,
@@ -243,7 +265,9 @@ describe('RtoDispositionService.finalize — Model A retry-state matrix', () => 
 
     expect(runWithRetry).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledWith(
-      {},
+      // The tx client, whatever shape the stub gives it — this test is
+      // about the MOVEMENT, not about which object carried it.
+      expect.anything(),
       expect.objectContaining({
         type: StockMovementType.RETURN_RESTOCK,
         qtyChange: 3, // +qty — the unit returned (Model A)
@@ -340,7 +364,11 @@ describe('RtoDispositionService.finalize — Model A retry-state matrix', () => 
       items: [item('si-1', RtoDisposition.RESTOCK)],
     });
     const r = await svc.finalize(SHIP, STAFF);
-    expect(runWithRetry).not.toHaveBeenCalled();
+    // The transaction IS opened now, and that is the fix: the question
+    // "have the movements already been posted?" is asked UNDER the
+    // advisory lock rather than before it. What must not happen is any
+    // POSTING, which `apply` pins on the next line.
+    expect(runWithRetry).toHaveBeenCalledTimes(1);
     expect(apply).not.toHaveBeenCalled();
     expect(transitionStatus).toHaveBeenCalled();
     expect(r).toMatchObject({
@@ -1100,18 +1128,21 @@ describe('RtoDispositionService.finalize — a line BOOKED into the returns hold
   });
 
   it('gate 2: a finalize movement already on the ledger ⇒ nothing re-applied, transition still runs', async () => {
-    const { svc, apply, runWithRetry, transitionStatus, stockMovementFindFirst } = makeService({
+    const { svc, apply, runWithRetry, transitionStatus, txMovementFindFirst } = makeService({
       existingMovement: { id: 'mv-prior' },
       items: [item('si-1', RtoDisposition.RESTOCK)],
       heldMovements: [heldBooking()],
     });
     const r = await svc.finalize(SHIP, STAFF);
-    expect(runWithRetry).not.toHaveBeenCalled();
+    // The tx IS opened now: the question is asked under the advisory
+    // lock rather than before it. What must not happen is POSTING.
+    expect(runWithRetry).toHaveBeenCalledTimes(1);
     expect(apply).not.toHaveBeenCalled();
     expect(transitionStatus).toHaveBeenCalled();
     expect(r.movementsAlreadyApplied).toBe(true);
-    // The gate looks for EVERY type a finalize writes.
-    expect(stockMovementFindFirst).toHaveBeenCalledWith(
+    // The gate looks for EVERY type a finalize writes — now asked
+    // through the TX client, which is where the lock is held.
+    expect(txMovementFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           shipmentId: SHIP,
@@ -1175,5 +1206,62 @@ describe('RtoDispositionService.finalize — a line BOOKED into the returns hold
     expect((advanceUnits.mock.calls[0] as unknown[])[1]).toMatchObject({
       fromStatus: 'RTO_RECEIVED',
     });
+  });
+});
+
+describe('RTO finalize — the idempotency guard is inside the writing transaction', () => {
+  /*
+    Two operators finalizing one return, or one double-tap, both used to
+    pass the movement-existence check and both went on to post: the
+    hold-to-shelf TRANSFER pair applied twice and the stock was inflated
+    by the whole returned quantity, write-offs posted twice, and the
+    inbound-freight share was DEBITED TWICE — a ledger write, therefore
+    permanent.
+
+    INV-6's version CAS cannot catch it, because nothing is lost. Each
+    application is internally consistent and simply happens twice. The
+    only fix is to serialize the question with its answer.
+  */
+
+  it('takes the RTO_FINALIZE advisory lock INSIDE the tx, BEFORE the read', async () => {
+    const { svc, txExecuteRaw, txMovementFindFirst, runWithRetry } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK)],
+    });
+    await svc.finalize(SHIP, STAFF);
+
+    expect(runWithRetry).toHaveBeenCalledTimes(1);
+    expect(txExecuteRaw).toHaveBeenCalled();
+    expect(txMovementFindFirst).toHaveBeenCalled();
+    // A read BEFORE the lock is exactly the unguarded read this fixes.
+    const lockOrder = txExecuteRaw.mock.invocationCallOrder[0] ?? Infinity;
+    const readOrder = txMovementFindFirst.mock.invocationCallOrder[0] ?? -Infinity;
+    expect(lockOrder).toBeLessThan(readOrder);
+  });
+
+  it('asks through the TX client, never the outer prisma', async () => {
+    const { svc, txMovementFindFirst, stockMovementFindFirst } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK)],
+    });
+    await svc.finalize(SHIP, STAFF);
+
+    // A read on the outer client is a read outside the lock, which is
+    // the whole defect.
+    expect(txMovementFindFirst).toHaveBeenCalled();
+    expect(stockMovementFindFirst).not.toHaveBeenCalled();
+  });
+
+  it('the loser posts NOTHING — no movement and no freight debit', async () => {
+    const { svc, apply, debitForWrittenOffItems } = makeService({
+      // The second operator: it waited on the lock, and by the time it
+      // reads, the winner has committed.
+      existingMovement: { id: 'mv-prior' },
+      items: [item('si-1', RtoDisposition.RESTOCK)],
+    });
+
+    await svc.finalize(SHIP, STAFF);
+
+    expect(apply).not.toHaveBeenCalled();
+    // The freight debit is the permanent one — a ledger write.
+    expect(debitForWrittenOffItems).not.toHaveBeenCalled();
   });
 });

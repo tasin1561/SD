@@ -10,6 +10,7 @@ import {
   StockUnitStatus,
 } from '@skydrop/db';
 import { parcelLabel } from '../../../common/text/parcel-label';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
@@ -421,19 +422,43 @@ export class RtoDispositionService {
     // never happen; left in hold and reported rather than guessed at).
     const unclaimedHeld: Array<{ shipmentItemId: string; quantity: number }> = [];
 
-    // ── GATE 2: movement-level idempotency over every finalize type.
+    /*
+      ── GATE 2: movement-level idempotency over every finalize type.
+
+      THE CHECK AND THE POSTING ARE ONE TRANSACTION, UNDER ONE LOCK.
+      This read used to sit OUTSIDE the writing transaction, which under
+      READ COMMITTED is not a guard: two operators finalizing the same
+      return — or one double-tap — both saw no movements and both went
+      on to post. The hold→shelf TRANSFER pair applied twice and the
+      stock was inflated by the whole returned quantity, write-offs
+      posted two `ADJUSTMENT_DECREASE` rows, and the inbound-freight
+      share was DEBITED TWICE, which is a ledger write and permanent.
+
+      INV-6's version CAS cannot catch it, because nothing is lost:
+      each application is internally consistent and simply happens
+      twice. Only serializing the question with its answer helps.
+
+      `pg_advisory_xact_lock` is held to commit-or-rollback, so a crash
+      between the check and the posting cannot leak it. The loser waits,
+      then re-reads inside its own lock, finds the movements, and takes
+      the already-applied path — which is the same answer it would have
+      given had the two been minutes apart.
+    */
     let movementsAlreadyApplied = false;
     let movementIdsByRow: Map<string, string[]> | null = null;
     if (legacyReturning.length > 0 || bookedLines.length > 0) {
-      const existing = await this.prisma.client.stockMovement.findFirst({
-        where: { shipmentId, type: { in: [...FINALIZE_MOVEMENT_TYPES] } },
-        select: { id: true },
-      });
-      movementsAlreadyApplied = existing !== null;
-
-      if (!movementsAlreadyApplied) {
-        movementIdsByRow = await this.mutation.runWithRetry(async (tx) => {
-          // Cleared per attempt: runWithRetry may re-run the whole tx.
+      movementIdsByRow = await this.mutation.runWithRetry(async (tx) => {
+        await takeAdvisoryLock(tx, AdvisoryLock.RTO_FINALIZE, shipmentId);
+        const existing = await tx.stockMovement.findFirst({
+          where: { shipmentId, type: { in: [...FINALIZE_MOVEMENT_TYPES] } },
+          select: { id: true },
+        });
+        if (existing !== null) {
+          movementsAlreadyApplied = true;
+          return null;
+        }
+        // Cleared per attempt: runWithRetry may re-run the whole tx.
+        {
           targetsByRow.clear();
           unclaimedHeld.length = 0;
           const ids = new Map<string, string[]>();
@@ -459,13 +484,13 @@ export class RtoDispositionService {
             });
           }
           return ids;
-        });
-        if (unclaimedHeld.length > 0) {
-          this.logger.warn(
-            { shipmentId, orderId, unclaimedHeld },
-            'RTO finalize: held units no inspection row claimed are left in the returns hold',
-          );
         }
+      });
+      if (unclaimedHeld.length > 0) {
+        this.logger.warn(
+          { shipmentId, orderId, unclaimedHeld },
+          'RTO finalize: held units no inspection row claimed are left in the returns hold',
+        );
       }
     }
     const itemSummaries = this.buildItemSummaries(lines, movementIdsByRow);

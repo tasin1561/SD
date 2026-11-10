@@ -87,6 +87,27 @@ export const AdvisoryLock = {
    */
   INBOUND_FREIGHT_BILL: 0x04642,
   /**
+   * 'RF' — finalizing ONE returned parcel (RTO disposition).
+   *
+   * Finalize asks "have the movements for this shipment already been
+   * posted?" and then posts them. That question was read OUTSIDE the
+   * writing transaction, which under READ COMMITTED is not a guard at
+   * all: two operators finalizing the same return — or one double-tap —
+   * both saw no movements and both went on to post.
+   *
+   * The doubling is not a lost update, so INV-6's version CAS cannot
+   * catch it: each application is internally consistent and simply
+   * happens twice. The hold→shelf TRANSFER pair applies twice and the
+   * stock is inflated by the whole returned quantity; write-offs post
+   * two `ADJUSTMENT_DECREASE` rows; and the inbound-freight share is
+   * DEBITED TWICE, which is a ledger write and therefore permanent.
+   *
+   * So the existence check and the posting happen under this lock, in
+   * one transaction. Per shipment, because that is the unit a person
+   * finalizes.
+   */
+  RTO_FINALIZE: 0x05246,
+  /**
    * 'SP' — provisioning an order's shipment. `provisionFromSnapshot`
    * checks "does this order already have a live shipment?" and then
    * creates one; two writers of CONFIRMED at once (a transition racing a
