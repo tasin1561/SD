@@ -26,6 +26,7 @@ import { Timeline, type TimelineStep, type TimelineStepState } from '@skydrop/ui
 import { OrderActionsPanel } from './order-actions-panel';
 import { OrderChargesSection } from './order-charges';
 import { OrderShipmentsSection } from './order-shipments-section';
+import { ParcelActivityPanel } from './parcel-activity-panel';
 import { StuckOrderRecovery } from './stuck-order-recovery';
 import { useOrderJourney } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -298,6 +299,16 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             orderNumber={detail.data.orderNumber}
             status={detail.data.status}
           />
+
+          {/* The journey says what happened to the parcel; this says who
+              made it happen — label, sheet, pick, pack, handover, each
+              with the staff member's name and the time. Beside the
+              journey on purpose: it is the second half of the same
+              question and nobody should have to leave the order to ask
+              it. */}
+          <section className="oo-section">
+            <ParcelActivityPanel orderId={orderId} />
+          </section>
 
           <section className="oo-section">
             <SectionHeading title={t('orderDetail.actions')} />

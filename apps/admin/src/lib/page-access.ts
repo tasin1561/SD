@@ -51,6 +51,11 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // the list, stated rather than inherited so a later change to the
   // prefix above does not silently move it.
   ['/warehouse/bins', 'warehouse.view'],
+  // "Who has what" — a READ of who is holding a parcel, a box or a
+  // picking sheet. The warehouse read key, stated rather than inherited:
+  // a picker deciding what to take next must see the pack and handover
+  // holds too, so it is deliberately not gated on `warehouse.pack`.
+  ['/warehouse/holds', 'warehouse.view'],
   // Merging every bin into FLOOR is destructive and only partly
   // reversible, so it does not inherit the warehouse read gate.
   ['/warehouse/collapse', 'warehouse.bins.collapse'],

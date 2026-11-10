@@ -1,0 +1,221 @@
+/* Parcel activity trail — "who did what", on the order page.
+   Tokens only (FE-6). Transform/opacity animation only, nothing that
+   reflows, and every grid declares minmax columns so no cell sizes to
+   its content (a long staff name must shrink, not push the time off the
+   row). */
+
+.pa-sub {
+  margin: 0 0 var(--sp-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.pa-empty {
+  margin: 0;
+  padding: var(--sp-4);
+  border: 1px dashed var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+.pa-stack {
+  display: grid;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+/* ── One parcel ───────────────────────────────────────────────────────── */
+.pa-parcel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-2);
+}
+.pa-parcel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.pa-parcel__id {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--fg-strong);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pa-parcel__awb {
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pa-parcel__count {
+  margin-inline-start: auto;
+  font-size: var(--fs-xs);
+  color: var(--fg-faint);
+}
+.pa-last {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+
+/* ── The ladder ───────────────────────────────────────────────────────── */
+.pa-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--sp-2);
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.pa-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) minmax(0, auto);
+  align-items: start;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border-radius: var(--r-md);
+  min-width: 0;
+  /* Enters once, on mount, staggered by its index. Transform + opacity
+     only, so it cannot cause layout. */
+  animation: pa-in 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--pa-i, 0) * 28ms);
+}
+.pa-row::after {
+  /* The connector, drawn behind the next chip. */
+  content: '';
+  position: absolute;
+  inset-inline-start: 21px;
+  top: 32px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--line-strong);
+}
+.pa-row:last-child::after {
+  display: none;
+}
+.pa-row:hover {
+  background: var(--surface-3);
+}
+.pa-row__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--fg-muted);
+  transition: transform 160ms ease;
+}
+.pa-row:hover .pa-row__chip {
+  transform: translateY(-1px);
+}
+.pa-row[data-tone='good'] .pa-row__chip {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.pa-row[data-tone='warn'] .pa-row__chip {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.pa-row__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.pa-row__what {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--fg-strong);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pa-row__who {
+  font-size: var(--fs-xs);
+  color: var(--fg-body);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Not a person: the sentence is a state ("Not recorded", "Skydrop
+   system"), so it reads quieter and in italics rather than looking like
+   somebody's name. */
+.pa-row__who[data-person='no'] {
+  color: var(--fg-faint);
+  font-style: italic;
+}
+.pa-row__detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.pa-row__when {
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+  text-align: end;
+}
+.pa-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.pa-chip[data-tone='warn'] {
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+
+@media (max-width: 480px) {
+  .pa-row {
+    grid-template-columns: 26px minmax(0, 1fr);
+  }
+  .pa-row__when {
+    grid-column: 2;
+    text-align: start;
+    white-space: normal;
+  }
+}
+
+@keyframes pa-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pa-row {
+    animation: none;
+  }
+  .pa-row__chip,
+  .pa-row:hover .pa-row__chip {
+    transition: none;
+    transform: none;
+  }
+}

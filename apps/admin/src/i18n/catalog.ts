@@ -1,5 +1,6 @@
 import { makeTranslator } from '@skydrop/ui/app/i18n';
 import { toCatalogs } from './define';
+import { activity } from './messages/activity';
 import { cc } from './messages/cc';
 import { common } from './messages/common';
 import { confirmation } from './messages/confirmation';
@@ -23,6 +24,7 @@ import { wh } from './messages/wh';
  * the later file win) and that every `{placeholder}` appears in both languages.
  */
 export const NAMESPACES = [
+  activity,
   common,
   confirmation,
   shell,
@@ -42,6 +44,7 @@ export const NAMESPACES = [
 ] as const;
 
 const ALL = {
+  ...activity,
   ...common,
   ...confirmation,
   ...shell,

@@ -8,6 +8,8 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Package } from 'lucide-react';
 import '../../_components/benches.css';
 import { useHandoverQueue, type WaitingHandover } from '@/lib/ops-hooks';
+import { useParcelLastTouch, type ParcelLastTouch } from '@/lib/activity-hooks';
+import { actorLabel, clockTime } from '@/lib/activity-format';
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/client';
 
@@ -29,6 +31,10 @@ export function HandoverQueue(): ReactElement {
   const t = useT();
 
   const q = useHandoverQueue();
+  // One line per row: who was last at this parcel. Several packers work
+  // in parallel, so the loader holding a box wants to know whose box it
+  // was before asking anybody anything. One request for the whole list.
+  const lastTouch = useParcelLastTouch((q.data ?? []).map((w) => w.shipmentId));
 
   if (q.isLoading) {
     return (
@@ -80,14 +86,24 @@ export function HandoverQueue(): ReactElement {
       </div>
       <ul className="wh-list">
         {waiting.map((w) => (
-          <WaitingRow key={w.shipmentId} pack={w} />
+          <WaitingRow
+            key={w.shipmentId}
+            pack={w}
+            lastTouch={lastTouch.data?.get(w.shipmentId) ?? null}
+          />
         ))}
       </ul>
     </section>
   );
 }
 
-function WaitingRow({ pack }: { pack: WaitingHandover }): ReactElement {
+function WaitingRow({
+  pack,
+  lastTouch,
+}: {
+  pack: WaitingHandover;
+  lastTouch: ParcelLastTouch | null;
+}): ReactElement {
   const t = useT();
   const checked = pack.handoverScannedAtIso !== null;
   return (
@@ -100,6 +116,17 @@ function WaitingRow({ pack }: { pack: WaitingHandover }): ReactElement {
             <span className="sk-ident">{pack.shipmentNumber}</span> ·{' '}
             <span className="sk-ident">{pack.orderNumber ?? '—'}</span>
             {pack.recipientName === null ? '' : ` · ${pack.recipientName}`} · {pack.courierCode}
+            {lastTouch !== null && (
+              <>
+                <br />
+                <span className="wh-faint">
+                  {t('activity.trail.lastTouch', {
+                    who: actorLabel(lastTouch.actor, t),
+                    time: clockTime(lastTouch.atIso),
+                  })}
+                </span>
+              </>
+            )}
           </>
         }
         status={

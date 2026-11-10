@@ -1,0 +1,324 @@
+/* "Who has what" — the live holds board.
+   Tokens only (FE-6), transform/opacity animation only, and every card
+   is a minmax grid so a long staff name shrinks instead of pushing the
+   clock time out of the card. Reads down to 360px as one column. */
+
+.hb-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-5, 20px);
+  min-width: 0;
+}
+.hb-page > .sk-ph {
+  margin-bottom: 0;
+}
+
+.hb-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.hb-counts {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--fg-body);
+}
+.hb-asof {
+  font-size: var(--fs-xs);
+  color: var(--fg-faint);
+}
+.hb-spin {
+  animation: hb-spin 900ms linear infinite;
+}
+
+.hb-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+/* ── One hold ─────────────────────────────────────────────────────────── */
+.hb-card {
+  position: relative;
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-2);
+  animation: hb-in 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--hb-i, 0) * 26ms);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+.hb-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hud);
+}
+/* The left edge carries the state, so the three states are told apart
+   without reading a word — and the word is there as well. */
+.hb-card::before {
+  content: '';
+  position: absolute;
+  inset-block: var(--sp-3);
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: var(--r-pill);
+  background: var(--blue-line);
+}
+.hb-card[data-state='free']::before {
+  background: var(--line-strong);
+}
+.hb-card[data-state='stuck']::before {
+  background: var(--red-fill);
+}
+.hb-card[data-state='stuck'] {
+  border-color: var(--red-line);
+}
+
+.hb-card__top {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.hb-card__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+}
+.hb-card[data-state='held'] .hb-card__chip {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.hb-card[data-state='stuck'] .hb-card__chip {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.hb-card__kind {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+.hb-card__who {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--fs-md, var(--fs-sm));
+  font-weight: var(--fw-semibold);
+  color: var(--fg-strong);
+  overflow-wrap: anywhere;
+}
+.hb-card__who[data-person='no'] {
+  color: var(--fg-faint);
+  font-style: italic;
+  font-weight: var(--fw-medium);
+}
+.hb-card__what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.hb-card__id {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--fg-body);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.hb-card__awb {
+  font-size: var(--fs-xs);
+  color: var(--fg-faint);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.hb-card__link {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--sky);
+  text-decoration: none;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+}
+.hb-card__link:hover {
+  text-decoration: underline;
+}
+.hb-card__link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+.hb-card__times {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+}
+.hb-card__times [data-free='yes'] {
+  color: var(--fg-faint);
+}
+.hb-card__stuck {
+  margin: 0;
+  padding: var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+  font-size: var(--fs-xs);
+}
+.hb-card__wh {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--fg-faint);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ── Sheet progress ───────────────────────────────────────────────────── */
+.hb-progress {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.hb-progress__label {
+  font-size: var(--fs-xs);
+  color: var(--fg-body);
+}
+.hb-progress__track {
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.hb-progress__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--blue-fill);
+  transform-origin: left center;
+  transform: scaleX(var(--hb-done, 0));
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── Reprints ─────────────────────────────────────────────────────────── */
+.hb-section {
+  margin-top: var(--sp-5, var(--sp-4));
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.hb-note {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.hb-quiet {
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.hb-reprints {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.hb-reprint {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) minmax(0, 1fr) minmax(0, auto);
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  min-width: 0;
+  border: 1px solid var(--saffron-line);
+  border-radius: var(--r-md);
+  background: var(--saffron-tint);
+}
+.hb-reprint__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--saffron-on-tint);
+}
+.hb-reprint__ids,
+.hb-reprint__who,
+.hb-reprint__counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  font-size: var(--fs-xs);
+  color: var(--saffron-on-tint);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .hb-reprint {
+    grid-template-columns: 26px minmax(0, 1fr);
+  }
+  .hb-reprint__who,
+  .hb-reprint__counts {
+    grid-column: 2;
+  }
+}
+
+@keyframes hb-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes hb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hb-card,
+  .hb-spin {
+    animation: none;
+  }
+  .hb-card,
+  .hb-card:hover {
+    transition: none;
+    transform: none;
+  }
+  .hb-progress__fill {
+    transition: none;
+  }
+}

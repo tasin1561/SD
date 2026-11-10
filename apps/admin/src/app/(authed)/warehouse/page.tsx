@@ -10,6 +10,7 @@ import {
   Ship,
   Printer,
   ScanLine,
+  Hand,
 } from 'lucide-react';
 import './_components/benches.css';
 import { getT } from '@/i18n/server';
@@ -62,6 +63,15 @@ export default async function WarehouseHubPage(): Promise<ReactElement> {
           icon={<ScanLine size={20} />}
           title={t('warehousePage.handover')}
           subtitle={t('warehousePage.scanEachParcelAsIt')}
+        />
+        {/* Who has a parcel, a box or a picking sheet right now. On the
+            hub because the question is asked with no parcel in mind —
+            "can I take one?" — by somebody standing between benches. */}
+        <Tile
+          href="/warehouse/holds"
+          icon={<Hand size={20} />}
+          title={t('holds.title')}
+          subtitle={t('holds.navSubtitle')}
         />
         <Tile
           href="/warehouse/rto"

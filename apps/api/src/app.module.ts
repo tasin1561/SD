@@ -37,6 +37,7 @@ import { InventoryTransferModule } from './modules/inventory-transfer/inventory-
 import { InventoryUnitModule } from './modules/inventory-unit/inventory-unit.module';
 import { OrderModule } from './modules/order/order.module';
 import { OrderJourneyModule } from './modules/order-journey/order-journey.module';
+import { WarehouseActivityModule } from './modules/warehouse-activity/warehouse-activity.module';
 import { CustomerReturnModule } from './modules/customer-return/customer-return.module';
 import { OrderReattemptModule } from './modules/order-reattempt/order-reattempt.module';
 import { OrderCsvImportModule } from './modules/order-csv-import/order-csv-import.module';
@@ -196,6 +197,7 @@ import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-
     InventoryUnitModule,
     OrderModule,
     OrderJourneyModule,
+    WarehouseActivityModule,
     CustomerReturnModule,
     OrderReattemptModule,
     OrderCsvImportModule,
