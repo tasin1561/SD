@@ -16,6 +16,8 @@ import { PutawayPanel } from './putaway-panel';
 import { RtoItemRow, type RtoInspectPayload } from './rto-item-row';
 import type { RtoItemCondition, RtoDisposition } from '@skydrop/db';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useScanSound } from '@/lib/scan-sound';
+import { ScanSoundToggle } from '@/components/scan-sound-toggle';
 import { OpenReturns } from './open-returns';
 import { AtOurDoorList, StillWithCourierList } from './awaiting-returns';
 import { RtoTabPanel, RtoTabs, type RtoTab } from './rto-tabs';
@@ -182,6 +184,8 @@ export function RtoStation(): ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [camera, setCamera] = useState(false);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
+  // The same two sounds as every other bench (one pair, learned once).
+  const sound = useScanSound();
 
   /*
     The tab lives in the URL.
@@ -241,6 +245,15 @@ export function RtoStation(): ReactElement {
     return serverVerdict(err, tr('warehouseRtoRtoStation.operationFailed'));
   }
 
+  /**
+   * The screen says no, so the room hears no — every refusal path on this
+   * bench, including the one client-side "type an AWB first". Never throws.
+   */
+  function refuse(text: string): void {
+    setError(text);
+    sound.refused();
+  }
+
   /** The row's payload in the API's vocabulary (the values ARE the enum). */
   function toRequest(payload: RtoInspectPayload): InspectRtoItemRequest {
     if ('rows' in payload) {
@@ -262,13 +275,15 @@ export function RtoStation(): ReactElement {
 
   async function onReceive(): Promise<void> {
     setError(null);
+    sound.prime();
     const a = awb.trim();
     if (!a) {
-      setError(tr('warehouseRtoRtoStation.awbIsRequired'));
+      refuse(tr('warehouseRtoRtoStation.awbIsRequired'));
       return;
     }
     try {
       const r = await receive.mutateAsync({ awbNumber: a });
+      sound.accepted();
       setShipmentId(r.shipmentId);
       toast.success(
         r.alreadyReceived
@@ -286,7 +301,7 @@ export function RtoStation(): ReactElement {
                 : ''),
       );
     } catch (err) {
-      setError(fmtError(err));
+      refuse(fmtError(err));
     }
   }
 
@@ -295,6 +310,7 @@ export function RtoStation(): ReactElement {
     setError(null);
     try {
       const r = await finalize.mutateAsync({ shipmentId });
+      sound.accepted();
       // Units, not lines: a split line is one line and two outcomes.
       toast.success(
         tr('warehouseRtoRtoStation.finalizedSummary', {
@@ -308,7 +324,7 @@ export function RtoStation(): ReactElement {
       setAwb('');
       return true;
     } catch (err) {
-      setError(fmtError(err));
+      refuse(fmtError(err));
       return false;
     }
   }
@@ -360,6 +376,7 @@ export function RtoStation(): ReactElement {
                 thirteen digits off a battered box and type them. */}
             <div className="wh-row">
               <CameraScanButton onClick={() => setCamera(true)} />
+              <ScanSoundToggle />
               <Button
                 variant="primary"
                 size="lg"
@@ -428,10 +445,11 @@ export function RtoStation(): ReactElement {
                         shipmentItemId: it.shipmentItemId,
                         ...toRequest(payload),
                       });
+                      sound.accepted();
                       toast.success(tr('warehouseRtoRtoStation.lineInspected'));
                       await detail.refetch();
                     } catch (err) {
-                      setError(fmtError(err));
+                      refuse(fmtError(err));
                     }
                   }}
                   saving={inspect.isPending}

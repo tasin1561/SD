@@ -2309,4 +2309,47 @@ export const wh = defineMessages({
     'Adjust stock for {skuCode}',
     '{skuCode}-এর স্টক সমন্বয় করুন',
   ],
+
+  // The pack bench's three steps (2026-11-10). Short on purpose: the
+  // numeral and the icon carry the step, the words only confirm it.
+  'warehousePackSteps.theThreeStepsOfPacking': [
+    'The three steps of packing a box',
+    'একটি বাক্স প্যাক করার তিনটি ধাপ',
+    'डिब्बा पैक करने के तीन चरण',
+  ],
+  'warehousePackSteps.one': [
+    'Scan the box label',
+    'বাক্সের লেবেল স্ক্যান করুন',
+    'डिब्बे का लेबल स्कैन करें',
+  ],
+  'warehousePackSteps.two': [
+    'Scan every product',
+    'প্রতিটি পণ্য স্ক্যান করুন',
+    'हर सामान स्कैन करें',
+  ],
+  'warehousePackSteps.three': [
+    'Scan the label again to close',
+    'বন্ধ করতে লেবেলটি আবার স্ক্যান করুন',
+    'बंद करने के लिए लेबल दोबारा स्कैन करें',
+  ],
+  'warehousePackPackStation.howManyPiecesAreIn': [
+    'How many pieces are in the box',
+    'বাক্সে কতটি পিস আছে',
+    'डिब्बे में कितने टुकड़े हैं',
+  ],
+
+  // The scan sounds, shared by every warehouse bench. A muted station must
+  // SAY it is muted, or the next person decides the feature is broken.
+  'scanSound.soundOn': ['Sound on', 'শব্দ চালু', 'आवाज़ चालू'],
+  'scanSound.soundOff': ['Sound off', 'শব্দ বন্ধ', 'आवाज़ बंद'],
+  'scanSound.soundIsOn': [
+    'Scan sounds are on — tap to mute this device',
+    'স্ক্যানের শব্দ চালু আছে — এই ডিভাইসে বন্ধ করতে চাপ দিন',
+    'स्कैन की आवाज़ चालू है — इस डिवाइस पर बंद करने के लिए दबाएं',
+  ],
+  'scanSound.soundIsOff': [
+    'Scan sounds are muted — tap to turn them on',
+    'স্ক্যানের শব্দ বন্ধ আছে — চালু করতে চাপ দিন',
+    'स्कैन की आवाज़ बंद है — चालू करने के लिए दबाएं',
+  ],
 });

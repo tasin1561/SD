@@ -686,6 +686,16 @@ export interface PackBoxLine {
   skuCode: string;
   productName: string;
   quantity: number;
+  /**
+   * The product's picture, a read-time presigned thumbnail URL from the
+   * API (`CatalogReadService`). NOT the snapshotted `order_items.imageUrl`:
+   * that column holds the canonical object URL and the bucket has been
+   * private since 2026-07-28, so every snapshot since resolves for nobody.
+   * `null` when the seller uploaded none, or the thumbnail service was
+   * down — the bench draws a neutral placeholder, never a broken frame.
+   * Optional on the wire so an older API build still typechecks here.
+   */
+  imageUrl?: string | null;
 }
 /** One parcel waiting on the pack bench (`GET /warehouse/packs/queue`). */
 export interface WaitingPack {

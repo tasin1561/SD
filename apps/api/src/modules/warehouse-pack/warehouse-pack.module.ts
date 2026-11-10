@@ -10,6 +10,7 @@ import { PackerController } from './controllers/packer.controller';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
 import { CourierOpsModule } from '../courier-ops/courier-ops.module';
+import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 
 /**
  * Module 8 — warehouse-pack module. Commit 9 = service layer
@@ -32,7 +33,17 @@ import { CourierOpsModule } from '../courier-ops/courier-ops.module';
  * loser pulls again. Revisit if pack volume scales.
  */
 @Module({
-  imports: [OrderModule, WarehouseManifestModule, InventorySharedModule, CourierOpsModule],
+  imports: [
+    OrderModule,
+    WarehouseManifestModule,
+    InventorySharedModule,
+    CourierOpsModule,
+    // The pack bench shows each line's product PICTURE (the packers may
+    // read no English), and a cross-module variant read goes through
+    // CatalogReadService — never a direct `product_variants` query
+    // (MUST #13). Same wiring as `warehouse-rto`'s line thumbnails.
+    CatalogReadModule,
+  ],
   controllers: [PackerController],
   providers: [
     PackQueueService,

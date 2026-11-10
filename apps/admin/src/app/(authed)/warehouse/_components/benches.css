@@ -16,6 +16,16 @@
 .wh-page > .sk-ph {
   margin-bottom: 0;
 }
+/* These benches are worked on whatever is to hand — a terminal, a tablet,
+   a phone — so they honour the 16px minimum side gutter at every width.
+   The shell gives 12px below 640px; the extra 4px is added HERE rather
+   than in the shell, because widening the shell would move every page in
+   every console for a rule that is about the warehouse screens. */
+@media (max-width: 40rem) {
+  .wh-page {
+    padding-inline: 4px;
+  }
+}
 .wh-stack {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -439,33 +449,98 @@ p.wh-alert {
 .wh-line[data-done='1'] {
   color: var(--fg-faint);
 }
+/* The picture leads the row: it is how a packer who reads no English
+   matches the line to the thing in their hand. */
+.wh-line__thumb {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--fg-faint);
+  object-fit: cover;
+}
+.wh-line__thumb--none {
+  color: var(--fg-faint);
+}
+.wh-line__text {
+  flex: 1 1 10rem;
+}
+/* The NAME is what gets matched against the item in hand, so it is the
+   biggest thing on the row and it WRAPS rather than truncating — a
+   truncated name is a name the packer cannot match. */
 .wh-line__name {
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-medium);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--fg-strong);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.wh-line[data-done='1'] .wh-line__name {
+  font-weight: var(--fw-semibold);
 }
 .wh-line__sku {
   color: var(--fg-faint);
   font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
 }
 .wh-line__count {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: var(--sp-2);
+  min-height: var(--tap);
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--saffron-line);
+  border-radius: var(--r-pill);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+/* Waiting / scanned, tellable apart at a glance: shape AND icon AND
+   colour, so a colour-blind packer loses nothing. */
+.wh-line[data-done='1'] .wh-line__count {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.wh-line__state {
+  display: inline-flex;
+  align-items: center;
 }
 .wh-line__figure {
   font-size: var(--fs-xl);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-heavy);
+  white-space: nowrap;
 }
 .wh-line[data-done='1'] .wh-line__figure {
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-regular);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
 }
 .wh-line__check {
   color: var(--green-text);
+}
+.wh-line__waiting {
+  color: var(--saffron-text);
+}
+/* On a phone the row reflows: picture + name on the first line, the count
+   dropping below. Nothing truncates and nothing is dropped. */
+@media (max-width: 30rem) {
+  .wh-line {
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-3);
+    padding: var(--sp-3);
+  }
+  .wh-line__name {
+    font-size: var(--fs-md);
+  }
+  .wh-line__count {
+    margin-inline-start: auto;
+  }
 }
 
 /* Queue lists (pack queue, handover queue, the session list). */
@@ -822,6 +897,360 @@ p.wh-alert {
   color: var(--fg-muted);
   font-size: var(--fs-xs);
   line-height: 1.5;
+}
+
+/* ── The pack bench, made illiterate-friendly (2026-11-10, owner) ─────
+   The packers are amateurs who may read no English. Everything below is
+   PRESENTATION: numbers, icons, pictures, size and colour do the work, and
+   the words are a bonus. Colour is never alone — every coloured state also
+   carries an icon or a shape. Tokens only; light and dark both come free.
+   Responsive to 360 px: no fixed width wider than the screen, every row
+   wraps or stacks, images are `max-width: 100%`, targets stay >= --tap. */
+
+/* The three steps, permanently on screen. Always THREE columns, even on a
+   phone, because the whole point is that it reads as 1 → 2 → 3. */
+.wh-steps-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.wh-steps-bar__aside {
+  margin-inline-start: auto;
+}
+.wh-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  flex: 1 1 18rem;
+  min-width: 0;
+  margin: 0;
+  padding: var(--sp-3) var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+  list-style: none;
+  counter-reset: none;
+}
+.wh-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 4px;
+  text-align: center;
+}
+/* The connector, drawn behind the chips and filled up to where you are.
+   A pseudo-element would be cheaper but a real span lets the fill carry a
+   transition without animating a layout property. */
+.wh-step__rail {
+  position: absolute;
+  top: 19px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: var(--line);
+}
+.wh-step:first-child .wh-step__rail {
+  left: 50%;
+}
+.wh-step:last-child .wh-step__rail {
+  right: 50%;
+}
+.wh-step[data-state='done'] .wh-step__rail,
+.wh-step[data-state='now'] .wh-step__rail {
+  background: var(--accent-fill);
+}
+.wh-step__chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-heavy);
+  line-height: 1;
+  transition:
+    transform var(--dur) var(--ease-out),
+    background var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out);
+}
+.wh-step__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.wh-step[data-state='done'] .wh-step__chip {
+  border-color: var(--green-fill);
+  background: var(--green-fill);
+  color: var(--green-on-fill);
+}
+.wh-step[data-state='now'] .wh-step__chip {
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  transform: scale(1.12);
+  box-shadow: 0 0 0 6px var(--accent-tint);
+}
+/* The current step breathes, so "you are here" survives being glanced at
+   from across a bench. Transform only, and off under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .wh-step[data-state='now'] .wh-step__chip {
+    animation: wh-step-pulse 1.8s var(--ease-out) infinite;
+  }
+}
+@keyframes wh-step-pulse {
+  0%,
+  100% {
+    transform: scale(1.12);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+}
+.wh-step__icon {
+  display: inline-flex;
+  color: var(--fg-faint);
+  transition: color var(--dur) var(--ease-out);
+}
+.wh-step__icon > svg {
+  width: 26px;
+  height: 26px;
+}
+.wh-step[data-state='now'] .wh-step__icon {
+  color: var(--blue-text);
+}
+.wh-step[data-state='done'] .wh-step__icon {
+  color: var(--green-text);
+}
+.wh-step__label {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.wh-step[data-state='now'] .wh-step__label {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+/* Below ~26rem the words would each wrap to four lines; the numbers and
+   icons still read as 1 → 2 → 3, which is the requirement. */
+@media (max-width: 26rem) {
+  .wh-step__label {
+    font-size: var(--fs-2xs);
+  }
+  .wh-step__icon > svg {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+/* The camera sits beside the field it belongs to. It wraps UNDER a
+   full-width field rather than squeezing it on a phone. */
+.wh-scan__row--with-camera > .wh-scan__input {
+  flex: 1 1 18rem;
+}
+.wh-scan__camera {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.wh-scan__camera .sk-btn {
+  min-height: 52px;
+}
+@media (max-width: 34rem) {
+  .wh-scan__camera,
+  .wh-scan__camera .sk-btn {
+    width: 100%;
+  }
+}
+
+/* Progress that reads as progress: a big figure, a tick per piece, a bar
+   that fills. The fraction stays as text — it is what gets read aloud. */
+.wh-prog {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.wh-prog[data-complete='1'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+}
+.wh-prog__figure {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: 2px;
+  line-height: 1;
+}
+.wh-prog__done {
+  color: var(--fg-strong);
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-heavy);
+  letter-spacing: -0.02em;
+}
+.wh-prog[data-complete='1'] .wh-prog__done {
+  color: var(--green-text);
+}
+.wh-prog__slash,
+.wh-prog__total {
+  color: var(--fg-muted);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+}
+.wh-prog__right {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-1);
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+.wh-prog__ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.wh-prog__tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--green-on-fill);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.wh-prog__tick[data-on='1'] {
+  border-color: var(--green-fill);
+  background: var(--green-fill);
+}
+.wh-prog__bar {
+  overflow: hidden;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+}
+.wh-prog__fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--accent-fill);
+  transform-origin: left center;
+  transition: transform var(--dur) var(--ease-out);
+}
+.wh-prog[data-complete='1'] .wh-prog__fill {
+  background: var(--green-fill);
+}
+@media (prefers-reduced-motion: reduce) {
+  .wh-prog__fill {
+    transition: none;
+  }
+}
+
+/* A friendly, three-language refusal. The icon and the tint say what KIND
+   of problem it is before a word is read; the kind never rests on colour
+   alone because the icon changes with it. */
+.wh-oops {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-md);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.wh-oops[data-kind='duplicate'],
+.wh-oops[data-kind='count'],
+.wh-oops[data-kind='empty'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.wh-oops[data-kind='notReady'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.wh-oops__icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: inherit;
+}
+.wh-tri {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.wh-tri__line {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.wh-tri__line--lead {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+/* Three lines inside a button: centred, tight, and still one tap target. */
+.wh-tri--btn {
+  justify-items: center;
+  gap: 0;
+  text-align: center;
+}
+.wh-tri--btn .wh-tri__line {
+  font-size: var(--fs-sm);
+  line-height: 1.3;
+}
+
+/* FE-2 — the server's own words, verbatim. Small and secondary, for
+   whoever is called over; never hidden. */
+.wh-verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: var(--sp-2) 0 0;
+  color: var(--fg-faint);
+  font-family: var(--app-mono);
+  font-size: var(--fs-2xs);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.wh-alert--rich {
+  padding: var(--sp-3);
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--fg-body);
 }
 
 /* ── The camera ───────────────────────────────────────────────────────── */

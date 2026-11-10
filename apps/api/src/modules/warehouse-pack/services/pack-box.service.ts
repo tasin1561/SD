@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ActorType,
   OrderStatus,
@@ -10,6 +10,7 @@ import {
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { ScanBlockService } from '../../system-issues/services/scan-block.service';
+import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 
 /**
  * The box on the pack bench.
@@ -57,6 +58,16 @@ export interface OpenBoxResult {
     skuCode: string;
     productName: string;
     quantity: number;
+    /**
+     * The product's picture, as a read-time presigned thumbnail URL from
+     * `CatalogReadService` — carried so the bench can show the packer what
+     * the thing LOOKS like. The pack bench is worked by people who may not
+     * read the name beside it, so the picture is the primary way a line is
+     * matched to the item in hand. `null` when the seller never uploaded
+     * one, or when the thumbnail service was unavailable; the bench draws a
+     * neutral placeholder rather than a broken frame.
+     */
+    imageUrl: string | null;
   }[];
   alreadyOpen: boolean;
 }
@@ -74,10 +85,13 @@ export interface ScanResult {
 
 @Injectable()
 export class PackBoxService {
+  private readonly logger = new Logger(PackBoxService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly scanBlock: ScanBlockService,
+    private readonly catalog: CatalogReadService,
   ) {}
 
   /**
@@ -610,6 +624,7 @@ export class PackBoxService {
       select: { id: true, skuCode: true },
     });
     const variantBySku = new Map(variants.map((v) => [v.skuCode, v.id]));
+    const thumbs = await this.thumbnails([...variantBySku.values()]);
 
     return {
       packBoxId: box.id,
@@ -617,14 +632,47 @@ export class PackBoxService {
       orderId: box.orderId,
       awbNumber: box.shipment.awbNumber ?? '',
       expiresAt: box.expiresAt,
-      expected: [...bySku.values()].map((r) => ({
-        variantId: variantBySku.get(r.skuCode) ?? '',
-        skuCode: r.skuCode,
-        productName: r.productName,
-        quantity: r.quantity,
-      })),
+      expected: [...bySku.values()].map((r) => {
+        const variantId = variantBySku.get(r.skuCode) ?? '';
+        return {
+          variantId,
+          skuCode: r.skuCode,
+          productName: r.productName,
+          quantity: r.quantity,
+          imageUrl: thumbs.get(variantId) ?? null,
+        };
+      }),
       alreadyOpen,
     };
+  }
+
+  /**
+   * The product's picture for the pack bench, via `CatalogReadService`
+   * (MUST #13 — cross-module variant reads go through it).
+   *
+   * It must be a PRESIGNED url minted at read time, not the snapshotted
+   * `order_items.imageUrl`: that column holds the canonical object URL and
+   * the bucket has been private since 2026-07-28, so every snapshot taken
+   * since resolves for nobody. A dead link on a bench is worse than no
+   * picture, because the packer waits for it.
+   *
+   * FAILS OPEN, exactly as `RtoReadService.thumbnails` does: a thumbnail
+   * service that is unavailable costs the lines their pictures and nothing
+   * else. A bench that cannot open a box because an image URL could not be
+   * signed is a far worse outcome on a warehouse floor.
+   */
+  private async thumbnails(variantIds: readonly string[]): Promise<ReadonlyMap<string, string>> {
+    const ids = variantIds.filter((id) => id !== '');
+    if (ids.length === 0) return new Map();
+    try {
+      return await this.catalog.thumbnailUrlsByVariant(ids);
+    } catch (err) {
+      this.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'Pack line thumbnails unavailable; showing the lines without them (fail-open)',
+      );
+      return new Map();
+    }
   }
 
   /** Effective box timeout (minutes): ops.pack_box_timeout_minutes,

@@ -11,6 +11,8 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { useHandoverScan, useScanBlock } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { useScanSound } from '@/lib/scan-sound';
+import { ScanSoundToggle } from '@/components/scan-sound-toggle';
 import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
 import { HandoverQueue } from './handover-queue';
 import '../../_components/benches.css';
@@ -35,6 +37,8 @@ export function HandoverBench(): ReactElement {
   const scan = useHandoverScan();
   const block = useScanBlock();
   const canManagePickups = usePermission('courier.pickups.manage');
+  // The same two sounds as every other bench (one pair, learned once).
+  const sound = useScanSound();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const [code, setCode] = useState('');
@@ -57,6 +61,14 @@ export function HandoverBench(): ReactElement {
     const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, [refusal]);
+
+  // SCAN-1 — the operator is stopped. Once, when the stop appears.
+  const wasBlocked = useRef(false);
+  const blocked = block.data != null;
+  useEffect(() => {
+    if (blocked && !wasBlocked.current) sound.refused();
+    wasBlocked.current = blocked;
+  }, [blocked, sound]);
   const [done, setDone] = useState<
     Array<{
       shipmentNumber: string;
@@ -71,8 +83,11 @@ export function HandoverBench(): ReactElement {
     const awb = value.trim();
     if (awb === '') return;
     setCode('');
+    // The keypress that got here is the gesture the browser waits for.
+    sound.prime();
     try {
       const r = await scan.mutateAsync(awb);
+      sound.accepted();
       setDone((prev) => [
         {
           shipmentNumber: r.shipmentNumber,
@@ -88,6 +103,8 @@ export function HandoverBench(): ReactElement {
       // Enter by itself, so a non-blocking warning is a warning the next
       // scan wipes off the screen.
       setRefusal(serverVerdict(err));
+      // If the screen says no, the room hears no.
+      sound.refused();
     } finally {
       inputRef.current?.focus();
     }
@@ -146,6 +163,9 @@ export function HandoverBench(): ReactElement {
             }}
           />
           <CameraScanButton onClick={() => setCamera(true)} />
+          <div className="wh-steps-bar__aside">
+            <ScanSoundToggle />
+          </div>
         </div>
         <p className="wh-scan__meta">
           {done.length === 0
