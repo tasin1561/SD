@@ -1177,10 +1177,18 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     source: 'intake-warehouses',
   },
   'ops.pack_box_timeout_minutes': {
-    name: 'Open pack box released after (minutes)',
+    name: 'Idle pack box released after (minutes)',
     group: 'Warehouse',
-    what: 'A box left open at the pack bench longer than this is released: its scans are discarded and the parcel goes back to the pack queue, so a box abandoned at the end of a shift does not block the order or the packer.',
-    example: 'Set to 60: a box opened at 5:30 pm and left is back in the queue by 6:30 pm.',
+    what: 'A box at the pack bench with NOBODY SCANNING into it for this long is released: its scans are discarded and the parcel goes back to the pack queue, so a box abandoned mid-shift does not block the order or the packer. The clock runs from the LAST SCAN, not from when the box was opened — every scan pushes it forward, so a packer working a long order is never cut off.',
+    example:
+      'Set to 10: a box whose last scan was at 5:30 pm is back in the queue at 5:40 pm, while a packer scanning every minute keeps it as long as they need.',
+  },
+  'ops.pack_claim_minutes': {
+    name: 'Parcel stays off other benches for (minutes)',
+    group: 'Warehouse',
+    what: 'When the pack queue hands a parcel to a packer, no other bench is offered it for this long. If no box is opened in that time the parcel comes back on its own, so a packer who walks away never blocks it.',
+    example:
+      'Set to 10: a parcel pulled at 2:00 pm with no box opened is back on every bench at 2:10 pm.',
   },
   'ops.pick_task_timeout_hours': {
     name: 'Unfinished pick released after (hours)',

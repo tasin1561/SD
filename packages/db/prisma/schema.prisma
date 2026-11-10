@@ -79,6 +79,7 @@ model StaffUser {
   sellerCourierLinksCreated  SellerCourierAccountLink[]    @relation("SellerCourierAccountLinkCreatedBy")
   shipmentsPickStarted       Shipment[]                    @relation("ShipmentPickStartedBy")
   shipmentsPacked            Shipment[]                    @relation("ShipmentPackedBy")
+  shipmentsPackClaimed       Shipment[]                    @relation("ShipmentPackClaimedBy")
   packBoxes                  PackBox[]                     @relation("PackBoxPacker")
   shipmentItemsRtoDisposed   ShipmentItem[]                @relation("ShipmentItemRtoDisposedBy")
   manifestsClosed            Manifest[]                    @relation("ManifestClosedBy")
@@ -4340,6 +4341,15 @@ model Shipment {
   /// and this is a projection of it. Cleared when the last box is
   /// cancelled, or the two disagree about whether packing is under way.
   packStartedAt            DateTime?        @map("pack_started_at") @db.Timestamptz
+  /// PACK-4: who the PACK QUEUE last handed this parcel to, and until
+  /// when. A SOFT, SELF-EXPIRING claim whose only job is to stop the
+  /// queue offering one parcel to two packers; `pack_boxes` (PACK-1)
+  /// remains the authoritative exclusivity and the scan still decides
+  /// what may be opened. Expiry is evaluated in the eligibility
+  /// predicate (`pack_claim_expires_at <= now()`), never by a sweeper,
+  /// so a packer who walks away cannot strand a parcel.
+  packClaimedByStaffId     String?          @map("pack_claimed_by_staff_id") @db.Uuid
+  packClaimExpiresAt       DateTime?        @map("pack_claim_expires_at") @db.Timestamptz
   pickStartedByStaffId     String?          @map("pick_started_by_staff_id") @db.Uuid
   pickExpiresAt            DateTime?        @map("pick_expires_at") @db.Timestamptz
   pickCompletedAt          DateTime?        @map("pick_completed_at") @db.Timestamptz
@@ -4384,6 +4394,7 @@ model Shipment {
   supersededBy         Shipment[]        @relation("ShipmentSupersedes")
   pickStartedBy        StaffUser?        @relation("ShipmentPickStartedBy", fields: [pickStartedByStaffId], references: [id])
   packedBy             StaffUser?        @relation("ShipmentPackedBy", fields: [packedByStaffId], references: [id])
+  packClaimedBy        StaffUser?        @relation("ShipmentPackClaimedBy", fields: [packClaimedByStaffId], references: [id])
   manifest             Manifest?         @relation(fields: [manifestId], references: [id])
   labelPrintedBy       StaffUser?        @relation("ShipmentLabelPrintedBy", fields: [labelPrintedByStaffId], references: [id])
   handoverScannedBy    StaffUser?        @relation("ShipmentHandoverScannedBy", fields: [handoverScannedByStaffId], references: [id])
@@ -4428,6 +4439,10 @@ model Shipment {
   @@index([manifestId])
   @@index([pickStartedByStaffId])
   @@index([packedByStaffId])
+  // PACK-4: the pack queue's eligibility predicate reads the claim on
+  // every pull and every list refresh (several benches, every 30s).
+  @@index([packClaimedByStaffId])
+  @@index([packClaimExpiresAt])
   @@index([courierAccountId])
   @@index([rtoReceivedWarehouseId])
   @@map("shipments")

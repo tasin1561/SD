@@ -438,6 +438,8 @@ describe('ManifestService.close', () => {
       status: ManifestStatus.DRAFT,
       closedAt: null,
       closedByStaffId: null,
+      courierCode: 'delhivery',
+      originWarehouseId: 'w1',
       shipments: [
         {
           id: 's1',
@@ -457,7 +459,24 @@ describe('ManifestService.close', () => {
     const manifestUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
       count: opts.updateCount ?? 1,
     }));
-    const txClient = { manifest: { updateMany: manifestUpdateMany } };
+    /*
+      WMS-7b: close takes the ATTACH advisory lock and re-reads its
+      parcels INSIDE the closure tx. Without the lock, a packer's
+      post-commit `attachShipment` could point a parcel at this manifest
+      a moment after close read its list, leaving it PACKED on a CLOSED
+      manifest with no repair path. A mock has no lock, so what this
+      asserts is that the statement is ISSUED and that the list the saga
+      transitions comes from the in-tx read.
+    */
+    const executeRawUnsafe = jest.fn(async () => 1);
+    const shipmentFindMany = jest.fn(
+      async () => (opts.manifest === undefined ? defaultManifest : opts.manifest)?.shipments ?? [],
+    );
+    const txClient = {
+      manifest: { updateMany: manifestUpdateMany },
+      shipment: { findMany: shipmentFindMany },
+      $executeRawUnsafe: executeRawUnsafe,
+    };
     const client = {
       manifest: { findUnique: manifestFindUnique },
     } as {
@@ -488,7 +507,15 @@ describe('ManifestService.close', () => {
       orderWrite as unknown as OrderWriteService,
       awbQueue,
     );
-    return { svc, manifestUpdateMany, transitionStatus, auditLog, enqueueManifest };
+    return {
+      svc,
+      manifestUpdateMany,
+      transitionStatus,
+      auditLog,
+      enqueueManifest,
+      executeRawUnsafe,
+      shipmentFindMany,
+    };
   }
 
   it('happy: closes DRAFT + transitions each shipment + enqueues the AWB job', async () => {
@@ -586,6 +613,24 @@ describe('ManifestService.close', () => {
     // The AWB job is still enqueued — the manifest IS closed; a
     // per-shipment transition failure does not undo the closure.
     expect(enqueueManifest).toHaveBeenCalledWith(MAN);
+  });
+
+  it('WMS-7b: close takes the ATTACH lock and reads its parcels INSIDE the tx', async () => {
+    // The lock key is the same (courier, warehouse) pair attachShipment
+    // hashes, in the same namespace — that is what makes the two
+    // mutually exclusive. The parcel list the saga transitions comes
+    // from the in-tx read, so a parcel attached a moment earlier is
+    // carried along instead of being left PACKED on a closed manifest.
+    const { svc, executeRawUnsafe, shipmentFindMany } = makeCloseService();
+    await svc.close(MAN, 'sup-1');
+    expect(executeRawUnsafe).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock($1::int, $2::int)',
+      0x0_4d_47,
+      expect.any(Number),
+    );
+    expect(shipmentFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { manifestId: MAN } }),
+    );
   });
 
   it('race: 409 MANIFEST_CLOSE_RACE when updateMany count=0', async () => {

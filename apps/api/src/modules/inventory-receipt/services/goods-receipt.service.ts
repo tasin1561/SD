@@ -526,14 +526,53 @@ export class GoodsReceiptService {
     }
   }
 
-  /** PENDING -> ARRIVING; records who is receiving. */
+  /**
+   * PENDING -> ARRIVING; records who is receiving.
+   *
+   * THE CLAIM IS THE WRITE (2026-11-10). This read the status and then
+   * updated unguarded, so two receivers who both pressed Start on the
+   * same arriving consignment both passed the check and both wrote:
+   * `received_by_id` silently became whoever committed last, and each
+   * believed the carton was theirs. With several people receiving in
+   * parallel all day that is two people counting one pile into one set
+   * of line quantities (`recordLines` is last-write-wins by design — a
+   * re-count has to stay possible, and CNS-3 forbids blocking over a
+   * count difference), and nothing anywhere said so.
+   *
+   * Now the status change IS the claim: a guarded `updateMany` on
+   * `(id, status = PENDING)`. The loser is told WHO is receiving it, so
+   * they go to the next consignment instead of counting in parallel.
+   */
   async startReceiving(staffId: string, id: string, ctx: ClientContext): Promise<GoodsReceiptView> {
     const existing = await this.getForAdmin(id);
     this.assertStatus(existing.status, [GoodsReceiptStatus.PENDING], 'start receiving');
-    return this.prisma.client.$transaction(async (tx) => {
-      const row = await tx.goodsReceipt.update({
+    const claimed = await this.prisma.client.goodsReceipt.updateMany({
+      where: { id, status: GoodsReceiptStatus.PENDING },
+      data: { status: GoodsReceiptStatus.ARRIVING, receivedById: staffId },
+    });
+    if (claimed.count === 0) {
+      // Re-read rather than echo the stale view: the useful sentence
+      // names the person who got there first.
+      const current = await this.prisma.client.goodsReceipt.findUnique({
         where: { id },
-        data: { status: GoodsReceiptStatus.ARRIVING, receivedById: staffId },
+        select: {
+          status: true,
+          receivedBy: { select: { emailDisplay: true, email: true } },
+        },
+      });
+      const who = current?.receivedBy?.emailDisplay ?? current?.receivedBy?.email ?? null;
+      throw new ConflictException({
+        code: 'RECEIPT_ALREADY_RECEIVING',
+        message:
+          who === null
+            ? `This consignment is already being received (it is ${current?.status ?? 'no longer pending'}). Take the next one.`
+            : `${who} is already receiving this consignment. Take the next one, or count it together with them.`,
+        ...(who === null ? {} : { details: { staff: who } }),
+      });
+    }
+    return this.prisma.client.$transaction(async (tx) => {
+      const row = await tx.goodsReceipt.findUniqueOrThrow({
+        where: { id },
         include: RECEIPT_VIEW_INCLUDE,
       });
       await this.audit.log(

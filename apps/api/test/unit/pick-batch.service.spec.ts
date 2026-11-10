@@ -33,6 +33,12 @@ function makeService(opts: {
   claimCount?: number;
   /** Product pictures the catalog hands back, per variant. */
   thumbnails?: Map<string, Buffer>;
+  /** The batch's own status, for the release path. */
+  batchStatus?: PickBatchStatus;
+  /** Rows the batch's guarded status `updateMany` matched. */
+  batchUpdateCount?: number;
+  /** What CatalogReadService can name, for the shortfall warning. */
+  namedVariants?: Map<string, { skuCode: string }>;
 }) {
   const shipments = opts.shipments ?? [shipment()];
   const shipmentUpdateMany = jest.fn(async () => ({
@@ -46,7 +52,7 @@ function makeService(opts: {
 
   const batchRow = {
     ...created,
-    status: PickBatchStatus.DRAFT,
+    status: opts.batchStatus ?? PickBatchStatus.DRAFT,
     warehouseId: 'wh-1',
     printedAt: null,
     warehouse: { name: 'Kolkata Main' },
@@ -73,7 +79,7 @@ function makeService(opts: {
     pickBatch: {
       findUnique: jest.fn(async () => batchRow),
       findMany: jest.fn(async () => [batchRow]),
-      updateMany: jest.fn(async () => ({ count: 1 })),
+      updateMany: jest.fn(async () => ({ count: opts.batchUpdateCount ?? 1 })),
       // buildList counts the sheet it just produced.
       update: jest.fn(async () => ({ printCount: 1 })),
     },
@@ -110,6 +116,11 @@ function makeService(opts: {
     {
       printableThumbnailsByVariant: jest.fn(
         async () => opts.thumbnails ?? new Map<string, Buffer>(),
+      ),
+      // MUST #13: the shortfall warning names the SKU through the
+      // catalog facade, never a direct product_variants read.
+      getVariantsByIds: jest.fn(
+        async () => opts.namedVariants ?? new Map<string, { skuCode: string }>(),
       ),
     } as unknown as CatalogReadService,
   );
@@ -429,5 +440,79 @@ describe('PickBatchService.markPicked — the picker is back with the trolley', 
       where: Record<string, unknown>;
     };
     expect(call.where['pickCompletedAt']).toBeNull();
+  });
+});
+
+describe('PickBatchService — two valid lists, one shelf (owner, 2026-11-10)', () => {
+  /*
+    "1 packing man printed a batch shipping label and when in the picking
+    list there is extra or less products because other packing man
+    printed shipping labels or already picked in the past picking list."
+
+    Nothing can stop two individually-correct batches from wanting the
+    same unit. What the system CAN do is refuse to print a list it
+    already knows is unfulfillable — which it does, because the sheet is
+    built from ACTIVE phase-2 reservations and `buildList` allocates
+    before rendering: whichever list is built second cannot allocate what
+    the first one holds, and says so at the desk instead of at the shelf.
+  */
+  it('a line that could not be allocated is NAMED BY SKU, not by a uuid', async () => {
+    const { svc } = makeService({
+      reservations: [
+        {
+          id: 'r1',
+          qtyReserved: 2,
+          variantId: 'v-uuid-1',
+          sellerId: 'sel-1',
+          binId: null,
+          batchId: null,
+          orderId: 'o1',
+          bin: null,
+          variant: null,
+        } as Any,
+      ],
+      namedVariants: new Map([['v-uuid-1', { skuCode: 'SKU-AVIATOR-BLK' }]]),
+    });
+    // The allocation attempt fails: the other list has the units.
+    const svcAny = svc as unknown as {
+      allocation: { allocateForPick: jest.Mock };
+    };
+    svcAny.allocation.allocateForPick.mockRejectedValueOnce(new Error('INSUFFICIENT_STOCK'));
+
+    const r = await svc.buildList('b1', 'staff-1');
+    expect(r.shortfalls).toHaveLength(1);
+    // The field is called skuCode and used to carry the variant id — a
+    // uuid printed to a warehouse screen, which nobody can act on.
+    expect(r.shortfalls[0]!.skuCode).toBe('SKU-AVIATOR-BLK');
+    expect(r.shortfalls[0]!.reason).toContain('INSUFFICIENT_STOCK');
+  });
+});
+
+describe('PickBatchService.releasePrinted — a printed batch nobody will walk', () => {
+  it('releases a PRINTED batch and gives its parcels back to the queue', async () => {
+    const { svc, shipmentUpdateMany } = makeService({ batchStatus: PickBatchStatus.PRINTED });
+    const r = await svc.releasePrinted('b1', 'sup-1', 'Printer jammed, the sheet never came out');
+    expect(r.batchNumber).toBe('PB-2026-09-000001');
+    expect(shipmentUpdateMany).toHaveBeenCalledWith({
+      where: { pickBatchId: 'b1' },
+      data: { pickBatchId: null },
+    });
+  });
+
+  it('refuses when the guarded claim matched nothing (not PRINTED any more)', async () => {
+    const { svc } = makeService({
+      batchStatus: PickBatchStatus.COMPLETED,
+      batchUpdateCount: 0,
+    });
+    await expect(
+      svc.releasePrinted('b1', 'sup-1', 'Picker went home before walking it'),
+    ).rejects.toMatchObject({ response: { code: 'BATCH_NOT_RELEASABLE' } });
+  });
+
+  it('needs a reason — the sheet still exists somewhere', async () => {
+    const { svc } = makeService({ batchStatus: PickBatchStatus.PRINTED });
+    await expect(svc.releasePrinted('b1', 'sup-1', 'lost')).rejects.toMatchObject({
+      response: { code: 'BATCH_RELEASE_REASON_REQUIRED' },
+    });
   });
 });

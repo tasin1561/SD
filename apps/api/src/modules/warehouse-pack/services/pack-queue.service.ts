@@ -37,20 +37,45 @@ export interface PulledPack {
 
 /**
  * Module 8 — pack pull (commit 9). The packer-facing analogue of
- * PickQueueService.pullNext, but with NO PERSISTENT CLAIM (schema is
- * intentionally claim-free for pack — commit 1 added only
- * packCompletedAt/packedByStaffId).
+ * PickQueueService.pullNext.
  *
- * Race characteristics (documented design tradeoff): two packers pulling
- * SIMULTANEOUSLY get distinct shipments via `FOR UPDATE OF s SKIP LOCKED`
- * inside the tx. Two packers pulling SEQUENTIALLY (after the first
- * packer's tx commits but BEFORE they call complete) BOTH see the same
- * shipment — the race is then resolved at `PackService.complete`, which
- * is atomic-guarded on `(status=CREATED, pack_completed_at IS NULL)`:
- * the second packer's complete fails with 409 PACK_NOT_AVAILABLE and
- * they pull again. Phase 1A pack volume makes this race rare and the UX
- * (re-pull on 409) acceptable; if pack volume scales we can revisit by
- * adding packStartedAt/packStartedByStaffId (schema migration).
+ * **PACK-4 (2026-11-10, owner: more than two packers and printers now
+ * run all day). The pull CLAIMS, and the claim EXPIRES.** This comment
+ * used to say pack was intentionally claim-free, that two packers
+ * pulling SEQUENTIALLY both saw the same shipment, and that the race was
+ * resolved at `complete` (or, since PACK-1, at `PackBoxService.open`)
+ * with a 409 for the loser — "rare at Phase 1A volume, revisit if pack
+ * volume scales". It scaled. Nothing was ever corrupted by it, because
+ * the pack box's partial unique indexes refuse the second packer; what
+ * it cost was the WALK — both packers were told to pack the same parcel
+ * and the second one found out at the bench, holding the goods.
+ *
+ * So the queue now reads TWO exclusions, and neither can strand a
+ * parcel:
+ *
+ *   1. A LIVE OPEN BOX held by another packer (`pack_boxes`, PACK-1 —
+ *      the authoritative claim, and the only one a scan obeys). Scoped
+ *      `expires_at > now()` so an abandoned box stops hiding the parcel
+ *      the moment it is due, whether or not the five-minute sweep has
+ *      run yet, and scoped `packer_staff_id <> me` so a packer who has
+ *      to come back to their own box (the STRICT resume, LBL-4) still
+ *      sees their parcel.
+ *   2. A LIVE PULL CLAIM held by another packer
+ *      (`shipments.pack_claimed_by_staff_id` / `pack_claim_expires_at`,
+ *      `ops.pack_claim_minutes`). Written by the pull itself, inside the
+ *      ONE `UPDATE … WHERE id = (SELECT … FOR UPDATE SKIP LOCKED)`
+ *      statement that selects it — never a read-then-write.
+ *
+ * The claim is deliberately SOFT: `pack_boxes` remains the authority and
+ * **what a scan accepts is unchanged** — a packer physically holding a
+ * label may always open its box, claim or no claim. The claim's only job
+ * is to stop the QUEUE offering one parcel to two people. It is also
+ * deliberately PREDICATE-EXPIRED rather than swept by a job: a parcel
+ * whose claimant went home is eligible again the instant the deadline
+ * passes, with no worker to be down and no admin to intervene.
+ *
+ * `releaseClaim` is the explicit "not this one" — a packer putting a
+ * parcel back does not have to wait out the deadline.
  *
  * Eligibility: shipment CREATED + pack_completed_at IS NULL AND the
  * shipment's order is in PICKED (WMS-9 — order status is the
@@ -74,12 +99,44 @@ export interface PulledPack {
  * predicate is the authority (WMS-2), not a proxy —
  * `ShipmentProvisionService.voidForOrder` is best-effort, so a lagged
  * void has to be excluded here rather than assumed away.
+ *
+ * Alias-parameterised because the PACK-4 claim is taken by an
+ * `UPDATE … WHERE id = (SELECT …)`, whose inner select needs its own
+ * alias. One predicate, three call sites, no chance of the list and the
+ * pull drifting apart.
  */
-const PACK_ELIGIBLE_SQL = `s.status = 'created'
-             AND s.pack_completed_at IS NULL
-             AND s.deleted_at IS NULL
-             AND o.deleted_at IS NULL
-             AND o.status = 'picked'`;
+const packEligibleSql = (s: string, o: string): string => `${s}.status = 'created'
+             AND ${s}.pack_completed_at IS NULL
+             AND ${s}.deleted_at IS NULL
+             AND ${o}.deleted_at IS NULL
+             AND ${o}.status = 'picked'`;
+
+/**
+ * PACK-4 — and it is MINE or FREE.
+ *
+ * Both halves are per-operator and both expire by themselves. `$1` is
+ * always the asking packer's staff id; everything a pull or a list shows
+ * is therefore something that packer may actually act on.
+ */
+const PACK_UNCLAIMED_SQL = (s: string): string => `
+             AND NOT EXISTS (
+               SELECT 1 FROM pack_boxes pb
+                WHERE pb.shipment_id = ${s}.id
+                  AND pb.status = 'open'
+                  AND pb.expires_at > now()
+                  AND pb.packer_staff_id <> $1::uuid
+             )
+             AND (
+               ${s}.pack_claim_expires_at IS NULL
+               OR ${s}.pack_claim_expires_at <= now()
+               OR ${s}.pack_claimed_by_staff_id = $1::uuid
+             )`;
+
+/** `ops.pack_claim_minutes` — how long a pulled parcel stays off the
+ *  other benches. Shorter than the box timeout on purpose: a pull is an
+ *  intention, a box is work in progress. */
+const CLAIM_SETTING = 'ops.pack_claim_minutes';
+const DEFAULT_CLAIM_MINUTES = 10;
 
 /** One parcel on the bench's waiting list. */
 export interface WaitingPack {
@@ -93,6 +150,35 @@ export interface WaitingPack {
   readonly labelPrintedAtIso: string | null;
   readonly pickCompletedAtIso: string | null;
   readonly itemCount: number;
+}
+
+/**
+ * A parcel the asking packer is NOT offered, and why.
+ *
+ * The exclusions could simply have hidden these rows, but a parcel
+ * disappearing off a bench list with no explanation is its own kind of
+ * confusing — the packer saw it a minute ago and now cannot find it. So
+ * the queue answers both halves: what is yours to take, and what
+ * somebody else already has.
+ */
+export interface PackInProgress {
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly awbNumber: string | null;
+  readonly orderNumber: string | null;
+  /** 'BOX' = a box is open on their bench; 'CLAIM' = the queue handed it
+   *  to them and no box has been opened yet. */
+  readonly hold: 'BOX' | 'CLAIM';
+  readonly heldByStaffId: string;
+  /** Who, as a person reads it — never a uuid on a screen. */
+  readonly heldByName: string | null;
+  /** When the hold lapses on its own. Nothing has to be done to it. */
+  readonly heldUntilIso: string;
+}
+
+export interface PackQueueView {
+  readonly waiting: WaitingPack[];
+  readonly inProgress: PackInProgress[];
 }
 
 @Injectable()
@@ -119,8 +205,12 @@ export class PackQueueService {
    * carried because a parcel with no label cannot be scanned in at all —
    * that is the one thing on this list somebody has to act on before the
    * bench can do anything with it.
+   *
+   * PACK-4: `staffId` is what makes this list THIS packer's. A parcel
+   * another bench holds is not in `waiting`; it is in `inProgress` with
+   * a name and a deadline on it.
    */
-  async listWaiting(courierCode?: string, limit = 100): Promise<WaitingPack[]> {
+  async listWaiting(staffId: string, courierCode?: string, limit = 100): Promise<WaitingPack[]> {
     const rows = await this.prisma.client.$queryRawUnsafe<
       Array<{
         id: string;
@@ -146,11 +236,12 @@ export class PackQueueService {
          FROM shipments s
          JOIN order_shipments os ON os.shipment_id = s.id
          JOIN orders o ON o.id = os.order_id
-        WHERE ${PACK_ELIGIBLE_SQL}
-          ${courierCode === undefined ? '' : 'AND s.courier_code = $1'}
+        WHERE ${packEligibleSql('s', 'o')}
+          ${PACK_UNCLAIMED_SQL('s')}
+          ${courierCode === undefined ? '' : 'AND s.courier_code = $2'}
         ORDER BY s.created_at ASC
         LIMIT ${Math.max(1, Math.min(limit, 500))}`,
-      ...(courierCode === undefined ? [] : [courierCode]),
+      ...(courierCode === undefined ? [staffId] : [staffId, courierCode]),
     );
 
     return rows.map((r) => ({
@@ -167,30 +258,133 @@ export class PackQueueService {
     }));
   }
 
-  /** Returns the next eligible parcel (informational, no claim), or
-   *  `null` (QUEUE_EMPTY). `courierCode` restricts the pull to that
-   *  courier only. */
+  /**
+   * Everything another packer is holding right now, with who and until
+   * when. Read-only, never a claim of its own.
+   *
+   * Exactly the complement of `listWaiting`: the same eligibility, the
+   * exclusions INVERTED, so the two lists together are every parcel
+   * waiting to be packed and nothing is unaccounted for.
+   */
+  async listInProgress(staffId: string, courierCode?: string): Promise<PackInProgress[]> {
+    const rows = await this.prisma.client.$queryRawUnsafe<
+      Array<{
+        id: string;
+        shipment_number: string;
+        awb_number: string | null;
+        order_number: string | null;
+        hold: string;
+        held_by: string;
+        held_by_name: string | null;
+        held_until: Date;
+      }>
+    >(
+      `SELECT s.id,
+              s.shipment_number,
+              s.awb_number,
+              o.order_number,
+              CASE WHEN pb.id IS NOT NULL THEN 'BOX' ELSE 'CLAIM' END AS hold,
+              COALESCE(pb.packer_staff_id, s.pack_claimed_by_staff_id) AS held_by,
+              COALESCE(bu.email_display, bu.email, cu.email_display, cu.email) AS held_by_name,
+              COALESCE(pb.expires_at, s.pack_claim_expires_at) AS held_until
+         FROM shipments s
+         JOIN order_shipments os ON os.shipment_id = s.id
+         JOIN orders o ON o.id = os.order_id
+         LEFT JOIN pack_boxes pb
+                ON pb.shipment_id = s.id
+               AND pb.status = 'open'
+               AND pb.expires_at > now()
+               AND pb.packer_staff_id <> $1::uuid
+         LEFT JOIN staff_users bu ON bu.id = pb.packer_staff_id
+         LEFT JOIN staff_users cu ON cu.id = s.pack_claimed_by_staff_id
+        WHERE ${packEligibleSql('s', 'o')}
+          AND (
+            pb.id IS NOT NULL
+            OR (
+              s.pack_claim_expires_at > now()
+              AND s.pack_claimed_by_staff_id IS NOT NULL
+              AND s.pack_claimed_by_staff_id <> $1::uuid
+            )
+          )
+          ${courierCode === undefined ? '' : 'AND s.courier_code = $2'}
+        ORDER BY s.created_at ASC
+        LIMIT 100`,
+      ...(courierCode === undefined ? [staffId] : [staffId, courierCode]),
+    );
+
+    return rows.map((r) => ({
+      shipmentId: r.id,
+      shipmentNumber: r.shipment_number,
+      awbNumber: r.awb_number,
+      orderNumber: r.order_number,
+      hold: r.hold === 'BOX' ? 'BOX' : 'CLAIM',
+      heldByStaffId: r.held_by,
+      heldByName: r.held_by_name,
+      heldUntilIso: r.held_until.toISOString(),
+    }));
+  }
+
+  /**
+   * Put a pulled parcel back, now rather than at the deadline.
+   *
+   * A packer who looks at what they pulled and cannot pack it (it is not
+   * on the bench, the label is torn, it is somebody else's aisle) must
+   * have a way to say so that does not cost the floor ten minutes.
+   *
+   * Guarded on the claim being THEIRS inside the writing statement: a
+   * release can never take a parcel off the bench of the packer who
+   * holds it, and releasing a claim that already lapsed is a no-op
+   * rather than an error (the deadline did the work).
+   */
+  async releaseClaim(shipmentId: string, staffId: string): Promise<{ released: boolean }> {
+    const res = await this.prisma.client.shipment.updateMany({
+      where: { id: shipmentId, packClaimedByStaffId: staffId },
+      data: { packClaimedByStaffId: null, packClaimExpiresAt: null },
+    });
+    return { released: res.count > 0 };
+  }
+
+  /**
+   * Claim and return the next eligible parcel, or `null` (QUEUE_EMPTY).
+   *
+   * PACK-4: the claim is written by the SAME statement that selects the
+   * row — `UPDATE … WHERE id = (SELECT … FOR UPDATE SKIP LOCKED LIMIT
+   * 1)`. There is no window between deciding and claiming, so no
+   * read-then-write: two simultaneous pulls skip each other's locked
+   * rows, and two sequential pulls see the claim the first one left.
+   *
+   * `courierCode` restricts the pull to that courier only.
+   */
   async pullNext(
-    _staffId: string,
+    staffId: string,
     _ctx?: ClientContext,
     courierCode?: string,
   ): Promise<PulledPack | null> {
+    const claimMinutes = await this.claimMinutes();
     const picked = await this.prisma.client.$transaction(async (tx) => {
-      // The WHERE clause's fixed literals are enum values, never user
-      // input. courierCode (when present) IS user-supplied — bound as
-      // $1 rather than interpolated, same discipline as any other
-      // caller-supplied value reaching raw SQL.
+      // Every caller-supplied value is a bound parameter, never
+      // interpolated: $1 the asking packer, $2 the claim window, $3 the
+      // optional courier. The fixed literals are enum values.
       const rows = await tx.$queryRawUnsafe<Array<{ id: string }>>(
-        `SELECT s.id
-           FROM shipments s
-           JOIN order_shipments os ON os.shipment_id = s.id
-           JOIN orders o ON o.id = os.order_id
-           WHERE ${PACK_ELIGIBLE_SQL}
-             ${courierCode === undefined ? '' : 'AND s.courier_code = $1'}
-           ORDER BY s.created_at ASC
-           FOR UPDATE OF s SKIP LOCKED
-           LIMIT 1`,
-        ...(courierCode === undefined ? [] : [courierCode]),
+        `UPDATE shipments s
+            SET pack_claimed_by_staff_id = $1::uuid,
+                pack_claim_expires_at = now() + make_interval(mins => $2::int)
+          WHERE s.id = (
+            SELECT s2.id
+              FROM shipments s2
+              JOIN order_shipments os ON os.shipment_id = s2.id
+              JOIN orders o ON o.id = os.order_id
+             WHERE ${packEligibleSql('s2', 'o')}
+               ${PACK_UNCLAIMED_SQL('s2')}
+               ${courierCode === undefined ? '' : 'AND s2.courier_code = $3'}
+             ORDER BY s2.created_at ASC
+             FOR UPDATE OF s2 SKIP LOCKED
+             LIMIT 1
+          )
+          RETURNING s.id`,
+        ...(courierCode === undefined
+          ? [staffId, claimMinutes]
+          : [staffId, claimMinutes, courierCode]),
       );
       const id = rows[0]?.id;
       if (id === undefined) return null;
@@ -288,6 +482,27 @@ export class PackQueueService {
       items,
       order,
     };
+  }
+
+  /** Effective claim window (minutes): `ops.pack_claim_minutes`, else
+   *  the default. Same shape as the box timeout and the pick timeout. */
+  private async claimMinutes(): Promise<number> {
+    try {
+      const row = await this.prisma.client.systemSetting.findUnique({
+        where: { key: CLAIM_SETTING },
+        select: { valueInt: true },
+      });
+      const v = row?.valueInt;
+      return typeof v === 'number' && v > 0 ? v : DEFAULT_CLAIM_MINUTES;
+    } catch (err) {
+      // A settings read failing must not stop the floor packing: the
+      // default window is a worse number, not a blocked bench.
+      this.logger.warn(
+        { err: (err as Error).message },
+        'Pack claim window unreadable; using the default (fail-open)',
+      );
+      return DEFAULT_CLAIM_MINUTES;
+    }
   }
 
   /**

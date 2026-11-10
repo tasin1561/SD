@@ -273,6 +273,8 @@ export class DispatchHandoffService {
         id: true,
         shipmentNumber: true,
         handoverScannedAt: true,
+        // SCAN-4: who already scanned it, so the refusal can say so.
+        handoverScannedBy: { select: { emailDisplay: true, email: true } },
         status: true,
         manifestId: true,
         orderShipments: {
@@ -305,6 +307,67 @@ export class DispatchHandoffService {
     }
 
     const dispatches = await this.handoverScanDispatches();
+
+    /*
+      SCAN-4 (2026-11-10, owner: "in handover it can happen that multiple
+      persons are scanning and by chance double same parcel is sent").
+
+      A parcel that was ALREADY STAMPED BEFORE THIS SCAN BEGAN is refused
+      by name, saying who scanned it and when. It used to return 200 with
+      `alreadyScanned: true` — correct data (the stamp is a guarded
+      `updateMany` and keeps the FIRST time) but the wrong SIGNAL: the
+      bench plays its accepted sound on any 200, so the second person
+      heard "good, next" and moved on believing they had just scanned a
+      new box. On a bench where two people work one pile, that is how the
+      same parcel goes into the van twice and another one is left on the
+      floor.
+
+      NOT the blocking stop (`refuseDuplicate`, SCAN-1) — that is for a
+      parcel already WITH THE COURIER, where either two boxes carry one
+      label or a loaded pile is being loaded again. This parcel has not
+      left the building: the operator needs to be told to move on, not to
+      have the bench closed around them.
+
+      SCAN-3 is preserved exactly: this reads the stamp AS IT WAS BEFORE
+      the lookup. A scan gun firing twice has `handoverScannedAt` null in
+      both reads, so neither call is refused here — one wins the stamp and
+      the other converges below, which is what a twitchy reader deserves.
+
+      AND ONLY WHEN THE SCAN IS A PURE RECORD (`dispatches` off). With
+      dispatch-on-scan ON, a stamped-but-undispatched parcel means the
+      saga did not finish — the one case where a re-scan is the RECOVERY
+      (stamp no-ops, transition re-runs). Refusing that would turn a
+      re-scannable parcel into one only an admin can move, which is the
+      stranding this whole round is meant to remove. A parcel that DID
+      dispatch is already refused above, by the blocking stop.
+    */
+    if (!dispatches && shipment.handoverScannedAt !== null) {
+      const who =
+        shipment.handoverScannedBy?.emailDisplay ?? shipment.handoverScannedBy?.email ?? null;
+      // A CLOCK TIME, not an ISO string: the person reading this is
+      // standing at a bench deciding whether to put a box in a van, and
+      // "11:04" is the only part of a timestamp that helps them. IST,
+      // because that is where the warehouse and the driver are.
+      const when = shipment.handoverScannedAt.toLocaleTimeString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      throw new ConflictException({
+        code: 'HANDOVER_ALREADY_SCANNED',
+        message:
+          `${shipment.shipmentNumber} was already scanned for handover` +
+          `${who === null ? '' : ` by ${who}`} at ${when}. ` +
+          `It is counted — take the next parcel.`,
+        details: {
+          awb,
+          ...(who === null ? {} : { staff: who }),
+          scannedAt: when,
+          scannedAtIso: shipment.handoverScannedAt.toISOString(),
+        },
+      });
+    }
 
     // The parcel has to be packed and still here. Anything else is
     // named, because "cannot scan this" sends somebody hunting.

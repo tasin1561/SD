@@ -266,6 +266,31 @@ export class CycleCountService {
     const threshold = await this.resolveThreshold();
 
     return this.prisma.client.$transaction(async (tx) => {
+      /*
+        THE STATUS CHANGE IS CLAIMED FIRST (2026-11-10).
+
+        `assertStatus` above is a pre-tx READ, and the write that used to
+        follow it was unguarded. Two supervisors pressing Complete on the
+        same count — or one double-tapping on a slow screen — both passed
+        the check, and each pass created a PENDING `stock_adjustment`
+        line for every discrepancy. Two identical pending corrections for
+        one count, and approving both applies the correction TWICE.
+
+        Claiming IN_PROGRESS → COMPLETED here, before any adjustment is
+        written, makes the loser's whole transaction roll back: the
+        adjustments it would have created never exist.
+      */
+      const claimed = await tx.cycleCount.updateMany({
+        where: { id, status: CycleCountStatus.IN_PROGRESS },
+        data: { status: CycleCountStatus.COMPLETED },
+      });
+      if (claimed.count === 0) {
+        throw new ConflictException({
+          code: 'CYCLE_COUNT_ALREADY_COMPLETED',
+          message:
+            'This count was completed a moment ago by somebody else; its reconciliation adjustments are already waiting for approval.',
+        });
+      }
       const bins = new Set<string>();
       const skus = new Set<string>();
       let discrepancyCount = 0;

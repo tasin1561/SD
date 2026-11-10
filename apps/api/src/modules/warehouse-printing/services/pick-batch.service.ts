@@ -260,7 +260,20 @@ export class PickBatchService {
 
     // ALLOCATE. Per reservation, through the WMS-3 retry wrapper so a
     // transient version-CAS clash does not read as a shortfall.
+    //
+    // THIS IS THE PRINT-TIME WARNING, and it is the whole answer to two
+    // valid batches wanting one shelf (owner, 2026-11-10: "in the
+    // picking list there is extra or less products because other packing
+    // man printed shipping labels"). Nothing can stop two correct lists
+    // from needing the same unit — but the RESERVATION is the arbiter,
+    // not on-hand: whichever list is built second cannot allocate what
+    // the first one holds, so it says so HERE, at the desk, before
+    // anybody walks. A shortfall is named on the sheet
+    // (`parcelsWithoutStock`, and the line prints "NOT ALLOCATED") and
+    // returned to the screen, never thrown: the rest of the batch is
+    // still walkable.
     const shortfalls: Array<{ skuCode: string; reason: string }> = [];
+    const shortVariantIds: string[] = [];
     for (const orderId of orderIds) {
       const active = await this.reservations.listActiveForOrderWithLocations(orderId);
       for (const r of active) {
@@ -268,18 +281,36 @@ export class PickBatchService {
         try {
           await this.allocation.allocateForPick(r.id, { type: ActorType.STAFF, id: staffId });
         } catch (err) {
-          // Named on the sheet rather than thrown: the rest of the batch
-          // is still walkable, and a picker who knows one line is short
-          // can bring the others back and let a supervisor deal with it.
           this.logger.warn(
             { batchId, reservationId: r.id, err: (err as Error).message },
             'Pick-batch allocation shortfall',
           );
+          shortVariantIds.push(r.variantId);
           shortfalls.push({
+            // Filled in below. It used to be `r.variantId` — a uuid in
+            // the field called skuCode, printed to a warehouse screen
+            // where nobody can act on it.
             skuCode: r.variantId,
             reason: (err as Error).message.slice(0, 160),
           });
         }
+      }
+    }
+    if (shortVariantIds.length > 0) {
+      // Through CatalogReadService (MUST #13) — never a direct
+      // product_variants read from outside catalog. Fails open: an
+      // unresolvable id keeps the warning, it just keeps the uuid.
+      try {
+        const named = await this.catalog.getVariantsByIds([...new Set(shortVariantIds)]);
+        for (const s of shortfalls) {
+          const v = named.get(s.skuCode);
+          if (v !== undefined) s.skuCode = v.skuCode;
+        }
+      } catch (err) {
+        this.logger.warn(
+          { batchId, err: (err as Error).message },
+          'Could not name the short SKUs; the warning keeps the variant ids',
+        );
       }
     }
 
@@ -659,6 +690,94 @@ export class PickBatchService {
         requestId: ctx?.requestId ?? null,
       },
     });
+  }
+
+  /**
+   * Release a PRINTED batch nobody is going to walk.
+   *
+   * The printer jammed, the sheet went in the bin, the picker went home
+   * mid-shift. Before this there was no way out of that: `cancel`
+   * refuses anything past DRAFT (correctly — releasing a batch somebody
+   * is walking with is how two pickers end up at one shelf), so the
+   * parcels kept their `pickBatchId` for ever. `create` refuses a
+   * parcel that already carries one (`ALREADY_BATCHED`) and the print
+   * queue's `unbatchedOnly` filter hides them, so they could never
+   * appear on another sheet. The only exit was DB surgery, and nothing
+   * on any screen said it had happened.
+   *
+   * Supervisor-only and deliberately NOT automatic: a sweep cannot tell
+   * a sheet in a bin from a sheet in somebody's hand, and releasing the
+   * second one is worse than leaving the first. The batch list shows
+   * PRINTED batches with their age, which is where this decision gets
+   * made.
+   *
+   * Guarded on `(id, status = PRINTED)` inside the writing statement, so
+   * two supervisors pressing it, or a release racing `markPicked`, can
+   * only have one winner.
+   *
+   * NO STOCK IS RELEASED, on purpose: the phase-2 allocation made at
+   * print is left exactly as it is. The next batch's `buildList` skips a
+   * reservation that is already allocated (`binId`/`batchId` set), so
+   * the parcel walks again from the same shelf, and the units were never
+   * double-promised in the first place. Releasing them here would hand
+   * them to a different order and turn one abandoned sheet into two
+   * short picks. The orders stay in PENDING_PICK — a status the print
+   * queue accepts — exactly as WMS-5's pick expiry leaves them.
+   */
+  async releasePrinted(
+    batchId: string,
+    staffId: string,
+    reason: string,
+    ctx?: ClientContext,
+  ): Promise<{ batchNumber: string; released: number }> {
+    const trimmed = reason.trim();
+    if (trimmed.length < 10) {
+      throw new ConflictException({
+        code: 'BATCH_RELEASE_REASON_REQUIRED',
+        message:
+          'Say in a few words why this printed batch is being released (at least 10 characters) — the next person needs to know the sheet is dead.',
+      });
+    }
+    const batch = await this.prisma.client.pickBatch.findUnique({
+      where: { id: batchId },
+      select: { batchNumber: true, status: true },
+    });
+    if (batch === null) {
+      throw new BadRequestException({ code: 'BATCH_NOT_FOUND', message: 'No such batch' });
+    }
+    const claimed = await this.prisma.client.pickBatch.updateMany({
+      where: { id: batchId, status: PickBatchStatus.PRINTED },
+      data: { status: PickBatchStatus.CANCELLED },
+    });
+    if (claimed.count === 0) {
+      throw new ConflictException({
+        code: 'BATCH_NOT_RELEASABLE',
+        message:
+          `Batch ${batch.batchNumber} is ${batch.status.toLowerCase()} — only a PRINTED batch that was never walked can be released. ` +
+          `A batch that has not been printed is cancelled instead.`,
+      });
+    }
+    const released = await this.prisma.client.shipment.updateMany({
+      where: { pickBatchId: batchId },
+      data: { pickBatchId: null },
+    });
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      actorId: staffId,
+      action: 'warehouse.pick_batch.released',
+      entityType: 'pick_batch',
+      entityId: batchId,
+      severity: 'MEDIUM',
+      metadata: {
+        batchNumber: batch.batchNumber,
+        releasedParcels: released.count,
+        reason: trimmed,
+        ipAddress: ctx?.ipAddress ?? null,
+        userAgent: ctx?.userAgent ?? null,
+        requestId: ctx?.requestId ?? null,
+      },
+    });
+    return { batchNumber: batch.batchNumber, released: released.count };
   }
 
   /** Past batches, newest first, searchable by batch number, order

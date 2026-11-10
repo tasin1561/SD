@@ -55,7 +55,11 @@ export function PackQueueList(): ReactElement {
     );
   }
 
-  const waiting = q.data ?? [];
+  // PACK-4: `waiting` is what THIS packer may take; `inProgress` is
+  // what another bench is holding. Rendering the second list is the
+  // pack-station owner's follow-up — the data is here so a parcel that
+  // leaves this list can be explained rather than just vanishing.
+  const waiting = q.data?.waiting ?? [];
   if (waiting.length === 0) {
     return (
       <EmptyState

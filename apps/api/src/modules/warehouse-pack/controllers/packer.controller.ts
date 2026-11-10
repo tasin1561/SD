@@ -21,6 +21,7 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import {
   type WaitingPack,
+  type PackInProgress,
   PackQueueService,
   type PulledPack,
 } from '../services/pack-queue.service';
@@ -38,11 +39,14 @@ import { RequirePermissions } from '../../../common/auth/require-permissions.dec
 /**
  * Packer workflow (pull → complete). Staff JWT only — packer role
  * scoping is the deferred RBAC concern (same Phase-1A posture as the
- * picker/agent controllers). Pack is INTENTIONALLY claim-free (commit 1
- * schema): pullNext is informational (race-free for SIMULTANEOUS pulls
- * via SKIP LOCKED, race-resolved at complete via the atomic guard);
- * complete is the race-resolution point (409 PACK_NOT_AVAILABLE for the
- * loser, who pulls again).
+ * picker/agent controllers).
+ *
+ * PACK-4 (2026-11-10): the pull now takes an EXPIRING claim, so the
+ * queue stops handing one parcel to two packers. The claim is soft —
+ * `pack_boxes` (PACK-1) is still the authoritative exclusivity and
+ * `complete` is still atomically guarded — and it lapses by itself, so
+ * a packer who walks away cannot strand a parcel. `POST
+ * :shipmentId/release` is the explicit "not this one".
  */
 @ApiTags('warehouse-packer')
 @ApiBearerAuth('staff-jwt')
@@ -75,10 +79,38 @@ export class PackerController {
   @Get('queue')
   @ApiOperation({
     summary:
-      'Everything waiting to be packed (same predicate as POST next, no claim). Optionally one courier via ?courierCode=.',
+      'What THIS packer may take (same predicate as POST next), plus what another bench is holding and until when (PACK-4). Optionally one courier via ?courierCode=.',
   })
-  queueList(@Query('courierCode') courierCode?: string): Promise<{ waiting: WaitingPack[] }> {
-    return this.queue.listWaiting(courierCode).then((waiting) => ({ waiting }));
+  async queueList(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Query('courierCode') courierCode?: string,
+  ): Promise<{ waiting: WaitingPack[]; inProgress: PackInProgress[] }> {
+    const [waiting, inProgress] = await Promise.all([
+      this.queue.listWaiting(staff.id, courierCode),
+      this.queue.listInProgress(staff.id, courierCode),
+    ]);
+    return { waiting, inProgress };
+  }
+
+  /**
+   * Put a pulled parcel back without waiting out the claim.
+   *
+   * Not an error when the claim already lapsed or was never theirs — the
+   * outcome the packer wanted (somebody else can have it) is already
+   * true, and a refusal here would teach them to stop using the button.
+   */
+  @Post(':shipmentId/release')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Release this packer’s PACK-4 queue claim on a parcel so another bench can take it immediately. Idempotent.',
+  })
+  release(
+    @Param('shipmentId', new ParseUUIDPipe({ version: '7' }))
+    shipmentId: string,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<{ released: boolean }> {
+    return this.queue.releaseClaim(shipmentId, staff.id);
   }
 
   @Post(':shipmentId/complete')

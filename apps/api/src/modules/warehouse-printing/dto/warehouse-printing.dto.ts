@@ -104,3 +104,17 @@ export class SkuLabelRequestDto {
   @Type(() => SkuLabelItemDto)
   items!: SkuLabelItemDto[];
 }
+
+/**
+ * Releasing a PRINTED pick batch nobody will walk.
+ *
+ * The reason is required because the sheet still exists somewhere: the
+ * next person to find it has to be able to learn that it is dead.
+ */
+export class ReleasePickBatchDto {
+  @ApiProperty({ minLength: 10, maxLength: 500 })
+  @IsString()
+  @MinLength(10)
+  @MaxLength(500)
+  reason!: string;
+}

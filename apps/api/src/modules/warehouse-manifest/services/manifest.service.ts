@@ -443,6 +443,11 @@ export class ManifestService {
         status: true,
         closedAt: true,
         closedByStaffId: true,
+        // WMS-7b: the lock key the attach side uses. A manifest's
+        // courier and warehouse never change, so reading them before
+        // the lock is safe.
+        courierCode: true,
+        originWarehouseId: true,
         shipments: {
           select: {
             id: true,
@@ -462,7 +467,6 @@ export class ManifestService {
         message: `Manifest ${manifestId} not found`,
       });
     }
-    const shipmentIds = manifest.shipments.map((s) => s.id);
 
     // Idempotent on any ALREADY-PROGRESSED manifest. Module 9 expanded
     // ManifestStatus (DRAFT → CLOSED → CONFIRMED → DISPATCHED, + FAILED):
@@ -477,7 +481,7 @@ export class ManifestService {
         status: manifest.status,
         closedAt: manifest.closedAt ?? new Date(),
         closedByStaffId: manifest.closedByStaffId ?? staffId,
-        shipmentIds,
+        shipmentIds: manifest.shipments.map((s) => s.id),
         transitionedCount: 0,
         failures: [],
         alreadyClosed: true,
@@ -492,7 +496,55 @@ export class ManifestService {
 
     const now = new Date();
     // 1. CLOSURE TX — atomic state change + audit.
-    await this.prisma.client.$transaction(async (tx) => {
+    const attached = await this.prisma.client.$transaction(async (tx) => {
+      /*
+        WMS-7b (2026-11-10): CLOSE TAKES THE ATTACH LOCK, and reads its
+        parcel list INSIDE it.
+
+        `attachShipment` serialises its find-or-create on this same
+        (courier, warehouse) key, but close did not take it and read its
+        shipments BEFORE its transaction. With several packers finishing
+        at once and a supervisor closing the day's manifest, that lost a
+        parcel:
+
+          A: PackService.complete → attachShipment takes the lock, finds
+             DRAFT M1, has not yet written shipment.manifestId.
+          B: supervisor closes M1 — reads the shipments (A's parcel not
+             among them), commits CLOSED, transitions the ones it read.
+          A: commits — its parcel now points at a CLOSED manifest.
+
+        The parcel ends PACKED on a closed manifest: never transitioned
+        to PENDING_DISPATCH, not in the AWB job's set, and unreachable by
+        either repair path (`attachShipment` → MANIFEST_CLOSED,
+        `moveShipment` → SOURCE_MANIFEST_CLOSED). Only DB surgery gets it
+        out, and nothing says it happened.
+
+        Taking the lock makes the two mutually exclusive: an attach that
+        got in first is INCLUDED (the in-tx read sees it), and one that
+        comes later finds no DRAFT and opens a new one, which is the
+        correct outcome for a parcel packed after the van's manifest
+        closed.
+      */
+      await tx.$executeRawUnsafe(
+        'SELECT pg_advisory_xact_lock($1::int, $2::int)',
+        ATTACH_LOCK_NAMESPACE,
+        fnv1a32(`${manifest.courierCode}|${manifest.originWarehouseId}`),
+      );
+
+      // The AUTHORITATIVE set, read under the lock. The pre-read above
+      // is only for the guards (is it DRAFT, is it empty).
+      const shipments = await tx.shipment.findMany({
+        where: { manifestId },
+        select: {
+          id: true,
+          status: true,
+          orderShipments: {
+            select: { orderId: true },
+            orderBy: { shipmentSequence: 'asc' },
+            take: 1,
+          },
+        },
+      });
       const upd = await tx.manifest.updateMany({
         where: { id: manifestId, status: ManifestStatus.DRAFT },
         data: {
@@ -522,8 +574,8 @@ export class ManifestService {
           severity: 'MEDIUM',
           metadata: {
             manifestNumber: manifest.manifestNumber,
-            shipmentCount: shipmentIds.length,
-            shipmentIds,
+            shipmentCount: shipments.length,
+            shipmentIds: shipments.map((s) => s.id),
             ipAddress: ctx?.ipAddress ?? null,
             userAgent: ctx?.userAgent ?? null,
             requestId: ctx?.requestId ?? null,
@@ -531,7 +583,9 @@ export class ManifestService {
         },
         tx,
       );
+      return shipments;
     });
+    const shipmentIds = attached.map((s) => s.id);
 
     // 2. POST-COMMIT per-shipment PACKED → PENDING_DISPATCH (saga). The
     //    matrix edge has EMPTY side-effects (no M5 work). Failures are
@@ -540,7 +594,7 @@ export class ManifestService {
     const actor = { type: ActorType.STAFF, id: staffId };
     let transitionedCount = 0;
     const failures: CloseManifestFailure[] = [];
-    for (const ship of manifest.shipments) {
+    for (const ship of attached) {
       const orderId = ship.orderShipments[0]?.orderId ?? null;
       if (orderId === null) {
         failures.push({

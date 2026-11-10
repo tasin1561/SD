@@ -711,15 +711,41 @@ export interface WaitingPack {
 }
 
 /**
+ * A parcel ANOTHER bench is holding (PACK-4), and until when.
+ *
+ * The queue stopped offering these to everybody — two packers being told
+ * to pack one parcel cost the second one the walk — but a row that
+ * simply disappears is its own confusion. This is the explanation:
+ * who has it, whether they have a box open or only pulled it, and the
+ * time the hold lapses on its own.
+ */
+export interface PackInProgress {
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly awbNumber: string | null;
+  readonly orderNumber: string | null;
+  readonly hold: 'BOX' | 'CLAIM';
+  readonly heldByStaffId: string;
+  readonly heldByName: string | null;
+  readonly heldUntilIso: string;
+}
+
+/**
  * What is waiting to be packed.
  *
- * The bench is scan-driven, so this is a VIEW and never a claim — it
- * answers "what is coming", which a packer previously could only learn
- * one parcel at a time by scanning a label already in their hand. It
- * polls because parcels arrive from the pick floor while somebody is
+ * The bench is scan-driven, so `waiting` is a VIEW and never a claim —
+ * it answers "what is coming", which a packer previously could only
+ * learn one parcel at a time by scanning a label already in their hand.
+ * It polls because parcels arrive from the pick floor while somebody is
  * standing here.
+ *
+ * PACK-4: `waiting` is now THIS packer's — a parcel another bench holds
+ * moves to `inProgress` instead, so the list and the pull agree and
+ * nobody is sent after a parcel somebody else already has.
  */
-export function usePackQueue(courierCode?: string): UseQueryResult<WaitingPack[], Error> {
+export function usePackQueue(
+  courierCode?: string,
+): UseQueryResult<{ waiting: WaitingPack[]; inProgress: PackInProgress[] }, Error> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['warehouse-pack', 'queue', courierCode ?? null],
@@ -728,10 +754,13 @@ export function usePackQueue(courierCode?: string): UseQueryResult<WaitingPack[]
       client
         .request<{
           waiting: WaitingPack[];
+          inProgress?: PackInProgress[];
         }>(
           `/api/warehouse/packs/queue${courierCode === undefined ? '' : `?courierCode=${encodeURIComponent(courierCode)}`}`,
         )
-        .then((r) => r.waiting),
+        // Optional on the wire so a browser tab open across a deploy
+        // still renders rather than throwing on a missing field.
+        .then((r) => ({ waiting: r.waiting, inProgress: r.inProgress ?? [] })),
   });
 }
 
@@ -749,6 +778,12 @@ export interface PackScanResult {
   variantId: string;
   skuCode: string;
   stockUnitId: string | null;
+  /**
+   * The box's LIVE deadline. Every accepted scan pushes it forward, so the
+   * bench has to take it from the scan rather than from the open call — a
+   * deadline drawn once at open is wrong the moment the first item goes in.
+   */
+  expiresAt: string;
   scannedCount: number;
   expectedCount: number;
   complete: boolean;

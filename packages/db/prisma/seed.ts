@@ -465,10 +465,19 @@ const systemSettings: SystemSettingSeed[] = [
     key: 'ops.pack_box_timeout_minutes',
     category: 'ops',
     valueType: SettingValueType.INT,
-    valueInt: 60,
-    displayName: 'Pack Box Timeout (minutes)',
+    valueInt: 10,
+    displayName: 'Pack Box Idle Timeout (minutes)',
     description:
-      'A box left open at the pack bench longer than this is auto-released: its scans are discarded and the parcel returns to the pack queue. Stops a box abandoned at the end of a shift from wedging an order.',
+      'A box at the pack bench with NO SCANNING for this long is auto-released: its scans are discarded and the parcel returns to the pack queue. Measured from the LAST SCAN, not from when the box opened (2026-11-10) — every scan pushes the deadline forward, which is why 10 minutes is safe: it catches a bench nobody is at and never a packer still working a long order.',
+  },
+  {
+    key: 'ops.pack_claim_minutes',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 10,
+    displayName: 'Pack Queue Claim (minutes)',
+    description:
+      'PACK-4: how long a parcel the pack queue handed to a packer stays off the other benches. Shorter than the box timeout on purpose — a pull is only an intention to pack, and if no box follows the parcel must come back quickly. Expiry is read in the queue predicate, so nothing can strand a parcel here.',
   },
   {
     key: 'ops.pick_task_timeout_hours',

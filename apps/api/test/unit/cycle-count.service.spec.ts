@@ -46,6 +46,17 @@ function makeSut(opts: { status: CycleCountStatus; items: Item[]; batchUnitCost?
         Object.assign(cc, args.data);
         return clone(cc);
       }),
+      // The completion CLAIM (2026-11-10): the status change is a
+      // guarded `updateMany` taken before any adjustment is written, so
+      // two supervisors completing one count cannot each create a set of
+      // reconciliation adjustments. Matches only while IN_PROGRESS.
+      updateMany: jest.fn(
+        async (args: { where: { status: CycleCountStatus }; data: Record<string, unknown> }) => {
+          if (cc.status !== args.where.status) return { count: 0 };
+          Object.assign(cc, args.data);
+          return { count: 1 };
+        },
+      ),
     },
     cycleCountItem: {
       update: jest.fn(async (args: { where: { id: string }; data: { adjustmentId: string } }) => {

@@ -36,6 +36,7 @@ import {
   PickBatchQueryDto,
   ProductLocationQueryDto,
   QueueQueryDto,
+  ReleasePickBatchDto,
   ReprintLabelsDto,
   ShipmentSelectionDto,
   SkuLabelRequestDto,
@@ -209,6 +210,28 @@ export class WarehousePrintingController {
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<void> {
     return this.batches.cancel(id, staff.id, ctx);
+  }
+
+  /**
+   * Release a printed batch nobody is going to walk (jammed printer,
+   * sheet in the bin, picker gone home). Its own permission because it
+   * un-claims parcels a picker may be holding paper for — the picker
+   * must not be able to decide that about their own walk.
+   */
+  @Post('pick-batches/:id/release')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('warehouse.pick.supervise')
+  @ApiOperation({
+    summary:
+      'Supervisor: release a PRINTED batch that will never be walked. Its parcels return to the picking queue (allocations are deliberately left alone); audited MEDIUM with the reason',
+  })
+  releaseBatch(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+    @Body() body: ReleasePickBatchDto,
+  ): Promise<{ batchNumber: string; released: number }> {
+    return this.batches.releasePrinted(id, staff.id, body.reason, ctx);
   }
 
   @Get('pick-batches')

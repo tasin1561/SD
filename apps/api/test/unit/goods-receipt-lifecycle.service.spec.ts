@@ -21,6 +21,8 @@ function makeSut(opts: {
   receipt?: Record<string, unknown> | null;
   variantStatus?: VariantStatus;
   receiptCount?: number;
+  /** The guarded claim matched nothing — somebody else got there. */
+  claimLost?: boolean;
 }) {
   const receipt = opts.receipt ?? null;
   const created: Array<Record<string, unknown>> = [];
@@ -35,6 +37,11 @@ function makeSut(opts: {
       }),
       findFirst: jest.fn(async () => (receipt ? clone(receipt) : null)),
       findUniqueOrThrow: jest.fn(async () => clone(receipt)),
+      findUnique: jest.fn(async () => (receipt ? clone(receipt) : null)),
+      // The RECEIVING CLAIM (2026-11-10): PENDING → ARRIVING is a
+      // guarded `updateMany`, so two receivers pressing Start on one
+      // arriving consignment cannot both believe it is theirs.
+      updateMany: jest.fn(async () => ({ count: opts.claimLost === true ? 0 : 1 })),
       update: jest.fn(async (args: { data: Record<string, unknown> }) => ({
         id: 'gr1',
         ...(receipt ?? {}),
@@ -159,6 +166,29 @@ describe('GoodsReceiptService — admin recording lifecycle', () => {
     });
     await expect(sut.svc.startReceiving('staff1', 'gr1', CTX)).rejects.toMatchObject({
       response: { code: 'INVALID_RECEIPT_STATUS' },
+    });
+  });
+
+  it('start-receiving NAMES the person already receiving when the claim is lost', async () => {
+    // Two receivers pressing Start on one arriving consignment. The
+    // status change IS the claim, so the loser is told to take the next
+    // one instead of silently counting the same pile in parallel.
+    const sut = makeSut({
+      claimLost: true,
+      receipt: {
+        id: 'gr1',
+        sellerId: 's1',
+        warehouseId: 'w1',
+        status: GoodsReceiptStatus.PENDING,
+        receivedBy: { emailDisplay: 'Imran', email: 'imran@skydrop.global' },
+        lines: [],
+      },
+    });
+    await expect(sut.svc.startReceiving('staff1', 'gr1', CTX)).rejects.toMatchObject({
+      response: {
+        code: 'RECEIPT_ALREADY_RECEIVING',
+        message: expect.stringContaining('Imran'),
+      },
     });
   });
 

@@ -517,3 +517,69 @@ describe('DispatchHandoffService.recordHandoverScan — the scan IS the handover
     expect(transitionStatus).toHaveBeenCalled();
   });
 });
+
+describe('SCAN-4: a parcel already scanned for handover is REFUSED BY NAME', () => {
+  /*
+    Owner, 2026-11-10: "in handover it can happen that multiple persons
+    are scanning and by chance double same parcel is sent."
+
+    The stamp was always safe — a guarded `updateMany` on
+    `handover_scanned_at IS NULL` keeps the FIRST time — but a repeat
+    returned 200 with `alreadyScanned: true`, and the bench plays its
+    ACCEPTED sound on any 200. The second person heard "good, next" and
+    moved on believing they had scanned a new box. That is how one parcel
+    goes into the van twice and another is left on the floor.
+  */
+  it('names who scanned it and when, when the scan is a pure record', async () => {
+    const { svc, transitionStatus } = makeService({
+      handoverScanDispatches: false,
+      scannedShipment: {
+        id: 's1',
+        shipmentNumber: 'SH-s1',
+        handoverScannedAt: new Date('2026-11-10T05:34:00Z'),
+        handoverScannedBy: { emailDisplay: 'Rahim', email: 'rahim@skydrop.global' },
+        status: ShipmentStatus.CREATED,
+        manifestId: MAN,
+        orderShipments: [
+          { orderId: 'o1', order: { status: OrderStatus.PACKED, sellerId: 'seller-1' } },
+        ],
+      },
+    });
+    await expect(svc.recordHandoverScan('DLV-123', STAFF)).rejects.toMatchObject({
+      response: {
+        code: 'HANDOVER_ALREADY_SCANNED',
+        // IST clock time, because that is the part a person at a bench
+        // can use. 05:34 UTC is 11:04 in Kolkata.
+        message: expect.stringContaining('by Rahim at 11:04'),
+        details: expect.objectContaining({ staff: 'Rahim', scannedAt: '11:04' }),
+      },
+    });
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('does NOT refuse when dispatch-on-scan is ON — that re-scan is the saga recovery', async () => {
+    // Stamped but not dispatched means the transition did not finish.
+    // A re-scan is the ONE way to finish it, so refusing here would
+    // strand the parcel.
+    const { svc, transitionStatus } = makeService({
+      scannedShipment: {
+        id: 's1',
+        shipmentNumber: 'SH-s1',
+        handoverScannedAt: new Date('2026-11-10T05:34:00Z'),
+        handoverScannedBy: { emailDisplay: 'Rahim', email: 'rahim@skydrop.global' },
+        status: ShipmentStatus.CREATED,
+        manifestId: MAN,
+        orderShipments: [
+          { orderId: 'o1', order: { status: OrderStatus.PACKED, sellerId: 'seller-1' } },
+        ],
+      },
+    });
+    // No throw, and the transition is attempted again — which is the
+    // whole point of letting it through. (`alreadyScanned` reflects the
+    // stamp's own CAS, which this mock always reports as won.)
+    await expect(svc.recordHandoverScan('DLV-123', STAFF)).resolves.toMatchObject({
+      shipmentId: 's1',
+    });
+    expect(transitionStatus).toHaveBeenCalled();
+  });
+});
