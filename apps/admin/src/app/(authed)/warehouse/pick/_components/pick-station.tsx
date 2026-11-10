@@ -14,6 +14,8 @@ import {
   type StrictPulledPick,
 } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useScanSound } from '@/lib/scan-sound';
+import { ScanSoundToggle } from '@/components/scan-sound-toggle';
 import { SerialScanner, scanCountMet } from '@/components/ui/serial-scanner';
 import { ForceExpirePick } from './force-expire';
 import '../../_components/benches.css';
@@ -37,6 +39,15 @@ import { richMessage } from '@/i18n/client';
  *
  * FE-2: every server rejection surfaces verbatim — PICK_NOT_OWNED,
  * PICK_INCOMPLETE, UNIT_SCAN_COUNT_MISMATCH, UNIT_NOT_FOUND.
+ *
+ * …and every one of them is AUDIBLE. A picker walking a shelf is looking
+ * at the unit in their hand, not at the inline alert, so a refusal that
+ * only writes a line of red text is a refusal nobody notices: the
+ * serials stay in the box and the parcel looks done. Each serial scanned
+ * is answered by `SerialScanner` itself; this file answers the four
+ * station actions (pull, start, record, complete). Silence is never the
+ * answer — sound never replaces the on-screen state, it only arrives
+ * with it.
  */
 export function PickStation(): ReactElement {
   const t = useT();
@@ -56,6 +67,16 @@ export function PickStation(): ReactElement {
   const recordItem = useRecordPickItem();
   const complete = useCompletePick();
 
+  // The one feedback channel that needs no literacy: a picker holding the
+  // unit still HEARS whether the bench took it.
+  const sound = useScanSound();
+
+  /** Inline refusal: on screen AND in the room (every refusal is audible). */
+  function fail(message: string): void {
+    setError(message);
+    sound.refused();
+  }
+
   async function onPull(): Promise<void> {
     setError(null);
     try {
@@ -72,7 +93,7 @@ export function PickStation(): ReactElement {
       setBatchByItem({});
       setSerialsByItem({});
     } catch (err) {
-      setError(serverVerdict(err));
+      fail(serverVerdict(err));
     }
   }
 
@@ -83,10 +104,14 @@ export function PickStation(): ReactElement {
     try {
       const r = await start.mutateAsync({ shipmentId: pick.shipmentId });
       if (r.status === 'PENDING_MANUAL_PLACEMENT') {
+        // The parcel is gone off this bench. That is a refusal even
+        // though no inline error carries it, so it sounds like one.
         toast.error(t('warehousePickPickStation.pickShortfallOrderRoutedTo'));
+        sound.refused();
         setPick(null);
       } else {
         setStarted(true);
+        sound.accepted();
         toast.success(
           t('warehousePickPickStation.pickStartedAllocations', {
             allocationsLength: r.allocations.length,
@@ -94,7 +119,7 @@ export function PickStation(): ReactElement {
         );
       }
     } catch (err) {
-      setError(serverVerdict(err));
+      fail(serverVerdict(err));
     } finally {
       setBusyId(null);
     }
@@ -108,7 +133,10 @@ export function PickStation(): ReactElement {
     const bin = (binByItem[shipmentItemId] ?? '').trim();
     const batch = (batchByItem[shipmentItemId] ?? '').trim();
     if (!bin || !batch) {
-      setError(t('warehousePickPickStation.binAndBatchAreBoth'));
+      // Pressing Record IS the submit for the serials just scanned into
+      // this line, so refusing it has to sound refused — otherwise the
+      // picker walks off believing the line went in.
+      fail(t('warehousePickPickStation.binAndBatchAreBoth'));
       return;
     }
     const strict = line.inventoryMode === 'STRICT';
@@ -126,13 +154,14 @@ export function PickStation(): ReactElement {
         ...(strict ? { scannedSerials: serials } : {}),
       });
       setRecordedItems((prev) => new Set(prev).add(shipmentItemId));
+      sound.accepted();
       toast.success(
         strict
           ? t('warehousePickPickStation.lineRecordedUnitSScanned', { length: serials.length })
           : t('warehousePickPickStation.lineRecorded'),
       );
     } catch (err) {
-      setError(serverVerdict(err));
+      fail(serverVerdict(err));
     } finally {
       setBusyId(null);
     }
@@ -144,6 +173,7 @@ export function PickStation(): ReactElement {
     setBusyId('complete');
     try {
       await complete.mutateAsync({ shipmentId: pick.shipmentId });
+      sound.accepted();
       toast.success(
         t('warehousePickPickStation.pickedShipmentIsInThe', {
           shipmentNumber: pick.shipmentNumber,
@@ -155,7 +185,7 @@ export function PickStation(): ReactElement {
       setRecordedItems(new Set());
       setSerialsByItem({});
     } catch (err) {
-      setError(serverVerdict(err));
+      fail(serverVerdict(err));
     } finally {
       setBusyId(null);
     }
@@ -188,6 +218,9 @@ export function PickStation(): ReactElement {
               : t('warehousePickPickStation.startPick')}
           </Button>
         )}
+        {/* The bench now makes noise, so the bench can silence it — one
+            device-wide setting, shared with every other station. */}
+        <ScanSoundToggle />
       </div>
 
       {error && (

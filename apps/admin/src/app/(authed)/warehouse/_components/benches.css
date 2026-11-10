@@ -773,6 +773,12 @@ p.wh-alert {
 }
 .wh-search {
   max-width: 24rem;
+  /* It now sits in a `wh-row` beside the sound-mute button, where a flex
+     item sizes to its content and would shrink the field to the input's
+     intrinsic width. Grow back up to the same max it always had; the
+     rules are inert wherever it is still a plain block. */
+  flex: 1 1 18rem;
+  min-width: 0;
 }
 .wh-empty-cell {
   display: grid;

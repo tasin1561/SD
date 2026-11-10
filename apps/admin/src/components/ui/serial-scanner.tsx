@@ -4,6 +4,7 @@ import { useState, type ReactElement } from 'react';
 import { Button } from '@skydrop/ui/app/button';
 import { X } from 'lucide-react';
 import { useT } from '@/i18n/client';
+import { useScanSound } from '@/lib/scan-sound';
 
 /**
  * R4 STRICT — the one serial-capture interaction, shared by pick, pack
@@ -23,9 +24,19 @@ import { useT } from '@/i18n/client';
  * DISPLAY and the caller's own submit gate; the refusal that counts
  * comes back from the API and is shown verbatim.
  *
- * Lives in apps/admin/src/components/ui — no `@/…` imports, so the
- * folder still lifts to @skydrop/ui wholesale when a second app needs
- * it.
+ * EVERY SERIAL IS AUDIBLE, and the sound is wired INSIDE this component
+ * rather than handed in by the caller (no `onAccept` / `onReject` prop).
+ * Two reasons. One: the refusal this component owns — "that serial is
+ * already in this list" — is decided here and nowhere else, so a
+ * callback design would STILL need this file to fire it, and would then
+ * have two places that must agree. Two: pick and receive cannot drift
+ * apart if there is nothing at either call site to forget. A packer
+ * scanning twenty serials learns about number seven when it happens, not
+ * when the whole line is submitted.
+ *
+ * Lives in apps/admin/src/components/ui — the only `@/…` imports are the
+ * i18n client and the scan sounds, both of which the folder would take
+ * with it if it ever lifts to @skydrop/ui.
  */
 
 export interface SerialScannerProps {
@@ -75,6 +86,7 @@ export function SerialScanner({
   hint,
 }: SerialScannerProps): ReactElement {
   const t = useT();
+  const sound = useScanSound();
   const [code, setCode] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -87,10 +99,14 @@ export function SerialScanner({
     // predicting what the server would say about it.
     if (serials.includes(serial)) {
       setNotice(t('uiSerialScanner.isAlreadyInThisList', { serial }));
+      // The notice is small, and the eyes are on the box. The room hears
+      // it too, or a re-scan reads as a second unit captured.
+      sound.refused();
       return;
     }
     setNotice(null);
     onChange([...serials, serial]);
+    sound.accepted();
   }
 
   function remove(serial: string): void {

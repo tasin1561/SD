@@ -24,6 +24,8 @@ import {
 } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { useScanSound } from '@/lib/scan-sound';
+import { ScanSoundToggle } from '@/components/scan-sound-toggle';
 import { SerialScanner, scanCountMet } from '@/components/ui/serial-scanner';
 import { SkuLabelSheetView } from '@/components/sku-label-sheet';
 import { AmendCount } from '../../_components/amend-count';
@@ -90,6 +92,11 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   // `serialsByLineId` on the complete call wants.
   const [serialsByLine, setSerialsByLine] = useState<Record<string, readonly string[]>>({});
 
+  // The intake bench is worked with both hands on the carton and the eyes
+  // on what came out of it. Every verdict is audible as well as visible —
+  // the same two sounds as pack, handover, RTO and pick, one shared mute.
+  const sound = useScanSound();
+
   const bins = useWarehouseBins(detail.data?.warehouseId ?? '');
 
   if (detail.isLoading)
@@ -147,14 +154,21 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
         }))
     : [];
 
+  /** Inline refusal: on screen AND in the room (every refusal is audible). */
+  function fail(message: string): void {
+    setError(message);
+    sound.refused();
+  }
+
   async function onStart(): Promise<void> {
     setError(null);
     setBusy('start');
     try {
       await start.mutateAsync({ id });
+      sound.accepted();
       toast.success(t('warehouseReceiveReceiveDetailView.startedReceivingRecordEachProduct'));
     } catch (e) {
-      setError(serverVerdict(e));
+      fail(serverVerdict(e));
     } finally {
       setBusy(null);
     }
@@ -173,20 +187,21 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       binByLine,
     );
     if (!built.ok) {
-      setError(built.error);
+      fail(built.error);
       setBusy(null);
       return false;
     }
     const lines = built.lines;
     try {
       await record.mutateAsync({ id, lines });
+      sound.accepted();
       toast.success(t('warehouseReceiveReceiveDetailView.recordedLineS', { length: lines.length }));
       setReceived({});
       setDamaged({});
       setBinByLine({});
       return true;
     } catch (e) {
-      setError(serverVerdict(e));
+      fail(serverVerdict(e));
       return false;
     } finally {
       setBusy(null);
@@ -210,7 +225,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       (l) => (received[l.id] ?? '').trim() === '' && (damaged[l.id] ?? '').trim() !== '',
     );
     if (orphan) {
-      setError(
+      fail(
         t('warehouseReceiveReceiveDetailView.damagedWithoutReceived', {
           sku: orphan.variant.skuCode,
         }),
@@ -267,18 +282,24 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       if (result.status === 'COMPLETED') {
         // A variance no longer withholds the stock (CNS-3), so this is
         // not an error — it is a fact about the count, and the goods are
-        // already on the shelf either way.
+        // already on the shelf either way. Both ways are ACCEPTED.
+        sound.accepted();
         if (result.hasDiscrepancies) {
           toast.info(t('warehouseReceiveReceiveDetailView.completedStockWrittenForWhat'));
         } else {
           toast.success(t('warehouseReceiveReceiveDetailView.receiptCompletedStockWritten'));
         }
       } else {
+        // It came back as something other than COMPLETED: the serials and
+        // counts just sent did NOT finish the receipt. The toast says so
+        // and so does the room — a quiet "status now ARRIVING" reads as
+        // done to somebody who cannot read it.
+        sound.refused();
         toast.info(t('warehouseReceiveReceiveDetailView.statusNow', { status: result.status }));
       }
       return true;
     } catch (e) {
-      setError(serverVerdict(e));
+      fail(serverVerdict(e));
       return false;
     } finally {
       setBusy(null);
@@ -292,9 +313,10 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       await cancelReceipt.mutateAsync({ id, reason: cancelReason.trim() });
       setCancelOpen(false);
       setCancelReason('');
+      sound.accepted();
       toast.info(t('warehouseReceiveReceiveDetailView.receiptCancelledNothingWasWritten'));
     } catch (e) {
-      setError(serverVerdict(e));
+      fail(serverVerdict(e));
     } finally {
       setBusy(null);
     }
@@ -346,6 +368,9 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
         }
         action={
           <div className="wh-row">
+            {/* The bench beeps now, so the bench can silence it — the one
+                device-wide mute every other station shares. */}
+            <ScanSoundToggle />
             {isPending && (
               <Button
                 variant="primary"

@@ -37,6 +37,7 @@ import {
 } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useScanSound } from '@/lib/scan-sound';
 import { ROUTE_LABEL, SITE_LABEL, STATUS_LABEL } from '../../_components/labels';
 import {
   Actions,
@@ -96,6 +97,9 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
   const [reprintReason, setReprintReason] = useState('');
   const dispatch = useDispatchConsignment();
   const cancel = useCancelConsignment();
+  // Only the damaged-label request below is fed by a scanner; see its
+  // comment for why the rest of this panel stays quiet.
+  const sound = useScanSound();
 
   const [error, setError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<LabelSheet | null>(null);
@@ -192,6 +196,15 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
   /**
    * The damaged sticker — named units only, it says why, and it prints
    * nothing: somebody else approves it first (LBL-5b).
+   *
+   * THE ONE SCAN-FED PATH ON THIS PANEL, so the only one that speaks.
+   * Those serials came off a gun pointed at the damaged units, and a
+   * refusal here is about what was scanned — "that serial is already on
+   * an open request", "that serial is not on this consignment". Everything
+   * else on this page is a typed form or a button somebody deliberately
+   * presses (the labelling site, the sheet, dispatch, cancel, freight):
+   * eyes are on the screen, and a sound there would only wear out a pair
+   * of cues the floor has to keep trusting.
    */
   async function onReprint(): Promise<void> {
     setError(null);
@@ -201,6 +214,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
         serials: parseSerials(reprintSerials),
         reason: reprintReason.trim(),
       });
+      sound.accepted();
       toast.success(
         t('warehouseConsignmentsIdConsignmentPanel.askedToReprintLabelS', {
           serialsLength: result.serials.length,
@@ -211,6 +225,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
       setReprintReason('');
     } catch (e) {
       setError(serverVerdict(e));
+      sound.refused();
     }
   }
 

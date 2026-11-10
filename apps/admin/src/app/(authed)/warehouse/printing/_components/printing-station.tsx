@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type KeyboardEvent, type ReactElement } from 'react';
 import { Check, Download, FileCheck2, Printer, Search, Tags, X } from 'lucide-react';
 import { useToast } from '@skydrop/ui/components';
 import { Button } from '@skydrop/ui/app/button';
@@ -37,6 +37,8 @@ import {
 } from '@/lib/api-hooks';
 import { SkuLabelSheetView } from '@/components/sku-label-sheet';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useScanSound } from '@/lib/scan-sound';
+import { ScanSoundToggle } from '@/components/scan-sound-toggle';
 import { downloadPdf, printPdf } from '@/lib/print-pdf';
 import { SelectionTable } from './selection-table';
 import '../../_components/benches.css';
@@ -44,6 +46,60 @@ import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/client';
 
 type Tab = 'labels' | 'reprint' | 'picking' | 'batches' | 'locate';
+
+/**
+ * A SEARCH BOX A SCAN GUN DRIVES, given a voice.
+ *
+ * ── WHICH PATHS HERE ARE SCANS ───────────────────────────────────────
+ * This is a desk, not a barcode bench: the printing, confirming,
+ * abandoning and marking all start from a tick-box in a table or a
+ * button in a dialog, and nothing a scanner does reaches them. Two
+ * fields are different — "Search batches" takes a batch number, an order
+ * number or an AWB, and "Find a product" takes a barcode. Both say so in
+ * their own placeholder, and both are read with a gun off a carton or a
+ * shelf label. A gun types the code and presses Enter itself, so ENTER
+ * is the only honest commit point: before it, the operator may still be
+ * typing.
+ *
+ * ── WHY IT WAITS FOR THE ANSWER ──────────────────────────────────────
+ * The verdict is "did this code find anything", which the server has not
+ * said yet when Enter arrives. So Enter only REMEMBERS what was asked;
+ * the sound plays once the query for THAT EXACT string has settled.
+ * Playing early would be guessing, and a wrong accepted sound is worse
+ * than no sound at all: a packer who trusts the pair would hear "found
+ * it" and walk away from an empty list.
+ *
+ * `settled` and `found` are the caller's, because only the caller knows
+ * its own query (one of them has a two-character floor below which no
+ * request is made at all — that is a refusal, and it sounds like one).
+ */
+function useScanSearchVerdict(
+  query: string,
+  settled: boolean,
+  found: boolean,
+): (e: KeyboardEvent<HTMLInputElement>) => void {
+  const sound = useScanSound();
+  const [awaiting, setAwaiting] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (awaiting === null || awaiting !== query.trim() || !settled) return;
+    setAwaiting(null);
+    if (found) sound.accepted();
+    else sound.refused();
+  }, [awaiting, query, settled, found, sound]);
+
+  return (e) => {
+    if (e.key !== 'Enter') return;
+    // A gun's Enter is a question, never a submit.
+    e.preventDefault();
+    // The keypress that got here IS the gesture a browser waits for
+    // before it will play anything. Priming can never throw.
+    sound.prime();
+    const committed = query.trim();
+    if (committed.length === 0) return;
+    setAwaiting(committed);
+  };
+}
 
 /**
  * The print-first floor.
@@ -669,6 +725,15 @@ function BatchesTab(): ReactElement {
     setPendingAct(act);
   }
 
+  // Scanning a batch number, an order number or an AWB in here is a scan,
+  // and gets an answer in the room. Nothing else on this tab is: every
+  // other action starts from a button or a dialog.
+  const onSearchKeyDown = useScanSearchVerdict(
+    search,
+    !batches.isLoading && !batches.isFetching,
+    (batches.data ?? []).length > 0,
+  );
+
   /*
     FINISHING A DRAFT FROM HERE.
 
@@ -755,15 +820,21 @@ function BatchesTab(): ReactElement {
         </div>
       )}
       <SkippedNotice skippedByBatch={skippedByBatch} batches={batches.data ?? []} />
-      <div className="wh-search">
-        <TextField
-          label={t('warehousePrintingPrintingStation.searchBatches')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('warehousePrintingPrintingStation.batchNumberOrderNumberOr')}
-          aria-label={t('warehousePrintingPrintingStation.searchBatches')}
-          icon={<Search size={16} />}
-        />
+      <div className="wh-row wh-row--between">
+        <div className="wh-search">
+          <TextField
+            label={t('warehousePrintingPrintingStation.searchBatches')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={onSearchKeyDown}
+            placeholder={t('warehousePrintingPrintingStation.batchNumberOrderNumberOr')}
+            aria-label={t('warehousePrintingPrintingStation.searchBatches')}
+            icon={<Search size={16} />}
+          />
+        </div>
+        {/* This field makes noise, so it offers the same device-wide
+            mute every other station shares. */}
+        <ScanSoundToggle />
       </div>
 
       {batches.isLoading ? (
@@ -1038,6 +1109,16 @@ function LocateTab(): ReactElement {
   const reprint = useSkuLabelsForVariants();
   const [reprintSheet, setReprintSheet] = useState<SkuLabelSheet | null>(null);
 
+  // A barcode read off a shelf label lands here. Below the server's own
+  // two-character floor nothing is asked at all, which is still an answer
+  // of "that found nothing" — settled, not found, so it sounds refused.
+  const tooShort = q.trim().length < 2;
+  const onSearchKeyDown = useScanSearchVerdict(
+    q,
+    tooShort || (!results.isLoading && !results.isFetching),
+    !tooShort && (results.data ?? []).length > 0,
+  );
+
   if (reprintSheet !== null) {
     return <SkuLabelSheetView sheet={reprintSheet} onClose={() => setReprintSheet(null)} />;
   }
@@ -1045,15 +1126,20 @@ function LocateTab(): ReactElement {
   return (
     <div className="wh-stack">
       <section className="wh-card wh-stack">
-        <div className="wh-search">
-          <TextField
-            label={t('warehousePrintingPrintingStation.findAProduct')}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={t('warehousePrintingPrintingStation.productNameSkuOrBarcode')}
-            aria-label={t('warehousePrintingPrintingStation.findAProduct')}
-            icon={<Search size={16} />}
-          />
+        <div className="wh-row wh-row--between">
+          <div className="wh-search">
+            <TextField
+              label={t('warehousePrintingPrintingStation.findAProduct')}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={onSearchKeyDown}
+              placeholder={t('warehousePrintingPrintingStation.productNameSkuOrBarcode')}
+              aria-label={t('warehousePrintingPrintingStation.findAProduct')}
+              icon={<Search size={16} />}
+            />
+          </div>
+          {/* Scanning a barcode in here beeps, so the mute is here too. */}
+          <ScanSoundToggle />
         </div>
 
         {q.trim().length < 2 ? (
