@@ -1704,6 +1704,35 @@ export const wh = defineMessages({
     '{batchNumber} picked — {picked} parcels are at the packing bench',
     '{batchNumber} পিক হয়েছে — {picked}টি পার্সেল প্যাকিং বেঞ্চে',
   ],
+  'warehousePrintingPrintingStation.shortPick': ['Short', 'কম', 'कम'],
+  'warehousePrintingPrintingStation.shortPickFor': [
+    'Report a short pick on {batchNumber}',
+    '{batchNumber} এ কম পাওয়া গেছে জানান',
+    '{batchNumber} में कम मिला, बताएं',
+  ],
+  'warehousePrintingPrintingStation.shortPickTitle': [
+    '{batchNumber} — found less than the sheet says',
+    '{batchNumber} — শিটের চেয়ে কম পাওয়া গেছে',
+    '{batchNumber} — शीट से कम मिला',
+  ],
+  'warehousePrintingPrintingStation.sheetAsked': [
+    'The sheet asks for {expected}',
+    'শিটে চাওয়া হয়েছে {expected}',
+    'शीट में चाहिए {expected}',
+  ],
+  'warehousePrintingPrintingStation.oneLess': ['One less', 'একটি কম', 'एक कम'],
+  'warehousePrintingPrintingStation.oneMore': ['One more', 'একটি বেশি', 'एक ज़्यादा'],
+  'warehousePrintingPrintingStation.record': ['Save', 'সংরক্ষণ', 'सेव करें'],
+  'warehousePrintingPrintingStation.recordFound': [
+    'Save: found {found} of {expected}',
+    'সংরক্ষণ: {expected} এর মধ্যে {found} পাওয়া গেছে',
+    'सेव करें: {expected} में से {found} मिले',
+  ],
+  'warehousePrintingPrintingStation.recordedShort': [
+    'Saved: found {found} of {expected}',
+    'সংরক্ষিত: {expected} এর মধ্যে {found} পাওয়া গেছে',
+    'सेव हुआ: {expected} में से {found} मिले',
+  ],
   'warehousePrintingPrintingStation.searchBatches': ['Search batches', 'ব্যাচ খুঁজুন'],
   'warehousePrintingPrintingStation.batchNumberOrderNumberOr': [
     'Batch number, order number or AWB',

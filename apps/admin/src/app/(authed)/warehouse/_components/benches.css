@@ -1421,3 +1421,64 @@ p.wh-alert {
   border-radius: var(--r-md);
   background: var(--surface-3);
 }
+
+/* SHORT PICK (2026-11-10) — one line of the sheet, its expected count and
+   a thumb-sized stepper. Numbers lead; words are small. */
+.wh-sp {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-2);
+  align-items: center;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.wh-sp__what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.wh-sp__ask {
+  justify-self: end;
+}
+.wh-sp__big {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-strong);
+}
+.wh-sp__step {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.wh-sp__found {
+  min-width: 3ch;
+  text-align: center;
+}
+.wh-sp__ok {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--green-line);
+  border-radius: var(--r-md);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.wh-sp__ok .wh-sp__big {
+  color: inherit;
+}
+.wh-sp .wh-alert {
+  grid-column: 1 / -1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .wh-sp__ok {
+    animation: wh-fix-in var(--dur-slow) var(--ease-out) both;
+  }
+}

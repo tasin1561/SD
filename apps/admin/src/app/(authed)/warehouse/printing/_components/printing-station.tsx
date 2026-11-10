@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type KeyboardEvent, type ReactElement } from 'react';
-import { Check, Download, FileCheck2, Printer, Search, Tags, X } from 'lucide-react';
+import { Check, Download, FileCheck2, PackageMinus, Printer, Search, Tags, X } from 'lucide-react';
 import { useToast } from '@skydrop/ui/components';
 import { Button } from '@skydrop/ui/app/button';
 import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
@@ -41,6 +41,7 @@ import { useScanSound } from '@/lib/scan-sound';
 import { ScanSoundToggle } from '@/components/scan-sound-toggle';
 import { downloadPdf, printPdf } from '@/lib/print-pdf';
 import { SelectionTable } from './selection-table';
+import { ShortPickDialog } from './short-pick-dialog';
 import '../../_components/benches.css';
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/client';
@@ -720,6 +721,8 @@ function BatchesTab(): ReactElement {
     readonly batchNumber: string;
     readonly shipmentCount: number;
   } | null>(null);
+  // The batch whose lines are open for a short-pick report.
+  const [shortFor, setShortFor] = useState<string | null>(null);
   function ask(act: NonNullable<typeof pendingAct>): void {
     setError(null);
     setPendingAct(act);
@@ -998,6 +1001,21 @@ function BatchesTab(): ReactElement {
                           {t('warehousePrintingPrintingStation.picked')}
                         </Button>
                       )}
+                      {/* Beside "Picked", never instead of it: everything
+                          found stays one tap. */}
+                      {b.status === 'PRINTED' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShortFor(b.id)}
+                          aria-label={t('warehousePrintingPrintingStation.shortPickFor', {
+                            batchNumber: b.batchNumber,
+                          })}
+                          icon={<PackageMinus size={16} />}
+                        >
+                          {t('warehousePrintingPrintingStation.shortPick')}
+                        </Button>
+                      )}
                       {(skippedByBatch[b.id]?.length ?? 0) > 0 && (
                         <Link href="/warehouse/pick" className="wh-link">
                           {t('warehousePrintingPrintingStation.scanAtThePickStation', {
@@ -1013,6 +1031,15 @@ function BatchesTab(): ReactElement {
           </TBody>
         </Table>
       )}
+
+      <ShortPickDialog
+        key={shortFor ?? 'none'}
+        batch={(batches.data ?? []).find((x) => x.id === shortFor) ?? null}
+        open={shortFor !== null}
+        onOpenChange={(next) => {
+          if (!next) setShortFor(null);
+        }}
+      />
 
       <ConfirmDialog
         open={pendingAct !== null}

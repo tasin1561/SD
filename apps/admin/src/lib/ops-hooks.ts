@@ -3906,6 +3906,14 @@ export interface PickBatchView {
     shipmentNumber: string;
     orderNumber: string;
     awbNumber: string | null;
+    /** The lines on the parcel; `quantity` is what the sheet asked for. */
+    items: Array<{
+      shipmentItemId: string;
+      skuCode: string;
+      productName: string;
+      variantLabel: string | null;
+      quantity: number;
+    }>;
   }>;
 }
 
@@ -4130,6 +4138,30 @@ export function useMarkBatchPicked(): UseMutationResult<
       }>(`/api/admin/warehouse/printing/pick-batches/${batchId}/mark-picked`, { method: 'POST' }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin', 'pick-batches'] });
+      void qc.invalidateQueries({ queryKey: ['admin-orders'] });
+    },
+  });
+}
+
+/**
+ * A picker found fewer than the sheet asked for. The server only RECORDS
+ * it (no stock moves, nothing blocks) and enforces `0 <= found < expected`
+ * itself; the answer is what it wrote down.
+ */
+export function useRecordShortPick(): UseMutationResult<
+  { shipmentNumber: string; expected: number; found: number },
+  Error,
+  { batchId: string; shipmentItemId: string; qtyFound: number }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ batchId, shipmentItemId, qtyFound }) =>
+      client.request<{ shipmentNumber: string; expected: number; found: number }>(
+        `/api/admin/warehouse/printing/pick-batches/${batchId}/short-pick`,
+        { method: 'POST', body: { shipmentItemId, qtyFound } },
+      ),
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin-orders'] });
     },
   });

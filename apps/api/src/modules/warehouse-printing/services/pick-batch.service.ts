@@ -40,6 +40,26 @@ export interface PickBatchView {
     shipmentNumber: string;
     orderNumber: string;
     awbNumber: string | null;
+    /**
+     * The lines on this parcel, so a picker walking the sheet can report
+     * a SHORT PICK against one of them (2026-11-10).
+     *
+     * `recordShortPick` needs a `shipmentItemId`, and the picker needs to
+     * see what the sheet asked for. Without this the bench would have to
+     * guess an id or re-derive `expected`, which is exactly the
+     * client-side mirror of a server rule that FE-2 forbids — the UI may
+     * SHOW `quantity`, but the server is what enforces it.
+     *
+     * These are the shipment's own SNAPSHOT columns (MUST #10), not a
+     * catalog read, so MUST #13 does not apply.
+     */
+    items: ReadonlyArray<{
+      shipmentItemId: string;
+      skuCode: string;
+      productName: string;
+      variantLabel: string | null;
+      quantity: number;
+    }>;
   }>;
 }
 
@@ -1093,6 +1113,19 @@ const PICK_BATCH_SELECT = {
       shipmentNumber: true,
       awbNumber: true,
       orderShipments: { select: { order: { select: { orderNumber: true } } }, take: 1 },
+      // Ordered so the sheet, the screen and a short-pick report all list
+      // the lines the same way; `createdAt` is the line's insertion order
+      // on the parcel, which is the order the packing list already uses.
+      items: {
+        select: {
+          id: true,
+          skuCode: true,
+          productName: true,
+          variantLabel: true,
+          quantity: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      },
     },
   },
 } as const;
@@ -1118,6 +1151,13 @@ function toView(r: PickBatchRow): PickBatchView {
       shipmentNumber: s.shipmentNumber,
       orderNumber: s.orderShipments[0]?.order?.orderNumber ?? '—',
       awbNumber: s.awbNumber,
+      items: s.items.map((i) => ({
+        shipmentItemId: i.id,
+        skuCode: i.skuCode,
+        productName: i.productName,
+        variantLabel: i.variantLabel,
+        quantity: i.quantity,
+      })),
     })),
   };
 }
