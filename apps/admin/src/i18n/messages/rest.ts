@@ -529,6 +529,14 @@ export const rest = defineMessages({
     'One step left on {span}',
     '{span}-এ আর একটি ধাপ বাকি',
   ],
+  // The IDLE deadline, as a clock time. It slides forward on every scan,
+  // so the sentence is about nobody scanning — not about the clock running
+  // out on work in progress.
+  'warehousePackPackStation.ifNobodyScansThisBox': [
+    'If nobody scans, this box frees itself at {span}',
+    'কেউ স্ক্যান না করলে {span}-এ বাক্সটি নিজেই ছেড়ে যাবে',
+    'कोई स्कैन न करे तो {span} पर यह डिब्बा अपने आप छूट जाएगा',
+  ],
   'warehousePickPickStation.shipment': ['Shipment {span}', 'শিপমেন্ট {span}'],
   'warehousePrintingPrintingStation.lineToWalk': [
     '{span} — {span2} line{value} to walk.',

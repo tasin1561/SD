@@ -20,6 +20,8 @@ import {
   ScanLine,
   Trash2,
   Undo2,
+  User,
+  Wrench,
 } from 'lucide-react';
 import { ApiError } from '@skydrop/api-client';
 import {
@@ -41,7 +43,14 @@ import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
 import { SerialScanner } from '@/components/ui/serial-scanner';
 import { PackQueueList } from './pack-queue-list';
 import { PackStepStrip } from './pack-step-strip';
-import { DISMISS_TRIPLE, packErrorCopy, type PackErrorKind } from './pack-error-copy';
+import {
+  DISMISS_TRIPLE,
+  packErrorCopy,
+  type PackErrorCopy,
+  type PackErrorKind,
+  type PackErrorTriple,
+  type PackErrorVars,
+} from './pack-error-copy';
 import '../../_components/benches.css';
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/client';
@@ -85,11 +94,50 @@ interface PendingCompletion {
   readonly awbNumber: string;
 }
 
+/**
+ * A wall-clock time in the warehouse's own zone — the same shape the
+ * server uses for the `when` it puts in a refusal, so the two never
+ * disagree on screen. 24-hour and Western numerals, like every figure on
+ * this bench.
+ */
+function clockTime(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return '';
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(at);
+}
+
 /** The code on an ApiError body, for choosing which remedy to OFFER. */
 function verdictCode(err: unknown): string | null {
   if (!(err instanceof ApiError)) return null;
   const body = err.body as { code?: unknown } | null;
   return typeof body?.code === 'string' ? body.code : (err.code ?? null);
+}
+
+/**
+ * The server's own `details`, for the friendly sentence to name.
+ *
+ * This is NOT a second opinion about what was refused (FE-2) — it is the
+ * server's values, shown in the server's three languages. "You scanned
+ * the wrong parcel" is half an instruction; which parcel to scan is the
+ * other half, and only the server knows it.
+ *
+ * Non-string and empty values are dropped rather than rendered, so a
+ * packer can never be shown a raw placeholder.
+ */
+function verdictVars(err: unknown): PackErrorVars {
+  if (!(err instanceof ApiError)) return {};
+  const details = (err.body as { details?: unknown } | null)?.details;
+  if (typeof details !== 'object' || details === null || Array.isArray(details)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(details)) {
+    if (typeof value === 'string' && value.trim() !== '') out[key] = value;
+  }
+  return out;
 }
 
 /**
@@ -106,6 +154,79 @@ const KIND_ICON: Readonly<Record<PackErrorKind, ReactElement>> = {
   stop: <OctagonX size={22} />,
 };
 
+/** One sentence, three languages, one `<p>` each. */
+function Triple({ copy, className }: { copy: PackErrorTriple; className: string }): ReactElement {
+  return (
+    <div className={className}>
+      <p className="wh-tri__line wh-tri__line--lead" lang="en">
+        {copy.en}
+      </p>
+      <p className="wh-tri__line" lang="bn">
+        {copy.bn}
+      </p>
+      <p className="wh-tri__line" lang="hi">
+        {copy.hi}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * A refusal, told the way two colleagues can settle it between them
+ * (2026-11-10, owner): WHAT happened, WHO and WHEN, WHY it happens with
+ * several people working, and THE FIX — each in all three languages,
+ * except the who/when row, which is a name and a clock time and needs no
+ * language at all.
+ *
+ * Shared by the blocking dialog and the inline alert so the two can never
+ * drift. FE-2 is unaffected: the server's verbatim `[CODE] message` is
+ * rendered by the caller, below this.
+ */
+function RefusalBody({ copy, vars }: { copy: PackErrorCopy; vars: PackErrorVars }): ReactElement {
+  // `who`/`when` on the pack bench, `staff`/`time` on the handover one.
+  // Either pair, so a code from another bench drops in without rework.
+  const who = vars['who'] ?? vars['staff'] ?? '';
+  const when = vars['when'] ?? vars['time'] ?? '';
+  return (
+    <>
+      <div className="wh-oops" data-kind={copy.kind}>
+        <span className="wh-oops__icon" aria-hidden>
+          {KIND_ICON[copy.kind]}
+        </span>
+        <Triple copy={copy} className="wh-tri" />
+      </div>
+      {/* WHO and WHEN, as facts rather than prose: a name and a clock
+          time are the same in every language, and they are the two things
+          that decide whether to go and find somebody or just wait. */}
+      {(who !== '' || when !== '') && (
+        <p className="wh-facts">
+          {who !== '' && (
+            <span className="wh-facts__item">
+              <User size={14} className="wh-inline-icon" /> <strong>{who}</strong>
+            </span>
+          )}
+          {when !== '' && (
+            <span className="wh-facts__item">
+              <Clock size={14} className="wh-inline-icon" /> <strong>{when}</strong>
+            </span>
+          )}
+        </p>
+      )}
+      {/* The scenario. First thing cut on a narrow screen (CSS) — the fix
+          must survive, the explanation may not. */}
+      {copy.why !== undefined && <Triple copy={copy.why} className="wh-tri wh-oops__why" />}
+      {copy.fix !== undefined && (
+        <div className="wh-fix">
+          <span className="wh-fix__icon" aria-hidden>
+            <Wrench size={18} />
+          </span>
+          <Triple copy={copy.fix} className="wh-tri" />
+        </div>
+      )}
+    </>
+  );
+}
+
 export function PackStation(): ReactElement {
   const t = useT();
 
@@ -116,10 +237,22 @@ export function PackStation(): ReactElement {
   const [forcing, setForcing] = useState(false);
   const [forceReason, setForceReason] = useState('');
   const [box, setBox] = useState<OpenPackBox | null>(null);
+  /**
+   * When the open box frees itself, as the SERVER last said. It slides
+   * forward on every accepted scan, so it is kept here rather than read
+   * off `box` — a deadline drawn once at open is wrong the moment the
+   * first item goes in, and a packer watching a stale clock is worse than
+   * one watching none.
+   */
+  const [deadline, setDeadline] = useState<string | null>(null);
   const [lines, setLines] = useState<ScannedLine[]>([]);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  // The server's `details`, so the friendly sentence can name the AWB to
+  // scan or the client a product belongs to.
+  const [errorVars, setErrorVars] = useState<PackErrorVars>({});
+  const [refusalVars, setRefusalVars] = useState<PackErrorVars>({});
   const [refusal, setRefusal] = useState<string | null>(null);
   // The server's CODE, kept beside the verbatim verdict so the dialog can
   // pick the friendly three-language sentence. The verdict is still what
@@ -198,17 +331,20 @@ export function PackStation(): ReactElement {
   function fail(err: unknown): void {
     setError(serverVerdict(err));
     setErrorCode(verdictCode(err));
+    setErrorVars(verdictVars(err));
     sound.refused();
   }
 
   function dismissRefusal(): void {
     setRefusal(null);
     setRefusalCode(null);
+    setRefusalVars({});
     setCode('');
   }
 
   function reset(): void {
     setBox(null);
+    setDeadline(null);
     setLines([]);
     setCode('');
     setReason('');
@@ -230,6 +366,7 @@ export function PackStation(): ReactElement {
     if (value.length === 0) return;
     setError(null);
     setErrorCode(null);
+    setErrorVars({});
     setCode('');
     // The keypress that got here IS the gesture a browser waits for before
     // it will play anything. Priming can never throw.
@@ -239,6 +376,7 @@ export function PackStation(): ReactElement {
       if (box === null) {
         const opened = await open.mutateAsync({ awbNumber: value });
         setBox(opened);
+        setDeadline(opened.expiresAt);
         setLines(opened.expected.map((l) => ({ ...l, scanned: 0 })));
         sound.accepted();
         toast.info(
@@ -278,6 +416,7 @@ export function PackStation(): ReactElement {
 
       const result = await scan.mutateAsync({ packBoxId: box.packBoxId, code: value });
       sound.accepted();
+      setDeadline(result.expiresAt);
       setLines((prev) =>
         prev.map((l) => (l.variantId === result.variantId ? { ...l, scanned: l.scanned + 1 } : l)),
       );
@@ -293,6 +432,7 @@ export function PackStation(): ReactElement {
       // scrolls away is a refusal nobody read.
       setRefusal(serverVerdict(err));
       setRefusalCode(verdictCode(err));
+      setRefusalVars(verdictVars(err));
       sound.refused();
     }
   }
@@ -311,6 +451,7 @@ export function PackStation(): ReactElement {
     if (pending === null || unitSerials.length === 0) return;
     setError(null);
     setErrorCode(null);
+    setErrorVars({});
     try {
       const result = await completePack.mutateAsync({
         shipmentId: pending.shipmentId,
@@ -340,6 +481,7 @@ export function PackStation(): ReactElement {
     if (box === null) return;
     setError(null);
     setErrorCode(null);
+    setErrorVars({});
     try {
       const result = await forceComplete.mutateAsync({
         shipmentId: box.shipmentId,
@@ -365,6 +507,7 @@ export function PackStation(): ReactElement {
     if (box === null || reason.trim().length < 3) return;
     setError(null);
     setErrorCode(null);
+    setErrorVars({});
     try {
       const result = await cancel.mutateAsync({ packBoxId: box.packBoxId, reason: reason.trim() });
       sound.accepted();
@@ -391,8 +534,8 @@ export function PackStation(): ReactElement {
   // The friendly, three-language words for whatever the server refused.
   // Never undefined: an unknown code gets the generic triple and the raw
   // message still shows beneath it.
-  const friendly = packErrorCopy(refusalCode);
-  const inlineFriendly = packErrorCopy(errorCode);
+  const friendly = packErrorCopy(refusalCode, refusalVars);
+  const inlineFriendly = packErrorCopy(errorCode, errorVars);
 
   return (
     <div className="wh-stack">
@@ -475,6 +618,18 @@ export function PackStation(): ReactElement {
                   span3: <span className="sk-figure">{total}</span>,
                 })}
               </div>
+              {/* The idle deadline, as a CLOCK TIME and not a countdown:
+                  the packer reads it again five minutes later, when "in 8
+                  minutes" would be a lie and "11:05" is still true. It is
+                  the live value — every scan pushes it forward. */}
+              {deadline !== null && (
+                <div className="wh-scan__meta wh-scan__deadline">
+                  <Clock size={14} className="wh-inline-icon" />{' '}
+                  {richMessage(t('warehousePackPackStation.ifNobodyScansThisBox'), {
+                    span: <span className="sk-figure">{clockTime(deadline)}</span>,
+                  })}
+                </div>
+              )}
               {/* Progress read as progress: a big figure, one tick per
                   piece, and a bar that fills. The fraction stays in the
                   DOM because it is the thing a supervisor reads out. */}
@@ -518,22 +673,7 @@ export function PackStation(): ReactElement {
           above the server's verbatim verdict (FE-2). */}
       {error !== null && (
         <div role="alert" className="wh-alert wh-alert--rich">
-          <div className="wh-oops" data-kind={inlineFriendly.kind}>
-            <span className="wh-oops__icon" aria-hidden>
-              {KIND_ICON[inlineFriendly.kind]}
-            </span>
-            <div className="wh-tri">
-              <p className="wh-tri__line wh-tri__line--lead" lang="en">
-                {inlineFriendly.en}
-              </p>
-              <p className="wh-tri__line" lang="bn">
-                {inlineFriendly.bn}
-              </p>
-              <p className="wh-tri__line" lang="hi">
-                {inlineFriendly.hi}
-              </p>
-            </div>
-          </div>
+          <RefusalBody copy={inlineFriendly} vars={errorVars} />
           <p className="wh-verdict">
             <CircleHelp size={14} className="wh-inline-icon" /> <span>{error}</span>
           </p>
@@ -635,11 +775,17 @@ export function PackStation(): ReactElement {
           )}
 
           <section className="wh-card wh-stack">
-            {!cancelling ? (
-              // It LOOKS like what it does. As plain ghost text it read as a
-              // caption and nobody pressed it; cancelling a box is
-              // destructive, so it carries the destructive shape and a bin.
-              <div className="wh-row">
+            {!cancelling && !forcing && (
+              // BOTH on ONE row (2026-11-10, owner). Stacked, the second
+              // read as an afterthought bolted under the first; side by
+              // side they read as the two ways out of a box that will not
+              // scan. They LOOK like what they do — as plain ghost text
+              // the cancel read as a caption and nobody pressed it — and
+              // the destructive one keeps its own shape and a bin, so the
+              // pair is never two equal-looking choices. `--pair` shares
+              // the row and wraps to stacked only when it truly cannot
+              // hold them (a phone), never squeezing either below 44px.
+              <div className="wh-row wh-row--pair">
                 <Button
                   variant="destructive"
                   size="lg"
@@ -648,8 +794,23 @@ export function PackStation(): ReactElement {
                 >
                   {t('warehousePackPackStation.cancelThisBox')}
                 </Button>
+                {/* The escape hatch, and only for somebody who can carry
+                    it: a packer must not be able to waive the check they
+                    are the one performing. Cosmetic here — the server
+                    holds the permission (FE-2). */}
+                {canForce && (
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    icon={<Ban size={18} />}
+                    onClick={() => setForcing(true)}
+                  >
+                    {t('warehousePackPackStation.theseProductsHaveNoLabels')}
+                  </Button>
+                )}
               </div>
-            ) : (
+            )}
+            {cancelling && (
               <>
                 <p className="wh-note">{t('warehousePackPackStation.theScansAreDiscardedAnd')}</p>
                 <TextField
@@ -682,61 +843,36 @@ export function PackStation(): ReactElement {
               </>
             )}
 
-            {/* The escape hatch, and only for somebody who can carry
-                it: a packer must not be able to waive the check they
-                are the one performing. Cosmetic here — the server
-                holds the permission (FE-2). */}
-            {canForce && !cancelling && (
-              <div className="wh-stack wh-divide">
-                {!forcing ? (
-                  // An ORDINARY action (it only opens a reason field; the
-                  // server holds the permission), so a secondary button —
-                  // but a button, with a shape and an icon. It was plain
-                  // text and read as a caption.
-                  <div className="wh-row">
-                    <Button
-                      variant="secondary"
-                      size="lg"
-                      icon={<Ban size={18} />}
-                      onClick={() => setForcing(true)}
-                    >
-                      {t('warehousePackPackStation.theseProductsHaveNoLabels')}
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <p className="wh-note">
-                      {t('warehousePackPackStation.thisPacksTheParcelWithout')}
-                    </p>
-                    <TextField
-                      label={t('warehousePackPackStation.reasonForPackingWithoutScanning')}
-                      value={forceReason}
-                      placeholder={t('warehousePackPackStation.whyEGStockReceived')}
-                      onChange={(e) => setForceReason(e.target.value)}
-                    />
-                    <div className="wh-row">
-                      <Button
-                        variant="destructive"
-                        size="lg"
-                        icon={<Ban size={18} />}
-                        disabled={forceReason.trim().length < 20 || forceComplete.isPending}
-                        onClick={() => void onForceComplete()}
-                      >
-                        {forceComplete.isPending
-                          ? t('warehousePackPackStation.packing')
-                          : t('warehousePackPackStation.packWithoutScanning')}
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="lg"
-                        icon={<Undo2 size={18} />}
-                        onClick={() => setForcing(false)}
-                      >
-                        {t('warehousePackPackStation.back')}
-                      </Button>
-                    </div>
-                  </>
-                )}
+            {canForce && forcing && (
+              <div className="wh-stack">
+                <p className="wh-note">{t('warehousePackPackStation.thisPacksTheParcelWithout')}</p>
+                <TextField
+                  label={t('warehousePackPackStation.reasonForPackingWithoutScanning')}
+                  value={forceReason}
+                  placeholder={t('warehousePackPackStation.whyEGStockReceived')}
+                  onChange={(e) => setForceReason(e.target.value)}
+                />
+                <div className="wh-row">
+                  <Button
+                    variant="destructive"
+                    size="lg"
+                    icon={<Ban size={18} />}
+                    disabled={forceReason.trim().length < 20 || forceComplete.isPending}
+                    onClick={() => void onForceComplete()}
+                  >
+                    {forceComplete.isPending
+                      ? t('warehousePackPackStation.packing')
+                      : t('warehousePackPackStation.packWithoutScanning')}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    icon={<Undo2 size={18} />}
+                    onClick={() => setForcing(false)}
+                  >
+                    {t('warehousePackPackStation.back')}
+                  </Button>
+                </div>
               </div>
             )}
           </section>
@@ -808,22 +944,7 @@ export function PackStation(): ReactElement {
           necessarily change the language setting, and the person called
           over to help may read a different one. See pack-error-copy.ts.
         */}
-        <div className="wh-oops" data-kind={friendly.kind}>
-          <span className="wh-oops__icon" aria-hidden>
-            {KIND_ICON[friendly.kind]}
-          </span>
-          <div className="wh-tri">
-            <p className="wh-tri__line wh-tri__line--lead" lang="en">
-              {friendly.en}
-            </p>
-            <p className="wh-tri__line" lang="bn">
-              {friendly.bn}
-            </p>
-            <p className="wh-tri__line" lang="hi">
-              {friendly.hi}
-            </p>
-          </div>
-        </div>
+        <RefusalBody copy={friendly} vars={refusalVars} />
         {/* FE-2 — the server's own verdict, VERBATIM, never hidden and
             never contradicted. Small and secondary: it is for whoever is
             called over, not for the packer. */}

@@ -22,15 +22,67 @@ import { useT } from '@/i18n/client';
  * are — so colour is never the only signal (a colour-blind packer reads
  * the numeral, the tick and the position).
  *
+ * ── THREE LANGUAGES AT ONCE (2026-11-10, owner) ──────────────────────
+ * The words under each step are English, বাংলা and हिन्दी together, for
+ * exactly the reason the refusal dialog is (`pack-error-copy.ts`): a
+ * packer who cannot read English cannot find the language switcher
+ * either, and this strip is the thing that TEACHES the job — the worst
+ * place on the screen to be monolingual.
+ *
+ * They are deliberately SHORTER than the catalogue sentences they echo.
+ * Three stacked lines × three steps has to fit across a 360px phone
+ * without pushing the strip into a scroll, so each language gets three
+ * words at most. The catalogue sentence survives as the step's ACCESSIBLE
+ * name (one locale, read once) — a screen reader must not hear the same
+ * instruction three times.
+ *
  * It is presentation only. It derives its state from what the bench
  * already knows and decides nothing.
  */
+
+/** One step's words, short, in all three. Western numerals everywhere. */
+export interface PackStepTriple {
+  readonly en: string;
+  readonly bn: string;
+  readonly hi: string;
+}
+
+/**
+ * Step 1, 2, 3 — three words per language at most.
+ *
+ * The verb is kept in every language rather than trimmed to a noun
+ * phrase: "label again" reads as a riddle to somebody who is reading
+ * slowly, and the whole point of the strip is to be followable by them.
+ */
+export const PACK_STEP_TRIPLES: readonly [PackStepTriple, PackStepTriple, PackStepTriple] = [
+  {
+    en: 'Scan box label',
+    bn: 'বাক্সের লেবেল স্ক্যান করুন',
+    hi: 'डिब्बे का लेबल स्कैन करें',
+  },
+  {
+    en: 'Scan each product',
+    bn: 'প্রতিটি পণ্য স্ক্যান করুন',
+    hi: 'हर सामान स्कैन करें',
+  },
+  {
+    en: 'Scan label again',
+    bn: 'আবার লেবেল স্ক্যান করুন',
+    hi: 'लेबल दोबारा स्कैन करें',
+  },
+];
+
 export function PackStepStrip({ current }: { current: 1 | 2 | 3 }): ReactElement {
   const t = useT();
   const steps = [
-    { n: 1, icon: <ScanBarcode />, label: t('warehousePackSteps.one') },
-    { n: 2, icon: <PackagePlus />, label: t('warehousePackSteps.two') },
-    { n: 3, icon: <PackageCheck />, label: t('warehousePackSteps.three') },
+    { n: 1, icon: <ScanBarcode />, label: t('warehousePackSteps.one'), tri: PACK_STEP_TRIPLES[0] },
+    { n: 2, icon: <PackagePlus />, label: t('warehousePackSteps.two'), tri: PACK_STEP_TRIPLES[1] },
+    {
+      n: 3,
+      icon: <PackageCheck />,
+      label: t('warehousePackSteps.three'),
+      tri: PACK_STEP_TRIPLES[2],
+    },
   ] as const;
 
   return (
@@ -48,7 +100,21 @@ export function PackStepStrip({ current }: { current: 1 | 2 | 3 }): ReactElement
             <span className="wh-step__icon" aria-hidden>
               {s.icon}
             </span>
-            <span className="wh-step__label">{s.label}</span>
+            {/* The one translated sentence, for assistive tech only: the
+                three visible lines say the same thing three times and
+                nobody needs to hear that. */}
+            <span className="wh-sr">{s.label}</span>
+            <span className="wh-step__label wh-step__tri" aria-hidden>
+              <span className="wh-step__line wh-step__line--lead" lang="en">
+                {s.tri.en}
+              </span>
+              <span className="wh-step__line" lang="bn">
+                {s.tri.bn}
+              </span>
+              <span className="wh-step__line" lang="hi">
+                {s.tri.hi}
+              </span>
+            </span>
           </li>
         );
       })}

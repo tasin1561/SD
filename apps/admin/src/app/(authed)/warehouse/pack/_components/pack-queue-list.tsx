@@ -6,9 +6,9 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { ListRow } from '@skydrop/ui/app/list-row';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
-import { Package } from 'lucide-react';
+import { Clock, Package, User } from 'lucide-react';
 import '../../_components/benches.css';
-import { usePackQueue, type WaitingPack } from '@/lib/api-hooks';
+import { usePackQueue, type PackInProgress, type WaitingPack } from '@/lib/api-hooks';
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/client';
 
@@ -55,18 +55,23 @@ export function PackQueueList(): ReactElement {
     );
   }
 
-  // PACK-4: `waiting` is what THIS packer may take; `inProgress` is
-  // what another bench is holding. Rendering the second list is the
-  // pack-station owner's follow-up — the data is here so a parcel that
-  // leaves this list can be explained rather than just vanishing.
+  // PACK-4: `waiting` is what THIS packer may take; `inProgress` is what
+  // another bench is holding. BOTH are drawn (2026-11-10): a parcel that
+  // simply vanished from the queue is the thing a packer walks over to
+  // ask about, and "Rahim has it until 11:05" is the answer — on screen,
+  // before they ask.
   const waiting = q.data?.waiting ?? [];
+  const inProgress = q.data?.inProgress ?? [];
   if (waiting.length === 0) {
     return (
-      <EmptyState
-        tone="positive"
-        title={t('warehousePackPackQueueList.nothingWaitingToBePacked')}
-        description={t('warehousePackPackQueueList.parcelsAppearHereOnceThey')}
-      />
+      <>
+        <EmptyState
+          tone="positive"
+          title={t('warehousePackPackQueueList.nothingWaitingToBePacked')}
+          description={t('warehousePackPackQueueList.parcelsAppearHereOnceThey')}
+        />
+        <InProgressSection rows={inProgress} />
+      </>
     );
   }
 
@@ -103,8 +108,95 @@ export function PackQueueList(): ReactElement {
           <WaitingRow key={w.shipmentId} pack={w} />
         ))}
       </ul>
+      <InProgressSection rows={inProgress} />
     </section>
   );
+}
+
+/**
+ * What another bench is holding, and until when.
+ *
+ * Nothing here is actionable, which is the point: it exists so a parcel
+ * that left the waiting list has somewhere to be seen. A packer who can
+ * read "another bench has it until 11:05" does not go looking for a
+ * supervisor, and two people do not both go hunting for one carton.
+ *
+ * A hold whose holder cannot be NAMED says "another bench" rather than a
+ * uuid — a packer cannot act on an id, and a blank where a name should be
+ * reads as a bug.
+ */
+function InProgressSection({ rows }: { rows: readonly PackInProgress[] }): ReactElement | null {
+  const t = useT();
+  if (rows.length === 0) return null;
+  return (
+    <div className="wh-inprog">
+      <div className="wh-card__head">
+        <h3 className="wh-card__title wh-card__title--sm">
+          {richMessage(t('warehousePackPackQueueList.onAnotherBench'), {
+            span: <span className="sk-figure">{rows.length}</span>,
+          })}
+        </h3>
+        <div className="wh-card__sub">{t('warehousePackPackQueueList.theseComeBackOnTheir')}</div>
+      </div>
+      <ul className="wh-list">
+        {rows.map((r) => (
+          <InProgressRow key={r.shipmentId} row={r} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function InProgressRow({ row }: { row: PackInProgress }): ReactElement {
+  const t = useT();
+  const who = row.heldByName ?? t('warehousePackPackQueueList.anotherBench');
+  return (
+    <li>
+      <ListRow
+        icon={<Package size={16} />}
+        title={<span className="sk-ident">{row.awbNumber ?? row.shipmentNumber}</span>}
+        description={
+          <>
+            <span className="sk-ident">{row.orderNumber ?? '—'}</span>
+            {' · '}
+            <User size={12} className="wh-inline-icon" /> {who}
+            {' · '}
+            <Clock size={12} className="wh-inline-icon" />{' '}
+            <span className="sk-figure">{clockTime(row.heldUntilIso)}</span>
+          </>
+        }
+        status={
+          <StatusChip
+            // A token kind, never a hex: 'in-transit' for a box being
+            // filled right now, 'pending' for a parcel merely claimed.
+            kind={row.hold === 'BOX' ? 'in-transit' : 'pending'}
+            label={
+              row.hold === 'BOX'
+                ? t('warehousePackPackQueueList.boxOpen')
+                : t('warehousePackPackQueueList.pulled')
+            }
+            size="sm"
+          />
+        }
+      />
+    </li>
+  );
+}
+
+/**
+ * A wall-clock time in the warehouse's own zone — the same shape the pack
+ * bench and the server's refusals use, so no two places on this screen
+ * disagree about what time a hold lapses. 24-hour, Western numerals.
+ */
+function clockTime(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return '';
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(at);
 }
 
 function WaitingRow({ pack }: { pack: WaitingPack }): ReactElement {

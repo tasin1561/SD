@@ -1191,6 +1191,22 @@ export const wh = defineMessages({
   'warehousePackPackQueueList.parcelHas': ['parcel has', 'পার্সেল আছে'],
   'warehousePackPackQueueList.parcelsHave': ['parcels have', 'পার্সেল আছে'],
   'warehousePackPackQueueList.labelPrinted': ['Label printed', 'লেবেল ছাপা হয়েছে'],
+  // PACK-4 (2026-11-10): what ANOTHER bench is holding. The list exists so
+  // a parcel that left the waiting queue is explained rather than just
+  // gone — nobody goes hunting for a carton somebody else already has.
+  'warehousePackPackQueueList.onAnotherBench': [
+    'On another bench ({span})',
+    'অন্য বেঞ্চে ({span})',
+    'दूसरी बेंच पर ({span})',
+  ],
+  'warehousePackPackQueueList.theseComeBackOnTheir': [
+    'These come back on their own if nobody packs them by the time shown.',
+    'দেখানো সময়ের মধ্যে কেউ প্যাক না করলে এগুলো নিজেই ফিরে আসবে।',
+    'दिखाए गए समय तक कोई पैक न करे तो ये अपने आप लौट आएंगे।',
+  ],
+  'warehousePackPackQueueList.anotherBench': ['another bench', 'অন্য একটি বেঞ্চ', 'दूसरी बेंच'],
+  'warehousePackPackQueueList.boxOpen': ['Box open', 'বাক্স খোলা', 'डिब्बा खुला'],
+  'warehousePackPackQueueList.pulled': ['Pulled', 'নেওয়া হয়েছে', 'ले लिया'],
   'warehousePackPackQueueList.noLabel': ['No label', 'লেবেল নেই'],
   'warehousePackPackQueueList.needsALabel': ['Needs a label', 'লেবেল দরকার'],
   'warehousePackPackStation.scanningIsStopped': ['Scanning is stopped', 'স্ক্যান বন্ধ আছে'],

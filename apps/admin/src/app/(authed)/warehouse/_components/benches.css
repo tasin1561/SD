@@ -49,6 +49,17 @@
   justify-content: space-between;
   align-items: baseline;
 }
+/* Two buttons that belong together on ONE row (2026-11-10, owner).
+   They share the width evenly and WRAP to stacked rather than squeezing:
+   `14rem` is the basis at which a long caption still reads on one or two
+   lines, so a phone gets two full-width buttons instead of two cramped
+   ones. The 44px floor is restated here because the row is also the place
+   somebody would later be tempted to shrink. */
+.wh-row--pair > .sk-btn {
+  flex: 1 1 14rem;
+  min-width: 0;
+  min-height: 44px;
+}
 
 /* ── Cards ────────────────────────────────────────────────────────────── */
 .wh-card {
@@ -288,6 +299,15 @@ p.wh-alert {
 .wh-scan__meta {
   color: var(--fg-faint);
   font-size: var(--fs-xs);
+}
+/* The idle deadline. Present but quiet: it matters only to the packer who
+   is about to walk away, and it must never compete with the line list. */
+.wh-scan__deadline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin-top: 2px;
 }
 
 /* ── Line cards (pick, receive, RTO) ──────────────────────────────────── */
@@ -1051,6 +1071,32 @@ p.wh-alert {
   color: var(--fg-strong);
   font-weight: var(--fw-semibold);
 }
+/* THREE LANGUAGES under one step (2026-11-10, owner), kept tight enough
+   that the numeral and the icon stay the primary signal: a grid with no
+   gap, small type, and balanced wrapping so a two-word line does not
+   leave one word alone underneath. The English line leads. */
+.wh-step__tri {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  min-width: 0;
+}
+.wh-step__line {
+  /* `anywhere` would break a Bangla word mid-grapheme; these are short
+     phrases that should wrap between words or not at all. */
+  overflow-wrap: normal;
+  font-size: var(--fs-2xs);
+  line-height: 1.25;
+  text-wrap: balance;
+}
+.wh-step__line--lead {
+  font-weight: var(--fw-semibold);
+}
+@media (min-width: 48rem) {
+  .wh-step__line {
+    font-size: var(--fs-xs);
+  }
+}
 /* Below ~26rem the words would each wrap to four lines; the numbers and
    icons still read as 1 → 2 → 3, which is the requirement. */
 @media (max-width: 26rem) {
@@ -1061,6 +1107,20 @@ p.wh-alert {
     width: 22px;
     height: 22px;
   }
+}
+
+/* Clipped, not hidden: the one translated sentence a screen reader reads
+   for a step whose visible words are three languages at once. */
+.wh-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* The camera sits beside the field it belongs to. It wraps UNDER a
@@ -1237,6 +1297,100 @@ p.wh-alert {
 .wh-tri--btn .wh-tri__line {
   font-size: var(--fs-sm);
   line-height: 1.3;
+}
+
+/* What ANOTHER bench is holding, under the waiting list. Quieter than the
+   list above it — nothing here is actionable, it exists so a parcel that
+   left the queue can be seen rather than wondered about. */
+.wh-inprog {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+}
+.wh-card__title--sm {
+  font-size: var(--fs-sm);
+}
+
+/* WHO and WHEN (2026-11-10, owner): a colleague's name and a clock time,
+   the two facts that decide whether to wait or go and find somebody. No
+   language, so no triple — and a chip each so they read as facts rather
+   than as more sentence. */
+.wh-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 0;
+  min-width: 0;
+}
+.wh-facts__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--fg-body);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+/* The SCENARIO — why this happens when several people work at once.
+   Quieter than the verdict above it, and the FIRST thing cut on a narrow
+   screen: four facts in three languages is a lot of phone, and the fix is
+   the half that has to survive (owner's rule). */
+.wh-oops__why {
+  margin-top: var(--sp-2);
+  color: var(--fg-muted);
+}
+.wh-oops__why .wh-tri__line--lead {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+@media (max-width: 26rem) {
+  .wh-oops__why {
+    display: none;
+  }
+}
+/* THE FIX — the one block a packer must not miss, so it gets the accent
+   well and an icon of its own. */
+.wh-fix {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin-top: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--blue-line);
+  border-radius: var(--r-md);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.wh-fix__icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: inherit;
+}
+/* It arrives a beat after the verdict, so the eye lands on WHAT and then
+   on WHAT TO DO. Transform and opacity only; one pass, no loop. */
+@media (prefers-reduced-motion: no-preference) {
+  .wh-fix {
+    animation: wh-fix-in var(--dur-slow) var(--ease-out) both;
+  }
+}
+@keyframes wh-fix-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* FE-2 — the server's own words, verbatim. Small and secondary, for
