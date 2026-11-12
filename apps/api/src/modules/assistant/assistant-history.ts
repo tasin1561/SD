@@ -1,4 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk';
+import { isAttachmentBlock } from './assistant-attachment-block';
 import type { StoredMessage } from './services/assistant-store.service';
 
 /**
@@ -9,7 +10,21 @@ import type { StoredMessage } from './services/assistant-store.service';
  */
 export const HISTORY_TOKEN_BUDGET = 60_000;
 
+/**
+ * Prompt tokens, OVER-counted. An attachment block stands for a file the
+ * stored JSON does not contain, so it is priced from the `tokens` written
+ * at upload (images ~ w*h/750, a PDF page counted as 3K) instead of from
+ * its few bytes of JSON. Content with no attachment is counted exactly as
+ * before.
+ */
 export function estimateTokens(value: unknown): number {
+  if (Array.isArray(value) && value.some(isAttachmentBlock)) {
+    const rest = value.filter((b) => !isAttachmentBlock(b));
+    const files = value
+      .filter(isAttachmentBlock)
+      .reduce((n, b) => n + (Number.isFinite(b.tokens) ? Math.max(0, b.tokens) : 0), 0);
+    return files + estimateTokens(rest);
+  }
   const text = typeof value === 'string' ? value : JSON.stringify(value);
   let ascii = 0;
   let other = 0;
@@ -50,6 +65,8 @@ export function windowStart(rows: readonly StoredMessage[]): number {
 
 type Block = { type?: string } & Record<string, unknown>;
 
+export type ApiFileBlock = Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam;
+
 /**
  * The stored rows as API messages.
  *
@@ -66,6 +83,8 @@ export function toApiMessages(
   rows: readonly StoredMessage[],
   start: number,
   currentTurnStart: number,
+  /** The immutable file blocks, by attachment id, read from the bucket by the caller. */
+  attachments: ReadonlyMap<string, ApiFileBlock> = new Map(),
 ): Anthropic.MessageParam[] {
   const out: Anthropic.MessageParam[] = [];
   for (let i = start; i < rows.length; i++) {
@@ -80,6 +99,16 @@ export function toApiMessages(
       // An assistant turn that was only thinking has nothing to send.
       if (kept.length === 0) continue;
       content = kept as unknown as Anthropic.MessageParam['content'];
+    }
+    if (Array.isArray(content) && (content as unknown[]).some(isAttachmentBlock)) {
+      // Resolved in place, same position, from the same stored bytes every
+      // time: the prefix a later thinking block is bound to never changes.
+      content = (content as unknown[]).map((b) => {
+        if (!isAttachmentBlock(b)) return b;
+        const file = attachments.get(b.id);
+        if (file === undefined) throw new Error(`attachment ${b.id} was not loaded`);
+        return file;
+      }) as unknown as Anthropic.MessageParam['content'];
     }
     out.push({ role, content });
   }

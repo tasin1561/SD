@@ -21,6 +21,8 @@ export type NoticeCode =
   | 'RESTING_DAILY'
   | 'REFUSED'
   | 'TRUNCATED'
+  | 'ATTACHMENTS_TOO_LARGE'
+  | 'ATTACHMENT_UNAVAILABLE'
   | 'FAILED';
 
 const TEXT: Record<NoticeCode, Record<ReplyLanguage, string>> = {
@@ -53,6 +55,16 @@ const TEXT: Record<NoticeCode, Record<ReplyLanguage, string>> = {
     en: 'That answer got too long. Please ask a shorter or narrower question.',
     bn: 'উত্তরটি অনেক লম্বা হয়ে গেছে। ছোট বা নির্দিষ্ট করে প্রশ্ন করুন।',
     hi: 'जवाब बहुत लंबा हो गया। कृपया छोटा या सीधा सवाल पूछें।',
+  },
+  ATTACHMENTS_TOO_LARGE: {
+    en: 'Those files are too big to read together with your question. Please remove one or attach a shorter PDF.',
+    bn: 'ফাইলগুলো প্রশ্নের সাথে একসাথে পড়ার জন্য অনেক বড়। একটি ফাইল সরান বা ছোট PDF দিন।',
+    hi: 'ये फाइलें आपके सवाल के साथ पढ़ने के लिए बहुत बड़ी हैं। कृपया एक फाइल हटाएँ या छोटा PDF लगाएँ।',
+  },
+  ATTACHMENT_UNAVAILABLE: {
+    en: 'I could not open one of the attached files just now. Nothing was sent to the assistant. Please try again in a moment.',
+    bn: 'সংযুক্ত একটি ফাইল এই মুহূর্তে খুলতে পারিনি। অ্যাসিস্ট্যান্টের কাছে কিছু পাঠানো হয়নি। একটু পরে আবার চেষ্টা করুন।',
+    hi: 'अभी जुड़ी हुई एक फाइल नहीं खुल सकी। असिस्टेंट को कुछ नहीं भेजा गया। थोड़ी देर में फिर कोशिश करें।',
   },
   FAILED: {
     en: 'Something went wrong on my side. Please try again in a moment.',

@@ -10,6 +10,7 @@ import { SystemSettingsModule } from '../system-settings/system-settings.module'
 import { AdminAssistantController } from './controllers/admin-assistant.controller';
 import { SellerAssistantController } from './controllers/seller-assistant.controller';
 import { StoreAssistantController } from './controllers/store-assistant.controller';
+import { AssistantAttachmentService } from './services/assistant-attachment.service';
 import { AssistantBudgetService } from './services/assistant-budget.service';
 import { AssistantChatService } from './services/assistant-chat.service';
 import { AssistantConversationService } from './services/assistant-conversation.service';
@@ -25,7 +26,7 @@ import { AssistantToolRegistry } from './services/assistant-tool-registry.servic
  * services their own modules export (order, seller tracking, the wallet's
  * balance read, store orders, the call-queue stats), each called with the
  * caller's scope as an argument, exactly as the controllers call them.
- * It writes nothing outside its own four tables.
+ * It writes nothing outside its own five tables (and the `assistant/` prefix of the private bucket).
  *
  * `ANTHROPIC_API_KEY` is read lazily by the gateway; with it unset the
  * module still boots and the assistant answers "not configured".
@@ -44,6 +45,7 @@ import { AssistantToolRegistry } from './services/assistant-tool-registry.servic
   controllers: [AdminAssistantController, SellerAssistantController, StoreAssistantController],
   providers: [
     AssistantStoreService,
+    AssistantAttachmentService,
     AssistantBudgetService,
     AssistantHelpService,
     AssistantToolRegistry,

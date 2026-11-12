@@ -150,12 +150,26 @@ export class SpacesService implements OnModuleInit {
    * the result — a stored presigned URL is either expired or a
    * long-lived public link, and both are wrong.
    */
-  async presignGetUrl(key: string, ttlSeconds = DEFAULT_GET_TTL_SECONDS): Promise<string> {
+  async presignGetUrl(
+    key: string,
+    ttlSeconds = DEFAULT_GET_TTL_SECONDS,
+    /** Signed response overrides, for a link that must download rather than render. */
+    response?: { contentDisposition?: string; contentType?: string },
+  ): Promise<string> {
     if (this.mock) return `mock://${this.bucket}/${key}`;
     const { GetObjectCommand } = await import('@aws-sdk/client-s3');
     return getSignedUrl(
       this.requireClient() as unknown as Parameters<typeof getSignedUrl>[0],
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ...(response?.contentDisposition !== undefined
+          ? { ResponseContentDisposition: response.contentDisposition }
+          : {}),
+        ...(response?.contentType !== undefined
+          ? { ResponseContentType: response.contentType }
+          : {}),
+      }),
       { expiresIn: ttlSeconds },
     );
   }
