@@ -250,7 +250,13 @@ function draw(doc: InstanceType<typeof PDFDocument>, d: ShippingLabelData): void
 
   // ── 3. Ship to, and the amount being collected.
   const shipH = 92;
-  const addrW = CONTENT_W - 84;
+  // The divider and the address box are DERIVED from one number, not
+  // written as two. They were independent (-94 and -84) and drifted
+  // apart, so a long address ran 16pt past the divider and printed
+  // "(North 24 Parganas)," on top of the COD column — found on a real
+  // label (2026-11-12). Two numbers that must agree are one number.
+  const colDividerX = left + CONTENT_W - 94;
+  const addrW = colDividerX - (left + 6) - 6;
   doc
     .fontSize(7.5)
     .font('Helvetica-Bold')
@@ -279,8 +285,8 @@ function draw(doc: InstanceType<typeof PDFDocument>, d: ShippingLabelData): void
   // Right column: what to collect, then when the label was made —
   // the two things the rider and the bench respectively look for.
   doc
-    .moveTo(left + CONTENT_W - 94, y)
-    .lineTo(left + CONTENT_W - 94, y + shipH)
+    .moveTo(colDividerX, y)
+    .lineTo(colDividerX, y + shipH)
     .stroke();
   const colX = left + CONTENT_W - 88;
   doc
@@ -305,7 +311,7 @@ function draw(doc: InstanceType<typeof PDFDocument>, d: ShippingLabelData): void
       .fillColor('#000000');
   }
   doc
-    .moveTo(left + CONTENT_W - 94, y + 48)
+    .moveTo(colDividerX, y + 48)
     .lineTo(left + CONTENT_W, y + 48)
     .stroke();
   doc

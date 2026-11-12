@@ -125,6 +125,28 @@ describe('the shipping label we render ourselves', () => {
     expect(text).not.toMatch(/RETURN TO/i);
   });
 
+  it('keeps a long address inside its own column', async () => {
+    // A real label printed "(North 24 Parganas)," across the divider and
+    // into the COD figure (2026-11-12). pdfkit wraps to the width it is
+    // given, so the guard is that the address box is DERIVED from the
+    // divider rather than being a second number that can drift.
+    const long = await renderShippingLabel({
+      ...BASE,
+      recipientAddress:
+        'Nadibhag, Badu Industrial Area, PO Badu (North 24 Parganas), PS Madhyamgram, 48, 2 Sarani, Madhyamgram Municipality, North Twenty Four Parganas, West Bengal',
+    });
+    if (process.env['LABEL_LONG_OUT'] !== undefined) {
+      writeFileSync(process.env['LABEL_LONG_OUT'], long);
+    }
+    const text = extractPdfText(long);
+    // The COD figure and its label survive intact beside it — they are
+    // what the overlap destroyed.
+    expect(text).toContain('COD');
+    expect(text).toContain('INR 1,050.00');
+    // And the address is still there rather than silently dropped.
+    expect(text).toContain('Nadibhag');
+  });
+
   it('stamps the time in IST, where the parcel actually is', () => {
     // 13:25 UTC is 18:55 IST on the same day.
     expect(formatStamp(new Date('2026-11-12T13:25:00Z'))).toBe('12-Nov-2026 | 6:55 PM');
