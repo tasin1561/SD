@@ -77,7 +77,18 @@ export class AssistantChatService {
     if (!verdict.ok) return notice(verdict.code);
     if (!this.gateway.isConfigured()) return notice('NOT_CONFIGURED');
 
-    await this.store.appendMessage(conv.id, 'USER', [{ type: 'text', text }], true);
+    // Where the person is and what just went wrong. Browser-supplied, so it
+    // is UNTRUSTED text: it rides in the USER turn (after the cached prefix,
+    // never in the system prompt), labelled as such. It is STORED with the
+    // question, exactly as sent: Haiku 5.5 binds every thinking block to the
+    // conversation before it, so a note sent once and dropped on the next
+    // request edits an earlier turn and the follow-up is a 400. (That was
+    // the live bug of 2026-11-12: every second question failed.) The
+    // transcript hides it — see `visibleText`.
+    const ctxText = renderPageContext(pageContext);
+    const question: Anthropic.TextBlockParam[] = [{ type: 'text', text }];
+    if (ctxText !== null) question.push({ type: 'text', text: ctxText });
+    await this.store.appendMessage(conv.id, 'USER', question, true);
     await this.store.setTitleIfEmpty(conv.id, text.replace(/\s+/g, ' ').slice(0, 60));
 
     // The window is fixed ONCE per question: if it moved between tool
@@ -93,24 +104,6 @@ export class AssistantChatService {
       }
     }
     const messages = toApiMessages(rows, start, currentTurnStart);
-
-    // Where the person is and what just went wrong. Browser-supplied, so it
-    // is UNTRUSTED text: it rides in the USER turn (after the cached prefix,
-    // never in the system prompt), labelled as such, and it is NOT stored,
-    // so a transcript and later replays stay free of it.
-    const ctxText = renderPageContext(pageContext);
-    const tail = messages[messages.length - 1];
-    if (
-      ctxText !== null &&
-      tail !== undefined &&
-      tail.role === 'user' &&
-      Array.isArray(tail.content)
-    ) {
-      messages[messages.length - 1] = {
-        role: 'user',
-        content: [...tail.content, { type: 'text', text: ctxText }],
-      };
-    }
 
     const system: Anthropic.TextBlockParam[] = [
       {
@@ -136,7 +129,19 @@ export class AssistantChatService {
           tools,
           messages,
         };
-        const message = await this.gateway.complete(req, (delta) => emit({ type: 'text', delta }));
+        let message: Anthropic.Message;
+        try {
+          message = await this.gateway.complete(req, (delta) => emit({ type: 'text', delta }));
+        } catch (e) {
+          // A conversation whose history was already edited (stored before
+          // the fix above) can never replay its thinking blocks again. The
+          // API decides this before any output, so nothing was streamed:
+          // drop EVERY thinking block from the copy we send (removing all
+          // of them is allowed) and retry once. Stored rows stay untouched.
+          if (!isThinkingBindingError(e) || !stripThinking(messages)) throw e;
+          this.log.warn('assistant: history no longer matches its thinking; retrying without it');
+          message = await this.gateway.complete(req, (delta) => emit({ type: 'text', delta }));
+        }
         await this.recordUsage(scope, conv.id, message);
 
         // Refusal first: its content must not be read as an answer, and it
@@ -211,7 +216,9 @@ export class AssistantChatService {
       return notice('TRUNCATED');
     } catch (e) {
       // Log what happened; tell the user nothing internal (and never the key).
-      this.log.error(`assistant turn failed: ${e instanceof Error ? e.name : 'unknown'}`);
+      // The API's own message names the field at fault and never carries
+      // the key; without it the log said only "BadRequestError".
+      this.log.error(`assistant turn failed: ${describeError(e)}`);
       return notice('FAILED');
     }
   }
@@ -241,4 +248,32 @@ export class AssistantChatService {
       `assistant usage audience=${scope.audience} input=${tokens.inputTokens} output=${tokens.outputTokens} cache_read_input_tokens=${tokens.cacheReadTokens} cache_creation_input_tokens=${tokens.cacheWriteTokens}`,
     );
   }
+}
+
+/** The history-editing check: a replayed thinking block no longer matches its prefix. */
+export function isThinkingBindingError(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  const status = (e as { status?: unknown }).status;
+  return status === 400 && /signature/i.test(e.message) && /thinking/i.test(e.message);
+}
+
+/** Removes every thinking block from the copy sent to the API; true if any were removed. */
+export function stripThinking(messages: Anthropic.MessageParam[]): boolean {
+  let removed = false;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m === undefined || !Array.isArray(m.content)) continue;
+    const kept = m.content.filter((b) => b.type !== 'thinking' && b.type !== 'redacted_thinking');
+    if (kept.length === m.content.length) continue;
+    removed = true;
+    if (kept.length === 0) messages.splice(i, 1);
+    else messages[i] = { ...m, content: kept } as Anthropic.MessageParam;
+  }
+  return removed;
+}
+
+function describeError(e: unknown): string {
+  if (!(e instanceof Error)) return 'unknown';
+  const status = (e as { status?: unknown }).status;
+  return `${e.name}${typeof status === 'number' ? ` ${status}` : ''}: ${e.message.slice(0, 500)}`;
 }

@@ -54,6 +54,45 @@ describe('no tool input schema carries an owner or tenant id', () => {
     }
   });
 
+  it('no keyword strict mode rejects reaches the API, for ANY audience (a 400 there fails every question)', () => {
+    // Live bug 2026-11-12: `limit` sent minimum/maximum, so every client
+    // and member-store question failed while admin (no `limit`) worked.
+    const banned = [
+      'pattern',
+      'minimum',
+      'maximum',
+      'exclusiveMinimum',
+      'exclusiveMaximum',
+      'multipleOf',
+    ];
+    const audiences = [
+      { audience: 'SELLER', sellerId: 's', storeId: null, orderScope: null },
+      { audience: 'STORE', sellerId: null, storeId: 'st', orderScope: 'ALL' },
+      { audience: 'ASSOCIATE', sellerId: null, storeId: 'st', orderScope: 'OWN' },
+      { audience: 'STAFF', sellerId: null, storeId: null, orderScope: null },
+    ] as const;
+    let checked = 0;
+    for (const a of audiences) {
+      const params = fakeRegistry().toolParams({
+        ...a,
+        userId: 'u',
+        permissions: ['orders.view', 'wallet.view', 'orders.read', 'tickets.view'],
+        impersonatingStaffId: null,
+      } as never);
+      const json = JSON.stringify(params.map((p) => p.input_schema));
+      for (const k of banned) expect(json).not.toContain(`"${k}"`);
+      checked += params.length;
+    }
+    // the walk must have seen the tool that carried the bug
+    const all = JSON.stringify(
+      fakeRegistry()
+        .all()
+        .map((t) => t.inputSchema),
+    );
+    expect(all).toContain('"minimum"');
+    expect(checked).toBeGreaterThan(4);
+  });
+
   it('the detector itself fires on a schema that has a tenant id (guard against a vacuous test)', () => {
     const bad = buildAssistantTools(fakeDeps())[0]!;
     const smuggled = {

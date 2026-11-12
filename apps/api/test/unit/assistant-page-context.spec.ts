@@ -20,7 +20,7 @@ describe('page context from the browser', () => {
     expect(renderPageContext({ path: '  ' })).toBeNull();
   });
 
-  it('rides in the user turn after the question, never in the system prompt, and is not stored', async () => {
+  it('rides in the user turn after the question, never in the system prompt, and is stored exactly as sent', async () => {
     const rig = chatRig([message({ content: [text('ok')] })]);
     const conv = rig.store.seedConversation();
     await rig.chat.send(scope(), conv.id, 'why?', () => undefined, {
@@ -33,6 +33,10 @@ describe('page context from the browser', () => {
     expect(JSON.stringify(last.content)).toContain('PACK_SCAN_WRONG');
     expect(JSON.stringify(req.system)).not.toContain('PACK_SCAN_WRONG');
     expect(JSON.stringify(req.system)).toContain(systemPromptFor(scope().audience).slice(0, 40));
-    expect(JSON.stringify(rig.store.rows)).not.toContain('PACK_SCAN_WRONG');
+    // Stored with the question (FLIPPED 2026-11-12): dropping it on the next
+    // request edits an earlier turn and Haiku 5.5 rejects every follow-up.
+    // The transcript hides it (assistant-follow-up.spec.ts).
+    const question = rig.store.rows.find((r) => r.isQuestion === true)!;
+    expect(JSON.stringify(question.content)).toBe(JSON.stringify(last.content));
   });
 });

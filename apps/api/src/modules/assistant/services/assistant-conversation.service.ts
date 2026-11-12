@@ -19,10 +19,14 @@ type Block = { type?: string; text?: string };
  */
 export function visibleText(content: unknown): string {
   if (!Array.isArray(content)) return '';
-  return (content as Block[])
-    .filter((b) => b.type === 'text' && typeof b.text === 'string')
-    .map((b) => b.text as string)
-    .join('');
+  return (
+    (content as Block[])
+      .filter((b) => b.type === 'text' && typeof b.text === 'string')
+      // The page note stored with a question is for the model, not the screen.
+      .filter((b) => !(b.text as string).startsWith('<untrusted_page_context>'))
+      .map((b) => b.text as string)
+      .join('')
+  );
 }
 
 @Injectable()

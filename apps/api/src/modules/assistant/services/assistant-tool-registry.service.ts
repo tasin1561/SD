@@ -97,7 +97,14 @@ export class AssistantToolRegistry {
       strict: true,
       input_schema: {
         type: 'object' as const,
-        properties: t.inputSchema.properties,
+        // Strict-mode schemas accept only a subset of JSON Schema: numeric
+        // bounds and `pattern` are a 400 for the WHOLE request (live bug
+        // 2026-11-12: the `limit` field's minimum/maximum failed every
+        // client and member-store question). validateToolInput still
+        // enforces all of them on our side.
+        properties: Object.fromEntries(
+          Object.entries(t.inputSchema.properties).map(([k, prop]) => [k, strictSafe(prop)]),
+        ),
         required: [...t.inputSchema.required],
         additionalProperties: false,
       } as Anthropic.Tool.InputSchema,
@@ -157,4 +164,19 @@ export class AssistantToolRegistry {
     const content = JSON.stringify({ error: message });
     return { content, isError: true, errorCode: code, bytes: content.length, validatedInput };
   }
+}
+
+/** JSON-Schema keywords strict tool schemas reject; our own validator enforces them. */
+const STRICT_UNSUPPORTED = new Set([
+  'pattern',
+  'minimum',
+  'maximum',
+  'exclusiveMinimum',
+  'exclusiveMaximum',
+  'multipleOf',
+]);
+
+/** A property schema with every keyword strict mode rejects removed. */
+export function strictSafe(prop: object): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(prop).filter(([key]) => !STRICT_UNSUPPORTED.has(key)));
 }
