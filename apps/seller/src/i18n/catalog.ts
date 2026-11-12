@@ -33,6 +33,7 @@ import { orderImport } from './messages/orderImport';
 import { csvColumns } from './messages/csvColumns';
 import { orderList } from './messages/orderList';
 import { orderNew } from './messages/orderNew';
+import { orderPage } from './messages/orderPage';
 import { orderPending } from './messages/orderPending';
 import { callConfirmation } from './messages/callConfirmation';
 import { orderPicker } from './messages/orderPicker';
@@ -114,6 +115,7 @@ export const NAMESPACES = [
   csvColumns,
   orderList,
   orderNew,
+  orderPage,
   orderPending,
   callConfirmation,
   orderPicker,
@@ -191,6 +193,7 @@ const ALL = {
   ...csvColumns,
   ...orderList,
   ...orderNew,
+  ...orderPage,
   ...orderPending,
   ...callConfirmation,
   ...orderPicker,
