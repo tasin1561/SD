@@ -69,16 +69,16 @@ export const orderPage = defineMessages({
     'আমরা এই অর্ডারটি বাতিল করেছি।',
   ],
   'orderPage.sum.where.REJECTED': [
-    'Your customer did not want this order.',
-    'আপনার গ্রাহক এই অর্ডারটি নিতে চাননি।',
+    'This order was not accepted, so it will not be sent.',
+    'এই অর্ডারটি গ্রহণ করা হয়নি, তাই পাঠানো হবে না।',
   ],
   'orderPage.sum.where.REJECTED_BY_CUSTOMER': [
     'Your customer turned this order down on the phone.',
     'আপনার গ্রাহক ফোনে অর্ডারটি নিতে রাজি হননি।',
   ],
   'orderPage.sum.where.REJECTED_NDR': [
-    'Delivery failed and your customer would not take the parcel.',
-    'ডেলিভারি হয়নি এবং আপনার গ্রাহক পার্সেলটি নিতে চাননি।',
+    'We called your customer several times and could not reach them, so the order was closed.',
+    'কয়েকবার কল করেও আপনার গ্রাহককে পাওয়া যায়নি, তাই অর্ডারটি বন্ধ করা হয়েছে।',
   ],
   'orderPage.sum.where.AWAITING_SELLER_DECISION': [
     'We could not reach your customer. Nothing moves until you decide.',
@@ -103,8 +103,8 @@ export const orderPage = defineMessages({
     'প্যাক হয়ে গেছে, পাঠানোর জন্য তৈরি।',
   ],
   'orderPage.sum.where.PENDING_MANUAL_PLACEMENT': [
-    'Delhivery could not take it, so we are booking another courier by hand.',
-    'Delhivery নিতে পারেনি, তাই আমরা নিজেরা অন্য কুরিয়ার ঠিক করছি।',
+    'Our usual courier could not take it, so we are booking another courier by hand.',
+    'আমাদের সাধারণ কুরিয়ার এটি নিতে পারেনি, তাই আমরা নিজেরা অন্য কুরিয়ার ঠিক করছি।',
   ],
   'orderPage.sum.where.DISPATCHED': ['Handed to the courier.', 'কুরিয়ারের হাতে দেওয়া হয়েছে।'],
   'orderPage.sum.where.IN_TRANSIT': ['On its way to your customer.', 'আপনার গ্রাহকের কাছে যাচ্ছে।'],
