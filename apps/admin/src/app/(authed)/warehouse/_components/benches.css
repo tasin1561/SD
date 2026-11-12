@@ -1501,3 +1501,25 @@ p.wh-alert {
     animation: wh-fix-in var(--dur-slow) var(--ease-out) both;
   }
 }
+
+/* Handover: whose van this parcel belongs on, read before the AWB.
+   A loader with two drivers at the door is choosing a pile, not
+   reading an identifier — so the carrier is a filled chip and the AWB
+   sits after it. */
+.wh-ho__head {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.wh-ho__courier {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--accent-soft, var(--bg-subtle));
+  color: var(--accent-strong, var(--fg-strong));
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}

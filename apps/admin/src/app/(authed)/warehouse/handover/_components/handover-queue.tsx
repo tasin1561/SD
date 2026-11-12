@@ -97,6 +97,20 @@ export function HandoverQueue(): ReactElement {
   );
 }
 
+/**
+ * The carrier as a loader reads it. `manual` is not a courier — it is
+ * "somebody booked this by hand", and that parcel needs a person, not a
+ * van, so it says so rather than printing the word "manual" as though
+ * it were a company.
+ */
+function courierLabel(code: string): string {
+  const c = code.trim().toLowerCase();
+  if (c === 'delhivery') return 'DELHIVERY';
+  if (c === 'shiprocket') return 'SHIPROCKET';
+  if (c === 'manual') return 'BOOKED BY HAND';
+  return code.trim().toUpperCase();
+}
+
 function WaitingRow({
   pack,
   lastTouch,
@@ -110,12 +124,22 @@ function WaitingRow({
     <li className={checked ? 'wh-quiet' : undefined}>
       <ListRow
         icon={<Package size={16} />}
-        title={<span className="sk-ident">{pack.awbNumber}</span>}
+        title={
+          <span className="wh-ho__head">
+            {/* WHOSE VAN IS THIS (owner, 2026-11-12). It was a grey word
+                at the end of a subtitle, which is no use to a loader
+                with two drivers at the door — the parcel goes on the
+                wrong van and nobody finds out until it is scanned at
+                somebody else's hub. Beside the AWB, loud, always. */}
+            <span className="wh-ho__courier">{courierLabel(pack.courierCode)}</span>
+            <span className="sk-ident">{pack.awbNumber}</span>
+          </span>
+        }
         description={
           <>
             <span className="sk-ident">{pack.shipmentNumber}</span> ·{' '}
             <span className="sk-ident">{pack.orderNumber ?? '—'}</span>
-            {pack.recipientName === null ? '' : ` · ${pack.recipientName}`} · {pack.courierCode}
+            {pack.recipientName === null ? '' : ` · ${pack.recipientName}`}
             {lastTouch !== null && (
               <>
                 <br />
