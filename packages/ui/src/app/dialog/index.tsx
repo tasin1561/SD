@@ -27,6 +27,13 @@ export interface DialogProps {
   /** While true, Escape / outside click / the close control do nothing. */
   locked?: boolean | undefined;
   className?: string | undefined;
+  /**
+   * CSS selector (inside the dialog) of the control that takes focus on
+   * open. Opt-in: a destructive confirm points it at the SAFE button so
+   * a stray Enter keeps the thing rather than doing it. Default: Radix's
+   * own first-focusable behaviour, unchanged.
+   */
+  initialFocus?: string | undefined;
 }
 
 /**
@@ -48,8 +55,21 @@ export function Dialog({
   tone = 'default',
   locked = false,
   className,
+  initialFocus,
 }: DialogProps): ReactElement {
   const t = useUiT();
+  // Where focus was when the dialog opened. Radix returns focus on close
+  // only to a `Dialog.Trigger`, and these dialogs are opened by state from
+  // a menu or a button elsewhere, so without this focus fell to <body> and
+  // a keyboard user restarted from the top of the page. Captured in render
+  // (the open transition), BEFORE Radix moves focus into the dialog.
+  const opener = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(false);
+  if (open && !wasOpen.current && typeof document !== 'undefined') {
+    const a = document.activeElement;
+    opener.current = a instanceof HTMLElement && a !== document.body ? a : null;
+  }
+  wasOpen.current = open;
   return (
     <RDialog.Root
       open={open}
@@ -64,6 +84,26 @@ export function Dialog({
           className={clsx('sk-dialog', className)}
           data-size={size}
           data-tone={tone}
+          onCloseAutoFocus={(event: Event) => {
+            const back = opener.current;
+            if (back !== null && back.isConnected) {
+              event.preventDefault();
+              back.focus();
+            }
+          }}
+          {...(initialFocus === undefined
+            ? {}
+            : {
+                onOpenAutoFocus: (event: Event) => {
+                  const target = (
+                    event.currentTarget as HTMLElement | null
+                  )?.querySelector<HTMLElement>(initialFocus);
+                  if (target !== null && target !== undefined) {
+                    event.preventDefault();
+                    target.focus();
+                  }
+                },
+              })}
           {...(description === undefined ? { 'aria-describedby': undefined } : {})}
         >
           <div className="sk-dialog__head">
@@ -127,6 +167,13 @@ export interface ConfirmDialogProps {
   children?: ReactNode;
   /** Close by itself when `onConfirm` resolves. Default true. */
   closeOnSuccess?: boolean | undefined;
+  /**
+   * Keeps the confirm button disabled (a typed-confirmation gate). The
+   * caller owns the condition; this only reflects it. Default false.
+   */
+  confirmDisabled?: boolean | undefined;
+  /** Opens with focus on the cancel button — the SAFE choice. Default false. */
+  focusSafe?: boolean | undefined;
 }
 
 /**
@@ -155,6 +202,8 @@ export function ConfirmDialog({
   destructive = false,
   children,
   closeOnSuccess = true,
+  confirmDisabled = false,
+  focusSafe = false,
 }: ConfirmDialogProps): ReactElement {
   const t = useUiT();
   const [busy, setBusy] = useState(false);
@@ -190,14 +239,21 @@ export function ConfirmDialog({
       icon={destructive ? <TriangleAlert size={18} /> : <Info size={18} />}
       size="sm"
       locked={busy}
+      initialFocus={focusSafe ? '[data-safe-action]' : undefined}
       footer={
         <DialogFooter>
-          <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={busy}>
+          <Button
+            variant="secondary"
+            onClick={() => onOpenChange(false)}
+            disabled={busy}
+            {...(focusSafe ? { 'data-safe-action': '' } : {})}
+          >
             {cancelLabel ?? t('ui.cancel')}
           </Button>
           <Button
             variant={destructive ? 'destructive' : 'primary'}
             loading={busy}
+            disabled={confirmDisabled}
             onClick={() => {
               void confirm();
             }}

@@ -93,7 +93,9 @@ describe('the panel is reachable, and only when it applies', () => {
   it('the order status is passed down rather than re-fetched', () => {
     // Two reads of the same status can disagree for a moment right
     // after a dispatch, which is exactly when this panel is on screen.
-    expect(read(DETAIL)).toContain('orderStatus={detail.data.status}');
+    // (The page now fetches the order once and hands the loaded order to
+    // its body, so the status the shipments card gets is that same one.)
+    expect(read(DETAIL)).toContain('orderStatus={order.status}');
   });
 
   it('will not offer to place an AWB on a shipment that has one', () => {

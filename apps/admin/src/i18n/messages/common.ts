@@ -35,4 +35,12 @@ export const common = defineMessages({
   // keys from the non-empty rule).
   'common.pluralS': ['s', '', ''],
   'common.pluralEs': ['es', '', ''],
+  // ── order detail redesign (2026-11-12): owner-supplied wording ──────
+  'common.copy': ['Copy', 'কপি', 'कॉपी'],
+  'common.copied': ['Copied', 'কপি হয়েছে', 'कॉपी हो गया'],
+  'common.edit': ['Edit', 'সম্পাদনা', 'संपादित करें'],
+  'common.expand': ['Expand', 'প্রসারিত করুন', 'विस्तार करें'],
+  'common.collapse': ['Collapse', 'সংকুচিত করুন', 'संक्षिप्त करें'],
+  'common.showAll': ['Show all ({count})', 'সব দেখুন ({count})', 'सभी देखें ({count})'],
+  'common.showLess': ['Show less', 'কম দেখুন', 'कम देखें'],
 });

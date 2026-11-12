@@ -418,3 +418,46 @@
   font-size: var(--fs-2xs);
   text-align: end;
 }
+
+/* ── embedded (opt-in: the admin order detail) ─────────────────────────
+   Sits inside a card that already has a title and a surface, so the
+   panel drops its own box. Only applies under `.sk-ac--embedded`; the
+   default panel above is untouched. */
+.sk-ac--embedded {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  gap: 8px;
+}
+.sk-ac--embedded .sk-ac__body {
+  gap: 8px;
+}
+.sk-ac--embedded .sk-ac__verdict {
+  flex-wrap: wrap;
+}
+.sk-ac--embedded .sk-ac__verdict .sk-ac__score {
+  margin-inline-start: auto;
+}
+.sk-ac--embedded .sk-ac__issues {
+  list-style: none;
+  padding-inline-start: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.5;
+}
+.sk-ac--embedded .sk-ac__issues li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.sk-ac--embedded .sk-ac__issues li > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--st-pending-fg);
+}
+:lang(bn) .sk-ac--embedded,
+:lang(hi) .sk-ac--embedded {
+  line-height: 1.5;
+}

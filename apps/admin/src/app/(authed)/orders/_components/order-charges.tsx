@@ -24,14 +24,29 @@ import { useT } from '@/i18n/client';
  * inserts the breakdown. Idempotent: rejects with
  * [CHARGES_ALREADY_EXIST] if rows already exist (FE-2 verbatim).
  */
-export function OrderChargesSection({
-  orderId,
-  orderNumber,
-}: {
-  orderId: string;
-  /** Restated in the compute confirm; the id stands in when it is not passed. */
-  orderNumber?: string | undefined;
-}): ReactElement {
+export interface OrderChargesPanel {
+  readonly canView: boolean;
+  readonly canCompute: boolean;
+  readonly charges: ReturnType<typeof useOrderCharges>;
+  readonly total: number;
+  readonly computing: boolean;
+  readonly serverError: string | null;
+  readonly confirmOpen: boolean;
+  /** Same confirm the in-card button opens. */
+  readonly openCompute: () => void;
+  /** The compute confirm. Mount once. */
+  readonly dialog: ReactElement;
+}
+
+/**
+ * The charges query, the permission gates and the compute confirm, as a
+ * hook: the order page shows the same section in its Items & charges card
+ * and offers "Compute & persist" from the header's More menu, and both
+ * must open ONE confirm with ONE verdict. The gates are the ones the
+ * section always had — `orders.charges.view` for the data (and the
+ * query), `orders.charges.compute` for the action.
+ */
+export function useOrderChargesPanel(orderId: string, orderNumber?: string): OrderChargesPanel {
   const t = useT();
   // The section is on the order page, which anyone with `orders.view`
   // may open — but the money is a separate permission. Gated on the
@@ -55,6 +70,84 @@ export function OrderChargesSection({
     }
   }
 
+  const total = charges.data?.reduce((sum, c) => sum + Number(c.totalAmountInr), 0) ?? 0;
+
+  const dialog = (
+    <ConfirmDialog
+      open={confirmOpen}
+      onOpenChange={setConfirmOpen}
+      title={t('ordersOrderCharges.computeAndSaveThisOrder')}
+      entity={orderNumber ?? orderId}
+      entityIsIdentifier
+      consequence={t('ordersOrderCharges.thePricingEngineEvaluatesThis')}
+      confirmLabel={t('ordersOrderCharges.computePersistCharges')}
+      onConfirm={handleCompute}
+      error={serverError}
+    />
+  );
+
+  return {
+    canView,
+    canCompute,
+    charges,
+    total,
+    computing: compute.isPending,
+    serverError,
+    confirmOpen,
+    openCompute: () => {
+      setServerError(null);
+      setConfirmOpen(true);
+    },
+    dialog,
+  };
+}
+
+/** The charges table, with its total row. */
+export function ChargesTable({
+  rows,
+  total,
+}: {
+  readonly rows: readonly OrderChargeView[];
+  readonly total: number;
+}): ReactElement {
+  const t = useT();
+  return (
+    <Table caption={t('ordersOrderCharges.charges')}>
+      <THead>
+        <Tr>
+          <Th>{t('ordersOrderCharges.charge')}</Th>
+          <Th>{t('ordersOrderCharges.visibility')}</Th>
+          <Th align="right">{t('ordersOrderCharges.amountInr')}</Th>
+        </Tr>
+      </THead>
+      <TBody>
+        {rows.map((c) => (
+          <ChargeRow key={c.id} charge={c} />
+        ))}
+        <Tr className="oc-total-row">
+          <Td colSpan={2}>{t('ordersOrderCharges.total')}</Td>
+          <Td align="right">
+            <Money amount={total} />
+          </Td>
+        </Tr>
+      </TBody>
+    </Table>
+  );
+}
+
+export function OrderChargesSection({
+  orderId,
+  orderNumber,
+}: {
+  orderId: string;
+  /** Restated in the compute confirm; the id stands in when it is not passed. */
+  orderNumber?: string | undefined;
+}): ReactElement {
+  const t = useT();
+  const cp = useOrderChargesPanel(orderId, orderNumber);
+  const { canView, canCompute, charges, total, computing, serverError, confirmOpen, openCompute } =
+    cp;
+
   if (charges.isLoading) {
     return (
       <OoCard>
@@ -71,8 +164,6 @@ export function OrderChargesSection({
     );
   }
 
-  const total = charges.data?.reduce((sum, c) => sum + Number(c.totalAmountInr), 0) ?? 0;
-
   if (!canView) return <></>;
 
   return (
@@ -87,11 +178,8 @@ export function OrderChargesSection({
           <Button
             variant="primary"
             icon={<Calculator size={15} />}
-            onClick={() => {
-              setServerError(null);
-              setConfirmOpen(true);
-            }}
-            loading={compute.isPending}
+            onClick={openCompute}
+            loading={computing}
           >
             {t('ordersOrderCharges.computePersistCharges')}
           </Button>
@@ -114,39 +202,10 @@ export function OrderChargesSection({
           />
         </div>
       ) : (
-        <Table caption={t('ordersOrderCharges.charges')}>
-          <THead>
-            <Tr>
-              <Th>{t('ordersOrderCharges.charge')}</Th>
-              <Th>{t('ordersOrderCharges.visibility')}</Th>
-              <Th align="right">{t('ordersOrderCharges.amountInr')}</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {charges.data.map((c) => (
-              <ChargeRow key={c.id} charge={c} />
-            ))}
-            <Tr className="oc-total-row">
-              <Td colSpan={2}>{t('ordersOrderCharges.total')}</Td>
-              <Td align="right">
-                <Money amount={total} />
-              </Td>
-            </Tr>
-          </TBody>
-        </Table>
+        <ChargesTable rows={charges.data} total={total} />
       )}
 
-      <ConfirmDialog
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        title={t('ordersOrderCharges.computeAndSaveThisOrder')}
-        entity={orderNumber ?? orderId}
-        entityIsIdentifier
-        consequence={t('ordersOrderCharges.thePricingEngineEvaluatesThis')}
-        confirmLabel={t('ordersOrderCharges.computePersistCharges')}
-        onConfirm={handleCompute}
-        error={serverError}
-      />
+      {cp.dialog}
     </OoCard>
   );
 }

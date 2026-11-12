@@ -125,12 +125,27 @@ function ReasonConfirm({
  * whether to *offer* the NDR button, and even that reads the server's
  * readiness verdict rather than reimplementing it.
  */
+/**
+ * Whether `CourierOpsPanel` would draw its "Courier actions & costs"
+ * button for this shipment — the same three branches, read the same way,
+ * so the order header offers the action exactly when the panel does.
+ */
+export function courierActionsAvailable(s: {
+  readonly isManualCourier: boolean;
+  readonly status: string;
+  readonly awbNumber: string | null;
+}): boolean {
+  return !s.isManualCourier && s.status !== 'CANCELLED' && s.awbNumber !== null;
+}
+
 export function CourierOpsPanel({
   shipmentId,
   awbNumber,
   isManualCourier,
   status,
   courierCancelledAt,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   readonly shipmentId: string;
   readonly awbNumber: string | null;
@@ -138,9 +153,21 @@ export function CourierOpsPanel({
   /** CANCELLED = voided with its order; only the waybill cancel applies. */
   readonly status: string;
   readonly courierCancelledAt: string | null;
+  /**
+   * Optional controlled open state, so the order header's "Courier actions
+   * & costs" can open the same panel this button opens. Uncontrolled
+   * (every other caller) behaves exactly as before.
+   */
+  readonly open?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
 }): ReactElement {
   const t = useT();
-  const [open, setOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+  const open = controlledOpen ?? innerOpen;
+  const setOpen = (next: boolean): void => {
+    if (controlledOpen === undefined) setInnerOpen(next);
+    onOpenChange?.(next);
+  };
 
   if (isManualCourier) {
     return <p className="os-note">{t('ordersCourierOpsPanel.placedManuallyWithANon')}</p>;
