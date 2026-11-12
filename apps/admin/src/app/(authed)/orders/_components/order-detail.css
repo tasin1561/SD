@@ -103,6 +103,13 @@
   white-space: nowrap;
 }
 .od-header__ref {
+  /* Never shrinks (owner: the client ref never hides). It is shown only
+     here, while the facts beside it are repeated lower down — ETA in the
+     stepper and the Shipment card, payment and weight in Payment &
+     package — so when the row runs out of room it is the FACTS that
+     ellipsise. Capped so a pathologically long ref cannot take the row. */
+  flex: none;
+  max-width: 18rem;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -155,19 +162,20 @@
 .od-header__whenicon {
   display: none;
 }
-/* Truncation order: Placed/Updated go to a tooltip first, then the client
-   ref. The order number, the status chip, the AWB and More never hide. */
+/* The phone-only copy of the client ref, shown by the <640px rules. */
+.od-header__ref--line2 {
+  display: none;
+}
+/* Truncation: Placed/Updated go to a tooltip; nothing else hides. The
+   client ref NEVER hides (owner, 2026-11-12) — when the row runs out of
+   room it ellipsises (full value in its title) instead. The order number,
+   the status chip, the AWB and More never hide either. */
 @container (max-width: 1500px) {
   .od-header__when {
     display: none;
   }
   .od-header__whenicon {
     display: inline-flex;
-  }
-}
-@container (max-width: 1240px) {
-  .od-header__ref {
-    display: none;
   }
 }
 
@@ -272,6 +280,54 @@
   }
   .od-header__line:first-child {
     grid-area: one;
+    /* Back + number + status chip had ~30px more than a 390px phone gives
+       line 1, so the chip ran UNDER More ("In transi…"). The number steps
+       down a size here; min-width lets the cell shrink instead of
+       spilling into the menu's column. */
+    min-width: 0;
+  }
+  /* The LAST resort, and the only shrinking part of line 1: the status
+     chip ellipsises rather than run under More. Short statuses never
+     reach it; "Pending confirmation" on a 360px phone does. The full
+     status is in the chip's title and printed in full on the stepper
+     directly below. Back, the number and More keep their size. */
+  .od-header__line:first-child .sk-chip {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .od-header__line:first-child .sk-chip__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .od-header__line:first-child .od-header__no {
+    flex: none;
+    font-size: 15px;
+    line-height: 20px;
+    letter-spacing: -0.01em;
+  }
+  /* More goes icon-only on a phone: measured, line 1 needed 271px of a
+     252px cell even with the smaller number, and the chip ran 15px under
+     the menu. The word is hidden VISUALLY only — it stays in the DOM, so
+     it is still the button's accessible name. The button keeps a 44px
+     tap target. */
+  .od-header > .od-menu .sk-menu-button__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .od-header > .od-menu button[aria-haspopup='menu'] {
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 0;
   }
   .od-header__line--facts {
     grid-area: two;
@@ -302,8 +358,14 @@
   .od-header__line--facts .od-header__whenicon {
     display: inline-flex;
   }
-  .od-header__ref {
+  /* Line 1 is back, number, status, More — no room for the ref there, so
+     it is shown at the head of line 2 (which scrolls) instead. */
+  .od-header__line:first-child .od-header__ref {
     display: none;
+  }
+  .od-header__ref--line2 {
+    display: inline;
+    flex: none;
   }
   /* Line 1 is back, number, status, More — nothing else, so it never
      overflows 320px. The contextual button leads line 2, which scrolls. */

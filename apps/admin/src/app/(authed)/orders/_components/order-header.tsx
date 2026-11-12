@@ -95,16 +95,27 @@ export function OrderHeader({
           <StatusChip
             kind={orderStatusKind(order.status)}
             label={statusLabel(order.status, locale)}
+            // The full status on hover: on a narrow phone the chip is the
+            // one thing in line 1 allowed to ellipsise.
+            title={statusLabel(order.status, locale)}
             size="sm"
           />
           {order.sellerOrderRef ? (
-            <span className="od-header__ref">
+            <span className="od-header__ref" title={order.sellerOrderRef}>
               {t('orderDetail.clientRef')} <span className="sk-ident">{order.sellerOrderRef}</span>
             </span>
           ) : null}
           <span className="od-header__spacer" />
         </div>
         <div className="od-header__line od-header__line--facts">
+          {/* The phone's copy of the client ref (owner: it never hides).
+              CSS shows exactly one of the two, so a screen reader — which
+              skips `display: none` — hears it once. */}
+          {order.sellerOrderRef ? (
+            <span className="od-header__ref od-header__ref--line2" title={order.sellerOrderRef}>
+              {t('orderDetail.clientRef')} <span className="sk-ident">{order.sellerOrderRef}</span>
+            </span>
+          ) : null}
           {awbs.map((awb) => (
             <span key={awb} className="od-header__awb">
               <span className="sk-ident">{awb}</span>
@@ -154,7 +165,7 @@ export function OrderHeader({
             <TooltipCard
               layer="fixed"
               title={placed}
-              description={`${updated}${order.sellerOrderRef ? ` · ${t('orderDetail.clientRef')} ${order.sellerOrderRef}` : ''}`}
+              description={updated}
               icon={<Info size={14} />}
             >
               <button

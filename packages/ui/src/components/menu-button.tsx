@@ -236,7 +236,10 @@ export function MenuButton({
           triggerClassName,
         )}
       >
-        {triggerIcon !== undefined ? null : label}
+        {/* Wrapped so a caller can hide the WORD visually (e.g. on a
+            phone header with no room) while it stays the button's
+            accessible name — a bare text node cannot be targeted. */}
+        {triggerIcon !== undefined ? null : <span className="sk-menu-button__label">{label}</span>}
         {triggerIcon !== undefined ? (
           <span aria-hidden="true">{triggerIcon}</span>
         ) : (
