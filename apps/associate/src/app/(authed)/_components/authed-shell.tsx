@@ -105,6 +105,8 @@ export function AuthedShell({
         <Shell
           subtitle={t('shell.subtitle')}
           sectionLabel={t('shell.section')}
+          searchPlaceholder={t('shell.searchMenu')}
+          searchEmpty={t('shell.searchMenuEmpty')}
           navGroups={visible}
           identityPrimary={identity.store.displayName ?? identity.store.name}
           identitySecondary={identity.emailDisplay}

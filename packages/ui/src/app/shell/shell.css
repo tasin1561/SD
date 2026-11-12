@@ -134,6 +134,44 @@
     transform var(--dur-slow) var(--ease-spring),
     opacity var(--dur) var(--ease-out);
 }
+.sk-nav__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.sk-nav__search-icon {
+  position: absolute;
+  left: var(--sp-3);
+  color: var(--fg-muted);
+  pointer-events: none;
+}
+.sk-nav__search-input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--sp-3) 0 calc(var(--sp-3) + 24px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: var(--fs-sm);
+  transition:
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+.sk-nav__search-input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.sk-nav__empty {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.sk-nav__heading[data-static] {
+  cursor: default;
+}
 .sk-nav__heading {
   display: flex;
   align-items: center;

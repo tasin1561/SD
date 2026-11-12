@@ -263,6 +263,8 @@ export function AuthedShell({
         <Shell
           subtitle={t('shell.subtitle')}
           sectionLabel={t('shell.section')}
+          searchPlaceholder={t('shell.searchMenu')}
+          searchEmpty={t('shell.searchMenuEmpty')}
           navGroups={navGroups}
           identityPrimary={identity.emailDisplay}
           // Every role, not `roleName` — that is the FIRST one only, and

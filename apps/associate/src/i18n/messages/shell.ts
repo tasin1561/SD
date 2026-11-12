@@ -2,6 +2,8 @@ import { defineMessages } from '../define';
 
 /** The signed-in chrome: navigation, the access boundary, the error screen, page metadata. */
 export const shell = defineMessages({
+  'shell.searchMenu': ['Search menu', 'মেনু খুঁজুন'],
+  'shell.searchMenuEmpty': ['Nothing in the menu matches.', 'মেনুতে কিছু মেলেনি।'],
   'shell.subtitle': ['Sales', 'সেলস'],
   'shell.section': ['Associate portal', 'অ্যাসোসিয়েট পোর্টাল'],
   'shell.meta.title': ['Skydrop Sales', 'Skydrop সেলস'],

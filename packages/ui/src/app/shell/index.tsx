@@ -2,7 +2,7 @@
 
 import * as Dialog from '@radix-ui/react-dialog';
 import { clsx } from 'clsx';
-import { ChevronDown, ChevronRight, LogOut, Menu, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, LogOut, Menu, Search, X } from 'lucide-react';
 import {
   forwardRef,
   useCallback,
@@ -133,7 +133,11 @@ function NavList({
   Link,
   variant,
   onNavigate,
+  searchPlaceholder,
+  searchEmpty,
 }: {
+  readonly searchPlaceholder: string;
+  readonly searchEmpty: string;
   readonly groups: readonly NavGroup[];
   readonly activeHref: string | null;
   readonly Link: LinkLike;
@@ -148,6 +152,19 @@ function NavList({
   // replays an entrance on each navigation reads as flicker.
   const [justOpened, setJustOpened] = useState<string | null>(null);
   const handleNavigate = onNavigate ?? ((): void => undefined);
+  // The search box filters what is RENDERED only. `collapsed` and its
+  // storage are never touched while searching, so clearing restores the nav.
+  const [query, setQuery] = useState('');
+  const needle = query.trim().toLowerCase();
+  const filtering = needle !== '';
+  const shownGroups = filtering
+    ? groups
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => i.label.toLowerCase().includes(needle)),
+        }))
+        .filter((g) => g.items.length > 0)
+    : groups;
 
   // Stored choices load after mount (storage is browser-only).
   useEffect(() => {
@@ -187,7 +204,7 @@ function NavList({
       list.dataset.ready = '1';
     });
     return () => window.cancelAnimationFrame(id);
-  }, [variant, activeHref, collapsed, toActive]);
+  }, [variant, activeHref, collapsed, toActive, needle]);
 
   const rowFrom = (target: EventTarget): HTMLElement | null =>
     target instanceof Element ? target.closest<HTMLElement>('.sk-nav__row') : null;
@@ -219,13 +236,48 @@ function NavList({
       onBlur={variant === 'rail' ? toActive : undefined}
     >
       {variant === 'rail' && <span className="sk-nav__bar" aria-hidden />}
-      {groups.map((group, gi) => {
-        const open = isOpen(group);
+      <div className="sk-nav__search" role="search">
+        <Search size={15} className="sk-nav__search-icon" aria-hidden />
+        <input
+          type="search"
+          className="sk-nav__search-input"
+          value={query}
+          placeholder={searchPlaceholder}
+          aria-label={searchPlaceholder}
+          autoComplete="off"
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' && query !== '') {
+              e.preventDefault();
+              e.stopPropagation();
+              setQuery('');
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              listRef.current?.querySelector<HTMLElement>('a.sk-nav__row')?.click();
+            } else if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              listRef.current?.querySelector<HTMLElement>('a.sk-nav__row')?.focus();
+            }
+          }}
+        />
+      </div>
+      {filtering && shownGroups.length === 0 && (
+        <p className="sk-nav__empty" role="status">
+          {searchEmpty}
+        </p>
+      )}
+      {shownGroups.map((group, gi) => {
+        const open = filtering || isOpen(group);
         const regionId = `${baseId}-g${gi}`;
         const heading = group.heading;
         return (
           <div key={heading ?? `group-${gi}`} className="sk-nav__group">
-            {heading !== undefined && (
+            {heading !== undefined && filtering && (
+              <div className="sk-nav__heading" data-static="1">
+                <span className="sk-nav__heading-text">{heading}</span>
+              </div>
+            )}
+            {heading !== undefined && !filtering && (
               <button
                 type="button"
                 className="sk-nav__heading"
@@ -448,6 +500,8 @@ export function Shell({
   statusStrip,
   themeControl,
   motionControl,
+  searchPlaceholder = 'Search menu',
+  searchEmpty = 'Nothing in the menu matches.',
   pathname,
   Link,
   onSignOut,
@@ -483,6 +537,9 @@ export function Shell({
   readonly themeControl?: ReactNode;
   /** MotionSwitch — rendered in the sidebar's user card and the drawer. */
   readonly motionControl?: ReactNode;
+  /** Menu search box copy (the app supplies its own translation). */
+  readonly searchPlaceholder?: string;
+  readonly searchEmpty?: string;
   readonly pathname: string | null;
   readonly Link: LinkLike;
   readonly onSignOut: () => void;
@@ -513,7 +570,14 @@ export function Shell({
           </span>
         </div>
         <nav className="sk-rail__nav" aria-label={t('ui.shell.main')}>
-          <NavList groups={navGroups} activeHref={activeHref} Link={Link} variant="rail" />
+          <NavList
+            groups={navGroups}
+            activeHref={activeHref}
+            Link={Link}
+            variant="rail"
+            searchPlaceholder={searchPlaceholder}
+            searchEmpty={searchEmpty}
+          />
         </nav>
         {footerNote !== undefined && <div className="sk-rail__note">{footerNote}</div>}
         <div className="sk-rail__user">
@@ -573,6 +637,8 @@ export function Shell({
                     activeHref={activeHref}
                     Link={Link}
                     variant="drawer"
+                    searchPlaceholder={searchPlaceholder}
+                    searchEmpty={searchEmpty}
                     onNavigate={() => setDrawerOpen(false)}
                   />
                 </nav>

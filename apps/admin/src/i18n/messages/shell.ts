@@ -2,6 +2,12 @@ import { defineMessages } from '../define';
 
 /** The signed-in chrome: navigation, the access boundary, the error screen, page metadata. */
 export const shell = defineMessages({
+  'shell.searchMenu': ['Search menu', 'মেনু খুঁজুন', 'मेन्यू खोजें'],
+  'shell.searchMenuEmpty': [
+    'Nothing in the menu matches.',
+    'মেনুতে কিছু মেলেনি।',
+    'मेन्यू में कुछ नहीं मिला।',
+  ],
   'shell.subtitle': ['Admin', 'অ্যাডমিন', 'एडमिन'],
   'shell.section': ['Staff console', 'স্টাফ কনসোল', 'स्टाफ़ कंसोल'],
   'shell.portal': ['operations console', 'অপারেশন্স কনসোল', 'ऑपरेशंस कंसोल'],

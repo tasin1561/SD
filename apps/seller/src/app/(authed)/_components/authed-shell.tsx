@@ -240,6 +240,8 @@ export function AuthedShell({
         <Shell
           subtitle={t('authedShell.client')}
           sectionLabel={t('authedShell.clientPortal')}
+          searchPlaceholder={t('shell.searchMenu')}
+          searchEmpty={t('shell.searchMenuEmpty')}
           navGroups={visibleGroups}
           identityPrimary={identity.companyName}
           identitySecondary={identity.emailDisplay}
