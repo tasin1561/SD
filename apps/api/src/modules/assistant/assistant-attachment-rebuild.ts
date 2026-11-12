@@ -99,7 +99,7 @@ export async function rebuildAttachment(input: Buffer): Promise<Rebuilt> {
       'Only JPEG, PNG, WebP, GIF and PDF files can be attached.',
     );
   }
-  return withRebuildSlot(() => (type === 'pdf' ? rebuildPdf(input) : rebuildImage(input)));
+  return withRebuildSlot<Rebuilt>(() => (type === 'pdf' ? rebuildPdf(input) : rebuildImage(input)));
 }
 
 /**

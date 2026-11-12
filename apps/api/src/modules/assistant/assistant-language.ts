@@ -103,11 +103,19 @@ const TEXT: Record<NoticeCode, Record<ReplyLanguage, string>> = {
     en: 'Those files are too big to read together with your question. Please remove one or attach a shorter PDF.',
     bn: 'ফাইলগুলো প্রশ্নের সাথে একসাথে পড়ার জন্য অনেক বড়। একটি ফাইল সরান বা ছোট PDF দিন।',
     hi: 'ये फाइलें आपके सवाल के साथ पढ़ने के लिए बहुत बड़ी हैं। कृपया एक फाइल हटाएँ या छोटा PDF लगाएँ।',
+    bnLatn:
+      'File gulo proshner sathe ekshathe porar jonno onek boro. Ekta file sorie din ba chhoto PDF din.',
+    hiLatn:
+      'Ye files aapke sawaal ke saath padhne ke liye bahut badi hain. Ek file hataiye ya chhota PDF lagaiye.',
   },
   ATTACHMENT_UNAVAILABLE: {
     en: 'I could not open one of the attached files just now. Nothing was sent to the assistant. Please try again in a moment.',
     bn: 'সংযুক্ত একটি ফাইল এই মুহূর্তে খুলতে পারিনি। অ্যাসিস্ট্যান্টের কাছে কিছু পাঠানো হয়নি। একটু পরে আবার চেষ্টা করুন।',
     hi: 'अभी जुड़ी हुई एक फाइल नहीं खुल सकी। असिस्टेंट को कुछ नहीं भेजा गया। थोड़ी देर में फिर कोशिश करें।',
+    bnLatn:
+      'Ekta attach kora file ekhon khulte parini. Assistant ke kichu pathano hoyni. Ektu pore abar cheshta korun.',
+    hiLatn:
+      'Abhi ek attach ki hui file nahi khul saki. Assistant ko kuch nahi bheja gaya. Thodi der mein phir koshish kariye.',
   },
   FAILED: {
     en: 'Something went wrong on my side. Please try again in a moment.',
