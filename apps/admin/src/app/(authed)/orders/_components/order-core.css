@@ -307,3 +307,12 @@
   color: var(--fg-strong);
   font-weight: var(--fw-semibold);
 }
+
+/* Client ref and AWB side by side under the order number, wrapping on a
+   phone rather than pushing the status chip off the header. */
+.oc-head-refs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  column-gap: 1.25rem;
+  row-gap: 0.25rem;
+}

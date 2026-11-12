@@ -64,6 +64,7 @@ export const orders = defineMessages({
   'orderDetail.crumb.operations': ['Operations', 'অপারেশন্স', 'ऑपरेशंस'],
   'orderDetail.crumb.orders': ['Orders', 'অর্ডার', 'ऑर्डर'],
   'orderDetail.clientRef': ['Client ref:', 'ক্লায়েন্টের রেফ:', 'क्लाइंट रेफ़:'],
+  'orderDetail.awbLabel': ['AWB:', 'AWB:', 'AWB:'],
   'orderDetail.override.title': [
     'This order was modified via god-mode (ORD-2). The flag is set-once and never cleared — it permanently records that admin override was used.',
     'এই অর্ডার god-mode (ORD-2) দিয়ে বদলানো হয়েছে। ফ্ল্যাগটি একবারই বসে, কখনো সরানো হয় না — এটি স্থায়ীভাবে রেকর্ড করে যে অ্যাডমিন ওভাররাইড ব্যবহার হয়েছে।',

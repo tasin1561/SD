@@ -8,7 +8,7 @@ import type { OrderStatus } from '@skydrop/db';
 import { useLocale, useT } from '@/i18n/client';
 import type { MessageKey } from '@/i18n/catalog';
 import type { Translate } from '@skydrop/ui/app/i18n';
-import { useOrderDetail } from '@/lib/api-hooks';
+import { useAdminOrderShipments, useOrderDetail } from '@/lib/api-hooks';
 import {
   JourneyTimeline,
   ParcelFacts,
@@ -52,6 +52,10 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
   const t = useT();
   const locale = useLocale();
   const detail = useOrderDetail(orderId);
+  // Same query the shipments section runs, so React Query serves both
+  // from one request rather than asking twice.
+  const shipments = useAdminOrderShipments(orderId);
+  const awbs = orderAwbs(shipments.data ?? []);
 
   return (
     <div className="oo-page">
@@ -82,10 +86,30 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             Link={Link}
             title={<span className="sk-ident">{detail.data.orderNumber}</span>}
             subtitle={
-              detail.data.sellerOrderRef ? (
-                <span>
-                  {t('orderDetail.clientRef')}{' '}
-                  <span className="sk-ident">{detail.data.sellerOrderRef}</span>
+              detail.data.sellerOrderRef || awbs.length > 0 ? (
+                <span className="oc-head-refs">
+                  {detail.data.sellerOrderRef ? (
+                    <span>
+                      {t('orderDetail.clientRef')}{' '}
+                      <span className="sk-ident">{detail.data.sellerOrderRef}</span>
+                    </span>
+                  ) : null}
+                  {/* The AWB beside the client's own ref (owner, 2026-11-12):
+                      it is the number a courier, a customer and the
+                      warehouse all quote, and it was only reachable by
+                      scrolling to the shipments section. Every AWB the
+                      order has, since a split order carries more than one. */}
+                  {awbs.length > 0 ? (
+                    <span>
+                      {t('orderDetail.awbLabel')}{' '}
+                      {awbs.map((awb, i) => (
+                        <span key={awb}>
+                          {i > 0 ? ', ' : ''}
+                          <span className="sk-ident">{awb}</span>
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
                 </span>
               ) : undefined
             }
@@ -485,4 +509,24 @@ function OrderJourneySection({
       entries={journey.data.timeline}
     />
   );
+}
+
+/**
+ * Every AWB an order carries, each once, in the order the shipments come.
+ *
+ * A split order has more than one parcel and so more than one AWB, and a
+ * reissue can repeat one, so this de-duplicates rather than taking the
+ * first. A shipment not booked yet has no AWB and contributes nothing —
+ * never an empty entry, which would print "AWB:" with nothing after it.
+ */
+export function orderAwbs(
+  shipments: ReadonlyArray<{ readonly awbNumber?: string | null }>,
+): string[] {
+  return [
+    ...new Set(
+      shipments
+        .map((s) => s.awbNumber)
+        .filter((a): a is string => typeof a === 'string' && a.trim() !== ''),
+    ),
+  ];
 }
