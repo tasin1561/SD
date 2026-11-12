@@ -9,6 +9,7 @@ import { AssistantBudgetService } from './assistant-budget.service';
 import { AssistantModelGateway, type AssistantModelRequest } from './assistant-model-gateway';
 import { AssistantStoreService, type ConversationRow } from './assistant-store.service';
 import { AssistantToolRegistry } from './assistant-tool-registry.service';
+import { renderPageContext, type AssistantPageContext } from '../assistant-page-context';
 
 /** Room for adaptive thinking (~4000) plus the answer. */
 export const MAX_OUTPUT_TOKENS = 6000;
@@ -52,7 +53,13 @@ export class AssistantChatService {
     return conv;
   }
 
-  async send(scope: CallerScope, conversationId: string, text: string, emit: Emit): Promise<void> {
+  async send(
+    scope: CallerScope,
+    conversationId: string,
+    text: string,
+    emit: Emit,
+    pageContext?: AssistantPageContext | null,
+  ): Promise<void> {
     const conv = await this.requireOwned(scope, conversationId);
     const lang = detectReplyLanguage(text);
     const notice = (code: NoticeCode): void => {
@@ -86,6 +93,24 @@ export class AssistantChatService {
       }
     }
     const messages = toApiMessages(rows, start, currentTurnStart);
+
+    // Where the person is and what just went wrong. Browser-supplied, so it
+    // is UNTRUSTED text: it rides in the USER turn (after the cached prefix,
+    // never in the system prompt), labelled as such, and it is NOT stored,
+    // so a transcript and later replays stay free of it.
+    const ctxText = renderPageContext(pageContext);
+    const tail = messages[messages.length - 1];
+    if (
+      ctxText !== null &&
+      tail !== undefined &&
+      tail.role === 'user' &&
+      Array.isArray(tail.content)
+    ) {
+      messages[messages.length - 1] = {
+        role: 'user',
+        content: [...tail.content, { type: 'text', text: ctxText }],
+      };
+    }
 
     const system: Anthropic.TextBlockParam[] = [
       {

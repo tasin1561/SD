@@ -157,6 +157,17 @@ export class ApiClient {
     return res.blob();
   }
 
+  /**
+   * A streaming response (Server-Sent Events). Same bearer token and the same
+   * single-flight refresh-and-retry as `request`, but the body is handed back
+   * UNREAD for the caller to consume. Non-2xx throws `ApiError`.
+   */
+  async requestStream(path: string, init: ApiRequestInit = {}): Promise<Response> {
+    const res = await this.send(path, init);
+    if (!res.ok) await this.handleResponse<unknown>(res);
+    return res;
+  }
+
   private async send(path: string, init: ApiRequestInit): Promise<Response> {
     const first = await this.doFetch(path, init);
     if (first.status === 401 && !init.suppressRefresh) {
@@ -186,6 +197,7 @@ export class ApiClient {
       method: init.method ?? 'GET',
       headers,
       credentials: 'include',
+      ...(init.signal ? { signal: init.signal } : {}),
       ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
       cache: 'no-store',
     });

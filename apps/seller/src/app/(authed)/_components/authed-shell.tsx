@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState, type ReactNode, type ReactElement } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { SellerMe } from '@skydrop/api-client';
@@ -9,6 +9,7 @@ import { MenuButton, StripFact, Toaster } from '@skydrop/ui/components';
 import { Shell, type NavGroup } from '@skydrop/ui/app/shell';
 import { PrefsControl } from '@/components/prefs-control';
 import { ToastProvider } from '@skydrop/ui/app/toast';
+import { AssistantWidget } from '@skydrop/ui/app/assistant';
 import { RestrictionBanner } from './restriction-banner';
 import { ImpersonationBanner } from './impersonation-banner';
 import { NotificationBellContainer } from '@/components/notification-bell-container';
@@ -67,6 +68,7 @@ export function AuthedShell({
   const t = useT();
   const pathname = usePathname();
   const client = useApiClient();
+  const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
   async function handleLogout(): Promise<void> {
@@ -340,6 +342,12 @@ export function AuthedShell({
           )}
           {children}
         </Shell>
+        <AssistantWidget
+          console="seller"
+          pathname={pathname}
+          transport={client}
+          navigate={(href) => router.push(href)}
+        />
       </ToastProvider>
     </Toaster>
   );

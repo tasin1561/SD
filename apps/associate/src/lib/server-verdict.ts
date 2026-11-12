@@ -1,4 +1,5 @@
 import { ApiError } from '@skydrop/api-client';
+import { recordLastError } from '@skydrop/ui/app/last-error';
 
 /**
  * FE-2 — render the server's verdict VERBATIM as `[CODE] message`.
@@ -33,6 +34,18 @@ import { ApiError } from '@skydrop/api-client';
  * support conversation resolvable, exactly as a code does.
  */
 export function serverVerdict(err: unknown, fallback = 'Request failed.'): string {
+  const text = verdictText(err, fallback);
+  // The one place a server refusal becomes on-screen text, so it is also the
+  // one place the assistant learns what the person just saw (memory only).
+  if (err instanceof ApiError) {
+    const body = err.body as { code?: unknown } | null;
+    const code = typeof body?.code === 'string' ? body.code : err.code;
+    recordLastError(code, text.startsWith('[') ? text.replace(/^\[[^\]]*\]\s*/, '') : text);
+  }
+  return text;
+}
+
+function verdictText(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
     const body = err.body as { code?: unknown; message?: unknown } | null;
     const code = typeof body?.code === 'string' ? body.code : err.code;

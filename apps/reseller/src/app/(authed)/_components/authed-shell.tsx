@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { StoreMe } from '@skydrop/api-client';
 import { Toaster } from '@skydrop/ui/components';
 import { Shell, type NavGroup } from '@skydrop/ui/app/shell';
 import { ToastProvider } from '@skydrop/ui/app/toast';
+import { AssistantWidget } from '@skydrop/ui/app/assistant';
 import {
   BarChart3,
   Contact,
@@ -49,6 +50,7 @@ export function AuthedShell({
   const t = useT();
   const pathname = usePathname();
   const client = useApiClient();
+  const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
 
   // 2026-09-16 — how many orders are stuck waiting for this store to say
@@ -170,6 +172,12 @@ export function AuthedShell({
           <TermsBanner enabled={can(identity, 'terms.view')} />
           {children}
         </Shell>
+        <AssistantWidget
+          console="reseller"
+          pathname={pathname}
+          transport={client}
+          navigate={(href) => router.push(href)}
+        />
       </ToastProvider>
     </Toaster>
   );

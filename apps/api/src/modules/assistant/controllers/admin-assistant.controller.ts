@@ -76,6 +76,8 @@ export class AdminAssistantController {
   ): Promise<void> {
     const scope = scopeFromStaff(staff);
     await this.chat.requireOwned(scope, id); // a plain 404 before any stream
-    await streamAnswer(res, (emit) => this.chat.send(scope, id, body.text, emit));
+    await streamAnswer(res, (emit) =>
+      this.chat.send(scope, id, body.text, emit, body.context ?? null),
+    );
   }
 }
