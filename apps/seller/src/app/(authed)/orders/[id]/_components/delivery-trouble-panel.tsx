@@ -1,14 +1,16 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { AlertTriangle, OctagonX, PhoneCall, Truck } from 'lucide-react';
+import { AlertTriangle, ChevronDown, OctagonX, PhoneCall, Truck } from 'lucide-react';
 import { Dialog, DialogFooter, ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Select } from '@skydrop/ui/app/select';
 import { TextArea } from '@skydrop/ui/app/text-field';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
-import { Notice, OrdSection } from '../../_components/orders-parts';
+import { Notice } from '../../_components/orders-parts';
+import { DetailCard } from '../../_components/detail/detail-card';
+import { fmtFull, fmtWhen } from '../../_components/detail/format';
 import {
   useCallHistory,
   useDeliveryActions,
@@ -26,7 +28,6 @@ import type { MessageKey } from '@/i18n/catalog';
 import { CATALOGS } from '@/i18n/catalog';
 import type { Locale } from '@skydrop/ui/app/i18n';
 import { CALL_OUTCOME_BN, DELIVERY_ACTION_STATUS_BN } from '@/i18n/enum-words';
-import { dateTag } from '@/i18n/format';
 
 /**
  * What happened to a parcel that could not be delivered, and what the
@@ -214,7 +215,13 @@ export function DeliveryTroublePanel({
   }
 
   return (
-    <OrdSection title={t(deliveryPanelTitleKey(orderStatus))}>
+    <DetailCard
+      id="trouble"
+      icon={<AlertTriangle size={18} />}
+      title={t(deliveryPanelTitleKey(orderStatus))}
+      titleText={t(deliveryPanelTitleKey(orderStatus))}
+      note={t('orderPage.card.troubleNote')}
+    >
       <div className="ord-stack">
         {orderStatus === 'DELIVERY_FAILED' && (
           <Notice tone="warn" icon={<AlertTriangle size={16} />}>
@@ -227,42 +234,10 @@ export function DeliveryTroublePanel({
             lead to opposite decisions. */}
         {(calls.data?.items.length ?? 0) > 0 && (
           <div>
-            <h3 className="ord-h3">{t('orderDelivery.whatWeDiscussedWith')}</h3>
-            <ul className="ord-cards">
+            <h3 className="cod-group">{t('orderDelivery.whatWeDiscussedWith')}</h3>
+            <ul className="cod-calls">
               {calls.data?.items.map((c) => (
-                <li key={c.id} className="ord-callcard" data-tone="accent">
-                  <div className="ord-callcard__head">
-                    <PhoneCall size={14} aria-hidden />
-                    <span className="ord-callcard__title">
-                      {humanOutcome(c.outcome, locale, CALL_OUTCOME_BN)}
-                    </span>
-                    <span className="ord-callcard__time sk-figure">
-                      {new Date(c.calledAt).toLocaleString(dateTag(locale))}
-                    </span>
-                  </div>
-                  {/*
-                    What the customer actually said. This is the answer
-                    to whatever the seller asked for, so it is the
-                    strongest line in the card.
-                  */}
-                  {c.notes !== null && c.notes !== '' && (
-                    <p className="ord-callcard__said">{c.notes}</p>
-                  )}
-                  {c.customerSaidAddress !== null && (
-                    <span className="ord-faint">
-                      {richMessage(t('orderDelivery.customerGaveADifferent'), {
-                        customerSaidAddress: c.customerSaidAddress,
-                      })}
-                    </span>
-                  )}
-                  {c.rescheduledFor !== null && (
-                    <span className="ord-faint">
-                      {richMessage(t('orderDelivery.askedUsToCall'), {
-                        rescheduledFor: new Date(c.rescheduledFor).toLocaleString(dateTag(locale)),
-                      })}
-                    </span>
-                  )}
-                </li>
+                <CallRow key={c.id} call={c} locale={locale} />
               ))}
             </ul>
           </div>
@@ -270,7 +245,7 @@ export function DeliveryTroublePanel({
 
         {(actions.data?.items.length ?? 0) > 0 && (
           <div>
-            <h3 className="ord-h3">{t('orderDelivery.whatYouAskedFor')}</h3>
+            <h3 className="cod-group">{t('orderDelivery.whatYouAskedFor')}</h3>
             <ul className="ord-cards">
               {actions.data?.items.map((a) => (
                 <li key={a.id} className="ord-callcard">
@@ -395,6 +370,85 @@ export function DeliveryTroublePanel({
         destructive
         onConfirm={() => submit()}
       />
-    </OrdSection>
+    </DetailCard>
+  );
+}
+
+/**
+ * One call as a single line (what happened, when) that opens to show what the
+ * customer actually said. What they said is the answer to whatever the seller
+ * asked for, so it is the strongest line once open.
+ */
+function CallRow({
+  call: c,
+  locale,
+}: {
+  readonly call: {
+    readonly id: string;
+    readonly calledAt: string;
+    readonly outcome: string;
+    readonly notes: string | null;
+    readonly customerSaidAddress: string | null;
+    readonly rescheduledFor: string | null;
+  };
+  readonly locale: Locale;
+}): ReactElement {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const words = { today: t('orderPage.today'), yesterday: t('orderPage.yesterday') };
+  const hasMore =
+    (c.notes !== null && c.notes !== '') ||
+    c.customerSaidAddress !== null ||
+    c.rescheduledFor !== null;
+  const outcome = humanOutcome(c.outcome, locale, CALL_OUTCOME_BN);
+  const head = (
+    <>
+      <PhoneCall size={16} aria-hidden className="cod-call__icon" />
+      <span className="cod-call__title">{outcome}</span>
+      <time
+        className="cod-call__time sk-figure"
+        dateTime={c.calledAt}
+        title={fmtFull(c.calledAt, locale)}
+      >
+        {fmtWhen(c.calledAt, locale, words)}
+      </time>
+      {hasMore ? <ChevronDown size={16} aria-hidden className="cod-call__chev" /> : null}
+    </>
+  );
+  return (
+    <li className="cod-call" data-open={open ? '1' : '0'}>
+      {hasMore ? (
+        <button
+          type="button"
+          className="cod-call__head"
+          aria-expanded={open}
+          aria-label={`${outcome} — ${t(open ? 'orderPage.trouble.hideNotes' : 'orderPage.trouble.showNotes')}`}
+          onClick={() => setOpen((v) => !v)}
+        >
+          {head}
+        </button>
+      ) : (
+        <div className="cod-call__head">{head}</div>
+      )}
+      {hasMore && open && (
+        <div className="cod-call__more">
+          {c.notes !== null && c.notes !== '' && <p className="cod-call__said">{c.notes}</p>}
+          {c.customerSaidAddress !== null && (
+            <span className="cod-muted">
+              {richMessage(t('orderDelivery.customerGaveADifferent'), {
+                customerSaidAddress: c.customerSaidAddress,
+              })}
+            </span>
+          )}
+          {c.rescheduledFor !== null && (
+            <span className="cod-muted">
+              {richMessage(t('orderDelivery.askedUsToCall'), {
+                rescheduledFor: fmtWhen(c.rescheduledFor, locale, words),
+              })}
+            </span>
+          )}
+        </div>
+      )}
+    </li>
   );
 }
