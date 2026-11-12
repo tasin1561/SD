@@ -17,6 +17,7 @@ const BASE: ShippingLabelData = {
   sellerName: 'Menev Store',
   awbNumber: '38061110633721',
   courierName: 'Delhivery',
+  accountName: 'MS Exports',
   sortCode: 'KLT/MDH',
   destinationPin: '700128',
   recipientName: 'Ismail Sk',
@@ -50,6 +51,22 @@ describe('the shipping label we render ourselves', () => {
     // The reason the whole renderer exists: Delhivery's own sheet says
     // Skydrop here because the account name is fixed per client.
     expect(text).not.toContain('SKYDROP');
+  });
+
+  it('leads with the account the courier knows us by, then the client', async () => {
+    // Owner, 2026-11-12: Delhivery's own people read "MS EXPORTS" and
+    // they read left to right, so it goes first — and both names are
+    // ONE string at ONE size, which is what "equal importance" means.
+    const text = await textOf(BASE);
+    expect(text).toContain('MS EXPORTS / MENEV STORE');
+  });
+
+  it('still reads correctly when no account name is configured', async () => {
+    const text = await textOf({ ...BASE, accountName: null });
+    expect(text).toContain('MENEV STORE');
+    // No orphaned separator where the account name would have been.
+    expect(text).not.toMatch(/^\s*\//m);
+    expect(text).not.toContain('/ MENEV STORE');
   });
 
   it('carries the two values the hub machine-reads: the AWB and the sort code', async () => {

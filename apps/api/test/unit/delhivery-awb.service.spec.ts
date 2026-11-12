@@ -72,6 +72,11 @@ describe('DelhiveryAwbService.generateAwb — stub mode', () => {
       awbNumber: 'DLVSTUB202605000042',
       courierShipmentId: 'DLVSHP202605000042',
       labelUrl: null,
+      // Read from the booking now (2026-11-12). The hub bags from this
+      // code and the label is drawn seconds after the booking, so
+      // waiting for a tracking poll meant every self-rendered label
+      // printed "NO SORT CODE" — found on the first live parcel.
+      sortCode: null,
     });
   });
 
@@ -119,6 +124,22 @@ describe('DelhiveryAwbService.generateAwb — real mode', () => {
     await expect(svc.generateAwb(awbReq())).rejects.toThrow(/pickup location not configured/i);
   });
 
+  it('reads the SORT CODE out of the booking response', async () => {
+    // The hub bags from this, and the label is drawn seconds after the
+    // booking. It used to be learned only from a tracking poll hours
+    // later, so every self-rendered label printed "NO SORT CODE" —
+    // found on the first live parcel (2026-11-12). The field was in the
+    // response all along; the parser dropped it.
+    const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
+    request.mockResolvedValueOnce({
+      success: true,
+      packages: [{ waybill: 'DLV1', refnum: 'SH-1', sort_code: 'KLT/MDH' }],
+    });
+    const r = await svc.generateAwb(awbReq());
+    expect(r.ok).toBe(true);
+    expect(r).toMatchObject({ sortCode: 'KLT/MDH' });
+  });
+
   it('marshals the wire envelope + parses a success response', async () => {
     const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
     request.mockResolvedValueOnce({
@@ -131,6 +152,10 @@ describe('DelhiveryAwbService.generateAwb — real mode', () => {
       awbNumber: 'DLV123456789',
       courierShipmentId: 'SH-2026-05-000042',
       labelUrl: null,
+      // This response carries no sort_code, so the result says null
+      // rather than omitting the key — the label's warning depends on
+      // being able to tell "absent" from "not asked".
+      sortCode: null,
     });
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({

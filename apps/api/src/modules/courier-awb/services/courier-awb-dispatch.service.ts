@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { assertPublicHttpsUrl } from '../../../common/net/ssrf-guard';
 import { DelhiveryAwbService } from '../../courier-delhivery/services/delhivery-awb.service';
+import { DelhiveryServiceabilityService } from '../../courier-delhivery/services/delhivery-serviceability.service';
 import { DelhiveryLabelService } from '../../courier-delhivery/services/delhivery-label.service';
 import type { DelhiveryAwbRequest } from '../../courier-delhivery/types/delhivery.types';
 import { ShiprocketClientService } from '../../courier-shiprocket/services/shiprocket-client.service';
@@ -169,6 +170,7 @@ export class CourierAwbDispatchService {
 
   constructor(
     private readonly delhivery: DelhiveryAwbService,
+    private readonly delhiveryPins: DelhiveryServiceabilityService,
     private readonly delhiveryLabel: DelhiveryLabelService,
     private readonly shiprocket: ShiprocketClientService,
     private readonly delhiveryHttp: DelhiveryHttpService,
@@ -279,6 +281,30 @@ export class CourierAwbDispatchService {
    * and when it does the label a packer needs is gone. So the URL is
    * downloaded here and the caller only ever sees bytes.
    */
+  /**
+   * The carrier's routing code for a destination pincode, or null.
+   *
+   * It lives HERE because CUR-12 keeps courier-code branches at the
+   * adapter boundary: a `=== 'delhivery'` upstream of this file is the
+   * thing the parity spec exists to catch, and it caught exactly that
+   * when this logic was first written into AwbGenerationService.
+   *
+   * Only reached when the booking response did not carry one and the
+   * label still needs it. Best-effort: a carrier with no such lookup,
+   * or a lookup that fails, answers null and the label says so.
+   */
+  async sortCodeFor(
+    input: { readonly courierCode: string; readonly pincode: string },
+    actor: CourierCredentialActor,
+  ): Promise<string | null> {
+    if (input.courierCode === 'delhivery') {
+      const pin = await this.delhiveryPins.describePin(input.pincode, actor);
+      const code = (pin.sortCode ?? '').trim();
+      return code === '' ? null : code;
+    }
+    return null;
+  }
+
   async fetchLabel(
     input: DispatchLabelInput,
     actor: CourierCredentialActor,

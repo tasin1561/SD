@@ -107,6 +107,16 @@ export interface DelhiveryAwbSuccess {
   /** A label URL when Delhivery returns one inline; null when the label
    *  must be fetched separately via fetchLabel. */
   labelUrl: string | null;
+  /**
+   * Their routing code (`KLT/MDH`) as returned BY THE BOOKING.
+   *
+   * It was previously only ever learned from a tracking poll, hours
+   * later — and the label is drawn seconds after the booking, so a
+   * self-rendered sheet printed "NO SORT CODE" on every parcel
+   * (2026-11-12, found on the first live one). The create response
+   * carries it; we were dropping it on the floor.
+   */
+  sortCode?: string | null;
 }
 
 export interface DelhiveryAwbFailure {

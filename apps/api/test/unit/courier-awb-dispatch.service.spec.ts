@@ -64,6 +64,9 @@ function makeService(
   );
   const svc = new CourierAwbDispatchService(
     { generateAwb: delhiveryGenerate } as unknown as DelhiveryAwbService,
+    // The pincode lookup behind `sortCodeFor`, reached only when a
+    // booking returned no routing code and a label still needs one.
+    { describePin: jest.fn(async () => ({ sortCode: null })) } as never,
     { fetchLabel: delhiveryFetchLabel } as unknown as DelhiveryLabelService,
     {
       generateAwb: shiprocketGenerate,

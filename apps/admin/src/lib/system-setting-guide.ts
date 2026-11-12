@@ -1540,6 +1540,13 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
       ],
     ),
   },
+  'courier.own_label_account_name': {
+    name: 'Account name printed on our own label',
+    group: 'Courier connection',
+    what: 'The name the courier knows us by — “MS Exports” — printed on every label we draw ourselves, beside the client’s own name and at the same size, with this one first. The client name is who the customer bought from; this is who the courier’s people recognise when they pick the box up. Only used while “Print our own shipping label” is on.',
+    example:
+      'Set to “MS Exports”: a Menev Store parcel reads “MS EXPORTS / MENEV STORE” across the top. Left empty, it reads “MENEV STORE” alone.',
+  },
   'courier.delhivery_waybill_pool_refill_enabled': {
     name: 'Refill the Delhivery waybill pool automatically',
     group: 'Courier connection',
@@ -1992,6 +1999,8 @@ export const FREE_TEXT_SETTINGS: Readonly<Record<string, string>> = {
   'invoice.gstin': 'A registration number issued by the tax office.',
   'invoice.address': 'A postal address, free text over several lines.',
   'inventory.strict_unit_serial_prefix': 'A label prefix; any short text is valid.',
+  'courier.own_label_account_name':
+    'The trading name the courier knows us by — whatever is on the account, or empty.',
   'courier.shiprocket_portal_proxy': 'A proxy URL for the Bangalore tunnel.',
   'courier.shiprocket_portal_egress_check_url': 'A URL on the app server, or empty.',
   'courier.shiprocket_portal_egress_country': 'A country name, or empty for anywhere.',

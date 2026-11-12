@@ -1112,6 +1112,15 @@ const systemSettings: SystemSettingSeed[] = [
       "OFF = the courier renders the label and we store their PDF (today's behaviour). ON = we render it ourselves, so the masthead carries the SELLER's business name instead of Skydrop's — the courier's own sheet is drawn from our account and always says Skydrop, which is wrong on a parcel a seller's customer opens. OFF is the safe default: a hub sorts from the label it expects, so the first parcels printed this way should be checked with the courier before this is left on. Turning it off is instant and needs no deploy — if a hub ever refuses one of these, flip this and the next booking is back on the courier's own sheet. Our label deliberately prints NO return address (owner, 2026-11-12): an RTO is routed from the AWB, not from printed text.",
   },
   {
+    key: 'courier.own_label_account_name',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Account name printed on our own label',
+    description:
+      'The name the COURIER knows us by — "MS EXPORTS" — printed on every label beside the client\'s own name, at the same size, with the account first. The client name is who the customer bought from; this is who Delhivery\'s people recognise when they handle the box, and both matter. Only used when courier.use_own_label_pdf is on. Left empty, the label shows the client name alone.',
+  },
+  {
     key: 'courier.delhivery_waybill_pool_refill_enabled',
     category: 'courier',
     valueType: SettingValueType.BOOLEAN,

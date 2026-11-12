@@ -608,6 +608,16 @@ export class AwbGenerationService {
           awbNumber: awb.awbNumber,
           courierShipmentId: awb.courierShipmentId,
           awbGeneratedAt: generatedAt,
+          // From the booking response. Only ever written by the tracking
+          // poller before, which runs hours later — so the label, drawn
+          // seconds after this, had nothing to print and said so. Guarded
+          // with `??` so a courier that does not return one leaves the
+          // column alone for the poller to fill in later.
+          // `in` rather than a property read: `awb` is the union across
+          // every courier adapter, and only some of them carry one.
+          ...('sortCode' in awb && typeof awb.sortCode === 'string' && awb.sortCode.trim() !== ''
+            ? { courierSortCode: awb.sortCode.trim() }
+            : {}),
           // The status is deliberately NOT advanced here.
           //
           // Since the AWB is generated at order CONFIRMATION, the parcel
@@ -796,6 +806,50 @@ export class AwbGenerationService {
    * left no current row → version 1 isCurrent).
    */
   /**
+   * The routing code the hub bags from, found wherever it actually is.
+   *
+   * It used to be written ONLY by the tracking poller, hours after the
+   * parcel was labelled — so the first self-rendered label printed
+   * "NO SORT CODE" on a real parcel (2026-11-12). The booking response
+   * now carries it, but that is a field we had never read, so this does
+   * not trust it alone: when the column is still empty we ask Delhivery
+   * what the destination pincode routes to, and persist the answer so
+   * the next reprint and the poller agree with the sheet.
+   *
+   * Best-effort by construction. A failure returns what we had — the
+   * label then prints its red warning, which is the honest outcome and
+   * far better than holding up a dispatch over a lookup.
+   */
+  private async resolveSortCode(
+    shipmentId: string,
+    courierCode: string,
+    stored: string | null,
+    destPostalCode: string,
+  ): Promise<string | null> {
+    const have = (stored ?? '').trim();
+    if (have !== '') return have;
+    try {
+      // Through the dispatcher, never a courier check here: CUR-12 keeps
+      // `=== 'delhivery'` at the adapter boundary, and the parity spec
+      // caught this exact branch when it was written inline.
+      const code = await this.dispatch.sortCodeFor(
+        { courierCode, pincode: destPostalCode },
+        courierActor.runner('awb-generation', shipmentId),
+      );
+      if (code === null) return null;
+      // Guarded: only fill an EMPTY column, so a value the poller or the
+      // booking already wrote is never overwritten by a later lookup.
+      await this.prisma.client.shipment.updateMany({
+        where: { id: shipmentId, courierSortCode: null },
+        data: { courierSortCode: code },
+      });
+      return code;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Our own label bytes, or null to use the courier's sheet.
    *
    * Null — not a throw — on every "not now" and every "not enough": the
@@ -811,11 +865,20 @@ export class AwbGenerationService {
     courierCode: string,
   ): Promise<{ bytes: Buffer; mimeType: string } | null> {
     try {
-      const onRow = await this.prisma.client.systemSetting.findUnique({
-        where: { key: 'courier.use_own_label_pdf' },
-        select: { valueBoolean: true },
-      });
+      const [onRow, acctRow] = await Promise.all([
+        this.prisma.client.systemSetting.findUnique({
+          where: { key: 'courier.use_own_label_pdf' },
+          select: { valueBoolean: true },
+        }),
+        this.prisma.client.systemSetting.findUnique({
+          where: { key: 'courier.own_label_account_name' },
+          select: { valueString: true },
+        }),
+      ]);
       if (onRow?.valueBoolean !== true) return null;
+      // Unset simply prints nothing there; unlike the sort code this is
+      // not something a hub routes on, so a blank is not a defect.
+      const accountName = (acctRow?.valueString ?? '').trim() || null;
 
       const s = await this.prisma.client.shipment.findUnique({
         where: { id: shipmentId },
@@ -866,7 +929,13 @@ export class AwbGenerationService {
         sellerName: order.seller.companyName,
         awbNumber,
         courierName: courierCode,
-        sortCode: s.courierSortCode,
+        accountName,
+        sortCode: await this.resolveSortCode(
+          shipmentId,
+          courierCode,
+          s.courierSortCode,
+          s.destPostalCode,
+        ),
         destinationPin: s.destPostalCode,
         recipientName: s.destRecipientName,
         recipientPhone: s.destRecipientPhoneE164,

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { drawCode128 } from '../../../common/barcode/pdf-barcode';
+import { courierMark } from './courier-marks';
 
 /**
  * Module 9 — the shipping label we render OURSELVES.
@@ -55,6 +56,17 @@ export interface ShippingLabelData {
   readonly sellerName: string;
   readonly awbNumber: string;
   readonly courierName: string;
+  /**
+   * The name the COURIER knows us by — "MS EXPORTS" — printed on every
+   * label beside the client's (owner, 2026-11-12).
+   *
+   * The masthead carries the client because that is who the customer
+   * bought from; this carries the account the parcel is booked under,
+   * because that is who Delhivery's people recognise when they handle
+   * it. Both, always: one is for the person opening the box and the
+   * other is for the person carrying it.
+   */
+  readonly accountName: string | null;
   /** Delhivery's routing code. Null is rendered as a visible warning. */
   readonly sortCode: string | null;
   readonly destinationPin: string;
@@ -111,30 +123,67 @@ function draw(doc: InstanceType<typeof PDFDocument>, d: ShippingLabelData): void
   doc.lineWidth(0.7).strokeColor('#000000');
   doc.rect(left, y, CONTENT_W, PAGE_HEIGHT - MARGIN * 2).stroke();
 
-  // ── 1. Masthead: the SELLER's name. The whole reason this file exists,
-  // so it gets the largest type on the sheet after the amount.
-  const headerH = 30;
+  // ── 1. Masthead: BOTH names, same size, on one line (owner,
+  // 2026-11-12 — "equal importance"). The client is who the customer
+  // bought from; the account is who Delhivery recognises when their
+  // hand picks the box up. Neither is a subtitle of the other, so
+  // neither gets smaller type.
+  const headerH = 34;
+  const account = (d.accountName ?? '').trim();
+  // ACCOUNT FIRST, then the client (owner, 2026-11-12). Delhivery's own
+  // people read the account name, and they read left to right.
+  const names = account === '' ? upper(d.sellerName) : `${upper(account)} / ${upper(d.sellerName)}`;
+  // The mark of whoever is carrying it, drawn from the carrier's own
+  // artwork; a courier we hold no mark for falls back to its name.
+  const mark = courierMark(d.courierName);
+  const markW = 56;
+  const namesW = CONTENT_W - 16 - (mark === null ? 52 : markW + 6);
+  // Shrink to fit rather than truncate: two business names ellipsised
+  // in the middle ("MENEV ST… · MS EXP…") serve nobody, and this line
+  // is the one thing on the sheet both parties look for.
+  let nameSize = 12;
+  doc.font('Helvetica-Bold');
+  while (nameSize > 7 && doc.fontSize(nameSize).widthOfString(names) > namesW) nameSize -= 0.5;
   doc
-    .fontSize(13)
-    .font('Helvetica-Bold')
+    .fontSize(nameSize)
     .fillColor('#000000')
-    .text(upper(d.sellerName), left + 6, y + 9, {
-      width: CONTENT_W - 70,
-      height: 16,
+    .text(names, left + 8, y + (headerH - nameSize) / 2 - 1, {
+      width: namesW,
+      height: nameSize + 4,
       ellipsis: true,
       lineBreak: false,
     });
-  doc
-    .fontSize(7)
-    .font('Helvetica')
-    .fillColor('#444444')
-    .text(upper(d.courierName), left + CONTENT_W - 66, y + 12, {
-      width: 60,
-      align: 'right',
-      height: 10,
-      ellipsis: true,
-      lineBreak: false,
-    });
+
+  if (mark === null) {
+    doc
+      .fontSize(7)
+      .font('Helvetica')
+      .fillColor('#555555')
+      .text(upper(d.courierName), left + CONTENT_W - 58, y + 14, {
+        width: 52,
+        align: 'right',
+        height: 9,
+        ellipsis: true,
+        lineBreak: false,
+      })
+      .fillColor('#000000');
+  } else {
+    try {
+      doc.image(mark, left + CONTENT_W - markW - 7, y + 11, { width: markW });
+    } catch {
+      // A mark that will not decode must not cost the whole label.
+      doc
+        .fontSize(7)
+        .font('Helvetica')
+        .fillColor('#555555')
+        .text(upper(d.courierName), left + CONTENT_W - 58, y + 14, {
+          width: 52,
+          align: 'right',
+          lineBreak: false,
+        })
+        .fillColor('#000000');
+    }
+  }
   y += headerH;
   rule(doc, left, y);
 

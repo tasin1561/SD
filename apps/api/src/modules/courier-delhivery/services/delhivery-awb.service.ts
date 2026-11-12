@@ -535,6 +535,10 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
         awbNumber: pkg.waybill,
         courierShipmentId: pkg.refnum ?? pkg.waybill,
         labelUrl: pkg.pdf_download_link ?? null,
+        // The hub bags from this. Taken from the BOOKING rather than
+        // waiting for a tracking poll, because the label is drawn
+        // seconds later and a sheet without it cannot be routed.
+        sortCode: pkg.sort_code ?? null,
       };
     }
     // PER-PACKAGE FIRST, and it is not a style preference.
@@ -642,6 +646,10 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       awbNumber: `DLVSTUB${digits}`,
       courierShipmentId: `DLVSHP${digits}`,
       labelUrl: null,
+      // Stub mode invents no routing code: the label's red warning is
+      // the honest local answer, and a made-up one would be a code that
+      // looks real and routes a parcel nowhere.
+      sortCode: null,
     };
   }
 }
