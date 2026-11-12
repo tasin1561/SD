@@ -1022,3 +1022,8 @@
 .od-typed-order {
   margin-top: var(--sp-2);
 }
+
+/* ── item pictures ────────────────────────────────────────────────────── */
+.od-thumb-cell {
+  width: 56px;
+}

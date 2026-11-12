@@ -737,6 +737,23 @@ describe('OrderService admin reads', () => {
     await expect(svc.adminGetById('o1')).resolves.toMatchObject({ id: 'o1' });
   });
 
+  it('adminGetForDisplay swaps each line’s dead snapshot URL for a live presigned picture', async () => {
+    const order = {
+      ...existingOrder(),
+      items: [
+        { id: 'i1', variantId: 'v1', imageUrl: 'https://bucket/dead-1.jpg' },
+        { id: 'i2', variantId: 'v2', imageUrl: 'https://bucket/dead-2.jpg' },
+      ],
+    };
+    const { svc } = makeService({ existing: order as never });
+    const thumbs = jest.fn(async () => new Map([['v1', 'https://signed/v1?sig=x']]));
+    (svc as unknown as { catalog: Record<string, unknown> }).catalog.thumbnailUrlsByVariant =
+      thumbs;
+    const view = await svc.adminGetForDisplay('o1');
+    expect(thumbs).toHaveBeenCalledWith(['v1', 'v2']);
+    expect(view.items.map((i) => i.imageUrl)).toEqual(['https://signed/v1?sig=x', null]);
+  });
+
   it('adminGetById 404s a missing/soft-deleted order', async () => {
     const { svc } = makeService({ existing: null });
     await expect(svc.adminGetById('gone')).rejects.toBeInstanceOf(NotFoundException);

@@ -150,7 +150,7 @@ export class AdminOrderController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get one order (with items)' })
   get(@Param('id', uuid()) id: string): Promise<AdminOrderView> {
-    return this.orders.adminGetById(id);
+    return this.orders.adminGetForDisplay(id);
   }
 
   @Get(':id/customer-reputation')

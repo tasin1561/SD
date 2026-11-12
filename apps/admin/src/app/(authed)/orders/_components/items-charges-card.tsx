@@ -3,7 +3,7 @@
 import { Calculator, Receipt } from 'lucide-react';
 import type { ReactElement } from 'react';
 import type { OrderView } from '@skydrop/api-client';
-import { Money } from '@skydrop/ui/components';
+import { Money, ProductThumb } from '@skydrop/ui/components';
 import { Button } from '@skydrop/ui/app/button';
 import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
@@ -73,6 +73,7 @@ export function ItemsChargesCard({
       <Table caption={t('orderDetail.itemsCaption')}>
         <THead>
           <Tr>
+            <Th className="od-thumb-cell" aria-label={t('orderDetail.col.picture')} />
             <Th>{t('orderDetail.col.sku')}</Th>
             <Th>{t('orderDetail.col.product')}</Th>
             <Th align="right">{t('orderDetail.col.qty')}</Th>
@@ -83,6 +84,11 @@ export function ItemsChargesCard({
         <TBody>
           {order.items.map((item) => (
             <Tr key={item.id}>
+              <Td className="od-thumb-cell">
+                {/* Presigned at read time (adminGetForDisplay) — the
+                    stored snapshot URL is dead since the bucket went private. */}
+                <ProductThumb src={item.imageUrl} size={40} />
+              </Td>
               <Td>
                 <span className="sk-ident">{item.skuCode}</span>
               </Td>

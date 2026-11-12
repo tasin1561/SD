@@ -2085,6 +2085,22 @@ export class OrderService {
     return { ...order, resellerTermsVersionNumber };
   }
 
+  /**
+   * The staff order page's read: `adminGetById` with each line's picture
+   * resolved LIVE, the same shape as the seller's `loadOwnedForDisplay`
+   * (the stored snapshot URL has resolved for nobody since the bucket went
+   * private). Separate so the assistant's read, which shows no pictures,
+   * does no presigning.
+   */
+  async adminGetForDisplay(id: string): Promise<AdminOrderView> {
+    const order = await this.adminGetById(id);
+    const thumbs = await this.catalog.thumbnailUrlsByVariant(order.items.map((i) => i.variantId));
+    return {
+      ...order,
+      items: order.items.map((i) => ({ ...i, imageUrl: thumbs.get(i.variantId) ?? null })),
+    };
+  }
+
   /** Seller-visible timeline. Internal-only events are filtered out. */
   async listEvents(sellerId: string, orderId: string): Promise<OrderEventView[]> {
     await this.loadOwned(sellerId, orderId); // ownership + 404 guard

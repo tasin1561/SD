@@ -90,6 +90,7 @@ export const orders = defineMessages({
   'orderDetail.items': ['Items ({count})', 'আইটেম ({count})', 'आइटम ({count})'],
   'orderDetail.itemsCaption': ['Items', 'আইটেম', 'आइटम'],
   'orderDetail.col.sku': ['SKU', 'SKU', 'SKU'],
+  'orderDetail.col.picture': ['Picture', 'ছবি', 'तस्वीर'],
   'orderDetail.col.product': ['Product', 'পণ্য', 'सामान'],
   'orderDetail.col.qty': ['Qty', 'পরিমাণ', 'तादाद'],
   'orderDetail.col.reserved': ['Reserved', 'রিজার্ভ করা', 'रिज़र्व'],
