@@ -1523,6 +1523,23 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
       ],
     ),
   },
+  'courier.use_own_label_pdf': {
+    name: 'Print our own shipping label',
+    group: 'Courier connection',
+    what: 'Who draws the label on the parcel. The courier draws it from our account, so its masthead always reads Skydrop — wrong on a box a client’s own customer opens. On, we draw it instead and the client’s business name goes at the top. The AWB barcode, the destination PIN and the courier’s sort code are printed exactly as before, because that is what the courier’s hub reads to route the parcel. Our label prints no return address.',
+    example:
+      'On: a Menev Store parcel arrives with “MENEV STORE” at the top instead of the Skydrop logo.',
+    values: onOff(
+      [
+        'We draw the label; the client’s business name is the masthead.',
+        'Check the first printed parcel with the courier — a hub sorts from the label it expects, and switching back takes effect on the next booking with no deploy.',
+      ],
+      [
+        'The courier draws the label and we store their PDF, as before.',
+        'Every label says Skydrop at the top, whichever client the parcel belongs to.',
+      ],
+    ),
+  },
   'courier.delhivery_waybill_pool_refill_enabled': {
     name: 'Refill the Delhivery waybill pool automatically',
     group: 'Courier connection',

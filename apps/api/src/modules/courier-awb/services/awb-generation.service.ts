@@ -16,6 +16,7 @@ import { CourierAwbDispatchService } from './courier-awb-dispatch.service';
 import { CourierDistributionService } from '../../courier-shared/services/courier-distribution.service';
 import type { DelhiveryAwbRequest } from '../../courier-delhivery/types/delhivery.types';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
+import { renderShippingLabel } from './skydrop-label-pdf.service';
 import {
   CUSTOMER_BRAND_ORDER_SELECT,
   customerFacingBrand,
@@ -794,6 +795,107 @@ export class AwbGenerationService {
    * re-issue case (CUR-6) AND the recovery path (a prior failed attempt
    * left no current row → version 1 isCurrent).
    */
+  /**
+   * Our own label bytes, or null to use the courier's sheet.
+   *
+   * Null — not a throw — on every "not now" and every "not enough": the
+   * caller falls back, so the worst case is the label we have always
+   * shipped rather than a parcel that cannot be dispatched at all.
+   *
+   * It returns null when `courier.use_own_label_pdf` is off and when the
+   * shipment cannot be read.
+   */
+  private async ownLabelBytes(
+    shipmentId: string,
+    awbNumber: string,
+    courierCode: string,
+  ): Promise<{ bytes: Buffer; mimeType: string } | null> {
+    try {
+      const onRow = await this.prisma.client.systemSetting.findUnique({
+        where: { key: 'courier.use_own_label_pdf' },
+        select: { valueBoolean: true },
+      });
+      if (onRow?.valueBoolean !== true) return null;
+
+      const s = await this.prisma.client.shipment.findUnique({
+        where: { id: shipmentId },
+        select: {
+          shipmentNumber: true,
+          courierSortCode: true,
+          destRecipientName: true,
+          destRecipientPhoneE164: true,
+          destAddressLine1: true,
+          destAddressLine2: true,
+          destLandmark: true,
+          destCity: true,
+          destStateProvince: true,
+          destPostalCode: true,
+          items: {
+            select: { productName: true, skuCode: true, quantity: true, unitPriceInr: true },
+          },
+          orderShipments: {
+            take: 1,
+            select: {
+              order: {
+                select: {
+                  sellerOrderRef: true,
+                  paymentMode: true,
+                  codAmountInr: true,
+                  declaredValueInr: true,
+                  seller: { select: { companyName: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+      const order = s?.orderShipments[0]?.order;
+      if (s === null || order === undefined) return null;
+
+      const isCod = String(order.paymentMode).toUpperCase() === 'COD';
+      const amount = isCod ? order.codAmountInr : order.declaredValueInr;
+      const items = s.items.map((i) => ({
+        productName: i.productName,
+        skuCode: i.skuCode,
+        quantity: i.quantity,
+        lineTotalInr: money(mul(i.unitPriceInr, i.quantity)),
+      }));
+
+      const bytes = await renderShippingLabel({
+        // The SELLER's name is the masthead — the whole point.
+        sellerName: order.seller.companyName,
+        awbNumber,
+        courierName: courierCode,
+        sortCode: s.courierSortCode,
+        destinationPin: s.destPostalCode,
+        recipientName: s.destRecipientName,
+        recipientPhone: s.destRecipientPhoneE164,
+        recipientAddress: [
+          s.destAddressLine1,
+          s.destAddressLine2,
+          s.destLandmark,
+          s.destCity,
+          s.destStateProvince,
+        ]
+          .filter((p): p is string => p !== null && p !== '')
+          .join(', '),
+        isCod,
+        amountInr: money(amount),
+        items,
+        totalInr: money(amount),
+        // Theirs, not ours — our shipment number means nothing to the
+        // seller answering "where is my order".
+        orderReference: order.sellerOrderRef ?? s.shipmentNumber,
+        generatedAt: new Date(),
+      });
+      return { bytes, mimeType: 'application/pdf' };
+    } catch {
+      // Any surprise at all — a shape change, a null we did not expect —
+      // and the courier's label still ships the parcel.
+      return null;
+    }
+  }
+
   private async uploadAndPersistLabel(
     shipmentId: string,
     awbNumber: string,
@@ -811,15 +913,27 @@ export class AwbGenerationService {
       // always Delhivery and the hardcoded call was harmless; the moment
       // a parcel can fail over, asking Delhivery for a Shiprocket
       // waybill's label returns nothing and the parcel ships unlabelled.
-      const label = await this.dispatch.fetchLabel(
-        {
-          courierCode,
-          courierAccountId,
-          awbNumber,
-          courierShipmentId,
-        },
-        courierActor.runner('awb-generation', shipmentId),
-      );
+      // OUR OWN LABEL (owner, 2026-11-12), when `courier.use_own_label_pdf`
+      // says so. The courier's own sheet is rendered from OUR account, so
+      // its masthead always reads Skydrop — and the parcel the customer
+      // opens has to carry the SELLER's brand.
+      //
+      // A render failure falls back to the courier's label rather than
+      // throwing: the switch exists to change how the sheet LOOKS, and it
+      // must not become a new way for dispatch to fail. A parcel with the
+      // courier's label ships; a parcel with no label does not.
+      const own = await this.ownLabelBytes(shipmentId, awbNumber, courierCode);
+      const label =
+        own ??
+        (await this.dispatch.fetchLabel(
+          {
+            courierCode,
+            courierAccountId,
+            awbNumber,
+            courierShipmentId,
+          },
+          courierActor.runner('awb-generation', shipmentId),
+        ));
       const mimeType = AwbGenerationService.labelMimeType(label.bytes, label.mimeType);
       const labelVersion = await this.nextLabelVersion(shipmentId);
       const spacesKey = `awb-labels/${shipmentId}/v${labelVersion}-${awbNumber}.pdf`;
@@ -998,4 +1112,23 @@ export class AwbGenerationService {
       return null;
     }
   }
+}
+
+/**
+ * Rupees as the label prints them: grouped, two decimals, never a bare
+ * `Decimal.toString()` (which gives "1050" where the sheet wants
+ * "1,050.00"). Indian digit grouping, because the person reading it is
+ * in India — 1,05,000.00 rather than 105,000.00.
+ */
+function money(v: Prisma.Decimal | null): string {
+  const n = v === null ? 0 : Number(v);
+  return new Intl.NumberFormat('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
+/** Line total, kept in Decimal so the money never round-trips a float. */
+function mul(unit: Prisma.Decimal | null, qty: number): Prisma.Decimal {
+  return (unit ?? new Prisma.Decimal(0)).mul(qty);
 }

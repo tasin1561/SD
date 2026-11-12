@@ -1103,6 +1103,15 @@ const systemSettings: SystemSettingSeed[] = [
       'OFF = every Delhivery create sends the seller and return keys present-but-empty (today\'s behaviour), which makes Delhivery print the pickup location as a nameless "Seller:" block on the label. ON = those keys are left out when blank; a real value (e.g. the member store name) is always sent. Untested against the live create endpoint: after turning on, the next booking is the test, and if Delhivery rejects it, turn this back off.',
   },
   {
+    key: 'courier.use_own_label_pdf',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Print our own shipping label',
+    description:
+      "OFF = the courier renders the label and we store their PDF (today's behaviour). ON = we render it ourselves, so the masthead carries the SELLER's business name instead of Skydrop's — the courier's own sheet is drawn from our account and always says Skydrop, which is wrong on a parcel a seller's customer opens. OFF is the safe default: a hub sorts from the label it expects, so the first parcels printed this way should be checked with the courier before this is left on. Turning it off is instant and needs no deploy — if a hub ever refuses one of these, flip this and the next booking is back on the courier's own sheet. Our label deliberately prints NO return address (owner, 2026-11-12): an RTO is routed from the AWB, not from printed text.",
+  },
+  {
     key: 'courier.delhivery_waybill_pool_refill_enabled',
     category: 'courier',
     valueType: SettingValueType.BOOLEAN,
