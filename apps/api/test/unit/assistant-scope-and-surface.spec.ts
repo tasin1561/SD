@@ -163,9 +163,18 @@ describe('SSE framing', () => {
 
 describe('the assistant is READ-ONLY (phase A)', () => {
   const dir = join(__dirname, '../../src/modules/assistant');
+  // `knowledge/generated/` is DATA (help text quoted from the docs), not code:
+  // it legitimately contains words like transitionStatus in prose. It has no
+  // imports and nothing executes from it, so it is not scanned for calls.
   const sources = (d: string): string[] =>
     readdirSync(d, { withFileTypes: true }).flatMap((e) =>
-      e.isDirectory() ? sources(join(d, e.name)) : e.name.endsWith('.ts') ? [join(d, e.name)] : [],
+      e.isDirectory()
+        ? e.name === 'generated'
+          ? []
+          : sources(join(d, e.name))
+        : e.name.endsWith('.ts')
+          ? [join(d, e.name)]
+          : [],
     );
 
   it('no assistant source calls a write on another domain’s service', () => {

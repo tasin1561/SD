@@ -8,11 +8,13 @@ import { Fragment, type MouseEvent, type ReactElement, type ReactNode } from 're
  * piece of source text reaches the DOM as a React text node, so `<script>`
  * and `<img onerror>` are inert characters. A link is live only when its
  * target is `https://` (a `javascript:`/`data:` target is shown as plain
- * text), and the model can never link to an in-app route — the only in-app
- * links are the order numbers and waybills THIS file recognises itself.
+ * text). The one other live link is a SAME-ORIGIN RELATIVE PATH such as
+ * `/orders` (see `safeRoute`): it navigates inside the console. Nothing that
+ * could leave the origin or carry a scheme is ever live.
  *
  * Supported: paragraphs, **bold**, bullet and numbered lists, `inline code`,
- * fenced code, [text](https://…) links, bare https:// links, # headings
+ * fenced code, [text](https://…) and [text](/in-app/path) links, bare
+ * https:// links, # headings
  * (shown as bold lines).
  */
 
@@ -21,6 +23,7 @@ export type Inline =
   | { readonly k: 'bold'; readonly c: readonly Inline[] }
   | { readonly k: 'code'; readonly v: string }
   | { readonly k: 'link'; readonly href: string; readonly v: string }
+  | { readonly k: 'route'; readonly href: string; readonly v: string }
   | { readonly k: 'entity'; readonly kind: 'order' | 'awb'; readonly v: string };
 
 export type Block =
@@ -37,6 +40,23 @@ const INLINE =
 
 function safeHref(url: string): boolean {
   return /^https:\/\/[^\s]+$/i.test(url);
+}
+
+/**
+ * A link target that stays on THIS origin: exactly one leading `/` followed
+ * by something that is not `/` or `\` (so `//evil.com` and `/\evil.com`,
+ * which browsers read as another host, are out), with no whitespace or
+ * control character, raw or percent-encoded, no backslash anywhere, and no
+ * `:` in the path (no scheme can hide in it). Anything else is shown as
+ * plain text.
+ */
+export function safeRoute(url: string): boolean {
+  if (!/^\/[^/\\]/.test(url)) return false;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u0020\u007f-\u009f\\]/.test(url)) return false;
+  if (/%(?:[01][0-9a-f]|7f)/i.test(url)) return false;
+  const path = url.split(/[?#]/)[0] ?? '';
+  return !path.includes(':');
 }
 
 export function parseInline(src: string): Inline[] {
@@ -65,6 +85,7 @@ export function parseInline(src: string): Inline[] {
       const url = m[4] ?? '';
       // An unsafe target is shown exactly as written: text, never a link.
       if (safeHref(url)) out.push({ k: 'link', href: url, v: label });
+      else if (safeRoute(url)) out.push({ k: 'route', href: url, v: label });
       else pushText(m[3]);
     } else if (m[5] !== undefined) {
       const trail = /[.,;:!?]+$/.exec(m[5]);
@@ -146,6 +167,14 @@ export interface MarkdownProps {
   readonly onNavigate?: ((href: string) => void) | undefined;
 }
 
+function navigateOnClick(props: MarkdownProps, href: string) {
+  return (e: MouseEvent<HTMLAnchorElement>): void => {
+    if (!props.onNavigate || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    props.onNavigate(href);
+  };
+}
+
 function renderInline(
   nodes: readonly Inline[],
   props: MarkdownProps,
@@ -170,13 +199,20 @@ function renderInline(
             {n.v}
           </a>
         );
+      case 'route':
+        return (
+          <a
+            key={key}
+            href={n.href}
+            className="sk-ai-route"
+            onClick={navigateOnClick(props, n.href)}
+          >
+            {n.v}
+          </a>
+        );
       case 'entity': {
         const href = props.entityHref(n.v);
-        const onClick = (e: MouseEvent<HTMLAnchorElement>): void => {
-          if (!props.onNavigate || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
-          e.preventDefault();
-          props.onNavigate(href);
-        };
+        const onClick = navigateOnClick(props, href);
         return (
           <a key={key} href={href} className="sk-ai-entity" data-kind={n.kind} onClick={onClick}>
             {n.v}

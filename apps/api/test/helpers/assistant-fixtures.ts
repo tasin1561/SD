@@ -14,6 +14,7 @@ import type {
 } from '../../src/modules/assistant/services/assistant-store.service';
 import { AssistantBudgetService } from '../../src/modules/assistant/services/assistant-budget.service';
 import { AssistantChatService } from '../../src/modules/assistant/services/assistant-chat.service';
+import { AssistantHelpService } from '../../src/modules/assistant/services/assistant-help.service';
 import { AssistantToolRegistry } from '../../src/modules/assistant/services/assistant-tool-registry.service';
 
 // Specs assert on behaviour; the service's own log lines are noise here.
@@ -101,7 +102,7 @@ export function fakeDeps(orders: readonly FakeOrder[] = []): AssistantToolDeps {
     callQueue: {
       stats: async () => ({ byStatus: { PENDING: 3 }, openTotal: 3, assignedByAgent: [] }),
     },
-    help: { search: () => [] },
+    help: new AssistantHelpService(),
   };
 }
 

@@ -120,19 +120,54 @@
   visibility: visible;
   transition-delay: 0s;
 }
+/* The phone's bottom-sheet pieces are invisible beside the desktop panel. */
+.sk-ai-backdrop,
+.sk-ai-grab {
+  display: none;
+}
 @media (max-width: 640px) {
-  .sk-ai-panel {
+  /* A bottom sheet, not the whole screen: the dimmed page stays visible above it. */
+  .sk-ai-backdrop {
+    display: block;
+    position: fixed;
     inset: 0;
+    z-index: 59;
+    background: var(--scrim);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--dur) var(--ease-out);
+  }
+  .sk-ai-backdrop[data-open='1'] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .sk-ai-panel {
+    inset: auto 0 0 0;
     width: 100%;
-    height: 100dvh;
-    border: 0;
-    border-radius: 0;
-    padding-top: env(safe-area-inset-top);
+    height: 85dvh;
+    max-height: 85dvh;
+    border-width: 1px 0 0;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }
   .sk-ai-panel[data-open='0'] {
-    transform: translateY(24px);
+    transform: translateY(100%);
+  }
+  .sk-ai-grab {
+    display: block;
+    flex: none;
+    width: 40px;
+    height: 4px;
+    margin: var(--sp-2) auto 0;
+    border-radius: 2px;
+    background: var(--line-strong);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-ai-backdrop,
+  .sk-ai-panel {
+    transition-duration: 0.01ms;
   }
 }
 

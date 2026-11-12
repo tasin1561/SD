@@ -15,6 +15,8 @@ describe('the tool list is filtered per request, by audience AND permission', ()
         'get_my_wallet_summary',
         'track_my_shipment',
         'search_help',
+        'explain_error',
+        'find_page',
       ]),
     );
     expect(n).not.toContain('get_order');
@@ -25,7 +27,13 @@ describe('the tool list is filtered per request, by audience AND permission', ()
 
   it('a store user is offered store tools — and no seller or staff tool', () => {
     const n = names(storeScope());
-    expect(n).toEqual(['get_my_store_order', 'list_my_store_orders', 'search_help']);
+    expect(n).toEqual([
+      'explain_error',
+      'find_page',
+      'get_my_store_order',
+      'list_my_store_orders',
+      'search_help',
+    ]);
     for (const seller of [
       'get_my_order',
       'list_my_recent_orders',
@@ -39,12 +47,24 @@ describe('the tool list is filtered per request, by audience AND permission', ()
 
   it('an associate gets the store reads (scoped to OWN by the viewer) and nothing else', () => {
     const n = names(storeScope({ audience: 'ASSOCIATE', orderScope: 'OWN' }));
-    expect(n).toEqual(['get_my_store_order', 'list_my_store_orders', 'search_help']);
+    expect(n).toEqual([
+      'explain_error',
+      'find_page',
+      'get_my_store_order',
+      'list_my_store_orders',
+      'search_help',
+    ]);
   });
 
   it('staff are offered staff tools — and no seller or store tool', () => {
     const n = names(staffScope());
-    expect(n).toEqual(['get_ops_queue_counts', 'get_order', 'search_help']);
+    expect(n).toEqual([
+      'explain_error',
+      'find_page',
+      'get_ops_queue_counts',
+      'get_order',
+      'search_help',
+    ]);
   });
 
   it('a tool is withheld from a caller who lacks its permission key', () => {
@@ -53,7 +73,11 @@ describe('the tool list is filtered per request, by audience AND permission', ()
     expect(names(staffScope({ permissions: ['orders.view'] }))).not.toContain(
       'get_ops_queue_counts',
     );
-    expect(names(scope({ permissions: [] }))).toEqual(['search_help']);
+    expect(names(scope({ permissions: [] }))).toEqual([
+      'explain_error',
+      'find_page',
+      'search_help',
+    ]);
   });
 
   it('the tools sent to the API are the filtered list, sorted, with the cache breakpoint on the last', () => {

@@ -26,6 +26,7 @@ import {
 } from 'react';
 import { useLocale, useUiT } from '../i18n-client';
 import { readLastError } from '../last-error';
+import { trapTab, useInertBackground, useIsPhone } from './phone-sheet';
 import {
   ASSISTANT_API_BASE,
   orderSearchHref,
@@ -201,6 +202,11 @@ export function AssistantWidget({
   const stickRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
   const wasOpen = useRef(false);
+  const panelRef = useRef<HTMLElement>(null);
+  const isPhone = useIsPhone();
+  // The phone sheet covers the whole screen, so it is modal; the desktop side panel is not.
+  const modal = open && isPhone;
+  useInertBackground(panelRef, modal);
 
   const entityHref = useCallback((v: string) => orderSearchHref(consoleName, v), [consoleName]);
 
@@ -420,6 +426,7 @@ export function AssistantWidget({
   };
 
   const onPanelKey = (e: KeyboardEvent<HTMLElement>): void => {
+    if (modal && trapTab(e, panelRef.current)) return;
     if (e.key === 'Escape') {
       e.stopPropagation();
       closePanel();
@@ -443,6 +450,15 @@ export function AssistantWidget({
     if (window.matchMedia('(max-width: 640px)').matches) closePanel();
   };
 
+  // A link inside an answer: navigate in the console, and on a phone drop
+  // the sheet that would otherwise cover the page it just opened.
+  const followLink = navigate
+    ? (href: string): void => {
+        navigate(href);
+        if (isPhone) closePanel();
+      }
+    : undefined;
+
   const suggestions = quickActionsFor(consoleName, pathname, readLastError() !== null);
 
   return (
@@ -463,16 +479,29 @@ export function AssistantWidget({
         <span>{t('ui.assistant.launcher')}</span>
       </button>
 
+      {mounted && isPhone ? (
+        // The dimmed page behind the phone's bottom sheet; a tap on it closes the sheet.
+        <div
+          className="sk-ai-backdrop"
+          data-open={open ? '1' : '0'}
+          data-sk-ai-keep=""
+          aria-hidden="true"
+          onClick={closePanel}
+        />
+      ) : null}
+
       {mounted ? (
         <section
+          ref={panelRef}
           className="sk-ai-panel"
           role="dialog"
-          aria-modal="false"
+          aria-modal={modal ? 'true' : 'false'}
           aria-labelledby={titleId}
           data-open={open ? '1' : '0'}
           inert={!open}
           onKeyDown={onPanelKey}
         >
+          <div className="sk-ai-grab" aria-hidden="true" />
           <header className="sk-ai-head">
             {view === 'history' ? (
               <button
@@ -632,7 +661,7 @@ export function AssistantWidget({
                             </span>
                           </span>
                         ) : (
-                          <Markdown text={m.text} entityHref={entityHref} onNavigate={navigate} />
+                          <Markdown text={m.text} entityHref={entityHref} onNavigate={followLink} />
                         )}
                         {m.role === 'assistant' &&
                         m.status === 'streaming' &&

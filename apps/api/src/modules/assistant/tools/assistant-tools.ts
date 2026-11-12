@@ -42,7 +42,7 @@ export interface AssistantToolDeps {
   readonly wallet: Pick<WalletService, 'balanceCached'>;
   readonly storeOrders: Pick<StoreOrdersService, 'list' | 'detail'>;
   readonly callQueue: Pick<AdminCallQueueService, 'stats'>;
-  readonly help: Pick<AssistantHelpService, 'search'>;
+  readonly help: Pick<AssistantHelpService, 'search' | 'explainError' | 'findPage'>;
 }
 
 const NOT_YOURS = 'No order of yours matches that number.';
@@ -351,7 +351,7 @@ export function buildAssistantTools(deps: AssistantToolDeps): readonly Assistant
     {
       name: 'search_help',
       description:
-        'Search the help text for this console by keyword and return the best matches. Use this for any "how do I" or "what does X mean" question before answering.',
+        'Search the knowledge base for this console: step-by-step workflow guides, plain definitions of terms (AWB, NDR, RTO, COD ...) and the console\'s own help text. Returns up to 5 short passages. Use it for any "how do I", "what does X mean" or "what happens next" question before answering. The knowledge is in English: send English keywords whatever language the person wrote in.',
       audience: ['STAFF', 'SELLER', 'STORE', 'ASSOCIATE'],
       permission: null,
       mirrors: null,
@@ -361,7 +361,7 @@ export function buildAssistantTools(deps: AssistantToolDeps): readonly Assistant
           query: {
             type: 'string',
             description:
-              'A few keywords in English, for example "withdraw money" or "cancel order".',
+              'A few English keywords, for example "withdraw money", "failed delivery" or "address check score".',
             minLength: 2,
             maxLength: 120,
           },
@@ -371,8 +371,71 @@ export function buildAssistantTools(deps: AssistantToolDeps): readonly Assistant
       },
       async run(scope, input) {
         const hits = deps.help.search(scope.audience, String(input.query));
-        if (hits.length === 0) return { results: [], note: 'Nothing found in the help text.' };
+        if (hits.length === 0) {
+          return {
+            results: [],
+            note: 'Nothing found. Say you are not sure and suggest raising a support ticket.',
+          };
+        }
         return { results: hits };
+      },
+    },
+    {
+      name: 'explain_error',
+      description:
+        'Explain an error code the person saw, such as PACK_VERIFICATION_REQUIRED (shown on screen as [CODE] message). Returns what it means, the area of the product it belongs to, and matching workflow guides. Call this FIRST when the page context shows a last error or the person pastes a [CODE]. Then use search_help for the steps to fix it.',
+      audience: ['STAFF', 'SELLER', 'STORE', 'ASSOCIATE'],
+      permission: null,
+      mirrors: null,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          code: {
+            type: 'string',
+            description:
+              'The error code only, in capitals with underscores, for example ORDER_NOT_FOUND. No brackets.',
+            minLength: 3,
+            maxLength: 80,
+            pattern: '^[A-Z][A-Z0-9_]{2,}$',
+          },
+        },
+        required: ['code'],
+        additionalProperties: false,
+      },
+      async run(scope, input) {
+        return deps.help.explainError(scope.audience, String(input.code));
+      },
+    },
+    {
+      name: 'find_page',
+      description:
+        'Find the page of THIS console where something is done, and get its link. Returns up to 5 pages the person is allowed to open, each with a route such as /orders. Use it whenever your answer mentions a page or a step done in the app, then write the route as a markdown link, for example [Orders](/orders). Never write a route this tool did not return.',
+      audience: ['STAFF', 'SELLER', 'STORE', 'ASSOCIATE'],
+      permission: null,
+      mirrors: null,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description:
+              'English keywords for the page, for example "orders", "wallet withdraw", "call queue" or "tickets".',
+            minLength: 2,
+            maxLength: 80,
+          },
+        },
+        required: ['query'],
+        additionalProperties: false,
+      },
+      async run(scope, input) {
+        const pages = deps.help.findPage(scope.audience, scope.permissions, String(input.query));
+        if (pages.length === 0) {
+          return {
+            pages: [],
+            note: 'No page you can open matches. Describe where to look without a link, or suggest raising a support ticket.',
+          };
+        }
+        return { pages };
       },
     },
   ];

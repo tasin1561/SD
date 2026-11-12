@@ -49,9 +49,11 @@ describe('every in-process worker consults the gate', () => {
    * containing `new Worker(`.
    */
   const root = resolve(__dirname, '../..');
-  const files = globSync('src/modules/**/*.ts', { cwd: root }).filter((f) =>
-    /new Worker\s*(<[^>]*>)?\s*\(/.test(readFileSync(resolve(root, f), 'utf8')),
-  );
+  // `knowledge/generated/` is quoted documentation (DATA), not code: its prose
+  // mentions `new Worker(` and must not be taken for a worker.
+  const files = globSync('src/modules/**/*.ts', { cwd: root })
+    .filter((f) => !f.includes('/knowledge/generated/'))
+    .filter((f) => /new Worker\s*(<[^>]*>)?\s*\(/.test(readFileSync(resolve(root, f), 'utf8')));
 
   it('finds the workers to check', () => {
     // Guards against the glob silently matching nothing, which would
@@ -96,9 +98,11 @@ describe('every in-process worker consults the gate', () => {
  */
 describe('every in-process worker reports its failures', () => {
   const root = resolve(__dirname, '../..');
-  const files = globSync('src/modules/**/*.ts', { cwd: root }).filter((f) =>
-    /new Worker\s*(<[^>]*>)?\s*\(/.test(readFileSync(resolve(root, f), 'utf8')),
-  );
+  // `knowledge/generated/` is quoted documentation (DATA), not code: its prose
+  // mentions `new Worker(` and must not be taken for a worker.
+  const files = globSync('src/modules/**/*.ts', { cwd: root })
+    .filter((f) => !f.includes('/knowledge/generated/'))
+    .filter((f) => /new Worker\s*(<[^>]*>)?\s*\(/.test(readFileSync(resolve(root, f), 'utf8')));
 
   it('finds the workers to check', () => {
     expect(files.length).toBeGreaterThanOrEqual(16);

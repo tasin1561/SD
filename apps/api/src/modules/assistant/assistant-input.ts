@@ -42,6 +42,9 @@ export function validateToolInput(schema: ToolInputSchema, raw: unknown): Record
       if (prop.maxLength !== undefined && v.length > prop.maxLength) {
         throw new ToolError('INVALID_INPUT', `"${name}" is too long.`);
       }
+      if (prop.pattern !== undefined && !new RegExp(prop.pattern).test(v)) {
+        throw new ToolError('INVALID_INPUT', `"${name}" has the wrong format.`);
+      }
       if (prop.enum !== undefined && !prop.enum.includes(v)) {
         throw new ToolError('INVALID_INPUT', `"${name}" must be one of: ${prop.enum.join(', ')}.`);
       }

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { render } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render } from '@testing-library/react';
 import { Markdown, orderSearchHref, type AssistantConsole } from '@skydrop/ui/app/assistant';
 
 const view = (text: string, console_: AssistantConsole = 'admin') =>
@@ -28,9 +28,45 @@ describe('assistant markdown is inert', () => {
     expect(a[0]?.getAttribute('rel')).toContain('noopener');
   });
 
-  it('never lets the model link into the app', () => {
-    const { container } = view('[go](/wallet) [x](//evil.test)');
+  it('makes a same-origin relative path a live in-app link', () => {
+    const { container } = view('Open [Orders](/orders) or [one](/orders?search=SD-1).');
+    const a = container.querySelectorAll('a');
+    expect(a).toHaveLength(2);
+    expect(a[0]?.getAttribute('href')).toBe('/orders');
+    expect(a[0]?.textContent).toBe('Orders');
+    expect(a[1]?.getAttribute('href')).toBe('/orders?search=SD-1');
+    // It stays inside the console: no new tab, no external-link treatment.
+    expect(a[0]?.getAttribute('target')).toBeNull();
+  });
+
+  it('navigates in the console (no reload) when a navigate handler is given, and lets modified clicks through', () => {
+    const go = vi.fn();
+    const { container } = render(
+      <Markdown text="[Wallet](/wallet)" entityHref={(v) => v} onNavigate={go} />,
+    );
+    const a = container.querySelector('a') as HTMLAnchorElement;
+    fireEvent.click(a);
+    expect(go).toHaveBeenCalledWith('/wallet');
+    fireEvent.click(a, { ctrlKey: true });
+    expect(go).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['protocol-relative', '[x](//evil.com)'],
+    ['backslash host', '[x](/\\evil.com)'],
+    ['javascript scheme', '[x](javascript:alert(1))'],
+    ['encoded newline then scheme', '[x](/orders%0ajavascript:)'],
+    ['data scheme', '[x](data:text/html,hi)'],
+    ['http scheme', '[x](http://evil.com)'],
+    ['scheme hidden in a path', '[x](/a:javascript:alert(1))'],
+    ['encoded carriage return', '[x](/orders%0Dfoo)'],
+    ['encoded null', '[x](/orders%00)'],
+    ['bare root', '[x](/)'],
+    ['relative without a slash', '[x](orders)'],
+  ])('keeps %s inert text', (_n, md) => {
+    const { container } = view(md);
     expect(container.querySelector('a')).toBeNull();
+    expect(container.textContent).toContain(md.slice(1, md.indexOf(']')));
   });
 
   it('renders bold, lists, inline code and paragraphs', () => {

@@ -37,6 +37,8 @@ export interface ToolProperty {
   readonly minimum?: number;
   readonly maximum?: number;
   readonly enum?: readonly string[];
+  /** A regular expression the (trimmed) value must match in full. Enforced by us; not sent to the API. */
+  readonly pattern?: string;
 }
 
 export interface ToolInputSchema {

@@ -1,309 +1,263 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { Injectable } from '@nestjs/common';
 import type { AssistantAudience } from '@skydrop/db';
+import { domainLabel, domainVisibleTo, firstVisibleDomain } from '../knowledge/domains';
+import { tokenize } from '../knowledge/generator/parse';
+import { defaultKnowledge, type ConsoleKey, type KnowledgeBase } from '../knowledge/knowledge-base';
+import type { GuideAudience } from '../knowledge/knowledge.types';
+
+// The pure parsers moved to `knowledge/generator/parse.ts` (no filesystem).
+// Re-exported so existing imports keep working.
+export {
+  parseMessageFile,
+  parseSettingGuide,
+  readStringLiteral,
+  tokenize,
+} from '../knowledge/generator/parse';
+
+export type HelpSource = 'guide' | 'glossary' | 'portal-text' | 'setting-guide' | 'internal-docs';
 
 export interface HelpHit {
   readonly title: string;
   readonly text: string;
-  /** The Bangla half, when the source has one (i18n catalogues do). */
-  readonly textBn?: string;
-  readonly source: 'portal-text' | 'setting-guide' | 'internal-docs';
+  readonly source: HelpSource;
 }
 
-interface HelpEntry extends HelpHit {
-  readonly haystack: string;
-  readonly titleLower: string;
+export interface PageHit {
+  readonly route: string;
+  readonly title: string;
+}
+
+export interface ErrorExplanation {
+  readonly found: boolean;
+  readonly code: string;
+  readonly area?: string;
+  /** The text the person saw. `{…}` marks a value that varies. Null when it varies entirely. */
+  readonly message?: string | null;
+  readonly guides?: ReadonlyArray<{ readonly title: string; readonly summary: string }>;
+  readonly note?: string;
+}
+
+interface Entry extends HelpHit {
+  readonly words: string;
+  readonly titleWords: string;
+  readonly boost: number;
 }
 
 /**
  * WHERE each audience's help comes from. This table IS the access
- * boundary for `search_help`: an audience can only ever search the
- * sources listed against it, so a seller cannot reach staff text by any
- * query. Internal design docs (`docs/invariants`) and the settings guide
- * are STAFF-ONLY. `assistant-help-scoping.spec.ts` pins it.
+ * boundary for `search_help`, `explain_error` and `find_page`: an audience
+ * can only ever reach the sources listed against it, so a seller cannot
+ * reach staff text by any query. The settings guide and the internal
+ * design docs are STAFF-ONLY. `assistant-help-scoping.spec.ts` pins it.
  */
 export const HELP_SOURCES: Readonly<
   Record<
     AssistantAudience,
     {
-      readonly messageDirs: readonly string[];
+      /** Whose message catalogue and page map. */
+      readonly console: ConsoleKey;
+      /** Which guide audience this audience belongs to. */
+      readonly guideAudience: GuideAudience;
       readonly settingGuide: boolean;
       readonly internalDocs: boolean;
     }
   >
 > = {
-  STAFF: { messageDirs: ['apps/admin/src/i18n/messages'], settingGuide: true, internalDocs: true },
-  SELLER: {
-    messageDirs: ['apps/seller/src/i18n/messages'],
-    settingGuide: false,
-    internalDocs: false,
-  },
-  STORE: {
-    messageDirs: ['apps/reseller/src/i18n/messages'],
-    settingGuide: false,
-    internalDocs: false,
-  },
+  STAFF: { console: 'admin', guideAudience: 'staff', settingGuide: true, internalDocs: true },
+  SELLER: { console: 'seller', guideAudience: 'seller', settingGuide: false, internalDocs: false },
+  STORE: { console: 'reseller', guideAudience: 'store', settingGuide: false, internalDocs: false },
   ASSOCIATE: {
-    messageDirs: ['apps/associate/src/i18n/messages'],
+    console: 'associate',
+    guideAudience: 'associate',
     settingGuide: false,
     internalDocs: false,
   },
 };
 
-const SETTING_GUIDE_FILE = 'apps/admin/src/lib/system-setting-guide.ts';
-const INTERNAL_DOCS_DIR = 'docs/invariants';
-const MIN_TEXT = 40;
-const CHUNK = 700;
-const STOP = new Set([
-  'the',
-  'a',
-  'an',
-  'is',
-  'are',
-  'to',
-  'of',
-  'in',
-  'on',
-  'for',
-  'and',
-  'or',
-  'how',
-  'do',
-  'i',
-  'my',
-  'what',
-  'can',
-  'me',
-  'it',
-  'this',
-  'that',
-  'with',
-  'be',
-  'you',
-  'your',
-  'does',
-]);
+/** Trim limits per source. Guides carry the answer, so they get the most room. */
+const TRIM: Readonly<Record<HelpSource, number>> = {
+  guide: 800,
+  glossary: 300,
+  'portal-text': 400,
+  'setting-guide': 450,
+  'internal-docs': 450,
+};
+const MAX_HITS = 5;
+/** Hard budget for one search result, so a broad query cannot flood the prompt. */
+const MAX_TOTAL_CHARS = 3600;
 
-/** Reads one quoted literal starting at `i` (after whitespace). Null if there is none. */
-export function readStringLiteral(
-  src: string,
-  from: number,
-): { value: string; end: number } | null {
-  let i = from;
-  while (i < src.length && /\s/.test(src[i] ?? '')) i++;
-  const quote = src[i];
-  if (quote !== "'" && quote !== '"' && quote !== '`') return null;
-  i++;
-  let out = '';
-  while (i < src.length) {
-    const ch = src[i] ?? '';
-    if (ch === '\\') {
-      const next = src[i + 1] ?? '';
-      if (next === 'n') out += '\n';
-      else if (next === 'u' && /^[0-9a-fA-F]{4}$/.test(src.slice(i + 2, i + 6))) {
-        out += String.fromCharCode(parseInt(src.slice(i + 2, i + 6), 16));
-        i += 4;
-      } else out += next;
-      i += 2;
-      continue;
-    }
-    if (quote === '`' && ch === '$' && src[i + 1] === '{') return null;
-    if (ch === quote) return { value: out, end: i + 1 };
-    out += ch;
-    i++;
-  }
-  return null;
+function norm(text: string): string {
+  return ` ${[...text.toLowerCase().matchAll(/[\p{L}\p{N}]+/gu)].map((m) => m[0]).join(' ')} `;
 }
 
-/** `'key': ['english', 'bangla']` entries of a defineMessages() file. */
-export function parseMessageFile(src: string): Array<{ key: string; en: string; bn: string }> {
-  const out: Array<{ key: string; en: string; bn: string }> = [];
-  const re = /'([A-Za-z0-9_.-]+)':\s*\[/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(src)) !== null) {
-    const en = readStringLiteral(src, re.lastIndex);
-    if (en === null) continue;
-    let j = en.end;
-    while (j < src.length && /[\s,]/.test(src[j] ?? '')) j++;
-    const bn = readStringLiteral(src, j);
-    if (bn === null) continue;
-    out.push({ key: m[1] ?? '', en: en.value, bn: bn.value });
-  }
-  return out;
-}
-
-/** `'setting.key': { name, what, example }` entries of the settings guide. */
-export function parseSettingGuide(src: string): Array<{ key: string; text: string }> {
-  const out: Array<{ key: string; text: string }> = [];
-  const re = /^ {2}'([a-z0-9_.]+)': \{\n/gm;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(src)) !== null) {
-    const end = src.indexOf('\n  },', re.lastIndex);
-    if (end < 0) continue;
-    const body = src.slice(re.lastIndex, end);
-    const parts: string[] = [];
-    for (const field of ['name', 'what', 'example']) {
-      const at = body.search(new RegExp(`\\n? {4}${field}:`));
-      if (at < 0) continue;
-      const lit = readStringLiteral(body, body.indexOf(':', at) + 1);
-      if (lit !== null) parts.push(lit.value);
-    }
-    if (parts.length > 0) out.push({ key: m[1] ?? '', text: parts.join(' — ') });
-  }
-  return out;
-}
-
-function chunkText(text: string): string[] {
-  const pieces: string[] = [];
-  for (const para of text.split(/\n{2,}/)) {
-    const p = para.replace(/\s+/g, ' ').trim();
-    if (p.length < MIN_TEXT) continue;
-    if (p.length <= CHUNK) {
-      pieces.push(p);
-      continue;
-    }
-    let cur = '';
-    for (const sentence of p.split(/(?<=[.!?])\s+/)) {
-      if (cur.length + sentence.length > CHUNK && cur.length > 0) {
-        pieces.push(cur);
-        cur = '';
-      }
-      cur += (cur ? ' ' : '') + sentence;
-    }
-    if (cur.length >= MIN_TEXT) pieces.push(cur);
-  }
-  return pieces;
-}
-
-export function tokenize(q: string): string[] {
-  return [...q.toLowerCase().matchAll(/[\p{L}\p{N}]+/gu)]
-    .map((m) => m[0])
-    .filter((t) => t.length > 1 && !STOP.has(t));
+function trim(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
 /**
- * Keyword search over an AUDIENCE-SCOPED help index (phase A: built from
- * the portals' own message catalogues and, for staff only, the settings
- * guide and the internal docs). Built lazily from the repo checkout on
- * first use and cached per source; if the sources are not on disk (a
- * bundle without the monorepo) the index is empty and the tool says so —
- * it never falls back to a wider source.
+ * Keyword search over an AUDIENCE-SCOPED knowledge base: hand-written
+ * workflow guides, the glossary, the console's own message catalogue and,
+ * for staff only, the settings guide and the internal docs.
+ *
+ * Everything is COMMITTED data (`knowledge/`), imported like code, so it
+ * works from `dist` with no filesystem walk. The indexes under
+ * `knowledge/generated/` are regenerated by `pnpm --filter @skydrop/api
+ * assistant:knowledge`; a spec fails CI when they are stale.
  */
 @Injectable()
 export class AssistantHelpService {
-  private readonly log = new Logger(AssistantHelpService.name);
-  private readonly cache = new Map<string, readonly HelpEntry[]>();
-  private root: string | null | undefined;
+  private kb: KnowledgeBase = defaultKnowledge();
+  private readonly cache = new Map<AssistantAudience, readonly Entry[]>();
 
-  /** Point the index at a different checkout (tests). Drops anything cached. */
-  useRoot(root: string): this {
-    this.root = root;
+  /** Use a different knowledge base (tests). Drops anything cached. */
+  useKnowledge(kb: KnowledgeBase): this {
+    this.kb = kb;
     this.cache.clear();
     return this;
   }
 
-  search(audience: AssistantAudience, query: string, limit = 4): HelpHit[] {
+  search(audience: AssistantAudience, query: string, limit = MAX_HITS): HelpHit[] {
     const tokens = tokenize(query);
     if (tokens.length === 0) return [];
-    const scored: Array<{ e: HelpEntry; score: number }> = [];
+    const scored: Array<{ e: Entry; score: number }> = [];
     for (const e of this.indexFor(audience)) {
       let score = 0;
+      let all = true;
       for (const t of tokens) {
-        if (e.haystack.includes(t)) score += 1;
-        if (e.titleLower.includes(t)) score += 2;
+        const hit = e.words.includes(` ${t}`);
+        if (hit) score += 1;
+        else all = false;
+        if (e.titleWords.includes(` ${t}`)) score += 2;
       }
-      // Every token matching beats most tokens matching.
-      if (score > 0)
-        scored.push({ e, score: score + (tokens.every((t) => e.haystack.includes(t)) ? 3 : 0) });
+      if (score === 0) continue;
+      scored.push({ e, score: score + (all ? 3 : 0) + e.boost });
     }
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, limit).map(({ e }) => ({
-      title: e.title,
-      text: e.text.length > 600 ? `${e.text.slice(0, 600)}…` : e.text,
-      ...(e.textBn === undefined ? {} : { textBn: e.textBn.slice(0, 600) }),
-      source: e.source,
-    }));
-  }
-
-  private findRoot(): string | null {
-    if (this.root !== undefined) return this.root;
-    let dir = resolve(__dirname);
-    for (let i = 0; i < 10; i++) {
-      if (existsSync(join(dir, 'apps', 'seller', 'src', 'i18n'))) {
-        this.root = dir;
-        return dir;
-      }
-      const up = resolve(dir, '..');
-      if (up === dir) break;
-      dir = up;
+    const out: HelpHit[] = [];
+    let total = 0;
+    for (const { e } of scored.slice(0, Math.min(limit, MAX_HITS))) {
+      const text = trim(e.text, TRIM[e.source]);
+      if (total + text.length > MAX_TOTAL_CHARS && out.length > 0) break;
+      total += text.length;
+      out.push({ title: e.title, text, source: e.source });
     }
-    this.root = null;
-    this.log.warn('help sources not found on disk; search_help will return nothing');
-    return null;
+    return out;
   }
 
-  private indexFor(audience: AssistantAudience): readonly HelpEntry[] {
-    const cached = this.cache.get(audience);
-    if (cached !== undefined) return cached;
-    const entries: HelpEntry[] = [];
-    const root = this.findRoot();
-    const spec = HELP_SOURCES[audience];
-    if (root !== null) {
-      for (const rel of spec.messageDirs) entries.push(...this.messageEntries(join(root, rel)));
-      if (spec.settingGuide) entries.push(...this.guideEntries(join(root, SETTING_GUIDE_FILE)));
-      if (spec.internalDocs) entries.push(...this.docEntries(join(root, INTERNAL_DOCS_DIR)));
+  /**
+   * Explains one `[CODE]` from an API error. A code from a staff-only
+   * area answers EXACTLY like an unknown code for anyone else, so the
+   * answer does not reveal that it exists. No source path is ever returned.
+   */
+  explainError(audience: AssistantAudience, code: string): ErrorExplanation {
+    const row = this.kb.errorCodes.find((r) => r[0] === code);
+    const domain = row === undefined ? null : firstVisibleDomain(row[1], audience);
+    if (row === undefined || domain === null || !domainVisibleTo(row[1], audience)) {
+      return {
+        found: false,
+        code,
+        note: 'That code is not one this console explains. Suggest raising a support ticket with the code in it.',
+      };
     }
-    this.cache.set(audience, entries);
-    return entries;
-  }
-
-  private entry(
-    title: string,
-    text: string,
-    source: HelpHit['source'],
-    textBn?: string,
-  ): HelpEntry {
+    const guides = this.kb.guides
+      .filter(
+        (g) =>
+          this.guideVisible(g.audience, audience) &&
+          (g.errorDomains ?? []).some((p) => domain === p || domain.startsWith(`${p}-`)),
+      )
+      .slice(0, 2)
+      .map((g) => ({ title: g.title, summary: g.summary }));
     return {
-      title,
-      text,
-      source,
-      ...(textBn === undefined ? {} : { textBn }),
-      haystack: `${title} ${text}`.toLowerCase(),
-      titleLower: title.toLowerCase(),
+      found: true,
+      code,
+      area: domainLabel(domain),
+      message: row[2],
+      guides,
+      ...(row[2] === null
+        ? { note: 'The wording varies. Describe what the code area means and what to check.' }
+        : {}),
     };
   }
 
-  private messageEntries(dir: string): HelpEntry[] {
-    if (!existsSync(dir)) return [];
-    const out: HelpEntry[] = [];
-    for (const f of readdirSync(dir)) {
-      if (!f.endsWith('.ts')) continue;
-      for (const m of parseMessageFile(readFileSync(join(dir, f), 'utf8'))) {
-        // Short strings are button and column labels, not help.
-        if (m.en.length < MIN_TEXT) continue;
-        out.push(this.entry(m.key, m.en, 'portal-text', m.bn));
-      }
+  /**
+   * Pages of THIS audience's own console that match the words, limited to
+   * those the caller's permissions open. A page whose permission is not
+   * held is never returned, and detail pages (they need an id) are not
+   * offered as links.
+   */
+  findPage(
+    audience: AssistantAudience,
+    permissions: readonly string[],
+    query: string,
+    limit = MAX_HITS,
+  ): PageHit[] {
+    const tokens = tokenize(query);
+    if (tokens.length === 0) return [];
+    const pages = this.kb.pages[HELP_SOURCES[audience].console];
+    const scored: Array<{ p: PageHit; score: number }> = [];
+    for (const [route, title, permission] of pages) {
+      if (route.includes('[')) continue;
+      if (permission !== null && !permissions.includes(permission)) continue;
+      const hay = norm(`${title} ${route.replace(/[/-]/g, ' ')}`);
+      let score = 0;
+      for (const t of tokens) if (hay.includes(` ${t}`)) score += 1;
+      if (score > 0) scored.push({ p: { route, title }, score });
     }
-    return out;
+    scored.sort((a, b) => b.score - a.score || a.p.route.length - b.p.route.length);
+    return scored.slice(0, limit).map((s) => s.p);
   }
 
-  private guideEntries(file: string): HelpEntry[] {
-    if (!existsSync(file)) return [];
-    return parseSettingGuide(readFileSync(file, 'utf8')).map((g) =>
-      this.entry(g.key, g.text, 'setting-guide'),
-    );
+  private guideVisible(
+    guideAudience: readonly GuideAudience[],
+    audience: AssistantAudience,
+  ): boolean {
+    // Staff may read every audience's guides (they help those people);
+    // nobody else may read a guide that is not written for them.
+    return audience === 'STAFF' || guideAudience.includes(HELP_SOURCES[audience].guideAudience);
   }
 
-  private docEntries(dir: string): HelpEntry[] {
-    if (!existsSync(dir)) return [];
-    const out: HelpEntry[] = [];
-    for (const f of readdirSync(dir)) {
-      if (!f.endsWith('.md')) continue;
-      for (const c of chunkText(readFileSync(join(dir, f), 'utf8'))) {
-        out.push(this.entry(f.replace(/\.md$/, ''), c, 'internal-docs'));
+  private indexFor(audience: AssistantAudience): readonly Entry[] {
+    const cached = this.cache.get(audience);
+    if (cached !== undefined) return cached;
+    const spec = HELP_SOURCES[audience];
+    const entries: Entry[] = [];
+    const add = (
+      title: string,
+      text: string,
+      source: HelpSource,
+      boost: number,
+      extra = '',
+    ): void =>
+      void entries.push({
+        title,
+        text,
+        source,
+        words: norm(`${title} ${text} ${extra}`),
+        titleWords: norm(title),
+        boost,
+      });
+
+    for (const g of this.kb.guides) {
+      if (!this.guideVisible(g.audience, audience)) continue;
+      const extra = (g.keywords ?? []).join(' ');
+      for (const s of g.sections) {
+        add(`${g.title} — ${s.heading}`, s.steps.join(' '), 'guide', 3, `${g.summary} ${extra}`);
       }
     }
-    return out;
+    for (const t of this.kb.glossary) {
+      if (t.audience !== undefined && audience !== 'STAFF') {
+        if (!t.audience.includes(spec.guideAudience)) continue;
+      }
+      add(t.term, `${t.meaning} Example: ${t.example}`, 'glossary', 2);
+    }
+    for (const [key, text] of this.kb.portalText[spec.console]) {
+      add(key, text, 'portal-text', 0);
+    }
+    if (spec.settingGuide)
+      for (const [key, text] of this.kb.settings) add(key, text, 'setting-guide', 0);
+    if (spec.internalDocs)
+      for (const [key, text] of this.kb.internalDocs) add(key, text, 'internal-docs', 0);
+    this.cache.set(audience, entries);
+    return entries;
   }
 }
