@@ -92,6 +92,8 @@ import { EarlyReservationModule } from '../early-reservation/early-reservation.m
     ConfirmationTtlWorker,
     StaffJwtGuard,
   ],
-  exports: [CallOutcomeMappingService],
+  // AdminCallQueueService.stats(): read by the in-app assistant's staff
+  // `get_ops_queue_counts` tool, behind the same `callcenter.queue.view`.
+  exports: [CallOutcomeMappingService, AdminCallQueueService],
 })
 export class CallCenterModule {}

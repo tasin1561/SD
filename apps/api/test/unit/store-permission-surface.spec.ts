@@ -116,6 +116,11 @@ describe('store permission surface (RS-2)', () => {
       ...new Set(HANDLERS.filter((h) => h.permissions === 'self-service').map((h) => h.file)),
     ];
     expect(files.sort()).toEqual([
+      // The in-app assistant: having a conversation is the caller's own
+      // session. What it can LOOK UP is gated per tool by the mirrored
+      // route's key (assistant-tool-permission-parity.spec.ts), and the
+      // tool is not offered without it.
+      'store-assistant.controller.ts',
       'store-auth.controller.ts',
       'store-notification.controller.ts',
       // Which order-form FIELDS to draw. Self-service for the same

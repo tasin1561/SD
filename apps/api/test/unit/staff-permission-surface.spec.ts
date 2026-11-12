@@ -138,6 +138,9 @@ describe('staff permission surface', () => {
         // an audience is a different act and is gated, in its own
         // controller, on `notifications.broadcast`.
         'admin-notification.controller.ts',
+        // The in-app assistant: a conversation is the caller's own; what
+        // it can look up is gated per tool by the mirrored route's key.
+        'admin-assistant.controller.ts',
       ].sort(),
     );
   });

@@ -137,6 +137,12 @@ describe('seller permission surface', () => {
         // reveals no data: the answer is the same for everyone and says
         // only whether a field is on a screen.
         'seller-uat-fields.controller.ts',
+        // The in-app assistant: having a conversation is about the
+        // caller's own session. What it can LOOK UP is gated per tool, by
+        // the same permission key as the route each tool mirrors
+        // (assistant-tool-permission-parity.spec.ts), and the tool is not
+        // even offered without it.
+        'seller-assistant.controller.ts',
       ].sort(),
     );
   });

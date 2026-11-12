@@ -14,5 +14,7 @@ import { SellerTrackingService } from './services/seller-tracking.service';
   imports: [AuthCommonModule, SellerRestrictionModule],
   controllers: [SellerTrackingController],
   providers: [SellerTrackingService],
+  // Read by the in-app assistant (`track_my_shipment`), scope as argument.
+  exports: [SellerTrackingService],
 })
 export class SellerTrackingModule {}

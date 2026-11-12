@@ -1713,6 +1713,10 @@ When Claude Code implements this schema:
 
 Reference this document at every step. Do not deviate without explicit approval.
 
+### In-app AI assistant (2026-11-12, phase A — read-only)
+
+Four tables, no FKs to people (a conversation outlives its account and support session — the `audit_logs` precedent): `assistant_conversations` (audience STAFF|SELLER|STORE|ASSOCIATE, soft `owner_user_id` = `staff_users`/`seller_users`/`store_users` id by audience, `seller_id`, `store_id`, nullable `impersonated_by_staff_id`, soft delete), `assistant_messages` (APPEND-ONLY, `content` = the full block array incl. thinking blocks), `assistant_tool_calls` (audit: tool, validated input, result size, ok/error code — never the result), `assistant_usage` (one row per model response: tokens, cache tokens, `cost_usd`). Settings: `assistant.enabled`, `assistant.monthly_budget_usd`, `assistant.daily_messages_per_user`.
+
 ---
 
 *Last updated: 2026-05-14*

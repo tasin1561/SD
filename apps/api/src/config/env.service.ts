@@ -126,6 +126,13 @@ export class EnvService {
     if (this.env.SOLADDR_API_KEY.trim() !== '') return 'SOLADDR_API_KEY';
     return null;
   }
+  /** The Anthropic key for the in-app assistant; '' when unset. NEVER log it. */
+  get anthropicApiKey(): string {
+    return this.env.ANTHROPIC_API_KEY.trim();
+  }
+  get hasAnthropicApiKey(): boolean {
+    return this.anthropicApiKey !== '';
+  }
   /** Empty when env carries no URL — the client then falls back to the
    *  `address_check.base_url` setting. */
   get soladdrBaseUrl(): string {

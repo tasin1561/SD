@@ -10578,3 +10578,139 @@ model ImpersonationSession {
   @@index([endedAt])
   @@map("impersonation_sessions")
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// In-app AI assistant (2026-11-12, phase A — backend core, READ-ONLY)
+// ─────────────────────────────────────────────────────────────────────
+//
+// Four tables and NO foreign keys to the people they name. Deliberate:
+// a conversation is a record of what somebody was TOLD and what the
+// assistant READ on their behalf, so it must outlive the account, the
+// staff member and the impersonation session it refers to — the same
+// reason `audit_logs` carries soft references. Ownership is enforced in
+// the WHERE clause of every read (`audience` + `owner_user_id`), never
+// by a join.
+
+/// Which console the assistant was opened in. ASSOCIATE is a STORE user
+/// whose role resolves to OWN order scope (ASSOC-1) — a narrow store
+/// login, not a fourth identity — but it is its own audience here
+/// because the associate sees less than the store, and the tool list and
+/// the help index are decided by it.
+enum AssistantAudience {
+  STAFF     @map("staff")
+  SELLER    @map("seller")
+  STORE     @map("store")
+  ASSOCIATE @map("associate")
+
+  @@map("assistant_audience")
+}
+
+/// `USER` also carries the tool_result blocks the server sends back
+/// after a tool call (the Messages API puts them in a user turn).
+enum AssistantMessageRole {
+  USER      @map("user")
+  ASSISTANT @map("assistant")
+
+  @@map("assistant_message_role")
+}
+
+model AssistantConversation {
+  id       String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  audience AssistantAudience
+
+  /// The person: `staff_users.id`, `seller_users.id` or `store_users.id`,
+  /// by audience. A soft reference (see the block comment above).
+  ownerUserId String  @map("owner_user_id") @db.Uuid
+  /// The tenant the owner acts inside — null for staff.
+  sellerId    String? @map("seller_id") @db.Uuid
+  storeId     String? @map("store_id") @db.Uuid
+
+  /// Set when a staff member opened this INSIDE a support session: the
+  /// conversation is the impersonated user's by identity but is only
+  /// ever shown back to that staff member, never to the real owner.
+  impersonatedByStaffId String? @map("impersonated_by_staff_id") @db.Uuid
+
+  title     String?
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  messages  AssistantMessage[]
+  toolCalls AssistantToolCall[]
+  usage     AssistantUsage[]
+
+  @@index([audience, ownerUserId, updatedAt])
+  @@map("assistant_conversations")
+}
+
+/// APPEND-ONLY (like `order_events`): never UPDATEd or DELETEd. `content`
+/// is the FULL block array exactly as the API returned or accepted it —
+/// thinking blocks included — so a conversation replays unmodified.
+model AssistantMessage {
+  id             String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  conversationId String               @map("conversation_id") @db.Uuid
+  role           AssistantMessageRole
+  content        Json
+  /// True on the turn a PERSON typed (a user turn that is not a tool
+  /// result). The per-person daily cap counts these.
+  isQuestion     Boolean              @default(false) @map("is_question")
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz
+
+  conversation AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+
+  @@index([conversationId, id])
+  @@map("assistant_messages")
+}
+
+/// The audit trail of what the assistant read, for whom. Never holds the
+/// result itself — only its size — so it cannot become a second copy of
+/// somebody's customer data.
+model AssistantToolCall {
+  id                    String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  conversationId        String            @map("conversation_id") @db.Uuid
+  audience              AssistantAudience
+  callerUserId          String            @map("caller_user_id") @db.Uuid
+  sellerId              String?           @map("seller_id") @db.Uuid
+  storeId               String?           @map("store_id") @db.Uuid
+  impersonatedByStaffId String?           @map("impersonated_by_staff_id") @db.Uuid
+  toolName              String            @map("tool_name")
+  /// The model's arguments, as validated. Tool schemas carry no tenant
+  /// id and no secret, so this is safe to keep.
+  input                 Json
+  resultBytes           Int               @map("result_bytes")
+  ok                    Boolean
+  /// A short code (NOT_FOUND, INVALID_INPUT, FORBIDDEN, FAILED) — never a stack.
+  errorCode             String?           @map("error_code")
+  createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  conversation AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+
+  @@index([conversationId, createdAt])
+  @@index([callerUserId, createdAt])
+  @@map("assistant_tool_calls")
+}
+
+/// One row per model response. The budget guard sums `cost_usd` for the
+/// month and counts a user's rows for the day, so both reads are index
+/// range scans.
+model AssistantUsage {
+  id                    String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  conversationId        String            @map("conversation_id") @db.Uuid
+  audience              AssistantAudience
+  callerUserId          String            @map("caller_user_id") @db.Uuid
+  impersonatedByStaffId String?           @map("impersonated_by_staff_id") @db.Uuid
+  model                 String
+  inputTokens           Int               @map("input_tokens")
+  outputTokens          Int               @map("output_tokens")
+  cacheReadTokens       Int               @map("cache_read_tokens")
+  cacheWriteTokens      Int               @map("cache_write_tokens")
+  /// USD, computed from the rate card in force for THIS prompt's size.
+  costUsd               Decimal           @map("cost_usd") @db.Decimal(14, 8)
+  createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  conversation AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt])
+  @@index([callerUserId, createdAt])
+  @@map("assistant_usage")
+}

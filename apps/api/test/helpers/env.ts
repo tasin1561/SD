@@ -55,6 +55,8 @@ const BASE_ENV: Env = {
   CHATWOOT_HMAC_SECRET: '',
   SOLADDR_API_KEY: '',
   SOLUSTATION_ADDRESS_KEY: '',
+  // The assistant is inert (replies "not configured") with no key.
+  ANTHROPIC_API_KEY: '',
   SOLUSTATION_ADDRESS_URL: '',
   // Phase 1B #2 — bank account encryption AES key. Tests that exercise
   // encrypted-write path use this; tests that exercise the legacy

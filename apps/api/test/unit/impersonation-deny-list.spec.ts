@@ -546,6 +546,11 @@ const DELIBERATELY_ALLOWED: ReadonlyArray<readonly [string, string]> = [
     'Checking an address that is being typed. One row about an uncommitted address; no access, no money of ours, no order touched.',
   ],
   ['/store/address-check', 'The store side of the same.'],
+  [
+    '/seller/assistant',
+    'The in-app assistant is READ-ONLY: its tools only look things up, and the only rows it writes are its own conversation, usage and audit rows — never anything of theirs. Rows made in a session carry the staff member (`impersonated_by_staff_id`) and are shown only back to that staff member, never to the real owner. A read-only session still refuses it, like every POST.',
+  ],
+  ['/store/assistant', 'The store and associate side of the same.'],
 ];
 
 describe('every mutating seller/store route is decided, one way or the other', () => {

@@ -231,6 +231,13 @@ export const envSchema = z.object({
   // advice about a delivery, and a delivery that was going to be
   // attempted is still attempted.
   SOLUSTATION_ADDRESS_KEY: z.string().optional().default(''),
+
+  // --- In-app AI assistant (2026-11-12) -------------------------------
+  // Read from the process environment only; never committed, never
+  // logged. Empty is a SUPPORTED state, not a misconfiguration: the
+  // assistant replies "not configured" and the rest of the API is
+  // untouched, so the app boots (and app-module-boots passes) without it.
+  ANTHROPIC_API_KEY: z.string().optional().default(''),
   SOLUSTATION_ADDRESS_URL: z
     .union([z.string().url(), z.literal('')])
     .optional()

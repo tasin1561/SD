@@ -90,6 +90,8 @@ import { StoreWebhookService } from './services/store-webhook.service';
     StoreJwtGuard,
     StoreApiKeyGuard,
   ],
-  exports: [ResellerOrderReadService],
+  // StoreOrdersService: read by the in-app assistant's store tools with the
+  // caller's viewer (ASSOC-1 scope) as an argument.
+  exports: [ResellerOrderReadService, StoreOrdersService],
 })
 export class ResellerOrderModule {}

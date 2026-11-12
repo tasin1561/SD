@@ -15,6 +15,7 @@ import { SellerOrderDefaultsController } from './controllers/seller-order-defaul
 import { OrderReadService } from './services/order-read.service';
 import { OrderWriteService } from './services/order-write.service';
 import { OrderRecipientCorrectionService } from './services/order-recipient-correction.service';
+import { OrderAssistantReadService } from './services/order-assistant-read.service';
 import { AwaitingConfirmationService } from './services/awaiting-confirmation.service';
 import { CallQueueModule } from '../call-queue/call-queue.module';
 import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-policy.module';
@@ -91,12 +92,19 @@ import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-po
     OrderReadService,
     OrderWriteService,
     OrderRecipientCorrectionService,
+    // The in-app assistant's narrow, scope-as-argument order read.
+    OrderAssistantReadService,
     AwaitingConfirmationService,
     SellerJwtGuard,
     StaffJwtGuard,
   ],
   // OrderRecipientCorrectionService (2026-11-09): the call bench's one door to
   // correct a customer's details mid-call; it delegates to OrderService.
-  exports: [OrderReadService, OrderWriteService, OrderRecipientCorrectionService],
+  exports: [
+    OrderReadService,
+    OrderWriteService,
+    OrderRecipientCorrectionService,
+    OrderAssistantReadService,
+  ],
 })
 export class OrderModule {}

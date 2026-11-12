@@ -2032,6 +2032,39 @@ const systemSettings: SystemSettingSeed[] = [
       'Where the Solustation Address API lives. Always the public HTTPS URL even though it runs on the same server — it is a separate product with its own API, and reaching it any other way would couple two things that are deliberately only joined over HTTP. Every request to it carries our Bearer key, which is why the host it may name is allow-listed in code.',
     sellerOverridable: false,
   },
+  // In-app AI assistant (2026-11-12, phase A). Also INSERTed by the
+  // 20261112120000_ai_assistant migration — this seed is create-only on
+  // value columns, so the migration is what puts them on a deployed DB.
+  {
+    key: 'assistant.enabled',
+    category: 'assistant',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'AI assistant enabled',
+    description:
+      'Kill switch for the in-app AI assistant. When off, nobody in any console can use it and no request is sent to the AI provider; the assistant tells people it is resting and points them to the help pages. On by default.',
+    sellerOverridable: false,
+  },
+  {
+    key: 'assistant.monthly_budget_usd',
+    category: 'assistant',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '80.00',
+    displayName: 'AI assistant monthly budget (USD)',
+    description:
+      'Hard cap on what the AI assistant may cost in a calendar month (UTC), summed from the recorded usage of every answer. Once reached, the assistant stops calling the AI provider until the month turns or this is raised.',
+    sellerOverridable: false,
+  },
+  {
+    key: 'assistant.daily_messages_per_user',
+    category: 'assistant',
+    valueType: SettingValueType.INT,
+    valueInt: 60,
+    displayName: 'AI assistant messages per person per day',
+    description:
+      'How many questions one person may ask the AI assistant in a UTC day. Past it, the assistant says it is resting for them until tomorrow. Counts questions, not answers.',
+    sellerOverridable: false,
+  },
 ];
 
 async function seedSystemSettings() {

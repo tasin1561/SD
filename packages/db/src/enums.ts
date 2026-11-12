@@ -176,3 +176,6 @@ export { ResellerMoneyParty, ResellerCreditStatus } from '@prisma/client';
 export { StoreNotificationCategory } from '@prisma/client';
 // RS-7 (2026-09-19) — what a store ↔ seller dispute is about.
 export { StoreDisputeKind } from '@prisma/client';
+// 2026-11-12 — in-app AI assistant (phase A): which console a conversation
+// belongs to, and who a stored turn is from.
+export { AssistantAudience, AssistantMessageRole } from '@prisma/client';

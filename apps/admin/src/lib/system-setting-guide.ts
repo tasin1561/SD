@@ -39,7 +39,8 @@ export type SettingGroup =
   | 'Member stores'
   | 'Live chat'
   | 'Capacity'
-  | 'UAT';
+  | 'UAT'
+  | 'AI assistant';
 
 /** Page order of the groups. */
 export const SETTING_GROUP_ORDER: readonly SettingGroup[] = [
@@ -63,6 +64,7 @@ export const SETTING_GROUP_ORDER: readonly SettingGroup[] = [
   'Live chat',
   'Capacity',
   'UAT',
+  'AI assistant',
 ];
 
 export interface SettingGuide {
@@ -488,6 +490,36 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     what: 'The public web address of Solustation Address, the service that checks an address on the new order page. Always the public address even though it runs on the same server — it is a separate product, and reaching it any other way would tie the two together. Only their real host is accepted here.',
     example:
       'Leave this alone unless Solustation move the service. The key that goes with it lives in the server’s environment and is never shown or typed on this screen.',
+  },
+  'assistant.enabled': {
+    name: 'AI assistant',
+    group: 'AI assistant',
+    what: 'The kill switch for the in-app AI assistant that answers questions in every console. It only reads — it cannot change anything.',
+    example:
+      'Switch it off during an incident and the assistant stops answering everywhere at once; people see a short note and the help links instead.',
+    values: onOff(
+      [
+        'The assistant answers questions in the admin, client, member-store and associate consoles.',
+        'A client asks “where is order 1042?” and gets the answer from their own orders.',
+      ],
+      [
+        'Nobody can use the assistant and nothing is sent to the AI provider.',
+        'Everyone who opens it is told it is resting and shown the help links.',
+      ],
+    ),
+  },
+  'assistant.monthly_budget_usd': {
+    name: 'AI assistant — monthly budget',
+    group: 'AI assistant',
+    what: 'The most the assistant may cost in a calendar month, in US dollars, added up from the recorded cost of every answer. When it is reached the assistant stops until the month turns or you raise it.',
+    example:
+      'At 80, once the answers of the month have cost $80 the assistant rests for everybody and no more requests are sent.',
+  },
+  'assistant.daily_messages_per_user': {
+    name: 'AI assistant — questions per person per day',
+    group: 'AI assistant',
+    what: 'How many questions one person may ask the assistant in a day (UTC). It counts questions, not answers.',
+    example: 'At 60, the 61st question from the same person today gets the “resting” note.',
   },
   'wallet.inbound_freight_mode': {
     name: 'How Bangladesh → India freight is paid',

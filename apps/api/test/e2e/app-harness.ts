@@ -297,6 +297,10 @@ export async function resetAuthState(
   // (seller_users, wallet, remittances, settings overrides, courier
   // links, withdrawal requests), so they must be gone before
   // resetOrderState's orders truncate and before the seller wipe below.
+  // The assistant's four tables hold soft references only (no FK to a
+  // seller, staff member or store), so this could sit anywhere; it goes
+  // first so a later FK can never make it the thing that blocks a wipe.
+  await resetAssistantState(prisma);
   await resetPhase1bState(prisma);
   await resetWarehouseState(prisma);
   await resetCallCenterState(prisma);
@@ -440,6 +444,25 @@ export async function truncateWithDiagnostics(
  * `delete_rule NOT IN ('CASCADE','SET NULL')` FKs referencing sellers
  * and diff against this list.
  */
+/**
+ * Wipes the in-app assistant's tables (MUST #12). The three child tables
+ * FK-RESTRICT `assistant_conversations`; one TRUNCATE ... CASCADE takes
+ * them together, and the list is explicit rather than relying on the cascade.
+ */
+export async function resetAssistantState(prisma: PrismaClient): Promise<void> {
+  await truncateWithDiagnostics(
+    prisma,
+    'TRUNCATE TABLE ' +
+      [
+        'assistant_usage',
+        'assistant_tool_calls',
+        'assistant_messages',
+        'assistant_conversations',
+      ].join(', ') +
+      ' RESTART IDENTITY CASCADE',
+  );
+}
+
 export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
   await truncateWithDiagnostics(
     prisma,

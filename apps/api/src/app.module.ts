@@ -99,6 +99,7 @@ import { SellerWalletWithdrawalModule } from './modules/seller-wallet-withdrawal
 import { AdminSellerWalletModule } from './modules/admin-seller-wallet/admin-seller-wallet.module';
 import { AdminWalletTransferModule } from './modules/admin-wallet-transfer/admin-wallet-transfer.module';
 import { SellerTrackingModule } from './modules/seller-tracking/seller-tracking.module';
+import { AssistantModule } from './modules/assistant/assistant.module';
 import { TreasuryModule } from './modules/treasury/treasury.module';
 import { PnlCarryForwardModule } from './modules/pnl-carry-forward/pnl-carry-forward.module';
 import { BackupWatchModule } from './modules/backup-watch/backup-watch.module';
@@ -283,6 +284,7 @@ import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-
     PnlCarryForwardModule,
     BackupWatchModule,
     SellerTrackingModule,
+    AssistantModule,
     AdminReportsModule,
     AdminWebhookDeliveriesModule,
     InvoiceModule,
