@@ -89,3 +89,45 @@ describe('DelhiveryServiceabilityService.checkServiceability', () => {
     expect(r).toEqual({ serviceable: false, fromLiveApi: true });
   });
 });
+
+describe('DelhiveryLabelService.fetchSortCode', () => {
+  it('reads THIS parcel’s routing code from the packing-slip metadata', async () => {
+    // The parcel's own slip, not the generic pincode lookup: when the
+    // two disagree, the box is sorted by what is on the box.
+    const http = makeHttp({ stubMode: false });
+    http.request.mockResolvedValueOnce({ packages: [{ waybill: 'A1', sort_code: 'KLT/MDH' }] });
+    const svc = new DelhiveryLabelService(http as unknown as DelhiveryHttpService);
+    await expect(svc.fetchSortCode('A1')).resolves.toBe('KLT/MDH');
+  });
+
+  it('accepts the other spellings Delhivery has used for the key', async () => {
+    for (const key of ['sortcode', 'Sort_Code', 'SORTCODE']) {
+      const http = makeHttp({ stubMode: false });
+      http.request.mockResolvedValueOnce({ packages: [{ [key]: 'BER/MAN' }] });
+      const svc = new DelhiveryLabelService(http as unknown as DelhiveryHttpService);
+      await expect(svc.fetchSortCode('A1')).resolves.toBe('BER/MAN');
+    }
+  });
+
+  it('answers null — never throws — when the slip carries no code', async () => {
+    // A label still prints without it, carrying its own red warning. A
+    // throw here would turn a cosmetic gap into a failed dispatch.
+    const http = makeHttp({ stubMode: false });
+    http.request.mockResolvedValueOnce({ packages: [{ waybill: 'A1' }] });
+    const svc = new DelhiveryLabelService(http as unknown as DelhiveryHttpService);
+    await expect(svc.fetchSortCode('A1')).resolves.toBeNull();
+  });
+
+  it('answers null when the call itself fails', async () => {
+    const http = makeHttp({ stubMode: false }); // request throws by default
+    const svc = new DelhiveryLabelService(http as unknown as DelhiveryHttpService);
+    await expect(svc.fetchSortCode('A1')).resolves.toBeNull();
+  });
+
+  it('asks nothing in stub mode', async () => {
+    const http = makeHttp({ stubMode: true });
+    const svc = new DelhiveryLabelService(http as unknown as DelhiveryHttpService);
+    await expect(svc.fetchSortCode('A1')).resolves.toBeNull();
+    expect(http.request).not.toHaveBeenCalled();
+  });
+});

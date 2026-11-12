@@ -136,12 +136,16 @@ function draw(doc: InstanceType<typeof PDFDocument>, d: ShippingLabelData): void
   // The mark of whoever is carrying it, drawn from the carrier's own
   // artwork; a courier we hold no mark for falls back to its name.
   const mark = courierMark(d.courierName);
-  const markW = 56;
-  const namesW = CONTENT_W - 16 - (mark === null ? 52 : markW + 6);
+  const markW = 74;
+  const namesW = CONTENT_W - 16 - (mark === null ? 52 : markW + 10);
+  // Smaller than the carrier's mark (owner, 2026-11-12): the mark is
+  // what a hub hand looks for first, and two business names set larger
+  // than it fought with it for the top of the sheet.
+  //
   // Shrink to fit rather than truncate: two business names ellipsised
-  // in the middle ("MENEV ST… · MS EXP…") serve nobody, and this line
+  // in the middle ("MENEV ST… / MS EXP…") serve nobody, and this line
   // is the one thing on the sheet both parties look for.
-  let nameSize = 12;
+  let nameSize = 9;
   doc.font('Helvetica-Bold');
   while (nameSize > 7 && doc.fontSize(nameSize).widthOfString(names) > namesW) nameSize -= 0.5;
   doc
@@ -169,7 +173,7 @@ function draw(doc: InstanceType<typeof PDFDocument>, d: ShippingLabelData): void
       .fillColor('#000000');
   } else {
     try {
-      doc.image(mark, left + CONTENT_W - markW - 7, y + 11, { width: markW });
+      doc.image(mark, left + CONTENT_W - markW - 7, y + 9, { width: markW });
     } catch {
       // A mark that will not decode must not cost the whole label.
       doc

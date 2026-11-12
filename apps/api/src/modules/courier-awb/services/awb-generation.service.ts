@@ -825,6 +825,7 @@ export class AwbGenerationService {
     courierCode: string,
     stored: string | null,
     destPostalCode: string,
+    awbNumber: string,
   ): Promise<string | null> {
     const have = (stored ?? '').trim();
     if (have !== '') return have;
@@ -833,7 +834,7 @@ export class AwbGenerationService {
       // `=== 'delhivery'` at the adapter boundary, and the parity spec
       // caught this exact branch when it was written inline.
       const code = await this.dispatch.sortCodeFor(
-        { courierCode, pincode: destPostalCode },
+        { courierCode, pincode: destPostalCode, awbNumber },
         courierActor.runner('awb-generation', shipmentId),
       );
       if (code === null) return null;
@@ -935,6 +936,7 @@ export class AwbGenerationService {
           courierCode,
           s.courierSortCode,
           s.destPostalCode,
+          awbNumber,
         ),
         destinationPin: s.destPostalCode,
         recipientName: s.destRecipientName,

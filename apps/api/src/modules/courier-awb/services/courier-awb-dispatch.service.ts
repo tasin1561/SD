@@ -294,15 +294,21 @@ export class CourierAwbDispatchService {
    * or a lookup that fails, answers null and the label says so.
    */
   async sortCodeFor(
-    input: { readonly courierCode: string; readonly pincode: string },
+    input: { readonly courierCode: string; readonly pincode: string; readonly awbNumber: string },
     actor: CourierCredentialActor,
   ): Promise<string | null> {
-    if (input.courierCode === 'delhivery') {
-      const pin = await this.delhiveryPins.describePin(input.pincode, actor);
-      const code = (pin.sortCode ?? '').trim();
-      return code === '' ? null : code;
-    }
-    return null;
+    if (input.courierCode !== 'delhivery') return null;
+
+    // THIS parcel's own slip first. A pincode lookup answers for the
+    // destination in general; the slip answers for the box, and when
+    // they disagree the box is what its hub sorts by (owner,
+    // 2026-11-12). Both are read as DATA — never by parsing their PDF.
+    const fromSlip = await this.delhiveryLabel.fetchSortCode(input.awbNumber, actor);
+    if (fromSlip !== null) return fromSlip;
+
+    const pin = await this.delhiveryPins.describePin(input.pincode, actor);
+    const code = (pin.sortCode ?? '').trim();
+    return code === '' ? null : code;
   }
 
   async fetchLabel(

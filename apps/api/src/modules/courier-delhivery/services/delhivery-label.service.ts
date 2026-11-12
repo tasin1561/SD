@@ -25,6 +25,48 @@ import type { CourierCredentialActor } from '../../courier-shared/services/couri
 export class DelhiveryLabelService implements Pick<DelhiveryClient, 'fetchLabel'> {
   constructor(private readonly http: DelhiveryHttpService) {}
 
+  /**
+   * THIS parcel's routing code, from the packing-slip metadata.
+   *
+   * The most authoritative source we have: the booking response is the
+   * same fact at the same moment, but a pincode lookup is only generic
+   * for the destination — if the two ever disagree, the code on the
+   * parcel's own slip is the one its hub will sort by (owner,
+   * 2026-11-12).
+   *
+   * Reads the JSON we ALREADY fetch to find the PDF link, not the PDF
+   * itself. Their label is drawn with subset fonts whose text is glyph
+   * ids rather than characters, so scraping it would be the most
+   * fragile link in the dispatch path and would break silently the day
+   * they change a font.
+   *
+   * Delhivery's key for it has varied across their docs, so several
+   * spellings are accepted and anything unrecognisable is ignored.
+   * Returns null rather than throwing: a label still prints without it,
+   * carrying its own visible warning.
+   */
+  async fetchSortCode(awbNumber: string, actor?: CourierCredentialActor): Promise<string | null> {
+    if (await this.http.isStubMode()) return null;
+    try {
+      const meta = await this.http.request<{ packages?: Array<Record<string, unknown>> }>({
+        actor,
+        method: 'GET',
+        path: `/api/p/packing_slip?wbns=${encodeURIComponent(awbNumber)}`,
+        endpoint: 'label',
+      });
+      const pkg = meta.packages?.[0];
+      if (pkg === undefined) return null;
+      for (const [key, value] of Object.entries(pkg)) {
+        if (!/^sort[_ ]?code$|^sortcode$/i.test(key)) continue;
+        const code = typeof value === 'string' ? value.trim() : '';
+        if (code !== '') return code;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   async fetchLabel(
     awbNumber: string,
     actor?: CourierCredentialActor,
