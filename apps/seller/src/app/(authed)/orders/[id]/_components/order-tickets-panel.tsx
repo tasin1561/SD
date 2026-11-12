@@ -8,7 +8,8 @@ import { ListRow, ListRows } from '@skydrop/ui/app/list-row';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { EmptyState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { OrdSection } from '../../_components/orders-parts';
+import { Button } from '@skydrop/ui/app/button';
+import { DetailCard } from '../../_components/detail/detail-card';
 import { useSellerTickets } from '@/lib/ops-hooks';
 import { RaiseTicketModal } from '../../../tickets/_components/raise-ticket-modal';
 import { useT, useLocale } from '@/i18n/client';
@@ -48,7 +49,24 @@ export function OrderTicketsPanel({
   const rows = tickets.data ?? [];
 
   return (
-    <OrdSection title={t('orderTickets.issuesRaisedOnThis')}>
+    <DetailCard
+      id="issues"
+      icon={<LifeBuoy size={18} />}
+      title={t('orderTickets.issuesRaisedOnThis')}
+      titleText={t('orderTickets.issuesRaisedOnThis')}
+      note={t('orderPage.card.issuesNote')}
+      actions={
+        // The SAME setter as the page header's button: two buttons, one action.
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<LifeBuoy size={16} />}
+          onClick={() => setRaising(true)}
+        >
+          {t('orderDetail.raiseAnIssue')}
+        </Button>
+      }
+    >
       {tickets.isLoading ? (
         <SkeletonRows rows={2} cols={1} label={t('orderTickets.loadingIssues')} />
       ) : rows.length === 0 ? (
@@ -84,6 +102,6 @@ export function OrderTicketsPanel({
 
       {/* The order is already known, so it is not asked for again. */}
       <RaiseTicketModal open={raising} onOpenChange={setRaising} orderId={orderId} />
-    </OrdSection>
+    </DetailCard>
   );
 }

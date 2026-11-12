@@ -3,23 +3,24 @@
 import Link from 'next/link';
 
 import {
+  AlertTriangle,
   ArrowLeft,
-  CircleDot,
   Clock,
   CreditCard,
   Download,
   FileText,
-  LifeBuoy,
+  Activity,
+  MapPin,
   Package,
   Pencil,
-  PhoneCall,
+  Receipt,
+  StickyNote,
   Truck,
-  Undo2,
   XCircle,
 } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import { useDeliveryActions } from '@/lib/ops-hooks';
-import type { OrderStatus } from '@skydrop/db';
+import type { OrderView } from '@skydrop/api-client';
 import {
   useGenerateInvoice,
   useOrderDetail,
@@ -28,9 +29,6 @@ import {
   useOrderJourney,
 } from '@/lib/api-hooks';
 import { Money, ProductThumb } from '@skydrop/ui/components';
-import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
-import { PageHeader } from '@skydrop/ui/app/page-header';
-import { KpiCard, type KpiTone } from '@skydrop/ui/app/kpi-card';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
@@ -44,22 +42,30 @@ import { CancelOrderDialog } from './cancel-order-dialog';
 import { RequestReturnDialog } from './request-return-dialog';
 import { ReattemptRequestDialog } from './reattempt-request-dialog';
 import { OrderChargesSection } from './order-charges';
-import { OrderJourney } from './order-journey-parts';
 import { CsvExtrasSection } from './csv-extras';
-import { BackLink, Facts, LinkButton, MetaFact, Notice, OrdSection } from './orders-parts';
+import { BackLink, Facts, Notice } from './orders-parts';
 import { verdict } from '@/i18n/verdict';
 import { packageWords } from '@/lib/package-type';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { OrderTicketsPanel } from '../[id]/_components/order-tickets-panel';
 import { ConsigneePanel } from '../[id]/_components/consignee-panel';
-import { OrderAddressCheckPanel } from '../[id]/_components/address-check-panel';
+import { useOrderAddressCheck } from '@/lib/address-check-hooks';
 import { ResellerMoneyPanel } from '../[id]/_components/reseller-money-panel';
 import { UnreachableCustomerPanel } from '../[id]/_components/unreachable-customer-panel';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
-import { dateTag } from '@/i18n/format';
-import type { Locale } from '@skydrop/ui/app/i18n';
+import { DetailCard } from './detail/detail-card';
+import { CopyButton } from './detail/copy-button';
+import { fmtWhen } from './detail/format';
+import { OrderHeader, type HeaderActions } from './detail/order-header';
+import { OrderStepper } from './detail/order-stepper';
+import { OrderActivity } from './detail/order-activity';
+import { ParcelFacts, collectableMismatch } from './detail/parcel-facts';
+import { AddressCheckView, addressNeedsFix } from './detail/address-check-view';
+import { OrderSkeleton } from './detail/order-skeleton';
+import { nextMilestoneKey, summaryFor } from './detail/summary';
+import './detail/order-detail.css';
 
 /** The public tracking site. Env-driven so a domain change is a deploy
  *  variable rather than a code edit. */
@@ -68,19 +74,10 @@ const TRACK_URL = process.env.NEXT_PUBLIC_TRACK_URL ?? 'https://track.skydrop.gl
 /**
  * Seller order detail. Two fetches: the order body (with items) and
  * the seller-visible lifecycle timeline (server filters to
- * `isVisibleToSeller=true` events). Read-only view; no admin actions
- * — sellers don't have cancel/god-mode buttons here. CSV-import flow
- * and manual order create are separate fast-follows.
- *
- * Renders:
- *   - Header (order number + status badge)
- *   - Recipient (immutable ORD-6 snapshot — same shape as admin's)
- *   - Payment + physical
- *   - Items table
- *   - Seller notes (sellerNotes only — internalNotes / callNotes are
- *     admin-only)
- *   - Lifecycle timeline (CP2.A.4 — closes the M12 deferral #1 for
- *     the seller half)
+ * `isVisibleToSeller=true` events). The page is a layout over the same
+ * panels as before — header with its actions, a banner zone, a two-sentence
+ * summary, the stepper, then two columns of cards — and every control opens
+ * the same dialog or flow it always did.
  */
 /**
  * The states a seller may cancel from — until the parcel is packed.
@@ -127,53 +124,9 @@ const CANCELLABLE: ReadonlySet<string> = new Set([
   'PENDING_MANUAL_PLACEMENT',
 ]);
 
-/**
- * How the STATUS tile should read.
- *
- * Derived from the shared `orderStatusKind` (FE-6) rather than a second
- * list of statuses kept here — a local copy is exactly the drift that
- * mapper exists to prevent, and this file has already been wrong about
- * a status vocabulary once (`CANCELLABLE` is cosmetic and says so).
- * Mapping the eight kinds onto the four tile tones is the only decision
- * being made, and it is exhaustive.
- */
-function statusTone(status: OrderStatus): 'neutral' | 'warn' | 'bad' | 'good' {
-  switch (orderStatusKind(status)) {
-    case 'delivered':
-      return 'good';
-    case 'failed':
-    case 'rto':
-      return 'bad';
-    case 'pending':
-      return 'warn';
-    case 'draft':
-    case 'confirmed':
-    case 'in-transit':
-    case 'cancelled':
-      return 'neutral';
-  }
-}
-
 function Dash(): ReactElement {
-  return <span className="ord-faint">—</span>;
+  return <span className="cod-faint">—</span>;
 }
-
-/** `21 Aug 2026` — a tile is a glance, not a timestamp. */
-function tileDate(value: string, locale: Locale = 'en'): string {
-  return new Date(value).toLocaleDateString(dateTag(locale, 'en-IN'), {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-/** The status tile's glow, from the same four tones. */
-const TILE_TONE: Record<ReturnType<typeof statusTone>, KpiTone> = {
-  good: 'credit',
-  bad: 'debit',
-  warn: 'pending',
-  neutral: 'neutral',
-};
 
 export function OrderDetailView({ orderId }: { orderId: string }): ReactElement {
   const locale = useLocale();
@@ -200,260 +153,94 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
   // The consignee editor is HIDDEN until asked for. It shows the same
   // three fields the Recipient card already shows, so having both open
   // at once was the same data twice, a screen apart — and the editable
-  // copy was the one that got read first.
+  // copy was the one that got read first. It now opens IN PLACE, inside
+  // the Recipient card.
   const [editingCustomer, setEditingCustomer] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
   const [raiseOpen, setRaiseOpen] = useState(false);
   const deliveryActions = useDeliveryActions(orderId);
   const canAsk = deliveryActions.data?.canRequest === true;
+  const words = { today: t('orderPage.today'), yesterday: t('orderPage.yesterday') };
+
+  if (detail.isLoading) return <OrderSkeletonPage />;
+
+  if (detail.isError || !detail.data) {
+    return (
+      <div className="cod-page">
+        <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
+          {t('orderDetail.orders')}
+        </BackLink>
+        {detail.isError ? (
+          <ErrorState
+            message={detail.error?.message ?? t('orderDetail.failedToLoadOrder')}
+            retry={() => void detail.refetch()}
+          />
+        ) : (
+          <ErrorState message={t('orderDetail.orderNotFound')} />
+        )}
+      </div>
+    );
+  }
+
+  const order = detail.data;
+
+  const actions: HeaderActions = {
+    askAdmin: canAsk ? () => setAskOpen(true) : null,
+    raiseIssue: () => setRaiseOpen(true),
+    // A Reseller store's order is EDITABLE HERE TOO (owner, 2026-09-18). You
+    // own the goods, the warehouse slot, the courier and the money at risk,
+    // so the whole order is yours to change — its products, quantities,
+    // prices and the customer's details. The store is emailed what moved,
+    // and its money is recalculated to the new order under the terms it
+    // was placed on.
+    editHref:
+      order.status === 'DRAFT' || order.status === 'PENDING_CONFIRMATION'
+        ? `/orders/${orderId}/edit`
+        : null,
+    // The customer declined, so nothing calls this order again on its own.
+    // Asking is the only path — and it is an ASK: an admin decides.
+    // `canRequest` is the SERVER's answer — which statuses qualify is a
+    // per-seller setting, and it already accounts for the one-open-request
+    // rule.
+    reattempt:
+      canRequest && identity !== null && can(identity, 'orders.create')
+        ? {
+            label: lastDecided === null ? t('orderDetail.askUsToCall') : t('orderDetail.askAgain'),
+            onClick: () => setReattemptOpen(true),
+          }
+        : null,
+    // Only a DELIVERED order can come back — before that a parcel that
+    // cannot be delivered returns as an RTO on its own, and offering a
+    // button for it would suggest the seller has a choice they do not have.
+    requestReturn:
+      order.status === 'DELIVERED' && identity !== null && can(identity, 'orders.cancel')
+        ? () => setReturnOpen(true)
+        : null,
+    cancel:
+      CANCELLABLE.has(order.status) && identity !== null && can(identity, 'orders.cancel')
+        ? () => setCancelOpen(true)
+        : null,
+  };
+
+  const unreachable = order.status === 'AWAITING_SELLER_DECISION';
+  const declined =
+    pendingRequest === null && lastDecided !== null && lastDecided.status === 'REJECTED';
+  const hasBanner = unreachable || pendingRequest !== null || declined;
 
   return (
-    <div className="ord-page">
-      {/* The BACK link stays beside the breadcrumb rather than being
-          replaced by it. They answer different questions — "where am
-          I" and "take me back one" — and a crumb trail is a poor
-          back button on a phone, where the tap target is a word in a
-          line of words. */}
-      <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
-        {t('orderDetail.orders')}
-      </BackLink>
+    <div className="cod-page">
+      <OrderHeader order={order} actions={actions} />
 
-      {detail.isLoading ? (
-        <SkeletonRows rows={6} cols={4} label={t('orderDetail.loadingOrder')} />
-      ) : detail.isError ? (
-        <ErrorState
-          message={detail.error?.message ?? t('orderDetail.failedToLoadOrder')}
-          retry={() => void detail.refetch()}
-        />
-      ) : !detail.data ? (
-        <ErrorState message={t('orderDetail.orderNotFound')} />
-      ) : (
-        <>
-          <PageHeader
-            breadcrumbs={[
-              { label: t('orderDetail.clientConsole') },
-              { label: t('orderDetail.orders'), href: '/orders' },
-              { label: detail.data.orderNumber },
-            ]}
-            Link={Link}
-            title={<span className="sk-ident">{detail.data.orderNumber}</span>}
-            subtitle={
-              detail.data.sellerOrderRef ? (
-                <span>
-                  {richMessage(t('orderDetail.yourRef'), {
-                    span: <span className="sk-ident">{detail.data.sellerOrderRef}</span>,
-                  })}
-                </span>
-              ) : undefined
-            }
-            /*
-              Standing facts about THIS parcel, under its number.
-
-              The comps carry a row of chips here — waybill, service
-              level, HS code, SAFTA duty, bonded status. Only the first
-              two exist: an AWB is real and the payment mode is real.
-              There is no service level on a shipment, HS codes were
-              removed from the catalogue in 2026-08-18, and nothing
-              records a duty rate per parcel. A chip that reads
-              "SAFTA 0%" on a screen is taken as a customs fact.
-            */
-            meta={
-              <span className="ord-meta">
-                <StatusChip
-                  kind={orderStatusKind(detail.data.status as OrderStatus)}
-                  label={statusLabel(detail.data.status as OrderStatus, locale)}
-                />
-                <MetaFact tone="accent">
-                  {detail.data.paymentMode === 'COD'
-                    ? t('orderDetail.cashOnDelivery')
-                    : t('orderDetail.prepaid')}
-                </MetaFact>
-                {detail.data.storeKind === 'RESELLER' && (
-                  <MetaFact>
-                    {richMessage(t('orderDetail.soldBy'), {
-                      t: detail.data.storeNameSnapshot ?? t('orderDetail.aMemberStore'),
-                    })}
-                  </MetaFact>
-                )}
-              </span>
-            }
-            action={
-              <div className="ord-row">
-                {/* The two things a seller can DO about a live parcel,
-                    beside the order number, where a seller looks for
-                    something to do. */}
-                {canAsk && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={<Truck size={14} />}
-                    onClick={() => setAskOpen(true)}
-                  >
-                    {t('orderDetail.askAdminToAct')}
-                  </Button>
-                )}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<LifeBuoy size={14} />}
-                  onClick={() => setRaiseOpen(true)}
-                >
-                  {t('orderDetail.raiseAnIssue')}
-                </Button>
-                {/* A Reseller store's order is EDITABLE HERE TOO (owner,
-                    2026-09-18). You own the goods, the warehouse slot,
-                    the courier and the money at risk, so the whole order
-                    is yours to change — its products, quantities, prices
-                    and the customer's details. The store is emailed what
-                    moved, and its money is recalculated to the new order
-                    under the terms it was placed on. */}
-                {(detail.data.status === 'DRAFT' ||
-                  detail.data.status === 'PENDING_CONFIRMATION') && (
-                  <LinkButton
-                    href={`/orders/${orderId}/edit`}
-                    variant="secondary"
-                    size="sm"
-                    icon={<Pencil size={14} />}
-                  >
-                    {t('orderDetail.edit')}
-                  </LinkButton>
-                )}
-                {/* The customer declined, so nothing calls this order
-                    again on its own. Asking is the only path — and it is
-                    an ASK: an admin decides. `canRequest` is the SERVER's
-                    answer — which statuses qualify is a per-seller
-                    setting, and it already accounts for the
-                    one-open-request rule. */}
-                {canRequest && identity !== null && can(identity, 'orders.create') && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={<PhoneCall size={14} />}
-                    onClick={() => setReattemptOpen(true)}
-                  >
-                    {lastDecided === null
-                      ? t('orderDetail.askUsToCall')
-                      : t('orderDetail.askAgain')}
-                  </Button>
-                )}
-                {/* Only a DELIVERED order can come back — before that a
-                    parcel that cannot be delivered returns as an RTO on
-                    its own, and offering a button for it would suggest
-                    the seller has a choice they do not have. */}
-                {detail.data.status === 'DELIVERED' &&
-                  identity !== null &&
-                  can(identity, 'orders.cancel') && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={<Undo2 size={14} />}
-                      onClick={() => setReturnOpen(true)}
-                    >
-                      {t('orderDetail.requestReturn')}
-                    </Button>
-                  )}
-                {CANCELLABLE.has(detail.data.status) &&
-                  identity !== null &&
-                  can(identity, 'orders.cancel') && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<XCircle size={14} />}
-                      onClick={() => setCancelOpen(true)}
-                    >
-                      {t('orderDetail.cancel')}
-                    </Button>
-                  )}
-              </div>
-            }
-          />
-
-          {/* ── The four standing facts about this parcel ────────────
-                 Every one is a COLUMN on the order, not a derivation —
-                 a tile that needed arithmetic to exist would be a
-                 claim rather than a record. The exceptions are the two
-                 sums in the items tile's footer, which add up lines
-                 that are all on the page directly below it. */}
-          <div className="ord-kpis">
-            <KpiCard
-              label={t('orderDetail.status')}
-              icon={<CircleDot size={14} />}
-              /* `statusLabel` from `@skydrop/ui/status`, never the raw
-                 enum: the chip in the header beside this tile reads
-                 the same vocabulary. */
-              figure={<span>{statusLabel(detail.data.status as OrderStatus, locale)}</span>}
-              tone={TILE_TONE[statusTone(detail.data.status as OrderStatus)]}
-            />
-            <KpiCard
-              label={
-                detail.data.paymentMode === 'COD'
-                  ? t('orderDetail.toCollect')
-                  : t('orderDetail.paidUpFront')
-              }
-              icon={<CreditCard size={14} />}
-              /* A PREPAID order reads "Prepaid", never ₹0 — nothing
-                 being owed and nothing having been recorded look the
-                 same at a glance otherwise. */
-              figure={
-                detail.data.codAmountInr === null ? (
-                  <span className="ord-faint">{t('orderDetail.prepaid')}</span>
-                ) : (
-                  <Money amount={detail.data.codAmountInr} />
-                )
-              }
-              tone="neutral"
-              {...(detail.data.declaredValueInr === null
-                ? {}
-                : {
-                    foot: [
-                      {
-                        label: t('orderDetail.declaredValue'),
-                        value: <Money amount={detail.data.declaredValueInr} />,
-                      },
-                    ],
-                  })}
-            />
-            <KpiCard
-              label={t('orderDetail.whatIsInIt')}
-              icon={<Package size={14} />}
-              value={detail.data.items.length}
-              unit={detail.data.items.length === 1 ? 'line' : 'lines'}
-              tone="neutral"
-              foot={[
-                {
-                  label: t('orderDetail.units'),
-                  value: detail.data.items.reduce((t, i) => t + i.quantity, 0),
-                },
-                {
-                  label: t('orderDetail.weight'),
-                  value:
-                    detail.data.totalWeightGrams === null ? (
-                      <span className="ord-faint">{t('orderDetail.notRecorded')}</span>
-                    ) : (
-                      `${detail.data.totalWeightGrams} g`
-                    ),
-                },
-              ]}
-            />
-            <KpiCard
-              label={t('orderDetail.placed')}
-              icon={<Clock size={14} />}
-              figure={<span>{tileDate(detail.data.placedAt, locale)}</span>}
-              tone="neutral"
-              hint={t('orderDetail.lastMoved', {
-                updatedAt: tileDate(detail.data.updatedAt, locale),
-              })}
-            />
-          </div>
-
-          {/* THE PAUSE COMES FIRST. R5b holds the order at
-              AWAITING_SELLER_DECISION and nothing moves until the seller
-              answers — which, until 2026-09-27, they could only do on a
-              page called "Held stock" under the Stock nav group, while
-              /needs-attention told them to come here. Above the
-              re-attempt notices because this one has a deadline. */}
-          {detail.data.status === 'AWAITING_SELLER_DECISION' && (
-            <UnreachableCustomerPanel orderId={orderId} orderNumber={detail.data.orderNumber} />
+      {/* ── Banner zone ─────────────────────────────────────────────────
+          Directly under the header, above the summary and the stepper.
+          THE PAUSE COMES FIRST. R5b holds the order at
+          AWAITING_SELLER_DECISION and nothing moves until the seller
+          answers; above the re-attempt notices because this one has a
+          deadline. */}
+      {hasBanner && (
+        <div className="cod-banners">
+          {unreachable && (
+            <UnreachableCustomerPanel orderId={orderId} orderNumber={order.orderNumber} />
           )}
 
           {pendingRequest !== null && (
@@ -463,24 +250,22 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             // us. Two facts, not one overwritten by the other.
             <Notice
               tone="warn"
-              icon={<Clock size={16} />}
+              icon={<Clock size={18} />}
               title={t('orderDetail.weAreReviewingYour')}
             >
               <span className="ord-p">
                 {richMessage(t('orderDetail.sentTheOrderStays'), {
-                  createdAt: new Date(pendingRequest.createdAt).toLocaleString(
-                    dateTag(locale, 'en-IN'),
-                  ),
+                  createdAt: fmtWhen(pendingRequest.createdAt, locale, words),
                 })}
               </span>
               <p className="ord-quote">“{pendingRequest.reason}”</p>
             </Notice>
           )}
 
-          {pendingRequest === null && lastDecided !== null && lastDecided.status === 'REJECTED' && (
+          {declined && lastDecided !== null && (
             <Notice
               tone="bad"
-              icon={<XCircle size={16} />}
+              icon={<XCircle size={18} />}
               title={t('orderDetail.weReviewedYourRequest')}
             >
               {lastDecided.decisionNote !== null && lastDecided.decisionNote !== '' && (
@@ -489,442 +274,615 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               <span className="ord-faint">{t('orderDetail.youCanAskAgain')}</span>
             </Notice>
           )}
-
-          {/* Correcting the consignee sits with the parcel, not in a
-              settings screen: it is only ever done while looking at a
-              specific delivery that is about to go wrong — and now only
-              when somebody has actually asked to change something, via
-              Edit on the Recipient card. */}
-          {editingCustomer && (
-            <div id="customer-details">
-              <ConsigneePanel
-                orderId={orderId}
-                orderNumber={detail.data.orderNumber}
-                onClose={() => setEditingCustomer(false)}
-              />
-            </div>
-          )}
-
-          {/*
-            Two columns. The JOURNEY is the wide left one — it is what the
-            page is for — and the FACTS stack down the right, where they
-            can be checked without leaving the timeline.
-          */}
-          <div className="ord-split ord-split--journey">
-            {/* The journey: the stage ladder, the parcels, and the
-                courier's own scans merged with our handling. */}
-            <div className="ord-stack">
-              <OrderJourneySection
-                orderId={orderId}
-                orderNumber={detail.data.orderNumber}
-                status={detail.data.status as OrderStatus}
-              />
-            </div>
-
-            {/* The facts, in the order a seller checks them: who it is
-                going to, what is in it, what it costs, the paperwork. */}
-            <div className="ord-stack">
-              <OrdSection
-                title={t('orderDetail.recipient')}
-                note={t('orderDetail.snapshottedWhenTheOrder')}
-                action={
-                  // `orders.create` is what the SERVER requires to save
-                  // a consignee change ("whoever may commit the company
-                  // to a delivery is who may change where it goes").
-                  // Gating on anything else shows an Edit whose save
-                  // comes back 403 — cosmetic RBAC that disagrees with
-                  // the boundary is worse than none.
-                  identity !== null && can(identity, 'orders.create') ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<Pencil size={14} />}
-                      onClick={() => {
-                        setEditingCustomer(true);
-                        // Opened, then scrolled to. The editor is full
-                        // width at the top — it needs the room — so
-                        // revealing it without moving there would look
-                        // like the button did nothing.
-                        window.setTimeout(
-                          () =>
-                            document
-                              .getElementById('customer-details')
-                              ?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
-                          50,
-                        );
-                      }}
-                    >
-                      {t('orderDetail.edit')}
-                    </Button>
-                  ) : undefined
-                }
-              >
-                <div className="ord-stack ord-stack--tight">
-                  {detail.data.storeKind === 'RESELLER' && (
-                    // The order is yours and so are its details; the
-                    // note says who sold to this person, because they
-                    // are who the customer will ring first.
-                    <p className="ord-p">
-                      {richMessage(t('orderDetail.soldByYourMember'), {
-                        span:
-                          detail.data.storeId !== null ? (
-                            <Link
-                              href={`/reseller-stores/${detail.data.storeId}`}
-                              className="ord-link"
-                            >
-                              {detail.data.storeNameSnapshot ?? t('orderDetail.aMemberStore')}
-                            </Link>
-                          ) : (
-                            <span className="ord-strong">
-                              {detail.data.storeNameSnapshot ?? t('orderDetail.aMemberStore')}
-                            </span>
-                          ),
-                      })}
-                    </p>
-                  )}
-                  <Facts
-                    items={[
-                      { label: t('orderDetail.name'), value: detail.data.recipientName },
-                      {
-                        label: t('orderDetail.phone'),
-                        value: (
-                          <span className="sk-figure">
-                            {detail.data.recipientPhoneE164}
-                            {detail.data.recipientAltPhoneE164 && (
-                              <span className="ord-faint">
-                                {' '}
-                                / {detail.data.recipientAltPhoneE164}
-                              </span>
-                            )}
-                          </span>
-                        ),
-                      },
-                      ...(detail.data.recipientEmail
-                        ? [{ label: t('orderDetail.email'), value: detail.data.recipientEmail }]
-                        : []),
-                      {
-                        label: t('orderDetail.address'),
-                        value: (
-                          <>
-                            <div>{detail.data.recipientAddressLine1}</div>
-                            {detail.data.recipientAddressLine2 && (
-                              <div>{detail.data.recipientAddressLine2}</div>
-                            )}
-                            {detail.data.recipientLandmark && (
-                              <div className="ord-faint">
-                                {richMessage(t('orderDetail.landmark'), {
-                                  recipientLandmark: detail.data.recipientLandmark,
-                                })}
-                              </div>
-                            )}
-                            <div>
-                              {[detail.data.recipientCity, detail.data.recipientStateProvince]
-                                .filter(Boolean)
-                                .join(', ')}{' '}
-                              <span className="sk-figure">{detail.data.recipientPostalCode}</span>{' '}
-                              <span className="ord-faint">{detail.data.recipientCountryCode}</span>
-                            </div>
-                          </>
-                        ),
-                      },
-                    ]}
-                  />
-                </div>
-              </OrdSection>
-
-              {/* The verdict on that address, directly under it — the
-                  two are read together or not at all. Absent on an
-                  order that was never checked. */}
-              <OrderAddressCheckPanel orderId={orderId} />
-
-              {/* Six facts do not need two bordered boxes and two
-                  heads, so they are one section and one list that
-                  reflows to a single column on a phone. */}
-              <OrdSection
-                title={t('orderDetail.paymentParcel')}
-                note={t('orderDetail.whatItIsWorth')}
-              >
-                <Facts
-                  items={[
-                    {
-                      label: t('orderDetail.paymentMode'),
-                      value:
-                        detail.data.paymentMode === 'COD'
-                          ? t('orderDetail.cashOnDelivery')
-                          : t('orderDetail.prepaid'),
-                    },
-                    {
-                      // The one figure here that decides whether the
-                      // parcel is worth chasing, through `Money` so it
-                      // groups the Indian way and sits on tabular
-                      // figures.
-                      label: t('orderDetail.toCollect'),
-                      value:
-                        detail.data.codAmountInr === null ? (
-                          <span className="ord-faint">{t('orderDetail.prepaid')}</span>
-                        ) : (
-                          <span className="ord-strong">
-                            <Money amount={detail.data.codAmountInr} />
-                          </span>
-                        ),
-                    },
-                    {
-                      label: t('orderDetail.declaredValue'),
-                      value:
-                        detail.data.declaredValueInr === null ? (
-                          <Dash />
-                        ) : (
-                          <Money amount={detail.data.declaredValueInr} />
-                        ),
-                    },
-                    {
-                      label: t('orderDetail.weight'),
-                      value:
-                        detail.data.totalWeightGrams === null ? (
-                          <Dash />
-                        ) : (
-                          <span className="sk-figure">{detail.data.totalWeightGrams} g</span>
-                        ),
-                    },
-                    {
-                      label: t('orderDetail.package'),
-                      value: packageWords(detail.data.packageType, t),
-                    },
-                    {
-                      label: t('orderDetail.flags'),
-                      value: detail.data.isUrgent ? (
-                        <StatusChip kind="pending" label={t('orderDetail.urgent')} size="sm" />
-                      ) : (
-                        <Dash />
-                      ),
-                    },
-                  ]}
-                />
-              </OrdSection>
-
-              <OrdSection
-                title={t('orderDetail.items')}
-                note={`${detail.data.items.length} ${detail.data.items.length === 1 ? 'line' : 'lines'}`}
-                flush
-              >
-                <Table caption={t('orderDetail.itemsOnThisOrder')}>
-                  <THead>
-                    <Tr>
-                      <Th className="ord-thumb-cell" aria-label={t('orderDetail.picture')} />
-                      <Th>{t('orderDetail.sku')}</Th>
-                      <Th>{t('orderDetail.product')}</Th>
-                      <Th align="right">{t('orderDetail.qty')}</Th>
-                      <Th align="right">{t('orderDetail.unitWeight')}</Th>
-                    </Tr>
-                  </THead>
-                  <TBody>
-                    {detail.data.items.length === 0 && (
-                      // A header row over nothing says less than a
-                      // sentence does.
-                      <TableEmpty colSpan={5}>{t('orderDetail.noItemsRecordedOn')}</TableEmpty>
-                    )}
-                    {detail.data.items.map((item) => (
-                      <Tr key={item.id}>
-                        <Td className="ord-thumb-cell">
-                          {/* Live presigned thumbnail, NOT the snapshot's
-                              stored url — that one has resolved for
-                              nobody since the bucket went private. */}
-                          <ProductThumb src={item.imageUrl} size={36} />
-                        </Td>
-                        <Td>
-                          <span className="sk-ident">{item.skuCode}</span>
-                        </Td>
-                        <Td>
-                          {item.productName}
-                          {item.variantLabel && (
-                            <span className="ord-faint"> · {item.variantLabel}</span>
-                          )}
-                        </Td>
-                        <Td align="right">
-                          <span className="sk-figure">{item.quantity}</span>
-                        </Td>
-                        <Td align="right">
-                          <span className="sk-figure ord-muted">
-                            {item.unitWeightGrams === null ? <Dash /> : `${item.unitWeightGrams} g`}
-                          </span>
-                        </Td>
-                      </Tr>
-                    ))}
-                  </TBody>
-                </Table>
-              </OrdSection>
-
-              {detail.data.sellerNotes && (
-                <OrdSection
-                  title={t('orderDetail.yourNotes')}
-                  note={t('orderDetail.whatYouToldUs')}
-                >
-                  <p className="ord-body">{detail.data.sellerNotes}</p>
-                </OrdSection>
-              )}
-
-              <CsvExtrasSection extras={detail.data.csvExtras} />
-
-              {/* Hidden rather than shown-and-refused for a VIEWER: the
-                  server rejects /charges for that role, and rendering its
-                  403 in a red box reads as a broken page rather than as
-                  policy. Cosmetic — the server is still the boundary. */}
-              {identity !== null && can(identity, 'charges.view') && (
-                <OrdSection
-                  title={t('orderDetail.charges')}
-                  note={t('orderDetail.whatThisParcelCosts')}
-                  flush
-                >
-                  <OrderChargesSection orderId={orderId} />
-                </OrdSection>
-              )}
-
-              {/* RS-6 phase 3c — a reseller store's order: your transfer
-                  price, your fee shares, and when.
-
-                  ── THE `role !== 'VIEWER'` CHECK IS GONE ─────────────
-                  It read the LEGACY `SellerUserRole` enum, which is null
-                  for anybody holding only roles the company invented, so
-                  `null !== 'VIEWER'` is true and it had stopped closing
-                  anything for exactly those people. Worse, it was a
-                  client-side mirror of a policy the server does not
-                  have: `SellerResellerOrderMoneyController` is gated on
-                  `orders.view`, which the `viewer` role holds, so this
-                  was the ONLY thing standing between a viewer and the
-                  figures — and the UI is not a boundary (FE-2, RBAC-1).
-                  That was fixed where it belonged: the controller now
-                  requires `stores.order_money.view` (Admin, Finance, and
-                  the owner implicitly). This gate tracks that key so the
-                  panel is not offered to somebody the server will refuse
-                  — cosmetic, which FE-2 permits; what it forbids is the
-                  UI being the only check, which is what it used to be. */}
-              <ResellerMoneyPanel
-                orderId={orderId}
-                enabled={
-                  detail.data.storeKind === 'RESELLER' &&
-                  identity !== null &&
-                  can(identity, 'stores.order_money.view')
-                }
-              />
-
-              <OrdSection
-                title={t('orderDetail.invoice')}
-                note={t('orderDetail.theTaxDocumentFor')}
-              >
-                <OrderInvoiceSection
-                  orderId={orderId}
-                  orderNumber={detail.data.orderNumber}
-                  status={detail.data.status}
-                />
-              </OrdSection>
-
-              {/* Directly UNDER the invoice, in the facts column: position
-                  in a two-column layout is what the eye sees, not what
-                  the DOM order says. */}
-              <DeliveryTroublePanel
-                orderId={orderId}
-                orderNumber={detail.data.orderNumber}
-                orderStatus={detail.data.status}
-                open={askOpen}
-                onOpenChange={setAskOpen}
-              />
-              <OrderTicketsPanel
-                orderId={orderId}
-                raising={raiseOpen}
-                onRaisingChange={setRaiseOpen}
-              />
-            </div>
-          </div>
-
-          <p className="ord-footnote sk-figure">
-            {t('orderDetail.placedUpdated', {
-              placedAt: new Date(detail.data.placedAt).toISOString().replace('T', ' ').slice(0, 16),
-              updatedAt: new Date(detail.data.updatedAt)
-                .toISOString()
-                .replace('T', ' ')
-                .slice(0, 16),
-            })}
-          </p>
-
-          <ReattemptRequestDialog
-            orderId={orderId}
-            orderNumber={detail.data.orderNumber}
-            open={reattemptOpen}
-            onOpenChange={setReattemptOpen}
-          />
-          <RequestReturnDialog
-            orderId={orderId}
-            orderNumber={detail.data.orderNumber}
-            open={returnOpen}
-            onClose={() => setReturnOpen(false)}
-          />
-
-          {/* `chargedInr` is what the wallet has actually taken for
-              this order and not given back — the figure the refund will
-              credit, from the server. It went unpassed from the day the
-              dialog was written (found 2026-09-30), so the paragraph
-              that names the money had never rendered for anybody, on
-              the one screen whose whole argument is that a seller
-              should see it before agreeing. Null for an AT_DELIVERY
-              seller, whose order is billed on arrival and has taken
-              nothing yet. */}
-          <CancelOrderDialog
-            open={cancelOpen}
-            orderId={orderId}
-            orderNumber={detail.data.orderNumber}
-            status={detail.data.status}
-            chargedInr={detail.data.chargedInr ?? null}
-            onOpenChange={setCancelOpen}
-          />
-        </>
+        </div>
       )}
+
+      <OrderBody
+        orderId={orderId}
+        order={order}
+        hasBanner={hasBanner}
+        editing={editingCustomer}
+        onEdit={() => {
+          setEditingCustomer(true);
+          // Opened, then scrolled to: revealing the editor without moving
+          // there would look like the button did nothing.
+          window.setTimeout(
+            () =>
+              document
+                .getElementById('customer-details')
+                ?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+            50,
+          );
+        }}
+        onCloseEdit={() => setEditingCustomer(false)}
+        askOpen={askOpen}
+        onAskOpenChange={setAskOpen}
+        raiseOpen={raiseOpen}
+        onRaiseOpenChange={setRaiseOpen}
+      />
+
+      <ReattemptRequestDialog
+        orderId={orderId}
+        orderNumber={order.orderNumber}
+        open={reattemptOpen}
+        onOpenChange={setReattemptOpen}
+      />
+      <RequestReturnDialog
+        orderId={orderId}
+        orderNumber={order.orderNumber}
+        open={returnOpen}
+        onClose={() => setReturnOpen(false)}
+      />
+
+      {/* `chargedInr` is what the wallet has actually taken for
+          this order and not given back — the figure the refund will
+          credit, from the server. It went unpassed from the day the
+          dialog was written (found 2026-09-30), so the paragraph
+          that names the money had never rendered for anybody, on
+          the one screen whose whole argument is that a seller
+          should see it before agreeing. Null for an AT_DELIVERY
+          seller, whose order is billed on arrival and has taken
+          nothing yet. */}
+      <CancelOrderDialog
+        open={cancelOpen}
+        orderId={orderId}
+        orderNumber={order.orderNumber}
+        status={order.status}
+        chargedInr={detail.data.chargedInr ?? null}
+        onOpenChange={setCancelOpen}
+      />
+    </div>
+  );
+}
+
+function OrderSkeletonPage(): ReactElement {
+  return (
+    <div className="cod-page">
+      <OrderSkeleton />
     </div>
   );
 }
 
 /**
- * The journey panels.
+ * Everything under the banners: summary, stepper, the two columns.
  *
- * Its own failure surface rather than one shared with the order body:
- * the journey is enrichment, and a courier read that is briefly
- * unavailable must not blank the recipient and the items a seller came
- * to check.
+ * Its own failure surface for the journey rather than one shared with the
+ * order body: the journey is enrichment, and a courier read that is briefly
+ * unavailable must not blank the recipient and the items a seller came to
+ * check.
  */
-function OrderJourneySection({
+function OrderBody({
   orderId,
-  orderNumber,
-  status,
+  order,
+  hasBanner,
+  editing,
+  onEdit,
+  onCloseEdit,
+  askOpen,
+  onAskOpenChange,
+  raiseOpen,
+  onRaiseOpenChange,
 }: {
   readonly orderId: string;
-  readonly orderNumber: string;
-  readonly status: OrderStatus;
-}): ReactElement | null {
-  const locale = useLocale();
+  readonly order: OrderView;
+  readonly hasBanner: boolean;
+  readonly editing: boolean;
+  readonly onEdit: () => void;
+  readonly onCloseEdit: () => void;
+  readonly askOpen: boolean;
+  readonly onAskOpenChange: (open: boolean) => void;
+  readonly raiseOpen: boolean;
+  readonly onRaiseOpenChange: (open: boolean) => void;
+}): ReactElement {
   const t = useT();
+  const identity = useSellerIdentity();
   const journey = useOrderJourney(orderId);
-  if (journey.isPending)
-    return <SkeletonRows rows={4} cols={1} label={t('orderDetail.loadingTheJourney')} />;
-  if (journey.isError || journey.data === undefined) {
-    return (
-      <OrdSection title={t('orderDetail.orderTracker')}>
-        <ErrorState message={verdict(journey.error, t)} retry={() => void journey.refetch()} />
-      </OrdSection>
-    );
-  }
+  const check = useOrderAddressCheck(orderId);
+  const checkResult = check.data ?? null;
+  const parcels = journey.data?.parcels ?? [];
+  // The latest parcel, as the shared panels chose it.
+  const parcel = parcels[parcels.length - 1] ?? null;
+  const summary = summaryFor({
+    status: order.status,
+    paymentMode: order.paymentMode,
+    codAmountInr: order.codAmountInr,
+    nextMilestoneKey: journey.data === undefined ? null : nextMilestoneKey(journey.data.milestones),
+    hasBanner,
+    addressNeedsFix: addressNeedsFix(checkResult),
+    collectableMismatch: collectableMismatch(parcel),
+  });
+
   return (
-    <OrderJourney
-      orderNumber={orderNumber}
-      status={
-        <StatusChip kind={orderStatusKind(status)} label={statusLabel(status, locale)} size="sm" />
+    <>
+      <div className="cod-summary" aria-label={t('orderPage.sum.label')}>
+        <p>
+          {summary.where !== null ? t(summary.where) : null}
+          {summary.next !== null ? ` ${t(summary.next)}` : null}
+        </p>
+        {summary.collectInr !== null ? (
+          <p>
+            {richMessage(t('orderPage.sum.collect'), {
+              money: <Money amount={summary.collectInr} size="md" />,
+            })}
+          </p>
+        ) : summary.prepaid ? (
+          <p>{t('orderPage.sum.prepaid')}</p>
+        ) : null}
+        {summary.addressFix && (
+          <p className="cod-summary__warn">
+            <AlertTriangle size={16} aria-hidden />
+            <a href="#recipient">{t('orderPage.sum.addressFix')}</a>
+          </p>
+        )}
+        {summary.mismatch && (
+          <p className="cod-summary__warn">
+            <AlertTriangle size={16} aria-hidden />
+            <a href="#parcel">{t('orderPage.sum.mismatch')}</a>
+          </p>
+        )}
+      </div>
+
+      {journey.isPending ? (
+        <div className="cod-stepper cod-stepper--wait">
+          <SkeletonRows rows={2} cols={1} label={t('orderDetail.loadingTheJourney')} />
+        </div>
+      ) : journey.isError || journey.data === undefined ? (
+        <div className="cod-stepper">
+          <ErrorState message={verdict(journey.error, t)} retry={() => void journey.refetch()} />
+        </div>
+      ) : (
+        <OrderStepper milestones={journey.data.milestones} />
+      )}
+
+      <div className="cod-grid">
+        <div className="cod-main">
+          <RecipientCard
+            order={order}
+            orderId={orderId}
+            check={checkResult}
+            editing={editing}
+            onEdit={onEdit}
+            onCloseEdit={onCloseEdit}
+          />
+
+          <ItemsCard orderId={orderId} order={order} />
+
+          {order.sellerNotes && (
+            <DetailCard
+              id="notes"
+              icon={<StickyNote size={18} />}
+              title={t('orderDetail.yourNotes')}
+              titleText={t('orderDetail.yourNotes')}
+              note={t('orderDetail.whatYouToldUs')}
+            >
+              <p className="ord-body">{order.sellerNotes}</p>
+            </DetailCard>
+          )}
+
+          <CsvExtrasSection extras={order.csvExtras} />
+
+          {/* RS-6 phase 3c — a reseller store's order: your transfer
+              price, your fee shares, and when.
+
+              ── THE `role !== 'VIEWER'` CHECK IS GONE ─────────────
+              It read the LEGACY `SellerUserRole` enum, which is null
+              for anybody holding only roles the company invented, so
+              `null !== 'VIEWER'` is true and it had stopped closing
+              anything for exactly those people. Worse, it was a
+              client-side mirror of a policy the server does not
+              have: `SellerResellerOrderMoneyController` is gated on
+              `orders.view`, which the `viewer` role holds, so this
+              was the ONLY thing standing between a viewer and the
+              figures — and the UI is not a boundary (FE-2, RBAC-1).
+              That was fixed where it belonged: the controller now
+              requires `stores.order_money.view` (Admin, Finance, and
+              the owner implicitly). This gate tracks that key so the
+              panel is not offered to somebody the server will refuse
+              — cosmetic, which FE-2 permits; what it forbids is the
+              UI being the only check, which is what it used to be. */}
+          <ResellerMoneyPanel
+            orderId={orderId}
+            enabled={
+              order.storeKind === 'RESELLER' &&
+              identity !== null &&
+              can(identity, 'stores.order_money.view')
+            }
+          />
+
+          <DeliveryTroublePanel
+            orderId={orderId}
+            orderNumber={order.orderNumber}
+            orderStatus={order.status}
+            open={askOpen}
+            onOpenChange={onAskOpenChange}
+          />
+
+          {journey.isPending ? (
+            <DetailCard
+              id="activity"
+              icon={<Activity size={18} />}
+              title={t('orderPage.card.activity')}
+              titleText={t('orderPage.card.activity')}
+              note={t('orderPage.card.activityNote')}
+            >
+              <SkeletonRows rows={4} cols={1} label={t('orderDetail.loadingTheJourney')} />
+            </DetailCard>
+          ) : journey.data !== undefined ? (
+            <DetailCard
+              id="activity"
+              icon={<Activity size={18} />}
+              title={t('orderPage.card.activity')}
+              titleText={t('orderPage.card.activity')}
+              note={t('orderPage.card.activityNote')}
+            >
+              <OrderActivity entries={journey.data.timeline} milestones={journey.data.milestones} />
+            </DetailCard>
+          ) : null}
+        </div>
+
+        <div className="cod-side">
+          {parcel !== null && (
+            <DetailCard
+              id="parcel"
+              icon={<Truck size={18} />}
+              title={t('orderDetail.parcel')}
+              titleText={t('orderDetail.parcel')}
+              note={t('orderDetail.whatTheCourierSays')}
+              actions={
+                <Link href="/tracking" className="cod-link cod-link--tap">
+                  {t('orderPage.parcel.allParcels')} →
+                </Link>
+              }
+            >
+              {/* The customer-safe page (TRK-8), so a seller can hand it to
+                  the person waiting for the parcel without exposing
+                  anything else. */}
+              <ParcelFacts parcel={parcel} trackingUrlBase={TRACK_URL} />
+            </DetailCard>
+          )}
+
+          <PaymentCard order={order} />
+
+          <OrderTicketsPanel
+            orderId={orderId}
+            raising={raiseOpen}
+            onRaisingChange={onRaiseOpenChange}
+          />
+
+          <DetailCard
+            id="invoice"
+            icon={<Receipt size={18} />}
+            title={t('orderDetail.invoice')}
+            titleText={t('orderDetail.invoice')}
+            note={t('orderDetail.theTaxDocumentFor')}
+          >
+            <OrderInvoiceSection
+              orderId={orderId}
+              orderNumber={order.orderNumber}
+              status={order.status}
+            />
+          </DetailCard>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function RecipientCard({
+  order,
+  orderId,
+  check,
+  editing,
+  onEdit,
+  onCloseEdit,
+}: {
+  readonly order: OrderView;
+  readonly orderId: string;
+  readonly check: Parameters<typeof AddressCheckView>[0]['result'] | null;
+  readonly editing: boolean;
+  readonly onEdit: () => void;
+  readonly onCloseEdit: () => void;
+}): ReactElement {
+  const t = useT();
+  const identity = useSellerIdentity();
+  const attention = addressNeedsFix(check);
+  const cityState = [order.recipientCity, order.recipientStateProvince].filter(Boolean).join(', ');
+  return (
+    <DetailCard
+      id="recipient"
+      icon={attention ? <AlertTriangle size={18} /> : <MapPin size={18} />}
+      title={t('orderPage.card.recipient')}
+      titleText={t('orderPage.card.recipient')}
+      note={t('orderPage.card.recipientNote')}
+      tone={attention ? 'warn' : undefined}
+      forceOpen={editing}
+      actions={
+        <>
+          {attention && (
+            <span className="cod-attn">
+              <AlertTriangle size={16} aria-hidden />
+              {t('orderPage.card.addressAttention')}
+            </span>
+          )}
+          {
+            // `orders.create` is what the SERVER requires to save a
+            // consignee change ("whoever may commit the company to a
+            // delivery is who may change where it goes"). Gating on
+            // anything else shows an Edit whose save comes back 403 —
+            // cosmetic RBAC that disagrees with the boundary is worse
+            // than none.
+            identity !== null && can(identity, 'orders.create') ? (
+              <Button variant="ghost" size="sm" icon={<Pencil size={16} />} onClick={onEdit}>
+                {t('orderDetail.edit')}
+              </Button>
+            ) : null
+          }
+        </>
       }
-      milestones={journey.data.milestones}
-      parcels={journey.data.parcels}
-      entries={journey.data.timeline}
-      allParcelsHref="/tracking"
-      // The customer-safe page (TRK-8), so a seller can hand it to the
-      // person waiting for the parcel without exposing anything else.
-      trackingUrlBase={TRACK_URL}
-    />
+    >
+      {editing && (
+        <div id="customer-details" className="cod-edit">
+          <ConsigneePanel
+            orderId={orderId}
+            orderNumber={order.orderNumber}
+            onClose={onCloseEdit}
+            inPlace
+          />
+        </div>
+      )}
+      <div className="cod-rec" data-check={check !== null ? '1' : '0'}>
+        <div className="cod-rec__facts">
+          {order.storeKind === 'RESELLER' && (
+            // The order is yours and so are its details; the note says who
+            // sold to this person, because they are who the customer will
+            // ring first.
+            <p className="ord-p">
+              {richMessage(t('orderDetail.soldByYourMember'), {
+                span:
+                  order.storeId !== null ? (
+                    <Link href={`/reseller-stores/${order.storeId}`} className="cod-link">
+                      {order.storeNameSnapshot ?? t('orderDetail.aMemberStore')}
+                    </Link>
+                  ) : (
+                    <span className="ord-strong">
+                      {order.storeNameSnapshot ?? t('orderDetail.aMemberStore')}
+                    </span>
+                  ),
+              })}
+            </p>
+          )}
+          <dl className="cod-dl">
+            <div className="cod-dl__row">
+              <dt>{t('orderDetail.name')}</dt>
+              <dd className="cod-wrap">{order.recipientName}</dd>
+            </div>
+            <div className="cod-dl__row">
+              <dt>{t('orderDetail.phone')}</dt>
+              <dd>
+                <span className="cod-phone">
+                  <a href={`tel:${order.recipientPhoneE164}`} className="cod-link sk-figure">
+                    {order.recipientPhoneE164}
+                  </a>
+                  <CopyButton value={order.recipientPhoneE164} />
+                </span>
+              </dd>
+            </div>
+            {order.recipientAltPhoneE164 && (
+              <div className="cod-dl__row">
+                <dt>{t('orderPage.rec.altPhone')}</dt>
+                <dd>
+                  <span className="cod-phone">
+                    <a href={`tel:${order.recipientAltPhoneE164}`} className="cod-link sk-figure">
+                      {order.recipientAltPhoneE164}
+                    </a>
+                    <CopyButton value={order.recipientAltPhoneE164} />
+                  </span>
+                </dd>
+              </div>
+            )}
+            {order.recipientEmail && (
+              <div className="cod-dl__row">
+                <dt>{t('orderDetail.email')}</dt>
+                <dd className="cod-wrap">{order.recipientEmail}</dd>
+              </div>
+            )}
+            <div className="cod-dl__row">
+              <dt>{t('orderDetail.address')}</dt>
+              <dd className="cod-wrap">
+                <div>{order.recipientAddressLine1}</div>
+                {order.recipientAddressLine2 && <div>{order.recipientAddressLine2}</div>}
+              </dd>
+            </div>
+            {order.recipientLandmark && (
+              <div className="cod-dl__row">
+                <dt>{t('orderPage.rec.landmark')}</dt>
+                <dd className="cod-wrap">{order.recipientLandmark}</dd>
+              </div>
+            )}
+            <div className="cod-dl__row">
+              <dt>{t('orderPage.rec.cityState')}</dt>
+              <dd className="cod-wrap">{cityState}</dd>
+            </div>
+            <div className="cod-dl__row">
+              <dt>{t('orderPage.rec.pin')}</dt>
+              <dd className="sk-figure">{order.recipientPostalCode}</dd>
+            </div>
+            <div className="cod-dl__row">
+              <dt>{t('orderPage.rec.country')}</dt>
+              <dd>{order.recipientCountryCode}</dd>
+            </div>
+          </dl>
+        </div>
+
+        {/* The verdict on that address, beside it — the two are read
+            together or not at all. The whole block is absent on an order
+            that was never checked (or whose read failed): this is advice
+            about a delivery, and an error box about advice is worse than
+            no advice. */}
+        {check !== null && (
+          <div className="cod-rec__check">
+            <AddressCheckView result={check} />
+          </div>
+        )}
+      </div>
+    </DetailCard>
+  );
+}
+
+function PaymentCard({ order }: { readonly order: OrderView }): ReactElement {
+  const t = useT();
+  return (
+    <DetailCard
+      id="payment"
+      icon={<CreditCard size={18} />}
+      title={t('orderPage.card.payment')}
+      titleText={t('orderPage.card.payment')}
+      note={t('orderDetail.whatItIsWorth')}
+    >
+      <Facts
+        items={[
+          {
+            label: t('orderDetail.paymentMode'),
+            value:
+              order.paymentMode === 'COD'
+                ? t('orderDetail.cashOnDelivery')
+                : t('orderDetail.prepaid'),
+          },
+          {
+            // The one figure here that decides whether the parcel is
+            // worth chasing, through `Money` so it groups the Indian way
+            // and sits on tabular figures.
+            label: t('orderDetail.toCollect'),
+            value:
+              order.codAmountInr === null ? (
+                <span className="cod-faint">{t('orderDetail.prepaid')}</span>
+              ) : (
+                <span className="cod-amount">
+                  <Money amount={order.codAmountInr} size="md" />
+                </span>
+              ),
+          },
+          {
+            label: t('orderPage.pay.declared'),
+            value:
+              order.declaredValueInr === null ? (
+                <Dash />
+              ) : (
+                <Money amount={order.declaredValueInr} />
+              ),
+          },
+          {
+            label: t('orderDetail.weight'),
+            value:
+              order.totalWeightGrams === null ? (
+                <Dash />
+              ) : (
+                <span className="sk-figure">{order.totalWeightGrams} g</span>
+              ),
+          },
+          {
+            label: t('orderDetail.package'),
+            value: order.packageType ? (
+              packageWords(order.packageType, t)
+            ) : (
+              <span className="cod-faint">{t('orderPage.pay.notSet')}</span>
+            ),
+          },
+          {
+            label: t('orderPage.pay.special'),
+            value: order.isUrgent ? (
+              <StatusChip kind="pending" label={t('orderDetail.urgent')} size="sm" />
+            ) : (
+              <span className="cod-faint">{t('orderPage.pay.none')}</span>
+            ),
+          },
+        ]}
+      />
+    </DetailCard>
+  );
+}
+
+function ItemsCard({
+  orderId,
+  order,
+}: {
+  readonly orderId: string;
+  readonly order: OrderView;
+}): ReactElement {
+  const t = useT();
+  const identity = useSellerIdentity();
+  const count = order.items.length;
+  return (
+    <DetailCard
+      id="items"
+      icon={<Package size={18} />}
+      title={t('orderPage.card.items')}
+      titleText={t('orderPage.card.items')}
+      note={t('orderPage.card.itemsNote')}
+    >
+      <h3 className="cod-group">
+        {t('orderDetail.items')} ·{' '}
+        {t(count === 1 ? 'orderPage.lineOne' : 'orderPage.lineMany', { count })}
+      </h3>
+      <div className="cod-items">
+        <Table caption={t('orderDetail.itemsOnThisOrder')}>
+          <THead>
+            <Tr>
+              <Th className="ord-thumb-cell" aria-label={t('orderDetail.picture')} />
+              <Th>{t('orderDetail.sku')}</Th>
+              <Th>{t('orderDetail.product')}</Th>
+              <Th align="right">{t('orderDetail.qty')}</Th>
+              <Th align="right">{t('orderDetail.unitWeight')}</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {order.items.length === 0 && (
+              // A header row over nothing says less than a sentence does.
+              <TableEmpty colSpan={5}>{t('orderDetail.noItemsRecordedOn')}</TableEmpty>
+            )}
+            {order.items.map((item) => (
+              <Tr key={item.id}>
+                <Td className="ord-thumb-cell">
+                  {/* Live presigned thumbnail, NOT the snapshot's stored
+                      url — that one has resolved for nobody since the
+                      bucket went private. */}
+                  <ProductThumb src={item.imageUrl} size={40} />
+                </Td>
+                <Td>
+                  <span className="sk-ident cod-wrap">{item.skuCode}</span>
+                </Td>
+                <Td>
+                  <span className="cod-wrap">
+                    {item.productName}
+                    {item.variantLabel && <span className="cod-faint"> · {item.variantLabel}</span>}
+                  </span>
+                </Td>
+                <Td align="right">
+                  <span className="sk-figure">{item.quantity}</span>
+                </Td>
+                <Td align="right">
+                  <span className="sk-figure cod-muted">
+                    {item.unitWeightGrams === null ? <Dash /> : `${item.unitWeightGrams} g`}
+                  </span>
+                </Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
+      </div>
+
+      {/* Hidden rather than shown-and-refused for a VIEWER: the server
+          rejects /charges for that role, and rendering its 403 in a red box
+          reads as a broken page rather than as policy. Cosmetic — the server
+          is still the boundary. */}
+      {identity !== null && can(identity, 'charges.view') && (
+        <div className="cod-charges-wrap">
+          <h3 className="cod-group">{t('orderDetail.charges')}</h3>
+          <p className="cod-card__note">{t('orderDetail.whatThisParcelCosts')}</p>
+          <OrderChargesSection orderId={orderId} />
+        </div>
+      )}
+    </DetailCard>
   );
 }
 
@@ -981,12 +939,12 @@ function OrderInvoiceSection({
   if (!invoice.data) {
     return (
       <div className="ord-stack ord-stack--tight">
-        <div className="ord-row ord-row--between">
-          <p className="ord-p">{t('orderDetail.noInvoiceYetUsually')}</p>
+        <p className="ord-p">{t('orderDetail.noInvoiceYetUsually')}</p>
+        <div>
           <AsyncButton
             variant="secondary"
-            size="sm"
-            icon={<FileText size={14} />}
+            size="md"
+            icon={<FileText size={16} />}
             state={generate.isPending ? 'busy' : undefined}
             labels={{ idle: t('orderDetail.generateNow'), busy: t('orderDetail.generating') }}
             onClick={() => setConfirming(true)}
@@ -1008,12 +966,15 @@ function OrderInvoiceSection({
   }
 
   return (
-    <div className="ord-row ord-row--between">
+    <div className="cod-invoice">
       <div>
-        <div className="sk-ident ord-strong">{invoice.data.invoiceNumber}</div>
+        <div className="sk-ident ord-strong cod-wrap">{invoice.data.invoiceNumber}</div>
         <span className="ord-sub">
           {richMessage(t('orderDetail.issuedTotal'), {
-            invoiceDate: new Date(invoice.data.invoiceDate).toLocaleString(dateTag(locale)),
+            invoiceDate: fmtWhen(invoice.data.invoiceDate, locale, {
+              today: t('orderPage.today'),
+              yesterday: t('orderPage.yesterday'),
+            }),
             totalInr: invoice.data.totalInr,
           })}
         </span>
@@ -1027,9 +988,9 @@ function OrderInvoiceSection({
           href={`/api/seller/orders/${orderId}/invoice/pdf`}
           target="_blank"
           rel="noopener noreferrer"
-          className="ord-link ord-link--block"
+          className="cod-link cod-link--tap"
         >
-          <Download size={14} aria-hidden />
+          <Download size={16} aria-hidden />
           {t('orderDetail.downloadPdf')}
         </a>
       )}

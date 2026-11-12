@@ -35,12 +35,15 @@ export function ConsigneePanel({
   orderId,
   orderNumber,
   onClose,
+  inPlace = false,
 }: {
   readonly orderId: string;
   /** Restated when the change is confirmed. */
   readonly orderNumber?: string | undefined;
   /** Put it away again. The Recipient card is what opens it. */
   readonly onClose?: () => void;
+  /** Render in place inside the Recipient card: no section heading of its own. */
+  readonly inPlace?: boolean;
 }): ReactElement {
   const locale = useLocale();
   const t = useT();
@@ -112,39 +115,34 @@ export function ConsigneePanel({
       : null,
   ].filter((x): x is string => x !== null);
 
-  return (
-    <OrdSection
-      title={t('orderConsignee.customerDetails')}
-      note={
-        d.editable ? (
-          d.reason
-        ) : (
-          /*
+  const note = d.editable ? (
+    d.reason
+  ) : (
+    /*
             When the courier has stopped accepting changes, the reason
             sits behind a chip next to the heading rather than in a
             block that pushed the fields off the screen. The panel is
             READ-ONLY in that state anyway, so the explanation is what
             somebody goes looking for once they notice they cannot type.
           */
-          <button
-            type="button"
-            onClick={() => setWhyOpen((v) => !v)}
-            aria-expanded={whyOpen}
-            className="ord-lock"
-          >
-            <Info size={12} aria-hidden />
-            {t('orderConsignee.lockedByTheCourier')}
-          </button>
-        )
-      }
-      action={
-        onClose !== undefined ? (
-          <Button variant="ghost" size="sm" icon={<X size={14} />} onClick={onClose}>
-            {t('orderConsignee.close')}
-          </Button>
-        ) : undefined
-      }
+    <button
+      type="button"
+      onClick={() => setWhyOpen((v) => !v)}
+      aria-expanded={whyOpen}
+      className="ord-lock"
     >
+      <Info size={12} aria-hidden />
+      {t('orderConsignee.lockedByTheCourier')}
+    </button>
+  );
+  const action =
+    onClose !== undefined ? (
+      <Button variant="ghost" size="sm" icon={<X size={14} />} onClick={onClose}>
+        {t('orderConsignee.close')}
+      </Button>
+    ) : undefined;
+  const content = (
+    <>
       <div className="ord-stack ord-stack--tight">
         {!d.editable && whyOpen && (
           <Notice
@@ -172,6 +170,8 @@ export function ConsigneePanel({
           />
           <TextField
             id="cons-phone"
+            type="tel"
+            inputMode="tel"
             label={t('orderConsignee.phone')}
             value={phone ?? d.currentPhone}
             disabled={!d.editable}
@@ -277,6 +277,20 @@ export function ConsigneePanel({
 
       {/* The order is already known, so it is not asked for again. */}
       <RaiseTicketModal open={raising} onOpenChange={setRaising} orderId={orderId} />
+    </>
+  );
+  return inPlace ? (
+    <div className="cod-inplace">
+      <div className="cod-inplace__head">
+        <h3 className="cod-group">{t('orderConsignee.customerDetails')}</h3>
+        <div className="cod-inplace__note">{note}</div>
+        {action}
+      </div>
+      {content}
+    </div>
+  ) : (
+    <OrdSection title={t('orderConsignee.customerDetails')} note={note} action={action}>
+      {content}
     </OrdSection>
   );
 }

@@ -12,7 +12,8 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Table, TBody, THead, TableEmpty, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { Facts, OrdSection } from '../../_components/orders-parts';
+import { Facts } from '../../_components/orders-parts';
+import { DetailCard } from '../../_components/detail/detail-card';
 import {
   resellerCreditStatusKind,
   resellerCreditStatusLabel,
@@ -130,28 +131,41 @@ export function ResellerMoneyPanel({
   if (!enabled) return null;
   if (money.isLoading) {
     return (
-      <OrdSection title={t('orderResellerMoney.memberStoreMoney')}>
+      <DetailCard
+        id="reseller-money"
+        icon={<Scale size={18} />}
+        title={t('orderResellerMoney.memberStoreMoney')}
+        titleText={t('orderResellerMoney.memberStoreMoney')}
+      >
         <SkeletonRows rows={3} cols={4} label={t('orderResellerMoney.loadingTheStoreMoney')} />
-      </OrdSection>
+      </DetailCard>
     );
   }
   if (money.isError) {
     // A channel order has no reseller money — nothing to show, not an error.
     if (money.error instanceof ApiError && money.error.status === 404) return null;
     return (
-      <OrdSection title={t('orderResellerMoney.memberStoreMoney')}>
+      <DetailCard
+        id="reseller-money"
+        icon={<Scale size={18} />}
+        title={t('orderResellerMoney.memberStoreMoney')}
+        titleText={t('orderResellerMoney.memberStoreMoney')}
+      >
         <ErrorState message={verdict(money.error, t)} retry={() => void money.refetch()} />
-      </OrdSection>
+      </DetailCard>
     );
   }
   const view: ResellerOrderMoneyView | undefined = money.data;
   if (view === undefined) return null;
   const mine = view.parties.find((p) => p.party === 'SELLER');
   return (
-    <OrdSection
+    <DetailCard
+      id="reseller-money"
+      icon={<Scale size={18} />}
       title={t('orderResellerMoney.memberStoreMoney')}
+      titleText={t('orderResellerMoney.memberStoreMoney')}
       note={t('orderResellerMoney.yourTransferPriceFor')}
-      action={<DisputeFiguresAction orderId={orderId} />}
+      actions={<DisputeFiguresAction orderId={orderId} />}
     >
       <div className="ord-stack">
         {mine === undefined ? (
@@ -280,6 +294,6 @@ export function ResellerMoneyPanel({
           </p>
         ) : null}
       </div>
-    </OrdSection>
+    </DetailCard>
   );
 }

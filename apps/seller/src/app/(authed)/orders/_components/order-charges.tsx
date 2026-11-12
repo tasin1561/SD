@@ -5,12 +5,12 @@ import type { OrderChargeView } from '@skydrop/api-client';
 import { useOrderCharges } from '@/lib/api-hooks';
 import { verdict } from '@/i18n/verdict';
 import { Money } from '@skydrop/ui/components';
-import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { Receipt } from 'lucide-react';
 import './orders.css';
 import { useT } from '@/i18n/client';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Seller order-charges section (Module 17). Reads from
@@ -23,94 +23,81 @@ import { useT } from '@/i18n/client';
  * state with the explanatory copy — the admin compute action can
  * populate them retroactively.
  *
- * ── CONSOLE PASS (2026-09-20) ───────────────────────────────────────
- * It renders NO `Card` of its own any more. The caller caps it with a
- * `SectionBand`, and `BandBody` IS the bordered surface — a card
- * inside that draws a second border a hair inside the first, which is
- * the mistake the profile conversion had to undo.
- *
- * The table was a hand-rolled `<thead>`/`<tbody>` inside the `Table`
- * WRAPPER, which meant it alone did not inherit the below-`md` card
- * layout every other table on the estate gets (FE-7) — two columns of
- * money on a 360px phone. It is the primitives now, so the mobile
- * stack and the stamped column labels come for free.
+ * ── REDESIGN (2026-11-12) ───────────────────────────────────────────
+ * Rows are label-left, amount-right at every width (a two-column table
+ * on a 320px phone was the problem, not the cure), the Total last and
+ * larger. The sub-label is the charge's STATE in a word ("Estimated");
+ * the exact charge type is in the row's title.
  */
+const STATUS_WORD: Readonly<Record<string, MessageKey>> = {
+  ESTIMATED: 'orderPage.charge.estimated',
+  CONFIRMED: 'orderPage.charge.confirmed',
+  FINAL: 'orderPage.charge.final',
+  DISPUTED: 'orderPage.charge.disputed',
+  ADJUSTED: 'orderPage.charge.adjusted',
+};
+
 export function OrderChargesSection({ orderId }: { orderId: string }): ReactElement {
   const t = useT();
   const charges = useOrderCharges(orderId);
 
   if (charges.isLoading) {
-    return (
-      <div className="ord-card__pad">
-        <SkeletonRows rows={4} cols={2} label={t('ordersParts.loadingCharges')} />
-      </div>
-    );
+    return <SkeletonRows rows={4} cols={2} label={t('ordersParts.loadingCharges')} />;
   }
   if (charges.isError) {
     return (
-      <div className="ord-card__pad">
-        <ErrorState
-          message={verdict(charges.error, t, t('ordersParts.failedToLoadCharges'))}
-          retry={() => void charges.refetch()}
-        />
-      </div>
+      <ErrorState
+        message={verdict(charges.error, t, t('ordersParts.failedToLoadCharges'))}
+        retry={() => void charges.refetch()}
+      />
     );
   }
   if (!charges.data || charges.data.length === 0) {
     return (
-      <div className="ord-card__pad">
-        <EmptyState
-          bare
-          icon={<Receipt size={20} />}
-          title={t('ordersParts.noChargesPersistedYet')}
-          description={t('ordersParts.pricingBreakdownsAppearHere')}
-        />
-      </div>
+      <EmptyState
+        bare
+        icon={<Receipt size={20} />}
+        title={t('ordersParts.noChargesPersistedYet')}
+        description={t('ordersParts.pricingBreakdownsAppearHere')}
+      />
     );
   }
 
   const total = charges.data.reduce((sum, c) => sum + Number(c.totalAmountInr), 0);
 
   return (
-    <Table caption={t('ordersParts.charges')}>
-      <THead>
-        <Tr>
-          <Th>{t('ordersParts.charge')}</Th>
-          <Th align="right">{t('ordersParts.amount')}</Th>
-        </Tr>
-      </THead>
-      <TBody>
-        {charges.data.map((c) => (
-          <ChargeRow key={c.id} charge={c} />
-        ))}
-        <Tr>
-          <Td>
-            <span className="ord-strong">{t('ordersParts.total')}</span>
-          </Td>
-          <Td align="right">
-            <span className="ord-strong">
-              <Money amount={total} />
-            </span>
-          </Td>
-        </Tr>
-      </TBody>
-    </Table>
+    <ul className="cod-charges" aria-label={t('ordersParts.charges')}>
+      {charges.data.map((c) => (
+        <ChargeRow key={c.id} charge={c} />
+      ))}
+      <li className="cod-charges__row cod-charges__total">
+        <span className="cod-charges__label">{t('ordersParts.total')}</span>
+        <span className="cod-charges__amt">
+          <Money amount={total} size="md" />
+        </span>
+      </li>
+    </ul>
   );
 }
 
 function ChargeRow({ charge }: { charge: OrderChargeView }): ReactElement {
+  const t = useT();
+  const word = STATUS_WORD[charge.status];
   return (
-    <Tr>
-      <Td>
-        <div>{charge.description ?? humanizeType(charge.type)}</div>
-        <span className="ord-sub">
-          {charge.type.toLowerCase().replace(/_/g, ' ')} · {charge.status.toLowerCase()}
+    <li
+      className="cod-charges__row"
+      title={`${charge.type.toLowerCase().replace(/_/g, ' ')} · ${charge.status.toLowerCase()}`}
+    >
+      <span className="cod-charges__label">
+        <span>{charge.description ?? humanizeType(charge.type)}</span>
+        <span className="cod-charges__sub">
+          {word === undefined ? charge.status.toLowerCase() : t(word)}
         </span>
-      </Td>
-      <Td align="right">
+      </span>
+      <span className="cod-charges__amt">
         <Money amount={charge.totalAmountInr} />
-      </Td>
-    </Tr>
+      </span>
+    </li>
   );
 }
 

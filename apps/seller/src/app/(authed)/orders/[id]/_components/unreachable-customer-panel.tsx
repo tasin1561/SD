@@ -11,7 +11,7 @@ import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
-import { dateTag } from '@/i18n/format';
+import { fmtWhen } from '../../_components/detail/format';
 
 /**
  * "We rang your customer and nobody answered" — ON THE ORDER, where the
@@ -95,7 +95,10 @@ export function UnreachableCustomerPanel({
         {review !== null && (
           <span className="ord-faint">
             {richMessage(t('orderUnreachable.raisedIfYouLeave'), {
-              createdAt: new Date(review.createdAt).toLocaleString(dateTag(locale, 'en-IN')),
+              createdAt: fmtWhen(review.createdAt, locale, {
+                today: t('orderPage.today'),
+                yesterday: t('orderPage.yesterday'),
+              }),
             })}
           </span>
         )}
