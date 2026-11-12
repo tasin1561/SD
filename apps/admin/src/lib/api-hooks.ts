@@ -791,9 +791,14 @@ export interface PackScanResult {
 
 export function useOpenPackBox(): UseMutationResult<OpenPackBox, Error, { awbNumber: string }> {
   const client = useApiClient();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
       client.request<OpenPackBox>('/api/warehouse/packs/boxes/open', { method: 'POST', body }),
+    // PACK-4: opening a box moves the parcel out of `waiting` and into
+    // `inProgress` — on THIS bench and on every other one. A stale list
+    // is how two packers walk after the same carton.
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['warehouse-pack', 'queue'] }),
   });
 }
 
@@ -833,12 +838,17 @@ export function useCancelPackBox(): UseMutationResult<
   { packBoxId: string; reason: string }
 > {
   const client = useApiClient();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ packBoxId, reason }) =>
       client.request<{ packBoxId: string; releasedScans: number }>(
         `/api/warehouse/packs/boxes/${packBoxId}/cancel`,
         { method: 'POST', body: { reason } },
       ),
+    // Cancelling puts the parcel BACK in the waiting list. Left stale it
+    // is invisible until the poll, and the packer who just gave it up
+    // cannot see it to hand on.
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['warehouse-pack', 'queue'] }),
   });
 }
 
@@ -857,12 +867,19 @@ export function useCompletePack(): UseMutationResult<
   { shipmentId: string; scannedSerials?: readonly string[] }
 > {
   const client = useApiClient();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ shipmentId, scannedSerials }) =>
       client.request<CompletePackResult>(`/api/warehouse/packs/${shipmentId}/complete`, {
         method: 'POST',
         body: scannedSerials === undefined ? {} : { scannedSerials },
       }),
+    // The parcel has just LEFT the waiting list, so the list on screen is
+    // wrong the moment this resolves. Without this it stayed wrong until
+    // the 30s poll happened to fire, and a packer watching a parcel they
+    // had just packed sit in "waiting to be packed" has every reason to
+    // think the pack did not take and to pack it again.
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['warehouse-pack', 'queue'] }),
   });
 }
 
