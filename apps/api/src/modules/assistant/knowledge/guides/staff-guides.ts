@@ -9,6 +9,37 @@ const INV = (file: string): string => `docs/invariants/${file}.md`;
  */
 export const STAFF_GUIDES: readonly Guide[] = [
   {
+    id: 'staff-find-anything',
+    audience: ['staff'],
+    title: 'Find any order fast: the search box at the top',
+    summary:
+      'The search box in the top bar finds an order by number, the client’s reference, the customer, the phone, the AWB or a ticket number.',
+    keywords: [
+      'search',
+      'find',
+      'awb',
+      'waybill',
+      'tracking number',
+      'order number',
+      'phone',
+      'customer name',
+      'ticket number',
+      'look up',
+    ],
+    errorDomains: [],
+    sections: [
+      {
+        heading: 'Searching',
+        steps: [
+          'Use the search box in the top bar ("Order, AWB, ticket, name or phone…").',
+          'Type at least 2 characters and wait a moment. It searches the order number, the client’s own reference, the recipient’s name and phone, the waybill (AWB), and a ticket number (TK-…).',
+          'Pick the result to open that order or ticket.',
+        ],
+      },
+    ],
+    sources: [AD('shell')],
+  },
+  {
     id: 'staff-call-centre',
     audience: ['staff'],
     title: 'Call centre: confirming orders by phone',

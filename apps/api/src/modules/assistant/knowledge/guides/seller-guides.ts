@@ -9,6 +9,38 @@ const UI = 'packages/ui/src/app/i18n/ui-messages.ts';
  */
 export const SELLER_GUIDES: readonly Guide[] = [
   {
+    id: 'seller-find-anything',
+    audience: ['seller'],
+    title: 'Find any order fast: the search box at the top',
+    summary:
+      'The search box at the top of every page finds an order by number, your reference, the customer, the phone, the AWB or a ticket number.',
+    keywords: [
+      'search',
+      'find',
+      'awb',
+      'waybill',
+      'tracking number',
+      'order number',
+      'phone',
+      'customer name',
+      'ticket number',
+      'look up',
+    ],
+    errorDomains: [],
+    sections: [
+      {
+        heading: 'Searching',
+        steps: [
+          'Use the search box in the bar at the top of every page ("Order, AWB, ticket, name or phone…").',
+          'Type at least 2 characters and wait a moment. It searches the order number, your own reference, the recipient’s name and phone, the waybill (AWB), and a ticket number (TK-…).',
+          'Pick the result to open that order or ticket.',
+          'If nothing matches, check the number for a typo, or look in the Orders list.',
+        ],
+      },
+    ],
+    sources: [S('authedShell')],
+  },
+  {
     id: 'seller-getting-started',
     audience: ['seller'],
     title: 'Getting started as a client',
