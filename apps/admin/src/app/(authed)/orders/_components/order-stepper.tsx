@@ -14,9 +14,10 @@ import { fmtDate } from './order-detail-format';
  * parcel that went straight through) is dashed and hollow with a
  * screen-reader "Skipped", so it never reads as simply "not yet".
  *
- * Only the first, the current and the last steps print their name; the
- * rest are in the list for assistive tech and in `title`. The estimated
- * delivery sits at the right end. It is an `<ol>`, and below ~720px the
+ * The track carries only dots; one caption row under it prints the
+ * current step (ellipsised, full text in `title`) and, at the right, the
+ * estimated delivery or the final step. Every name is in the list for
+ * assistive tech and in each dot's `title`. It is an `<ol>`, and below ~720px the
  * row scrolls sideways with the current step brought into view.
  */
 export function OrderStepper({
@@ -56,39 +57,64 @@ export function OrderStepper({
   });
   const estimate = milestones.find((m) => m.estimated && m.at !== null);
 
+  const current = milestones.find((m) => m.state === 'CURRENT');
+  const caption = current !== undefined ? stepText(current) : null;
+  const tail =
+    estimate !== undefined
+      ? t('orderDetail.estimated', { date: fmtDate(estimate.at) })
+      : (milestones[last]?.label ?? null);
+
   return (
-    <div className="od-stepper" ref={scroller}>
-      <ol className="od-stepper__list" aria-label={t('orderDetail.tracker')}>
-        {milestones.map((m, i) => {
-          const current = m.state === 'CURRENT';
-          const skipped = m.state === 'SKIPPED';
-          const showLabel = current || i === 0 || (i === last && estimate === undefined);
-          const text = current && m.detail !== null ? `${m.label} · ${m.detail}` : m.label;
-          return (
-            <li
-              key={m.key}
-              className="od-step"
-              data-state={m.state.toLowerCase()}
-              data-first={i === 0 ? '1' : undefined}
-              data-last={i === last ? '1' : undefined}
-              data-fill={i < reached ? '1' : '0'}
-              aria-current={current ? 'step' : undefined}
-              title={text}
-            >
-              <span className="od-step__node" aria-hidden>
-                {m.state === 'DONE' ? <Check size={9} strokeWidth={4} /> : null}
-              </span>
-              {skipped ? <span className="od-sr">{t('orderDetail.stepper.skipped')}</span> : null}
-              <span className={showLabel ? 'od-step__label' : 'od-step__label od-sr'}>{text}</span>
-            </li>
-          );
-        })}
-      </ol>
-      {estimate !== undefined ? (
-        <span className="od-stepper__eta">
-          {t('orderDetail.estimated', { date: fmtDate(estimate.at) })}
+    <div className="od-stepper-box">
+      <div className="od-stepper" ref={scroller}>
+        <ol className="od-stepper__list" aria-label={t('orderDetail.tracker')}>
+          {milestones.map((m, i) => {
+            const isCurrent = m.state === 'CURRENT';
+            const skipped = m.state === 'SKIPPED';
+            const text = isCurrent ? stepText(m) : m.label;
+            return (
+              <li
+                key={m.key}
+                className="od-step"
+                data-state={m.state.toLowerCase()}
+                data-last={i === last ? '1' : undefined}
+                data-fill={i < reached ? '1' : '0'}
+                aria-current={isCurrent ? 'step' : undefined}
+                title={text}
+              >
+                <span className="od-step__node" aria-hidden>
+                  {m.state === 'DONE' ? <Check size={9} strokeWidth={4} /> : null}
+                </span>
+                {skipped ? <span className="od-sr">{t('orderDetail.stepper.skipped')}</span> : null}
+                <span className="od-step__label od-sr">{text}</span>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+      {/* The words live on their own row, never under the dots: a long
+          courier location used to run into the estimate (owner,
+          2026-11-12). The current step shrinks with an ellipsis; the
+          estimate never does. Hidden from assistive tech — the list above
+          already says all of it. */}
+      <div className="od-stepper__caption" aria-hidden>
+        <span className="od-stepper__now" title={caption ?? undefined}>
+          {caption ?? milestones[0]?.label}
         </span>
-      ) : null}
+        {tail !== null ? <span className="od-stepper__eta">{tail}</span> : null}
+      </div>
     </div>
   );
+}
+
+/**
+ * "Out for delivery · Kolkata_Baranagar_D" — not "Out for delivery · Out
+ * for delivery · Kolkata…" when the courier's detail already starts with
+ * the step's own name.
+ */
+export function stepText(m: Pick<JourneyMilestoneView, 'label' | 'detail'>): string {
+  if (m.detail === null || m.detail.trim() === '') return m.label;
+  const detail = m.detail.trim();
+  if (detail.toLowerCase().startsWith(m.label.toLowerCase())) return detail;
+  return `${m.label} · ${detail}`;
 }

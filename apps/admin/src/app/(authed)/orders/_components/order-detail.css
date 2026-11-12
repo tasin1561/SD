@@ -406,22 +406,28 @@
 .od-stepper-wrap {
   min-width: 0;
 }
-.od-stepper {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--sp-3);
-  min-height: 56px;
+.od-stepper-box {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
   padding: var(--sp-3) var(--sp-4);
-  overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--surface-2);
+}
+.od-stepper {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+  padding-top: 2px;
+  overflow-x: auto;
   scrollbar-width: thin;
 }
 .od-stepper__list {
   display: flex;
   flex: 1 1 auto;
-  min-width: 520px;
+  /* dots only now: fits a 360px phone without scrolling sideways */
+  min-width: 220px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -429,7 +435,7 @@
 .od-step {
   position: relative;
   flex: 1 1 0;
-  height: 32px;
+  height: 18px;
 }
 .od-step[data-last='1'] {
   flex: 0 0 14px;
@@ -478,35 +484,25 @@
   border-color: var(--fg-faint);
   background: transparent;
 }
-.od-step__label {
-  position: absolute;
-  top: 18px;
-  left: 0;
+.od-stepper__caption {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  min-width: 0;
   font-size: var(--fs-xs);
   line-height: 16px;
-  white-space: nowrap;
-  color: var(--fg-muted);
 }
-.od-step[data-state='current'] .od-step__label {
-  left: 7px;
-  transform: translateX(-50%);
+.od-stepper__now {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: var(--fw-semibold);
   color: var(--blue-text);
 }
-.od-step[data-first='1'] .od-step__label {
-  left: 0;
-  transform: none;
-}
-.od-step[data-last='1'] .od-step__label {
-  left: auto;
-  right: 0;
-  transform: none;
-}
 .od-stepper__eta {
   flex: none;
-  align-self: flex-end;
-  font-size: var(--fs-xs);
-  line-height: 16px;
   white-space: nowrap;
   color: var(--fg-muted);
 }
