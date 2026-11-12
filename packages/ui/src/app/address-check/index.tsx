@@ -536,8 +536,13 @@ function Verdict({
         <ConfirmBox confirmed={confirmed} onChange={onConfirmedChange} />
       ) : null}
 
-      {result.providersUsed.some((p) => p.toLowerCase() === 'ola') ? (
-        <p className="sk-ac__attr">{t('ui.ac.attribution.ola')}</p>
+      {/* OUR provider, never theirs (owner, 2026-11-12). Solustation is
+          who we buy the answer from; which map data they lean on behind
+          it is their arrangement and not a name to put in front of a
+          call agent, who can only act on "who do I chase when this is
+          wrong". Shown whenever an answer came from anywhere. */}
+      {result.providersUsed.length > 0 ? (
+        <p className="sk-ac__attr">{t('ui.ac.attribution.provider')}</p>
       ) : null}
     </>
   );
