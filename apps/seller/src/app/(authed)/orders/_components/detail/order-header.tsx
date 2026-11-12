@@ -144,11 +144,6 @@ export function OrderHeader({
       <div className="cod-meta">
         <div className="cod-meta__info">
           <div className="cod-meta__chips">
-            {/* The bar is too narrow on a phone to carry the copy button beside
-              the number, so it sits here instead (CSS shows exactly one). */}
-            <span className="cod-phone-copy">
-              <CopyButton value={order.orderNumber} />
-            </span>
             <span className="cod-pill" data-tone="accent">
               {order.paymentMode === 'COD'
                 ? t('orderDetail.cashOnDelivery')
