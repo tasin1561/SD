@@ -212,3 +212,34 @@ describe('helpers', () => {
     expect(cleanFileName('  \u0007 ')).toBe('attachment');
   });
 });
+
+describe('rebuilds are rationed, so a burst of uploads cannot exhaust memory', () => {
+  it('never runs more than MAX_CONCURRENT_REBUILDS at once, and every queued one finishes', async () => {
+    const { withRebuildSlot, MAX_CONCURRENT_REBUILDS } =
+      await import('../../src/modules/assistant/assistant-attachment-rebuild');
+    let running = 0;
+    let peak = 0;
+    const job = (i: number) =>
+      withRebuildSlot(async () => {
+        running++;
+        peak = Math.max(peak, running);
+        await new Promise((r) => setTimeout(r, 5));
+        running--;
+        return i;
+      });
+    const results = await Promise.all(Array.from({ length: 10 }, (_, i) => job(i)));
+    expect(results).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(peak).toBe(MAX_CONCURRENT_REBUILDS);
+  });
+
+  it('a failing rebuild frees its slot', async () => {
+    const { withRebuildSlot } =
+      await import('../../src/modules/assistant/assistant-attachment-rebuild');
+    const boom = () =>
+      withRebuildSlot(async () => {
+        throw new Error('bad file');
+      });
+    await expect(Promise.all([boom(), boom(), boom()])).rejects.toThrow('bad file');
+    await expect(withRebuildSlot(async () => 'ok')).resolves.toBe('ok');
+  });
+});

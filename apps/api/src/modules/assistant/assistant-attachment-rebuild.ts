@@ -99,7 +99,34 @@ export async function rebuildAttachment(input: Buffer): Promise<Rebuilt> {
       'Only JPEG, PNG, WebP, GIF and PDF files can be attached.',
     );
   }
-  return type === 'pdf' ? rebuildPdf(input) : rebuildImage(input);
+  return withRebuildSlot(() => (type === 'pdf' ? rebuildPdf(input) : rebuildImage(input)));
+}
+
+/**
+ * At most this many rebuilds at once per API process. Decoding a 40 MP
+ * image holds ~160 MB of raw pixels; the droplet has ~1.5 GB free and
+ * runs ONE API process, so ten uploads at once must queue, not all decode
+ * together and take the API down (the failure ClamAV was rejected for).
+ */
+export const MAX_CONCURRENT_REBUILDS = 2;
+let activeRebuilds = 0;
+const waitingRebuilds: Array<() => void> = [];
+
+export async function withRebuildSlot<T>(work: () => Promise<T>): Promise<T> {
+  if (activeRebuilds >= MAX_CONCURRENT_REBUILDS) {
+    await new Promise<void>((resolve) => waitingRebuilds.push(resolve));
+  } else {
+    activeRebuilds++;
+  }
+  try {
+    return await work();
+  } finally {
+    // Hand the slot straight to the next waiter (the count stays the same),
+    // or free it.
+    const next = waitingRebuilds.shift();
+    if (next !== undefined) next();
+    else activeRebuilds--;
+  }
 }
 
 /**
