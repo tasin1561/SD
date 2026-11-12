@@ -48,7 +48,7 @@ import './parcel-activity.css';
  * same gate as the page), and `usePermission` only decides whether to
  * SPEND the request — FE-2: the server is law and this is cosmetic.
  */
-const ICONS: Readonly<Record<ParcelActivityKind, ReactElement>> = {
+export const ICONS: Readonly<Record<ParcelActivityKind, ReactElement>> = {
   LABEL_GENERATED: <Tag size={14} aria-hidden />,
   LABEL_PRINTED: <Printer size={14} aria-hidden />,
   PICK_BATCH_CREATED: <ClipboardList size={14} aria-hidden />,
@@ -70,7 +70,7 @@ const ICONS: Readonly<Record<ParcelActivityKind, ReactElement>> = {
 };
 
 /** Which steps read as a warning rather than ordinary progress. */
-const TONE: Partial<Readonly<Record<ParcelActivityKind, 'warn' | 'good'>>> = {
+export const TONE: Partial<Readonly<Record<ParcelActivityKind, 'warn' | 'good'>>> = {
   PICKED_SHORT: 'warn',
   PACK_BOX_CANCELLED: 'warn',
   RTO_RECEIVED: 'warn',
@@ -209,7 +209,7 @@ function TrailRow({
  * copies. Enum values and document numbers are DATA and stay as they
  * are — only the words around them are translated.
  */
-function Details({ event }: { readonly event: ParcelActivityEvent }): ReactElement | null {
+export function Details({ event }: { readonly event: ParcelActivityEvent }): ReactElement | null {
   const t = useT();
   const d = event.detail;
   if (d === null) return null;

@@ -1,0 +1,1028 @@
+/* Order detail — the dense two-column working page.
+   Tokens only (FE-6): no colour literals. Every transition here is
+   transform / opacity / grid-rows, and all of them collapse to instant
+   under prefers-reduced-motion via brand/app.css's global rule. */
+
+.od-page {
+  overflow-x: clip;
+  --od-top: calc(var(--top-h, 56px) + env(safe-area-inset-top));
+  --od-head-h: 52px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  font-size: var(--fs-md);
+  line-height: 20px;
+}
+:lang(bn) .od-page,
+:lang(hi) .od-page {
+  line-height: 1.5;
+}
+.od-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.od-muted {
+  color: var(--fg-muted);
+}
+.od-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--blue-text);
+  text-decoration: none;
+}
+.od-link:hover {
+  text-decoration: underline;
+}
+.od-link:focus-visible,
+.od-iconbtn:focus-visible,
+.od-copy:focus-visible,
+.od-card__toggle:focus-visible,
+.od-disc__btn:focus-visible,
+.od-seg__tab:focus-visible {
+  outline: 2px solid var(--blue-text);
+  outline-offset: 2px;
+}
+
+/* ── header ───────────────────────────────────────────────────────────── */
+.od-sentinel {
+  height: 1px;
+  margin-bottom: -1px;
+}
+.od-header {
+  container-type: inline-size;
+  position: sticky;
+  top: var(--od-top);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--od-head-h);
+  max-height: 56px;
+  padding: 0 var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  /* Opaque, and a shadow ONLY while stuck — a state, never an animation. */
+}
+.od-header[data-stuck='1'] {
+  box-shadow: var(--elev-2);
+}
+.od-header__line {
+  display: contents;
+}
+.od-header__line > * {
+  order: 1;
+}
+.od-header__line:first-child > * {
+  order: 0;
+}
+.od-header__line > .od-header__spacer {
+  order: 2;
+  flex: 1 1 0;
+  min-width: 0;
+}
+.od-header__line > .od-header__primary {
+  order: 3;
+}
+.od-header > .od-menu {
+  order: 4;
+}
+.od-header__no {
+  flex: none;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: var(--fw-semibold);
+  color: var(--fg-strong);
+  white-space: nowrap;
+}
+.od-header__ref {
+  /* Never shrinks (owner: the client ref never hides). It is shown only
+     here, while the facts beside it are repeated lower down — ETA in the
+     stepper and the Shipment card, payment and weight in Payment &
+     package — so when the row runs out of room it is the FACTS that
+     ellipsise. Capped so a pathologically long ref cannot take the row. */
+  flex: none;
+  max-width: 18rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  color: var(--fg-muted);
+}
+.od-header__awb {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-inline-start: var(--sp-2);
+  border-inline-start: 1px solid var(--line);
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+}
+.od-header__facts {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  color: var(--fg-body);
+}
+.od-header__fact {
+  display: inline;
+}
+.od-header__fact > * {
+  vertical-align: baseline;
+}
+.od-header__fact::before {
+  content: '';
+}
+.od-header__dot {
+  margin-inline: 4px;
+  color: var(--fg-faint);
+}
+.od-header__when {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  color: var(--fg-muted);
+}
+.od-header__whenicon {
+  display: none;
+}
+/* The phone-only copy of the client ref, shown by the <640px rules. */
+.od-header__ref--line2 {
+  display: none;
+}
+/* Truncation: Placed/Updated go to a tooltip; nothing else hides. The
+   client ref NEVER hides (owner, 2026-11-12) — when the row runs out of
+   room it ellipsises (full value in its title) instead. The order number,
+   the status chip, the AWB and More never hide either. */
+@container (max-width: 1500px) {
+  .od-header__when {
+    display: none;
+  }
+  .od-header__whenicon {
+    display: inline-flex;
+  }
+}
+
+.od-iconbtn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.od-iconbtn:hover {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+}
+.od-iconbtn--sm {
+  width: 24px;
+  height: 24px;
+}
+.od-copy {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.od-copy:hover {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+}
+.od-copy__a,
+.od-copy__b {
+  grid-area: 1 / 1;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.od-copy__b {
+  opacity: 0;
+  transform: scale(0.5);
+}
+.od-copy[data-copied='1'] .od-copy__a {
+  opacity: 0;
+  transform: scale(0.5);
+}
+.od-copy[data-copied='1'] .od-copy__b {
+  opacity: 1;
+  transform: none;
+  color: var(--st-delivered-fg);
+}
+
+/* The More trigger: the shared MenuButton's legacy classes set a 28px
+   button; the header wants the console's 32px control. */
+.od-menu {
+  flex: none;
+}
+.od-more {
+  width: auto !important;
+  height: var(--ctl-h-sm) !important;
+  padding: 0 var(--sp-3) !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: var(--r-sm) !important;
+  background: var(--surface-2) !important;
+  color: var(--fg-body) !important;
+  font-size: var(--fs-sm) !important;
+  font-weight: var(--fw-medium) !important;
+}
+.od-more:hover {
+  background: var(--surface-3) !important;
+  color: var(--fg-strong) !important;
+}
+.od-header__primary {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* < 640px: two compact lines, the second scrolling sideways. */
+@media (max-width: 639.98px) {
+  .od-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'one menu'
+      'two two';
+    align-items: center;
+    gap: 0 var(--sp-1);
+    min-height: 0;
+    max-height: 88px;
+    padding: 0 var(--sp-2);
+  }
+  .od-header__line:first-child {
+    grid-area: one;
+    /* Back + number + status chip had ~30px more than a 390px phone gives
+       line 1, so the chip ran UNDER More ("In transi…"). The number steps
+       down a size here; min-width lets the cell shrink instead of
+       spilling into the menu's column. */
+    min-width: 0;
+  }
+  /* The LAST resort, and the only shrinking part of line 1: the status
+     chip ellipsises rather than run under More. Short statuses never
+     reach it; "Pending confirmation" on a 360px phone does. The full
+     status is in the chip's title and printed in full on the stepper
+     directly below. Back, the number and More keep their size. */
+  .od-header__line:first-child .sk-chip {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .od-header__line:first-child .sk-chip__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .od-header__line:first-child .od-header__no {
+    flex: none;
+    font-size: 15px;
+    line-height: 20px;
+    letter-spacing: -0.01em;
+  }
+  /* More goes icon-only on a phone: measured, line 1 needed 271px of a
+     252px cell even with the smaller number, and the chip ran 15px under
+     the menu. The word is hidden VISUALLY only — it stays in the DOM, so
+     it is still the button's accessible name. The button keeps a 44px
+     tap target. */
+  .od-header > .od-menu .sk-menu-button__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .od-header > .od-menu button[aria-haspopup='menu'] {
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 0;
+  }
+  .od-header__line--facts {
+    grid-area: two;
+  }
+  .od-header > .od-menu {
+    grid-area: menu;
+  }
+  .od-header__line {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: 40px;
+  }
+  .od-header__line > * {
+    order: 0 !important;
+  }
+  .od-header__line--facts {
+    overflow-x: auto;
+    scrollbar-width: none;
+    min-height: 36px;
+  }
+  .od-header__line--facts > * {
+    flex: none;
+  }
+  .od-header__line--facts .od-header__when {
+    display: none;
+  }
+  .od-header__line--facts .od-header__whenicon {
+    display: inline-flex;
+  }
+  /* Line 1 is back, number, status, More — no room for the ref there, so
+     it is shown at the head of line 2 (which scrolls) instead. */
+  .od-header__line:first-child .od-header__ref {
+    display: none;
+  }
+  .od-header__ref--line2 {
+    display: inline;
+    flex: none;
+  }
+  /* Line 1 is back, number, status, More — nothing else, so it never
+     overflows 320px. The contextual button leads line 2, which scrolls. */
+  .od-header__line:first-child .od-copy {
+    display: none;
+  }
+  .od-header__line--facts > .od-header__primary {
+    order: -1 !important;
+  }
+  .od-header__no {
+    font-size: 15px;
+  }
+  .od-header__line:first-child {
+    gap: 6px;
+  }
+  .od-more {
+    padding: 0 var(--sp-2) !important;
+  }
+}
+@media (pointer: coarse) {
+  .od-iconbtn,
+  .od-copy,
+  .od-card__toggle {
+    width: 44px;
+    height: 44px;
+  }
+  .od-iconbtn--sm {
+    width: 44px;
+    height: 44px;
+  }
+  .od-more,
+  .od-header__primary {
+    min-height: 44px !important;
+  }
+}
+
+/* ── stepper ──────────────────────────────────────────────────────────── */
+.od-stepper-wrap {
+  min-width: 0;
+}
+.od-stepper {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-height: 56px;
+  padding: var(--sp-3) var(--sp-4);
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  scrollbar-width: thin;
+}
+.od-stepper__list {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 520px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.od-step {
+  position: relative;
+  flex: 1 1 0;
+  height: 32px;
+}
+.od-step[data-last='1'] {
+  flex: 0 0 14px;
+}
+.od-step::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 7px;
+  width: 100%;
+  height: 2px;
+  background: var(--line-strong);
+}
+.od-step[data-last='1']::after {
+  display: none;
+}
+.od-step[data-fill='1']::after {
+  background: var(--accent-fill);
+}
+.od-step__node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--accent-fg);
+}
+.od-step[data-state='done'] .od-step__node {
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
+}
+.od-step[data-state='current'] .od-step__node {
+  width: 18px;
+  height: 18px;
+  margin: -2px 0 0 -2px;
+  border-color: var(--accent-fill);
+  background: var(--surface-2);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+.od-step[data-state='skipped'] .od-step__node {
+  border-style: dashed;
+  border-color: var(--fg-faint);
+  background: transparent;
+}
+.od-step__label {
+  position: absolute;
+  top: 18px;
+  left: 0;
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  white-space: nowrap;
+  color: var(--fg-muted);
+}
+.od-step[data-state='current'] .od-step__label {
+  left: 7px;
+  transform: translateX(-50%);
+  font-weight: var(--fw-semibold);
+  color: var(--blue-text);
+}
+.od-step[data-first='1'] .od-step__label {
+  left: 0;
+  transform: none;
+}
+.od-step[data-last='1'] .od-step__label {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+.od-stepper__eta {
+  flex: none;
+  align-self: flex-end;
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  white-space: nowrap;
+  color: var(--fg-muted);
+}
+
+/* ── grid ─────────────────────────────────────────────────────────────── */
+.od-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+  min-width: 0;
+}
+.od-main,
+.od-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.od-slot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.od-slot:empty {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .od-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  }
+  /* Sticky only when the whole sidebar fits the viewport (set from JS). */
+  .od-side[data-sticky='1'] {
+    position: sticky;
+    top: calc(var(--od-top) + var(--od-head-h) + var(--sp-3));
+  }
+}
+@media (min-width: 1280px) {
+  .od-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  }
+}
+@media (max-width: 1023.98px) {
+  .od-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .od-main,
+  .od-side {
+    display: contents;
+  }
+  /* Stepper, Recipient & address, Shipment, Payment & package,
+     Items & charges, (member-store panels), Activity. */
+  .od-slot[data-slot='recipient'] {
+    order: 1;
+  }
+  .od-slot[data-slot='shipment'] {
+    order: 2;
+  }
+  .od-slot[data-slot='payment'] {
+    order: 3;
+  }
+  .od-slot[data-slot='items'] {
+    order: 4;
+  }
+  .od-slot[data-slot='reseller'] {
+    order: 5;
+  }
+  .od-slot[data-slot='activity'] {
+    order: 6;
+  }
+}
+
+/* ── card ─────────────────────────────────────────────────────────────── */
+.od-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+  scroll-margin-top: calc(var(--od-top) + var(--od-head-h) + var(--sp-2));
+}
+.od-card[data-tone='warn'] {
+  border-inline-start: 3px solid var(--st-pending-fg);
+}
+.od-card__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  min-height: 40px;
+  padding: 4px var(--sp-2) 4px var(--sp-4);
+}
+.od-card__title {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: 20px;
+  font-weight: var(--fw-semibold);
+  color: var(--fg-strong);
+}
+.od-card__meta {
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  color: var(--fg-muted);
+}
+.od-card__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-inline-start: auto;
+  min-width: 0;
+}
+.od-card__toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.od-card__toggle:hover {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+}
+.od-card__toggle svg {
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.od-card[data-open='0'] > .od-card__head .od-card__toggle svg {
+  transform: rotate(-90deg);
+}
+.od-card__wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--dur) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+.od-card__wrap[data-open='1'] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.od-card__inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.od-card__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: 0 var(--sp-4) var(--sp-3);
+}
+.od-card .sk-table-wrap {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.od-card__body > .sk-table-wrap,
+.od-card__body .od-charges .sk-table-wrap {
+  margin: 0;
+}
+
+/* a label / value list, two columns */
+.od-dl {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+.od-dl__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-height: 28px;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+.od-dl__row:first-child {
+  border-top: 0;
+}
+.od-dl dt {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  color: var(--fg-muted);
+}
+.od-dl dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-body);
+}
+
+/* tables: 32px rows on a pointer, 40px+ on touch. The mobile card layout
+   (below md) is the shared Table's and is left alone. */
+@media (min-width: 768px) {
+  .od-card .sk-td {
+    height: 32px;
+    padding-block: 4px;
+    font-size: var(--fs-md);
+    line-height: 20px;
+  }
+  .od-card .sk-th {
+    padding-block: 6px;
+    font-size: var(--fs-xs);
+    line-height: 16px;
+  }
+}
+@media (min-width: 768px) and (pointer: coarse) {
+  .od-card .sk-td {
+    height: 44px;
+  }
+}
+.od-card .oc-total-row .sk-td {
+  font-weight: var(--fw-bold);
+  color: var(--fg-strong);
+}
+.od-charges {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.od-empty {
+  margin: 0;
+  padding: var(--sp-2) 0;
+  color: var(--fg-muted);
+}
+
+/* ── recipient & address ──────────────────────────────────────────────── */
+.od-attn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--st-pending-line);
+  border-radius: var(--r-pill);
+  background: var(--st-pending-bg);
+  color: var(--st-pending-fg);
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  font-weight: var(--fw-semibold);
+}
+.od-recip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .od-recip[data-check='1'] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.od-recip__main,
+.od-recip__check {
+  display: grid;
+  align-content: start;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.od-recipient {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.od-recipient > p {
+  margin: 0;
+}
+.od-recipient__name {
+  font-weight: var(--fw-semibold);
+  color: var(--fg-strong);
+}
+.od-recipient__phone {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+}
+.od-recipient__addr {
+  display: grid;
+  gap: 0;
+  margin: 4px 0;
+  font-style: normal;
+  color: var(--fg-body);
+}
+.od-recipient .cc-risk {
+  margin-top: var(--sp-2);
+}
+
+/* disclosure */
+.od-disc {
+  border-top: 1px solid var(--line);
+  padding-top: var(--sp-1);
+}
+.od-disc__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  cursor: pointer;
+}
+.od-disc__btn:hover {
+  color: var(--fg-strong);
+}
+.od-disc__btn svg {
+  transition: transform var(--dur-fast) var(--ease-out);
+  transform: rotate(-90deg);
+}
+.od-disc[data-open='1'] .od-disc__btn svg {
+  transform: none;
+}
+
+/* ── shipment ─────────────────────────────────────────────────────────── */
+.od-ship-list {
+  display: grid;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.od-ship {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+  scroll-margin-top: calc(var(--od-top) + var(--od-head-h) + var(--sp-2));
+}
+.od-ship + .od-ship {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+}
+.od-ship__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.od-ship__number {
+  font-weight: var(--fw-semibold);
+  color: var(--fg-strong);
+}
+.od-ship__meta,
+.od-ship__awb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  color: var(--fg-muted);
+}
+.od-ship__awb {
+  font-size: var(--fs-sm);
+  color: var(--fg-body);
+}
+.od-ship__actions {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.od-ship__courier {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.od-ship__courier .os-tools {
+  display: block;
+}
+.od-ship__courier .sk-btn {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+}
+.od-ship__actions .od-iconbtn {
+  border-color: var(--line-strong);
+}
+.od-ship__actions .od-menu .od-iconbtn {
+  width: 32px;
+  height: 32px;
+}
+
+/* ── activity ─────────────────────────────────────────────────────────── */
+.od-seg {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  scrollbar-width: none;
+}
+.od-seg__pill {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  width: var(--seg-w, 0);
+  border-radius: var(--r-pill);
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  transform: translateX(var(--seg-x, 0));
+}
+.od-seg[data-ready='1'] .od-seg__pill {
+  transition: transform 150ms var(--ease-out);
+}
+.od-seg__tab {
+  position: relative;
+  flex: none;
+  min-height: 28px;
+  padding: 0 var(--sp-3);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.od-seg__tab[aria-selected='true'] {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+@media (pointer: coarse) {
+  .od-seg__tab {
+    min-height: 40px;
+  }
+}
+.od-feed {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.od-feed__row {
+  display: grid;
+  grid-template-columns: 112px 76px minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-height: 32px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.od-feed__row:first-child {
+  border-top: 0;
+}
+.od-feed__time {
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+.od-feed__src {
+  justify-self: start;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-2xs);
+  line-height: 16px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+.od-feed__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--fg-body);
+}
+.od-feed__icon {
+  display: inline-grid;
+  vertical-align: -2px;
+  margin-inline-end: 6px;
+  color: var(--fg-muted);
+}
+.od-feed__row[data-tone='warn'] .od-feed__icon {
+  color: var(--st-pending-fg);
+}
+.od-feed__row[data-tone='good'] .od-feed__icon {
+  color: var(--st-delivered-fg);
+}
+@media (max-width: 639.98px) {
+  .od-feed__row {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 2px;
+  }
+  .od-feed__text {
+    grid-column: 1 / -1;
+  }
+}
+.od-showall {
+  justify-self: start;
+}
+
+/* danger dialogs */
+.od-danger-banner {
+  margin-bottom: var(--sp-2);
+}
+.od-typed-order {
+  margin-top: var(--sp-2);
+}

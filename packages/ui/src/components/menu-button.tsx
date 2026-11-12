@@ -36,6 +36,37 @@ import { Button } from './button';
  * caller for this single use.
  */
 
+/**
+ * ── ACTION MENUS (added for the admin order detail) ──────────────────
+ * The link menu below is unchanged. `entries` is a second, opt-in way to
+ * fill the same menu: buttons that RUN something rather than navigate,
+ * group labels, separators, danger styling and items that are disabled
+ * WITH A REASON. A disabled item keeps `role="menuitem"` and stays in the
+ * roving-focus order with `aria-disabled="true"` — it is not skipped —
+ * and its reason is a second muted line INSIDE the item, so a screen
+ * reader reads it with the name instead of leaving it to a tooltip.
+ */
+export type MenuEntry =
+  | {
+      readonly kind: 'action';
+      readonly id: string;
+      readonly label: string;
+      /** Muted second line. For a disabled item this is the REASON. */
+      readonly hint?: string;
+      readonly icon?: ReactNode;
+      readonly danger?: boolean;
+      readonly disabled?: boolean;
+      readonly onSelect: () => void;
+    }
+  | { readonly kind: 'separator'; readonly id: string }
+  | {
+      readonly kind: 'label';
+      readonly id: string;
+      readonly label: string;
+      /** Muted line under the group label. */
+      readonly description?: string;
+    };
+
 export type MenuAction = {
   readonly href: string;
   readonly label: string;
@@ -61,19 +92,36 @@ export type MenuLinkLike = ComponentType<{
 
 export function MenuButton({
   label,
-  items,
+  items = [],
   Link,
+  entries,
+  triggerIcon,
+  triggerAriaLabel,
+  triggerClassName,
   /** In the mobile drawer the trigger sits at the bottom of the screen,
    *  so a menu opening downward would be off-screen. */
   placement = 'below',
   className,
 }: {
   readonly label: string;
-  readonly items: readonly MenuAction[];
-  readonly Link: MenuLinkLike;
+  readonly items?: readonly MenuAction[];
+  readonly Link?: MenuLinkLike;
+  /** Action-menu mode; takes precedence over `items`. */
+  readonly entries?: readonly MenuEntry[];
+  /** Replaces the chevron (e.g. a "⋯" for an icon-only trigger). */
+  readonly triggerIcon?: ReactNode;
+  /** Stable accessible name when the visible label is an icon or hidden. */
+  readonly triggerAriaLabel?: string;
+  readonly triggerClassName?: string;
   readonly placement?: 'below' | 'above';
   readonly className?: string;
 }): ReactElement | null {
+  const actionMode = entries !== undefined;
+  const actionEntries = (entries ?? []).filter(
+    (e): e is Extract<MenuEntry, { kind: 'action' }> => e.kind === 'action',
+  );
+  // How many focusable items the menu has, in either mode.
+  const count = actionMode ? actionEntries.length : items.length;
   const [open, setOpen] = useState(false);
   const [focusIndex, setFocusIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -119,7 +167,7 @@ export function MenuButton({
       openAt(0);
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      openAt(items.length - 1);
+      openAt(count - 1);
     }
   }
 
@@ -131,11 +179,11 @@ export function MenuButton({
         break;
       case 'ArrowDown':
         event.preventDefault();
-        setFocusIndex((i) => (i + 1) % items.length);
+        setFocusIndex((i) => (i + 1) % count);
         break;
       case 'ArrowUp':
         event.preventDefault();
-        setFocusIndex((i) => (i - 1 + items.length) % items.length);
+        setFocusIndex((i) => (i - 1 + count) % count);
         break;
       case 'Home':
         event.preventDefault();
@@ -143,7 +191,7 @@ export function MenuButton({
         break;
       case 'End':
         event.preventDefault();
-        setFocusIndex(items.length - 1);
+        setFocusIndex(count - 1);
         break;
       case 'Tab':
         // Let focus leave naturally; just don't leave a menu hanging open.
@@ -158,7 +206,7 @@ export function MenuButton({
   // empty menu renders nothing rather than a button that opens onto a
   // blank panel — the caller filters by permission and may be left with
   // no actions at all.
-  if (items.length === 0) return null;
+  if (count === 0) return null;
 
   return (
     <div ref={rootRef} className={clsx('relative', className)}>
@@ -170,6 +218,7 @@ export function MenuButton({
         // wins that, so the override would have done nothing.
         size="sm"
         aria-haspopup="menu"
+        aria-label={triggerAriaLabel}
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         onClick={() => {
@@ -180,14 +229,26 @@ export function MenuButton({
         // Two words that must stay on one line: the header gives this a
         // share of a fixed strip, and left to wrap it became the tallest
         // thing in the bar.
-        className="w-full justify-center whitespace-nowrap lg:w-auto"
+        className={clsx(
+          actionMode
+            ? 'justify-center whitespace-nowrap'
+            : 'w-full justify-center whitespace-nowrap lg:w-auto',
+          triggerClassName,
+        )}
       >
-        {label}
-        <ChevronDown
-          size={14}
-          aria-hidden="true"
-          className={clsx('transition-transform', open && 'rotate-180')}
-        />
+        {/* Wrapped so a caller can hide the WORD visually (e.g. on a
+            phone header with no room) while it stays the button's
+            accessible name — a bare text node cannot be targeted. */}
+        {triggerIcon !== undefined ? null : <span className="sk-menu-button__label">{label}</span>}
+        {triggerIcon !== undefined ? (
+          <span aria-hidden="true">{triggerIcon}</span>
+        ) : (
+          <ChevronDown
+            size={14}
+            aria-hidden="true"
+            className={clsx('transition-transform', open && 'rotate-180')}
+          />
+        )}
       </Button>
 
       {open ? (
@@ -202,32 +263,145 @@ export function MenuButton({
             placement === 'below' ? 'top-full mt-1.5' : 'bottom-full mb-1.5',
           )}
         >
-          {items.map((item, index) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              role="menuitem"
-              tabIndex={index === focusIndex ? 0 : -1}
-              onClick={() => setOpen(false)}
-              className="text-text-body hover:bg-surface-hover hover:text-text-bright focus-visible:bg-surface-hover focus-visible:text-text-bright flex items-start gap-2.5 rounded-[5px] px-2.5 py-2 focus-visible:outline-none"
-            >
-              {item.icon !== undefined ? (
-                <span className="text-text-muted mt-0.5 shrink-0" aria-hidden="true">
-                  {item.icon}
-                </span>
-              ) : null}
-              <span className="min-w-0">
-                <span className="block text-sm leading-tight">{item.label}</span>
-                {item.hint !== undefined ? (
-                  <span className="text-text-faint mt-0.5 block text-xs leading-tight">
-                    {item.hint}
+          {actionMode ? (
+            <ActionRows
+              entries={entries}
+              focusIndex={focusIndex}
+              onRun={(run) => {
+                // Close FIRST and put focus back on the trigger, then run:
+                // a dialog the action opens captures the focused element
+                // as the place to return to, and that must be the
+                // trigger — not an item that is about to unmount.
+                close(true);
+                run();
+              }}
+            />
+          ) : null}
+          {!actionMode && Link !== undefined
+            ? items.map((item, index) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  role="menuitem"
+                  tabIndex={index === focusIndex ? 0 : -1}
+                  onClick={() => setOpen(false)}
+                  className="text-text-body hover:bg-surface-hover hover:text-text-bright focus-visible:bg-surface-hover focus-visible:text-text-bright flex items-start gap-2.5 rounded-[5px] px-2.5 py-2 focus-visible:outline-none"
+                >
+                  {item.icon !== undefined ? (
+                    <span className="text-text-muted mt-0.5 shrink-0" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                  ) : null}
+                  <span className="min-w-0">
+                    <span className="block text-sm leading-tight">{item.label}</span>
+                    {item.hint !== undefined ? (
+                      <span className="text-text-faint mt-0.5 block text-xs leading-tight">
+                        {item.hint}
+                      </span>
+                    ) : null}
                   </span>
-                ) : null}
-              </span>
-            </Link>
-          ))}
+                </Link>
+              ))
+            : null}
         </div>
       ) : null}
     </div>
   );
+}
+
+/**
+ * The rows of an action menu. Items are grouped under their label
+ * (`role="group"` + `aria-labelledby`) so a screen reader announces
+ * "Danger zone" with the items that belong to it; a separator ends a
+ * group. Focus order is the order of the ACTION items only.
+ */
+function ActionRows({
+  entries,
+  focusIndex,
+  onRun,
+}: {
+  readonly entries: readonly MenuEntry[];
+  readonly focusIndex: number;
+  readonly onRun: (run: () => void) => void;
+}): ReactElement {
+  const baseId = useId();
+  const nodes: ReactNode[] = [];
+  let group = null as ReactNode[] | null;
+  let groupLabelId: string | undefined;
+  let focusable = 0;
+  const flush = (): void => {
+    if (group === null) return;
+    nodes.push(
+      <div key={`g-${groupLabelId ?? nodes.length}`} role="group" aria-labelledby={groupLabelId}>
+        {group}
+      </div>,
+    );
+    group = null;
+    groupLabelId = undefined;
+  };
+  for (const entry of entries) {
+    if (entry.kind === 'separator') {
+      flush();
+      nodes.push(<div key={entry.id} role="separator" className="bg-border my-1 h-px" />);
+      continue;
+    }
+    if (entry.kind === 'label') {
+      flush();
+      groupLabelId = `${baseId}-${entry.id}`;
+      group = [
+        <div key={entry.id} className="px-2.5 pt-1.5 pb-1">
+          <span
+            id={groupLabelId}
+            className="text-text-faint block text-[11px] font-semibold tracking-wide uppercase"
+          >
+            {entry.label}
+          </span>
+          {entry.description !== undefined ? (
+            <span className="text-text-faint block text-xs leading-snug">{entry.description}</span>
+          ) : null}
+        </div>,
+      ];
+      continue;
+    }
+    const index = focusable;
+    focusable += 1;
+    const row = (
+      <button
+        key={entry.id}
+        type="button"
+        role="menuitem"
+        tabIndex={index === focusIndex ? 0 : -1}
+        aria-disabled={entry.disabled === true ? true : undefined}
+        data-danger={entry.danger === true ? '' : undefined}
+        onClick={() => {
+          if (entry.disabled === true) return;
+          onRun(entry.onSelect);
+        }}
+        className={clsx(
+          'flex w-full items-start gap-2.5 rounded-[5px] px-2.5 py-2 text-start focus-visible:outline-none',
+          entry.disabled === true
+            ? 'text-text-faint cursor-not-allowed focus-visible:bg-surface-hover'
+            : entry.danger === true
+              ? 'text-critical hover:bg-[var(--color-critical-tint)] focus-visible:bg-[var(--color-critical-tint)]'
+              : 'text-text-body hover:bg-surface-hover hover:text-text-bright focus-visible:bg-surface-hover focus-visible:text-text-bright',
+        )}
+      >
+        {entry.icon !== undefined ? (
+          <span className="mt-0.5 shrink-0" aria-hidden="true">
+            {entry.icon}
+          </span>
+        ) : null}
+        <span className="min-w-0">
+          <span className="block text-sm leading-tight">{entry.label}</span>
+          {entry.hint !== undefined ? (
+            <span className="text-text-faint mt-0.5 block text-xs leading-tight">{entry.hint}</span>
+          ) : null}
+        </span>
+      </button>
+    );
+    if (group === null) nodes.push(row);
+    else group.push(row);
+  }
+  flush();
+  return <>{nodes}</>;
 }

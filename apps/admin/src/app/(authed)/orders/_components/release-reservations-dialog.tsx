@@ -6,6 +6,7 @@ import { useReleaseReservations } from '@/lib/api-hooks';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { TextArea } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
+import { DangerBanner, TypeToConfirm, typedMatchesOrderNo } from './danger-confirm';
 import { useT } from '@/i18n/client';
 
 /**
@@ -33,11 +34,13 @@ export function ReleaseReservationsDialog({
 }): ReactElement {
   const t = useT();
   const [reason, setReason] = useState('');
+  const [typed, setTyped] = useState('');
   const [serverError, setServerError] = useState<string | null>(null);
   const release = useReleaseReservations(orderId);
 
   function close(): void {
     setReason('');
+    setTyped('');
     setServerError(null);
     onOpenChange(false);
   }
@@ -50,6 +53,7 @@ export function ReleaseReservationsDialog({
       });
       onSuccess(result);
       setReason('');
+      setTyped('');
     } catch (err) {
       setServerError(
         serverVerdict(err, t('ordersReleaseReservationsDialog.failedToReleaseReservations')),
@@ -70,9 +74,18 @@ export function ReleaseReservationsDialog({
       consequence={t('ordersReleaseReservationsDialog.godModeCleanupEveryActive')}
       confirmLabel={t('ordersReleaseReservationsDialog.releaseReservations')}
       destructive={true}
+      focusSafe
+      confirmDisabled={!typedMatchesOrderNo(typed, orderNumber ?? orderId)}
       onConfirm={confirm}
       error={serverError}
     >
+      <DangerBanner />
+      <TypeToConfirm
+        orderNo={orderNumber ?? orderId}
+        value={typed}
+        onChange={setTyped}
+        disabled={release.isPending}
+      />
       <TextArea
         id="release-reason"
         label={t('ordersReleaseReservationsDialog.reasonOptional')}

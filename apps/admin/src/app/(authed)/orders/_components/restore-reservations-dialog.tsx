@@ -6,6 +6,7 @@ import { useRestoreReservations } from '@/lib/api-hooks';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { TextArea } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
+import { DangerBanner, TypeToConfirm, typedMatchesOrderNo } from './danger-confirm';
 import { useT } from '@/i18n/client';
 
 /**
@@ -40,11 +41,13 @@ export function RestoreReservationsDialog({
 }): ReactElement {
   const t = useT();
   const [reason, setReason] = useState('');
+  const [typed, setTyped] = useState('');
   const [serverError, setServerError] = useState<string | null>(null);
   const restore = useRestoreReservations(orderId);
 
   function close(): void {
     setReason('');
+    setTyped('');
     setServerError(null);
     onOpenChange(false);
   }
@@ -57,6 +60,7 @@ export function RestoreReservationsDialog({
       });
       onSuccess(result);
       setReason('');
+      setTyped('');
     } catch (err) {
       setServerError(
         serverVerdict(err, t('ordersRestoreReservationsDialog.failedToRestoreReservations')),
@@ -77,9 +81,18 @@ export function RestoreReservationsDialog({
       consequence={t('ordersRestoreReservationsDialog.stockIsReReservedFor')}
       confirmLabel={t('ordersRestoreReservationsDialog.restoreStockClaim')}
       destructive={false}
+      focusSafe
+      confirmDisabled={!typedMatchesOrderNo(typed, orderNumber ?? orderId)}
       onConfirm={confirm}
       error={serverError}
     >
+      <DangerBanner />
+      <TypeToConfirm
+        orderNo={orderNumber ?? orderId}
+        value={typed}
+        onChange={setTyped}
+        disabled={restore.isPending}
+      />
       <TextArea
         id="restore-reason"
         label={t('ordersRestoreReservationsDialog.reasonOptional')}

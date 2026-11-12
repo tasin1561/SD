@@ -122,9 +122,29 @@ function nowForInput(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function ManualScanPanel({ shipmentId }: { readonly shipmentId: string }): ReactElement {
+export function ManualScanPanel({
+  shipmentId,
+  open: controlledOpen,
+  onOpenChange,
+}: {
+  readonly shipmentId: string;
+  /**
+   * Controlled mode, for a caller that opens the dialog from its own menu
+   * (the order header's More, a shipment's ⋯). When `open` is passed the
+   * panel draws NO trigger button of its own — the caller has one — and
+   * everything else (form, request, result) is unchanged.
+   */
+  readonly open?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
+}): ReactElement {
   const t = useT();
-  const [open, setOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+  const controlled = controlledOpen !== undefined;
+  const open = controlled ? controlledOpen : innerOpen;
+  const setOpen = (next: boolean): void => {
+    if (!controlled) setInnerOpen(next);
+    onOpenChange?.(next);
+  };
   const record = useRecordManualScan();
   const [status, setStatus] = useState<string>('IN_TRANSIT');
   const [eventAt, setEventAt] = useState(nowForInput);
@@ -162,9 +182,16 @@ export function ManualScanPanel({ shipmentId }: { readonly shipmentId: string })
 
   return (
     <>
-      <Button variant="ghost" size="sm" icon={<ScanLine size={14} />} onClick={() => setOpen(true)}>
-        {t('ordersManualScanPanel.recordAScanManually')}
-      </Button>
+      {controlled ? null : (
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<ScanLine size={14} />}
+          onClick={() => setOpen(true)}
+        >
+          {t('ordersManualScanPanel.recordAScanManually')}
+        </Button>
+      )}
 
       <Dialog
         open={open}

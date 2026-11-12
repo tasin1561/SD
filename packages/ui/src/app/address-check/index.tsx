@@ -158,6 +158,24 @@ export interface AddressCheckPanelProps {
   readonly labelAddressApplied?: boolean;
   readonly onApplyLabelAddress?: (() => void) | undefined;
   readonly onUndoLabelAddress?: (() => void) | undefined;
+  /**
+   * ── OPT-IN, ONE PAGE TODAY: the admin order detail ────────────────
+   * Sits the panel INSIDE a card that already has a title: no header of
+   * its own, the score as a `role="meter"` beside the verdict, a
+   * warning icon on each issue, the parsed-fields list left out (the page
+   * shows it as its own disclosure via `AddressParsedFields`), and the
+   * post-office candidates shown ONCE. Left off — the default — the panel
+   * is byte-for-byte what the order forms and the call centre render;
+   * `address-check-default-unchanged.test.tsx` pins that.
+   *
+   * The duplicate it removes: the question "Which is your post office?"
+   * lists the candidates, and the post_office suggestion lists the same
+   * names again under "confirm with the customer". The page needs one.
+   * Where the suggestion is interactive (a console that can apply it) the
+   * suggestion's buttons are the instance kept and the question's static
+   * copy is dropped, so no interactivity is lost.
+   */
+  readonly embedded?: boolean;
 }
 
 /** The three verdicts mapped onto the status kinds the brand already
@@ -230,6 +248,7 @@ export function AddressCheckPanel({
   labelAddressApplied = false,
   onApplyLabelAddress,
   onUndoLabelAddress,
+  embedded = false,
 }: AddressCheckPanelProps): ReactElement {
   const t = useUiT();
   const kind = result === null ? 'neutral' : result.available ? ACTION_KIND[result.action] : 'held';
@@ -240,28 +259,38 @@ export function AddressCheckPanel({
   } as CSSProperties;
 
   return (
-    <section className={clsx('sk-ac', className)} style={style} aria-label={t('ui.ac.title')}>
-      <header className="sk-ac__head">
-        <span className="sk-ac__title">
-          <MapPin size={15} aria-hidden="true" />
-          {t('ui.ac.title')}
-        </span>
-        {result !== null && result.available && result.score !== null ? (
-          <Score value={result.score} />
-        ) : null}
-        {onCheck !== undefined ? (
-          <button
-            type="button"
-            className="sk-ac__go"
-            onClick={onCheck}
-            disabled={busy || !canCheck}
-            aria-busy={busy}
-          >
-            <RefreshCw size={14} aria-hidden="true" className={busy ? 'sk-ac__spin' : undefined} />
-            {busy ? t('ui.ac.checking') : result === null ? t('ui.ac.go') : t('ui.ac.again')}
-          </button>
-        ) : null}
-      </header>
+    <section
+      className={clsx('sk-ac', embedded && 'sk-ac--embedded', className)}
+      style={style}
+      aria-label={t('ui.ac.title')}
+    >
+      {embedded ? null : (
+        <header className="sk-ac__head">
+          <span className="sk-ac__title">
+            <MapPin size={15} aria-hidden="true" />
+            {t('ui.ac.title')}
+          </span>
+          {result !== null && result.available && result.score !== null ? (
+            <Score value={result.score} />
+          ) : null}
+          {onCheck !== undefined ? (
+            <button
+              type="button"
+              className="sk-ac__go"
+              onClick={onCheck}
+              disabled={busy || !canCheck}
+              aria-busy={busy}
+            >
+              <RefreshCw
+                size={14}
+                aria-hidden="true"
+                className={busy ? 'sk-ac__spin' : undefined}
+              />
+              {busy ? t('ui.ac.checking') : result === null ? t('ui.ac.go') : t('ui.ac.again')}
+            </button>
+          ) : null}
+        </header>
+      )}
 
       {/* One live region for the whole panel: the verdict is what a
           screen reader needs announced, not every field under it. */}
@@ -284,6 +313,7 @@ export function AddressCheckPanel({
             labelAddressApplied={labelAddressApplied}
             onApplyLabelAddress={onApplyLabelAddress}
             onUndoLabelAddress={onUndoLabelAddress}
+            embedded={embedded}
           />
         )}
       </div>
@@ -304,10 +334,22 @@ function wordOf(
 }
 
 /** 0-100, with the bar filling from the left. Transform only. */
-function Score({ value }: { value: number }): ReactElement {
+function Score({ value, meter = false }: { value: number; meter?: boolean }): ReactElement {
   const t = useUiT();
   return (
-    <span className="sk-ac__score" title={t('ui.ac.score', { n: value })}>
+    <span
+      className="sk-ac__score"
+      title={t('ui.ac.score', { n: value })}
+      {...(meter
+        ? {
+            role: 'meter',
+            'aria-valuenow': value,
+            'aria-valuemin': 0,
+            'aria-valuemax': 100,
+            'aria-label': t('ui.ac.score', { n: value }),
+          }
+        : {})}
+    >
       <span className="sk-ac__score-num">{value}</span>
       <span className="sk-ac__score-track" aria-hidden="true">
         <span
@@ -349,7 +391,9 @@ function Verdict({
   labelAddressApplied,
   onApplyLabelAddress,
   onUndoLabelAddress,
+  embedded,
 }: {
+  embedded: boolean;
   readOnly: boolean;
   result: AddressCheckResult;
   onApplySuggestion?: ((field: string, value: string) => void) | undefined;
@@ -362,7 +406,19 @@ function Verdict({
 }): ReactElement {
   const t = useUiT();
   const Icon = ACTION_ICON[result.action];
-  const extracted = Object.entries(result.extracted).filter(([, v]) => v !== null && v !== '');
+  // Embedded only: a field's candidates already listed under a question
+  // are not listed a second time under the suggestion (or, when the
+  // suggestion is the interactive one, the other way round).
+  const questionHas = (field: string): boolean =>
+    result.questions.some((q) => q.field === field && (q.options?.length ?? 0) > 0);
+  const interactive = (field: string): boolean => !CONFIRM_ONLY_FIELDS.has(field) && !readOnly;
+  const suggestionDropped = (field: string): boolean =>
+    embedded && questionHas(field) && !interactive(field);
+  const questionOptionsDropped = (field: string): boolean =>
+    embedded &&
+    questionHas(field) &&
+    result.suggestions.some((s) => s.field === field) &&
+    interactive(field);
 
   return (
     <>
@@ -370,12 +426,16 @@ function Verdict({
         <Icon size={15} aria-hidden="true" />
         {t(ACTION_WORD[result.action])}
         {result.rechecked ? <span className="sk-ac__re">{t('ui.ac.rechecked')}</span> : null}
+        {embedded && result.score !== null ? <Score value={result.score} meter /> : null}
       </p>
 
       {result.issues.length > 0 ? (
         <ul className="sk-ac__issues">
           {result.issues.map((i) => (
-            <li key={i.code}>{i.message}</li>
+            <li key={i.code}>
+              {embedded ? <AlertTriangle size={13} aria-hidden="true" /> : null}
+              {embedded ? <span>{i.message}</span> : i.message}
+            </li>
           ))}
         </ul>
       ) : null}
@@ -393,7 +453,9 @@ function Verdict({
                 ) : null}
                 <span className="sk-ac__q-body">
                   <span className="sk-ac__q-text">{q.text}</span>
-                  {q.options !== undefined && q.options.length > 0 ? (
+                  {q.options !== undefined &&
+                  q.options.length > 0 &&
+                  !questionOptionsDropped(q.field) ? (
                     <span className="sk-ac__sugg-list">
                       {q.options.map((o) => (
                         <span key={o} className="sk-ac__cand sk-ac__cand--static">
@@ -409,80 +471,68 @@ function Verdict({
         </div>
       ) : null}
 
-      {result.suggestions.map((s) =>
-        CONFIRM_ONLY_FIELDS.has(s.field) || readOnly ? (
-          <div className="sk-ac__sugg sk-ac__sugg--confirm" key={s.field}>
-            <span className="sk-ac__sugg-label">
-              <AlertTriangle size={13} aria-hidden="true" />
-              {t('ui.ac.confirmOnly', {
-                field: wordOf(FIELD_WORD, s.field, t),
-              })}
-            </span>
-            <span className="sk-ac__sugg-why">
-              {s.reason ?? t('ui.ac.pincodeSays', { candidates: s.candidates.join(', ') })}
-            </span>
-            {/* Deliberately NOT buttons. Either half of the
+      {result.suggestions
+        .filter((s) => !suggestionDropped(s.field))
+        .map((s) =>
+          CONFIRM_ONLY_FIELDS.has(s.field) || readOnly ? (
+            <div className="sk-ac__sugg sk-ac__sugg--confirm" key={s.field}>
+              <span className="sk-ac__sugg-label">
+                <AlertTriangle size={13} aria-hidden="true" />
+                {t('ui.ac.confirmOnly', {
+                  field: wordOf(FIELD_WORD, s.field, t),
+                })}
+              </span>
+              <span className="sk-ac__sugg-why">
+                {s.reason ?? t('ui.ac.pincodeSays', { candidates: s.candidates.join(', ') })}
+              </span>
+              {/* Deliberately NOT buttons. Either half of the
                 disagreement may be the wrong one, and only the
                 customer can say which. */}
-            <span className="sk-ac__sugg-list">
-              {s.candidates.map((c) => (
-                <span key={c} className="sk-ac__cand sk-ac__cand--static">
-                  {c}
-                </span>
-              ))}
-            </span>
-          </div>
-        ) : (
-          <div className="sk-ac__sugg" key={s.field}>
-            <span className="sk-ac__sugg-label">
-              <Lightbulb size={13} aria-hidden="true" />
-              {wordOf(FIELD_WORD, s.field, t)}
-              {s.reason === undefined ? null : <em> — {s.reason}</em>}
-            </span>
-            {/* Every candidate is offered and none is pre-chosen: the
+              <span className="sk-ac__sugg-list">
+                {s.candidates.map((c) => (
+                  <span key={c} className="sk-ac__cand sk-ac__cand--static">
+                    {c}
+                  </span>
+                ))}
+              </span>
+            </div>
+          ) : (
+            <div className="sk-ac__sugg" key={s.field}>
+              <span className="sk-ac__sugg-label">
+                <Lightbulb size={13} aria-hidden="true" />
+                {wordOf(FIELD_WORD, s.field, t)}
+                {s.reason === undefined ? null : <em> — {s.reason}</em>}
+              </span>
+              {/* Every candidate is offered and none is pre-chosen: the
                 first is their best guess, not an answer, and a list
                 that applied itself would make the operator's job
                 "undo the wrong one". */}
-            <span className="sk-ac__sugg-list">
-              {s.candidates.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className="sk-ac__cand"
-                  onClick={() => onApplySuggestion?.(s.field, c)}
+              <span className="sk-ac__sugg-list">
+                {s.candidates.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className="sk-ac__cand"
+                    onClick={() => onApplySuggestion?.(s.field, c)}
+                    disabled={onApplySuggestion === undefined}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </span>
+              {s.field === 'post_office' ? (
+                <OtherOffices
+                  all={allPostOffices}
+                  offered={s.candidates}
+                  onPick={(name) => onApplySuggestion?.('post_office', name)}
                   disabled={onApplySuggestion === undefined}
-                >
-                  {c}
-                </button>
-              ))}
-            </span>
-            {s.field === 'post_office' ? (
-              <OtherOffices
-                all={allPostOffices}
-                offered={s.candidates}
-                onPick={(name) => onApplySuggestion?.('post_office', name)}
-                disabled={onApplySuggestion === undefined}
-              />
-            ) : null}
-          </div>
-        ),
-      )}
-
-      {extracted.length > 0 ? (
-        <dl className="sk-ac__fields">
-          {extracted.map(([k, v]) => (
-            <div className="sk-ac__field" key={k}>
-              <dt>{wordOf(FIELD_WORD, k, t)}</dt>
-              <dd>
-                {v}
-                <span className="sk-ac__src">
-                  {wordOf(SOURCE_WORD, result.fieldSource[k] ?? '', t, 'ui.ac.src.unknown')}
-                </span>
-              </dd>
+                />
+              ) : null}
             </div>
-          ))}
-        </dl>
-      ) : null}
+          ),
+        )}
+
+      {embedded ? null : <ParsedList result={result} />}
 
       {/* ONLY at high confidence. Anything less and the customer's own
           words go on the parcel — a label address we are unsure of is
@@ -615,4 +665,44 @@ function ConfirmBox({
       {t('ui.ac.confirmed')}
     </label>
   );
+}
+
+/** The parsed-fields list, shared by the panel and `AddressParsedFields`. */
+function ParsedList({ result }: { result: AddressCheckResult }): ReactElement | null {
+  const t = useUiT();
+  const extracted = Object.entries(result.extracted).filter(([, v]) => v !== null && v !== '');
+  if (extracted.length === 0) return null;
+  return (
+    <dl className="sk-ac__fields">
+      {extracted.map(([k, v]) => (
+        <div className="sk-ac__field" key={k}>
+          <dt>{wordOf(FIELD_WORD, k, t)}</dt>
+          <dd>
+            {v}
+            <span className="sk-ac__src">
+              {wordOf(SOURCE_WORD, result.fieldSource[k] ?? '', t, 'ui.ac.src.unknown')}
+            </span>
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** How many fields the check parsed out of the address — for a disclosure title. */
+export function addressParsedCount(result: AddressCheckResult): number {
+  return Object.values(result.extracted).filter((v) => v !== null && v !== '').length;
+}
+
+/**
+ * The parsed fields on their own, for a page that shows them as a
+ * disclosure under an `embedded` panel. Same list, same source tags
+ * ("from pincode" / "from customer" / "inferred").
+ */
+export function AddressParsedFields({
+  result,
+}: {
+  result: AddressCheckResult;
+}): ReactElement | null {
+  return <ParsedList result={result} />;
 }

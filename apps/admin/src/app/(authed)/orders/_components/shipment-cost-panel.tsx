@@ -35,17 +35,28 @@ export function ShipmentCostPanel({
   shipmentNumber,
   awbNumber,
   wasReturned,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   readonly shipmentId: string;
   /** For the confirm's restatement only. */
   readonly shipmentNumber?: string | undefined;
   readonly awbNumber?: string | null | undefined;
   readonly wasReturned: boolean;
+  /** Controlled mode — see ManualScanPanel. No trigger button is drawn when passed. */
+  readonly open?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
 }): ReactElement | null {
   const t = useT();
   const canWrite = usePermission('money.treasury.manage');
   const record = useRecordShipmentCost();
-  const [open, setOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+  const controlled = controlledOpen !== undefined;
+  const open = controlled ? controlledOpen : innerOpen;
+  const setOpen = (next: boolean): void => {
+    if (!controlled) setInnerOpen(next);
+    onOpenChange?.(next);
+  };
   const [confirming, setConfirming] = useState(false);
   const [forward, setForward] = useState('');
   const [rto, setRto] = useState('');
@@ -84,14 +95,16 @@ export function ShipmentCostPanel({
 
   return (
     <>
-      <Button
-        variant="ghost"
-        size="sm"
-        icon={<ReceiptIndianRupee size={14} />}
-        onClick={() => setOpen(true)}
-      >
-        {t('ordersShipmentCostPanel.recordCourierCost')}
-      </Button>
+      {controlled ? null : (
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<ReceiptIndianRupee size={14} />}
+          onClick={() => setOpen(true)}
+        >
+          {t('ordersShipmentCostPanel.recordCourierCost')}
+        </Button>
+      )}
 
       <Dialog
         open={open && !confirming}

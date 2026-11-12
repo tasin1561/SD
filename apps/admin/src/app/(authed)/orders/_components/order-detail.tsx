@@ -1,353 +1,386 @@
 'use client';
 
-import Link from 'next/link';
-import { CustomerRiskStrip } from '../../call-center/_components/customer-risk-strip';
-import { ArrowLeft, Route, ShieldAlert } from 'lucide-react';
-import type { ReactElement, ReactNode } from 'react';
-import type { OrderStatus } from '@skydrop/db';
-import { useLocale, useT } from '@/i18n/client';
-import type { MessageKey } from '@/i18n/catalog';
-import type { Translate } from '@skydrop/ui/app/i18n';
+import { Truck, TriangleAlert } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import type { OrderView } from '@skydrop/api-client';
+import { useT } from '@/i18n/client';
 import { useAdminOrderShipments, useOrderDetail } from '@/lib/api-hooks';
-import {
-  JourneyTimeline,
-  ParcelFacts,
-  type JourneyMilestoneView,
-  type JourneyParcelView,
-  type JourneyEntryView,
-} from '@skydrop/ui/components';
-import { journeyOwnerLabel, orderStatusKind, statusLabel } from '@skydrop/ui/status';
-import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
-import { StatusChip } from '@skydrop/ui/app/status-chip';
-import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { useOrderAddressCheck } from '@/lib/address-check-hooks';
+import { useConsignee, useOrderJourney } from '@/lib/ops-hooks';
+import { usePermission } from '@/lib/use-permission';
+import { serverVerdict } from '@/lib/server-verdict';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { Timeline, type TimelineStep, type TimelineStepState } from '@skydrop/ui/app/timeline';
-import { OrderActionsPanel } from './order-actions-panel';
-import { OrderChargesSection } from './order-charges';
-import { OrderShipmentsSection } from './order-shipments-section';
-import { ParcelActivityPanel } from './parcel-activity-panel';
-import { StuckOrderRecovery } from './stuck-order-recovery';
-import { useOrderJourney } from '@/lib/ops-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
-import { ConsigneePanel } from './consignee-panel';
-import { OrderAddressCheckPanel } from './address-check-panel';
-import { ResellerOrderPanel } from './reseller-order-panel';
+import { ActivityCard } from './activity-card';
+import { DetailCard } from './detail-card';
+import { ItemsChargesCard } from './items-charges-card';
+import { useOrderActions } from './order-actions-panel';
+import { useOrderChargesPanel } from './order-charges';
+import { useOrderDetailUi } from './order-detail-ui-state';
+import { OrderHeader, type HeaderPrimary } from './order-header';
+import { buildMoreEntries } from './order-more-menu';
+import {
+  OrderShipmentsSection,
+  courierActionsAvailable,
+  useShipmentDialogState,
+} from './order-shipments-section';
+import { OrderStepper } from './order-stepper';
+import { RecipientCard } from './recipient-card';
 import { ResellerMoneyPanel } from './reseller-money-panel';
-import { BackLink, Facts, OoSection } from './order-ops-parts';
+import { ResellerOrderPanel } from './reseller-order-panel';
+import { StuckOrderRecovery } from './stuck-order-recovery';
 import './order-core.css';
+import './order-detail.css';
 
 /**
- * Order detail. Single-fetch (admin /orders/:id). Renders:
- *   - Header (order number + status badge + override badge if set)
- *   - Recipient (immutable ORD-6 snapshot)
- *   - Payment + physical
- *   - Items table
- *   - Notes
- *   - Action panel (sane admin cancel here; god-mode in CP2.10)
- *   - Timeline (full admin events incl. internal-only — uses
- *     the merged Skydrop + courier journey)
+ * Order detail — a dense, two-column working page.
+ *
+ *   sticky header   number, status, AWB, the facts, and the actions (More)
+ *   stepper         where the parcel is
+ *   main            Recipient & address · Items & charges · member-store
+ *                   panels · Activity
+ *   sidebar         Shipment · Payment & package · Notes
+ *
+ * Single fetch of the order (admin /orders/:id) plus the same reads the old
+ * page made — shipments, journey, consignee, address check, charges, parcel
+ * activity. Nothing is fetched that was not before, and every action is the
+ * same dialog with the same gating; only where it lives changed.
  */
 export function OrderDetailView({ orderId }: { orderId: string }): ReactElement {
   const t = useT();
-  const locale = useLocale();
   const detail = useOrderDetail(orderId);
-  // Same query the shipments section runs, so React Query serves both
-  // from one request rather than asking twice.
-  const shipments = useAdminOrderShipments(orderId);
-  const awbs = orderAwbs(shipments.data ?? []);
 
-  return (
-    <div className="oo-page">
-      <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
-        {t('orderDetail.back')}
-      </BackLink>
-
-      {detail.isLoading ? (
+  if (detail.isLoading) {
+    return (
+      <div className="od-page">
         <div className="oo-stack" aria-busy="true">
           <Skeleton height={36} width="40%" />
           <SkeletonRows rows={6} cols={2} label={t('orderDetail.loading')} />
         </div>
-      ) : detail.isError ? (
+      </div>
+    );
+  }
+  if (detail.isError) {
+    return (
+      <div className="od-page">
         <ErrorState
           message={detail.error?.message ?? t('orderDetail.loadFailed')}
           retry={() => void detail.refetch()}
         />
-      ) : !detail.data ? (
+      </div>
+    );
+  }
+  if (!detail.data) {
+    return (
+      <div className="od-page">
         <ErrorState message={t('orderDetail.notFound')} />
-      ) : (
-        <>
-          <PageHeader
-            breadcrumbs={[
-              { label: t('orderDetail.crumb.operations') },
-              { label: t('orderDetail.crumb.orders'), href: '/orders' },
-              { label: detail.data.orderNumber },
-            ]}
-            Link={Link}
-            title={<span className="sk-ident">{detail.data.orderNumber}</span>}
-            subtitle={
-              detail.data.sellerOrderRef || awbs.length > 0 ? (
-                <span className="oc-head-refs">
-                  {detail.data.sellerOrderRef ? (
-                    <span>
-                      {t('orderDetail.clientRef')}{' '}
-                      <span className="sk-ident">{detail.data.sellerOrderRef}</span>
-                    </span>
-                  ) : null}
-                  {/* The AWB beside the client's own ref (owner, 2026-11-12):
-                      it is the number a courier, a customer and the
-                      warehouse all quote, and it was only reachable by
-                      scrolling to the shipments section. Every AWB the
-                      order has, since a split order carries more than one. */}
-                  {awbs.length > 0 ? (
-                    <span>
-                      {t('orderDetail.awbLabel')}{' '}
-                      {awbs.map((awb, i) => (
-                        <span key={awb}>
-                          {i > 0 ? ', ' : ''}
-                          <span className="sk-ident">{awb}</span>
-                        </span>
-                      ))}
-                    </span>
-                  ) : null}
-                </span>
-              ) : undefined
-            }
-            action={
-              <div className="oc-head-chips">
-                {detail.data.hasAdminOverride && (
-                  <span className="oc-override" title={t('orderDetail.override.title')}>
-                    <ShieldAlert size={12} aria-hidden />
-                    {t('orderDetail.override.chip')}
-                  </span>
-                )}
-                <StatusChip
-                  kind={orderStatusKind(detail.data.status)}
-                  label={statusLabel(detail.data.status, locale)}
-                />
-              </div>
-            }
-          />
+      </div>
+    );
+  }
+  return <OrderDetailBody order={detail.data} />;
+}
 
-          <OoSection title={t('orderDetail.recipient')}>
-            {/* The same strip the call agent sees. On this page it is
-                the answer to "why did this one come back?" — a customer
-                who returns a third of what they order was never a
-                surprise, and the RTO investigation should start there. */}
-            <CustomerRiskStrip orderId={detail.data.id} />
-            <Facts
-              items={[
-                { label: t('orderDetail.name'), value: detail.data.recipientName },
-                {
-                  label: t('orderDetail.phone'),
-                  value: (
-                    <span className="sk-figure">
-                      {detail.data.recipientPhoneE164}
-                      {detail.data.recipientAltPhoneE164 && (
-                        <span className="oo-faint"> / {detail.data.recipientAltPhoneE164}</span>
-                      )}
-                    </span>
-                  ),
-                },
-                ...(detail.data.recipientEmail
-                  ? [{ label: t('orderDetail.email'), value: detail.data.recipientEmail }]
-                  : []),
-                {
-                  label: t('orderDetail.address'),
-                  value: (
-                    <>
-                      <span className="oo-sub oo-body">{detail.data.recipientAddressLine1}</span>
-                      {detail.data.recipientAddressLine2 && (
-                        <span className="oo-sub oo-body">{detail.data.recipientAddressLine2}</span>
-                      )}
-                      {detail.data.recipientLandmark && (
-                        <span className="oo-sub">
-                          {t('orderDetail.landmark')} {detail.data.recipientLandmark}
-                        </span>
-                      )}
-                      <span className="oo-sub oo-body">
-                        {[detail.data.recipientCity, detail.data.recipientStateProvince]
-                          .filter(Boolean)
-                          .join(', ')}{' '}
-                        <span className="sk-figure">{detail.data.recipientPostalCode}</span>{' '}
-                        <span className="oo-muted">{detail.data.recipientCountryCode}</span>
-                      </span>
-                    </>
-                  ),
-                },
-              ]}
+function scrollToId(id: string): void {
+  window.requestAnimationFrame(() => {
+    const el = document.getElementById(id);
+    if (el === null) return;
+    const reduced =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ block: 'start', behavior: reduced ? 'auto' : 'smooth' });
+  });
+}
+
+function OrderDetailBody({ order }: { readonly order: OrderView }): ReactElement {
+  const t = useT();
+  const orderId = order.id;
+  // Same query the shipments card runs, so React Query serves both from one
+  // request rather than asking twice.
+  const shipments = useAdminOrderShipments(orderId);
+  const journey = useOrderJourney(orderId);
+  const consignee = useConsignee(orderId);
+  const addressCheck = useOrderAddressCheck(orderId);
+  const canWriteCourier = usePermission('courier.ops.write');
+  const canCost = usePermission('money.treasury.manage');
+  const actions = useOrderActions(order);
+  const charges = useOrderChargesPanel(orderId, order.orderNumber);
+  const dialogs = useShipmentDialogState();
+  const ui = useOrderDetailUi();
+  const side = useRef<HTMLElement>(null);
+  const [stickySide, setStickySide] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(true);
+
+  const rows = shipments.data ?? [];
+  const awbs = orderAwbs(rows);
+  const target = rows[rows.length - 1] ?? null;
+  const check = addressCheck.data ?? null;
+  // "Edit" exists only when the form does: the courier still allows the
+  // change AND this person may make it.
+  const editAvailable = canWriteCourier && consignee.data?.editable === true;
+  const eta =
+    journey.data?.milestones.find((m) => m.estimated && m.at !== null)?.at ??
+    journey.data?.parcels[journey.data.parcels.length - 1]?.expectedDeliveryAt ??
+    order.expectedDeliveryAt;
+
+  // The sidebar sticks only when ALL of it fits under the header — a
+  // sticky column taller than the viewport would hide its own bottom.
+  useEffect(() => {
+    const el = side.current;
+    if (el === null) return undefined;
+    const measure = (): void => {
+      const reserved = 56 + 52 + 12 + 16; // top bar + header + gaps
+      setStickySide(el.offsetHeight + reserved <= window.innerHeight);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    ro?.observe(el);
+    return () => {
+      window.removeEventListener('resize', measure);
+      ro?.disconnect();
+    };
+  }, []);
+
+  function fixAddress(): void {
+    ui.setOpen('recipient', true);
+    setEditing(true);
+    scrollToId('od-recipient');
+  }
+  function openCourier(id: string): void {
+    ui.setOpen('shipment', true);
+    dialogs.setCourierFor(id);
+    scrollToId(`od-ship-${id}`);
+  }
+
+  // Display-only: which one contextual button the header offers. No new
+  // rule — it reads what the cards below already know.
+  const liveCourier = [...rows].reverse().find(courierActionsAvailable) ?? null;
+  const primary: HeaderPrimary | null =
+    check !== null && check.issues.length > 0 && editAvailable
+      ? {
+          label: t('orderDetail.action.fixAddress'),
+          icon: <TriangleAlert size={14} />,
+          onClick: fixAddress,
+        }
+      : liveCourier !== null
+        ? {
+            label: t('ordersCourierOpsPanel.courierActionsCosts'),
+            icon: <Truck size={14} />,
+            onClick: () => openCourier(liveCourier.id),
+          }
+        : null;
+
+  const entries = buildMoreEntries({
+    t,
+    orderStatus: order.status,
+    canOverride: actions.canOverride,
+    canCancel: actions.canCancel,
+    inTerminalState: actions.inTerminalState,
+    cancelPending: actions.cancelPending,
+    canRequestReturn: actions.canRequestReturn,
+    canRecordScan: target !== null,
+    canRecordCost: target !== null && canCost,
+    canCompute:
+      charges.canView &&
+      charges.canCompute &&
+      !charges.charges.isLoading &&
+      !charges.charges.isError,
+    open: {
+      cancel: actions.open.cancel,
+      override: actions.open.override,
+      release: actions.open.release,
+      restore: actions.open.restore,
+      requestReturn: actions.open.requestReturn,
+      recordScan: () => {
+        if (target !== null) dialogs.setScanFor(target.id);
+      },
+      recordCost: () => {
+        if (target !== null) dialogs.setCostFor(target.id);
+      },
+      compute: charges.openCompute,
+    },
+  });
+
+  return (
+    <div className="od-page">
+      <OrderHeader order={order} awbs={awbs} eta={eta} primary={primary} entries={entries} />
+
+      {actions.results}
+
+      <section className="od-stepper-wrap" aria-label={t('orderDetail.tracker')}>
+        {journey.isPending ? (
+          <Skeleton height={40} />
+        ) : journey.isError || journey.data === undefined ? (
+          <ErrorState message={serverVerdict(journey.error)} retry={() => void journey.refetch()} />
+        ) : (
+          <OrderStepper milestones={journey.data.milestones} />
+        )}
+      </section>
+
+      <div className="od-grid">
+        <div className="od-main">
+          <div className="od-slot" data-slot="recipient">
+            <RecipientCard
+              order={order}
+              check={check}
+              consignee={consignee.data}
+              editAvailable={editAvailable}
+              editing={editing}
+              onEditingChange={setEditing}
+              open={ui.state.open.recipient}
+              onOpenChange={(o) => ui.setOpen('recipient', o)}
+              parsedOpen={ui.state.open.parsed}
+              onParsedOpenChange={(o) => ui.setOpen('parsed', o)}
             />
-          </OoSection>
+          </div>
+
+          <div className="od-slot" data-slot="items">
+            <ItemsChargesCard
+              order={order}
+              panel={charges}
+              open={ui.state.open.items}
+              onOpenChange={(o) => ui.setOpen('items', o)}
+            />
+          </div>
 
           {/* RS-5 — a reseller store's order: the store and the terms
               snapshot it was placed under. Nothing for a channel order. */}
-          <ResellerOrderPanel order={detail.data} />
-          {/* RS-6 phase 3c — the full split: both parties, both wallets. */}
-          <ResellerMoneyPanel orderId={orderId} enabled={detail.data.storeKind === 'RESELLER'} />
-
-          <div className="oo-grid-2">
-            <OoSection title={t('orderDetail.payment')}>
-              <Facts
-                items={[
-                  { label: t('orderDetail.mode'), value: detail.data.paymentMode },
-                  {
-                    label: t('orderDetail.cod'),
-                    value: <span className="sk-figure">{detail.data.codAmountInr ?? '—'}</span>,
-                  },
-                  {
-                    label: t('orderDetail.declared'),
-                    value: <span className="sk-figure">{detail.data.declaredValueInr ?? '—'}</span>,
-                  },
-                ]}
-              />
-            </OoSection>
-            <OoSection title={t('orderDetail.physical')}>
-              <Facts
-                items={[
-                  {
-                    label: t('orderDetail.weight'),
-                    value: <span className="sk-figure">{detail.data.totalWeightGrams ?? '—'}</span>,
-                  },
-                  { label: t('orderDetail.package'), value: detail.data.packageType },
-                  {
-                    label: t('orderDetail.flags'),
-                    value:
-                      detail.data.isUrgent || detail.data.isHighRisk ? (
-                        <span className="oo-row">
-                          {detail.data.isUrgent && (
-                            <span className="oc-flag" data-tone="warn">
-                              {t('orderDetail.urgent')}
-                            </span>
-                          )}
-                          {detail.data.isHighRisk && (
-                            <span className="oc-flag" data-tone="bad">
-                              {t('orderDetail.highRisk')}
-                            </span>
-                          )}
-                        </span>
-                      ) : (
-                        <span className="oo-muted">—</span>
-                      ),
-                  },
-                ]}
-              />
-            </OoSection>
+          <div className="od-slot" data-slot="reseller">
+            <ResellerOrderPanel order={order} />
+            {/* RS-6 phase 3c — the full split: both parties, both wallets. */}
+            <ResellerMoneyPanel orderId={orderId} enabled={order.storeKind === 'RESELLER'} />
           </div>
 
-          <OoSection title={t('orderDetail.items', { count: detail.data.items.length })} flush>
-            <Table caption={t('orderDetail.itemsCaption')}>
-              <THead>
-                <Tr>
-                  <Th>{t('orderDetail.col.sku')}</Th>
-                  <Th>{t('orderDetail.col.product')}</Th>
-                  <Th align="right">{t('orderDetail.col.qty')}</Th>
-                  <Th align="right">{t('orderDetail.col.reserved')}</Th>
-                  <Th align="right">{t('orderDetail.col.weight')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {detail.data.items.map((item) => (
-                  <Tr key={item.id}>
-                    <Td>
-                      <span className="sk-ident">{item.skuCode}</span>
-                    </Td>
-                    <Td>
-                      {item.productName}
-                      {item.variantLabel && (
-                        <span className="oo-muted"> · {item.variantLabel}</span>
-                      )}
-                    </Td>
-                    <Td align="right">
-                      <span className="sk-figure">{item.quantity}</span>
-                    </Td>
-                    <Td align="right">
-                      <span className="sk-figure oo-muted">{item.qtyReserved}</span>
-                    </Td>
-                    <Td align="right">
-                      <span className="sk-figure oo-muted">{item.unitWeightGrams ?? '—'}</span>
-                    </Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
-          </OoSection>
-
-          {(detail.data.sellerNotes || detail.data.internalNotes || detail.data.callNotes) && (
-            <OoSection title={t('orderDetail.notes')}>
-              {detail.data.sellerNotes && (
-                <NoteBlock label={t('orderDetail.note.client')}>
-                  {detail.data.sellerNotes}
-                </NoteBlock>
-              )}
-              {detail.data.callNotes && (
-                <NoteBlock label={t('orderDetail.note.call')}>{detail.data.callNotes}</NoteBlock>
-              )}
-              {detail.data.internalNotes && (
-                <NoteBlock label={t('orderDetail.note.internal')}>
-                  {detail.data.internalNotes}
-                </NoteBlock>
-              )}
-            </OoSection>
-          )}
-
-          <section className="oo-section">
-            <SectionHeading title={t('orderDetail.charges')} />
-            <OrderChargesSection orderId={orderId} orderNumber={detail.data.orderNumber} />
-          </section>
-
-          <section className="oo-section">
-            <SectionHeading title={t('orderDetail.shipments')} />
-            <div className="oo-stack">
-              {/* Renders nothing unless the order is actually stuck. */}
-              <StuckOrderRecovery
-                orderId={orderId}
-                orderStatus={detail.data.status}
-                orderNumber={detail.data.orderNumber}
-              />
-
-              <OrderShipmentsSection orderId={orderId} orderStatus={detail.data.status} />
-              {/* Correcting the consignee sits with the parcel: it is only
-                  ever done while looking at a delivery about to go wrong. */}
-              <ConsigneePanel orderId={orderId} />
-              <OrderAddressCheckPanel orderId={orderId} />
-            </div>
-          </section>
-
-          {/* The whole journey — the stage ladder, what the courier
-              says the parcel weighs and will collect, and our handling
-              merged with their scans. Staff also see the courier's own
-              NSL codes: an agent explaining a delay needs the code the
-              courier will quote back at them. */}
-          <OrderJourneySection
-            orderId={orderId}
-            orderNumber={detail.data.orderNumber}
-            status={detail.data.status}
-          />
-
-          {/* The journey says what happened to the parcel; this says who
-              made it happen — label, sheet, pick, pack, handover, each
-              with the staff member's name and the time. Beside the
-              journey on purpose: it is the second half of the same
-              question and nobody should have to leave the order to ask
-              it. */}
-          <section className="oo-section">
-            <ParcelActivityPanel orderId={orderId} />
-          </section>
-
-          <section className="oo-section">
-            <SectionHeading title={t('orderDetail.actions')} />
-            <OrderActionsPanel order={detail.data} />
-          </section>
-
-          <div className="oc-footnote sk-figure">
-            {t('orderDetail.placed')}{' '}
-            {new Date(detail.data.placedAt).toISOString().replace('T', ' ').slice(0, 16)} ·{' '}
-            {t('orderDetail.updated')}{' '}
-            {new Date(detail.data.updatedAt).toISOString().replace('T', ' ').slice(0, 16)}
+          <div className="od-slot" data-slot="activity">
+            <ActivityCard
+              orderId={orderId}
+              milestones={journey.data?.milestones ?? []}
+              entries={journey.data?.timeline ?? []}
+              journeyPending={journey.isPending}
+              journeyError={journey.isError ? serverVerdict(journey.error) : null}
+              onRetryJourney={() => void journey.refetch()}
+              open={ui.state.open.activity}
+              onOpenChange={(o) => ui.setOpen('activity', o)}
+              filter={ui.state.filter}
+              onFilterChange={ui.setFilter}
+            />
           </div>
-        </>
-      )}
+        </div>
+
+        <aside className="od-side" ref={side} data-sticky={stickySide ? '1' : undefined}>
+          <div className="od-slot" data-slot="shipment">
+            {/* Renders nothing unless the order is actually stuck. */}
+            <StuckOrderRecovery
+              orderId={orderId}
+              orderStatus={order.status}
+              orderNumber={order.orderNumber}
+            />
+            <OrderShipmentsSection
+              orderId={orderId}
+              orderStatus={order.status}
+              parcels={journey.data?.parcels ?? []}
+              open={ui.state.open.shipment}
+              onOpenChange={(o) => ui.setOpen('shipment', o)}
+              dialogState={dialogs}
+            />
+          </div>
+
+          <div className="od-slot" data-slot="payment">
+            <DetailCard
+              id="od-payment"
+              title={t('orderDetail.card.paymentPackage')}
+              titleText={t('orderDetail.card.paymentPackage')}
+              open={ui.state.open.payment}
+              onOpenChange={(o) => ui.setOpen('payment', o)}
+            >
+              <PaymentPackage order={order} />
+            </DetailCard>
+            {(order.sellerNotes || order.internalNotes || order.callNotes) && (
+              <DetailCard
+                id="od-notes"
+                title={t('orderDetail.notes')}
+                titleText={t('orderDetail.notes')}
+                open={notesOpen}
+                onOpenChange={setNotesOpen}
+              >
+                {order.sellerNotes && (
+                  <NoteBlock label={t('orderDetail.note.client')}>{order.sellerNotes}</NoteBlock>
+                )}
+                {order.callNotes && (
+                  <NoteBlock label={t('orderDetail.note.call')}>{order.callNotes}</NoteBlock>
+                )}
+                {order.internalNotes && (
+                  <NoteBlock label={t('orderDetail.note.internal')}>
+                    {order.internalNotes}
+                  </NoteBlock>
+                )}
+              </DetailCard>
+            )}
+          </div>
+        </aside>
+      </div>
+
+      {actions.dialogs}
     </div>
+  );
+}
+
+function PaymentPackage({ order }: { readonly order: OrderView }): ReactElement {
+  const t = useT();
+  const rows: ReadonlyArray<{
+    readonly key: string;
+    readonly label: string;
+    readonly value: ReactNode;
+  }> = [
+    { key: 'mode', label: t('orderDetail.mode'), value: order.paymentMode },
+    {
+      key: 'cod',
+      label: t('orderDetail.cod'),
+      value: <span className="sk-figure">{order.codAmountInr ?? '—'}</span>,
+    },
+    {
+      key: 'declared',
+      label: t('orderDetail.declared'),
+      value: <span className="sk-figure">{order.declaredValueInr ?? '—'}</span>,
+    },
+    {
+      key: 'weight',
+      label: t('orderDetail.weight'),
+      value: <span className="sk-figure">{order.totalWeightGrams ?? '—'}</span>,
+    },
+    { key: 'package', label: t('orderDetail.package'), value: order.packageType },
+    {
+      key: 'flags',
+      label: t('orderDetail.flags'),
+      value:
+        order.isUrgent || order.isHighRisk ? (
+          <span className="oo-row">
+            {order.isUrgent && (
+              <span className="oc-flag" data-tone="warn">
+                {t('orderDetail.urgent')}
+              </span>
+            )}
+            {order.isHighRisk && (
+              <span className="oc-flag" data-tone="bad">
+                {t('orderDetail.highRisk')}
+              </span>
+            )}
+          </span>
+        ) : (
+          <span className="oo-muted">—</span>
+        ),
+    },
+  ];
+  return (
+    <dl className="od-dl">
+      {rows.map((r) => (
+        <div key={r.key} className="od-dl__row">
+          <dt>{r.label}</dt>
+          <dd>{r.value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -363,151 +396,6 @@ function NoteBlock({
       <span className="oc-note-block__label">{label}</span>
       <p className="oo-body">{children}</p>
     </div>
-  );
-}
-
-/** The ladder's own time format, unchanged. */
-function fmt(at: string | null): string {
-  if (at === null) return '—';
-  return new Date(at).toLocaleString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-/** An estimated date carries no time. */
-function fmtDate(at: string | null): string {
-  if (at === null) return '—';
-  return new Date(at).toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-const STEP_STATE: Record<JourneyMilestoneView['state'], TimelineStepState> = {
-  DONE: 'done',
-  CURRENT: 'current',
-  PENDING: 'todo',
-  SKIPPED: 'skipped',
-};
-
-/** Milestones → u17 timeline steps. Same labels, same owner word, same times. */
-function milestoneSteps(
-  milestones: readonly JourneyMilestoneView[],
-  t: Translate<MessageKey>,
-): TimelineStep[] {
-  return milestones.map((m) => {
-    const owner = journeyOwnerLabel(m.owner);
-    const description: ReactNode = (
-      <>
-        <span>{owner}</span>
-        {m.state === 'SKIPPED' && <span>{t('orderDetail.notNeeded')}</span>}
-        {m.detail !== null && <span className="oo-sub">{m.detail}</span>}
-      </>
-    );
-    return {
-      id: m.key,
-      label: m.label,
-      state: STEP_STATE[m.state],
-      description,
-      ...(m.at === null
-        ? {}
-        : { time: m.estimated ? t('orderDetail.estimated', { date: fmtDate(m.at) }) : fmt(m.at) }),
-    };
-  });
-}
-
-function OrderJourney({
-  orderNumber,
-  status,
-  milestones,
-  parcels,
-  entries,
-}: {
-  readonly orderNumber: string;
-  readonly status: OrderStatus;
-  readonly milestones: readonly JourneyMilestoneView[];
-  readonly parcels: readonly JourneyParcelView[];
-  readonly entries: readonly JourneyEntryView[];
-}): ReactElement {
-  const t = useT();
-  const locale = useLocale();
-  // The latest parcel, as the shared panels chose it.
-  const parcel = parcels[parcels.length - 1] ?? null;
-  return (
-    <div className="oo-stack">
-      <div className={parcel === null ? 'oo-stack' : 'oo-split'}>
-        <OoSection title={t('orderDetail.tracker')}>
-          <Timeline
-            label={t('orderDetail.tracker')}
-            steps={milestoneSteps(milestones, t)}
-            header={{
-              icon: <Route size={16} />,
-              title: t('orderDetail.trackerOrder'),
-              id: orderNumber,
-              status: (
-                <StatusChip
-                  kind={orderStatusKind(status)}
-                  label={statusLabel(status, locale)}
-                  size="sm"
-                />
-              ),
-            }}
-          />
-        </OoSection>
-        {parcel !== null && (
-          <OoSection title={t('orderDetail.parcel')}>
-            <ParcelFacts parcel={parcel} />
-          </OoSection>
-        )}
-      </div>
-      <OoSection title={t('orderDetail.fullHistory')}>
-        <JourneyTimeline entries={entries} showCourierCodes />
-      </OoSection>
-    </div>
-  );
-}
-
-/**
- * The journey panels, with its own failure surface.
- *
- * Separate from the order body on purpose: the journey reads courier
- * data, and a courier read that is briefly unavailable must not blank
- * the recipient and the items an agent has the customer on the phone
- * about.
- */
-function OrderJourneySection({
-  orderId,
-  orderNumber,
-  status,
-}: {
-  readonly orderId: string;
-  readonly orderNumber: string;
-  readonly status: OrderStatus;
-}): ReactElement {
-  const t = useT();
-  const journey = useOrderJourney(orderId);
-  if (journey.isPending)
-    return <SkeletonRows rows={4} cols={1} label={t('orderDetail.journeyLoading')} />;
-  if (journey.isError || journey.data === undefined) {
-    return (
-      <OoSection title={t('orderDetail.tracker')}>
-        <ErrorState message={serverVerdict(journey.error)} retry={() => void journey.refetch()} />
-      </OoSection>
-    );
-  }
-  return (
-    <OrderJourney
-      orderNumber={orderNumber}
-      status={status}
-      milestones={journey.data.milestones}
-      parcels={journey.data.parcels}
-      entries={journey.data.timeline}
-    />
   );
 }
 

@@ -148,6 +148,13 @@ describe('FE-2 boundary — god-mode force-mutation', () => {
 
     await user.clear(typedInput);
     await user.type(typedInput, 'FORCE-MUTATE');
+    // The word alone is no longer enough: the order number is typed too
+    // (a client-side speed bump, never sent to the API).
+    expect(submit).toBeDisabled();
+    await user.type(
+      screen.getByLabelText('Type SD-2026-22-000001 to confirm'),
+      'SD-2026-22-000001',
+    );
     expect(submit).not.toBeDisabled();
   });
 
@@ -195,6 +202,10 @@ describe('FE-2 boundary — god-mode force-mutation', () => {
     );
     await user.click(screen.getByRole('button', { name: /Continue → confirmation/i }));
     await user.type(screen.getByPlaceholderText('FORCE-MUTATE'), 'FORCE-MUTATE');
+    await user.type(
+      screen.getByLabelText('Type SD-2026-22-000001 to confirm'),
+      'SD-2026-22-000001',
+    );
     await user.click(screen.getByRole('button', { name: /Force-mutate this order/i }));
 
     // The server's [code] + message render verbatim in the dialog.
@@ -253,6 +264,10 @@ describe('FE-2 boundary — god-mode force-mutation', () => {
     );
     await user.click(screen.getByRole('button', { name: /Continue → confirmation/i }));
     await user.type(screen.getByPlaceholderText('FORCE-MUTATE'), 'FORCE-MUTATE');
+    await user.type(
+      screen.getByLabelText('Type SD-2026-22-000001 to confirm'),
+      'SD-2026-22-000001',
+    );
     await user.click(screen.getByRole('button', { name: /Force-mutate this order/i }));
 
     await waitFor(() => {

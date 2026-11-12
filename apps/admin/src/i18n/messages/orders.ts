@@ -114,4 +114,80 @@ export const orders = defineMessages({
     'যাত্রাপথ লোড হচ্ছে…',
     'सफ़र लोड हो रहा है…',
   ],
+
+  // ── order detail redesign (2026-11-12) ─────────────────────────────
+  // Owner-supplied wording first; the block marked REVIEW is ours.
+  'orderDetail.header.back': ['Back to Orders', 'অর্ডারে ফিরে যান', 'ऑर्डर पर वापस जाएँ'],
+  'orderDetail.header.more': ['More', 'আরও', 'और'],
+  'orderDetail.header.placed': ['Placed {date}', 'অর্ডার {date}', 'ऑर्डर {date}'],
+  'orderDetail.header.updated': ['Updated {date}', 'হালনাগাদ {date}', 'अपडेट {date}'],
+  'orderDetail.action.fixAddress': ['Fix address', 'ঠিকানা ঠিক করুন', 'पता ठीक करें'],
+  'orderDetail.card.recipientAddress': [
+    'Recipient & address',
+    'প্রাপক ও ঠিকানা',
+    'प्राप्तकर्ता और पता',
+  ],
+  'orderDetail.card.addressAttention': [
+    'Address needs attention',
+    'ঠিকানায় মনোযোগ প্রয়োজন',
+    'पते पर ध्यान देना ज़रूरी है',
+  ],
+  'orderDetail.card.parsedFields': [
+    'Parsed fields ({count})',
+    'বিশ্লেষিত তথ্য ({count})',
+    'विश्लेषित फ़ील्ड ({count})',
+  ],
+  'orderDetail.card.shipment': ['Shipment', 'চালান', 'शिपमेंट'],
+  'orderDetail.card.paymentPackage': ['Payment & package', 'পেমেন্ট ও প্যাকেজ', 'भुगतान और पैकेज'],
+  'orderDetail.card.itemsCharges': ['Items & charges', 'পণ্য ও চার্জ', 'आइटम और शुल्क'],
+  'orderDetail.activity.title': ['Activity', 'কার্যকলাপ', 'गतिविधि'],
+  'orderDetail.activity.all': ['All', 'সব', 'सभी'],
+  'orderDetail.activity.milestones': ['Milestones', 'ধাপসমূহ', 'पड़ाव'],
+  'orderDetail.activity.courierScans': ['Courier scans', 'কুরিয়ার স্ক্যান', 'कूरियर स्कैन'],
+  'orderDetail.activity.warehouseAudit': ['Warehouse audit', 'গুদাম অডিট', 'गोदाम ऑडिट'],
+  'orderDetail.activity.source.warehouse': ['Warehouse', 'গুদাম', 'गोदाम'],
+  'orderDetail.activity.resultCount': [
+    '{count} events shown',
+    '{count}টি ঘটনা দেখানো হচ্ছে',
+    '{count} घटनाएँ दिखाई जा रही हैं',
+  ],
+  'orderDetail.stepper.skipped': ['Skipped', 'বাদ দেওয়া হয়েছে', 'छोड़ा गया'],
+  'orderDetail.danger.groupLabel': [
+    'Danger zone · ORD-2',
+    'ঝুঁকিপূর্ণ এলাকা · ORD-2',
+    'जोखिम क्षेत्र · ORD-2',
+  ],
+  'orderDetail.danger.typeToConfirm': [
+    'Type {orderNo} to confirm',
+    'নিশ্চিত করতে {orderNo} লিখুন',
+    'पुष्टि के लिए {orderNo} टाइप करें',
+  ],
+  'orderDetail.cancel.title': [
+    'Cancel order {orderNo}?',
+    'অর্ডার {orderNo} বাতিল করবেন?',
+    'ऑर्डर {orderNo} रद्द करें?',
+  ],
+  'orderDetail.cancel.keep': ['Keep order', 'অর্ডার রাখুন', 'ऑर्डर रखें'],
+  // REVIEW — not in the owner's list; translated by the implementer.
+  'orderDetail.header.eta': ['ETA {date}', 'আনুমানিক {date}', 'अनुमानित {date}'],
+  'orderDetail.ship.courierStatus': [
+    "Courier's own status",
+    'কুরিয়ারের নিজস্ব স্ট্যাটাস',
+    'कूरियर की अपनी स्थिति',
+  ],
+  'orderDetail.ship.collected': [
+    'Collected by courier',
+    'কুরিয়ার সংগ্রহ করেছে',
+    'कूरियर ने उठाया',
+  ],
+  'orderDetail.ship.expected': ['Expected delivery', 'প্রত্যাশিত ডেলিভারি', 'अपेक्षित डिलीवरी'],
+  'orderDetail.ship.chargeable': ['Chargeable weight', 'চার্জযোগ্য ওজন', 'चार्जेबल वज़न'],
+  'orderDetail.ship.dimensions': ['Dimensions', 'মাপ', 'आयाम'],
+  'orderDetail.ship.collectable': ['Collectable amount', 'আদায়যোগ্য পরিমাণ', 'वसूली योग्य राशि'],
+  'orderDetail.activity.filterLabel': [
+    'Filter activity',
+    'কার্যকলাপ ফিল্টার করুন',
+    'गतिविधि फ़िल्टर करें',
+  ],
+  'orderDetail.activity.empty': ['Nothing here yet', 'এখানে এখনও কিছু নেই', 'यहाँ अभी कुछ नहीं है'],
 });

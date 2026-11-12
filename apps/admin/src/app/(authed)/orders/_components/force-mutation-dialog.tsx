@@ -17,6 +17,7 @@ import { Select } from '@skydrop/ui/app/select';
 import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import './order-core.css';
 import { serverVerdict } from '@/lib/server-verdict';
+import { TypeToConfirm, typedMatchesOrderNo } from './danger-confirm';
 import type { MessageKey } from '@/i18n/catalog';
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/client';
@@ -201,6 +202,8 @@ export function ForceMutationDialog({
   const [ack, setAck] = useState(false);
   const [stage, setStage] = useState<'edit' | 'typed-confirm'>('edit');
   const [typed, setTyped] = useState('');
+  // Client-side guard only — never part of the request body.
+  const [typedOrder, setTypedOrder] = useState('');
   const [serverError, setServerError] = useState<string | null>(null);
   const mutate = useForceMutation(order.id);
 
@@ -214,6 +217,7 @@ export function ForceMutationDialog({
       setAck(false);
       setStage('edit');
       setTyped('');
+      setTypedOrder('');
       setServerError(null);
     }
   }, [open, order]);
@@ -322,7 +326,7 @@ export function ForceMutationDialog({
     </DialogFooter>
   );
 
-  const typedOk = typed === TYPED_CONFIRM;
+  const typedOk = typed === TYPED_CONFIRM && typedMatchesOrderNo(typedOrder, order.orderNumber);
   const confirmFooter = (
     <DialogFooter>
       <Button
@@ -342,7 +346,7 @@ export function ForceMutationDialog({
         icon={<ShieldAlert size={14} />}
         loading={mutate.isPending}
         onClick={() => {
-          if (typed === TYPED_CONFIRM) {
+          if (typed === TYPED_CONFIRM && typedMatchesOrderNo(typedOrder, order.orderNumber)) {
             void submitToServer();
           }
         }}
@@ -467,6 +471,9 @@ export function ForceMutationDialog({
           changedFields={Object.keys(fieldChanges)}
           statusChange={statusChange ? { from: order.status, to: targetStatus } : null}
           typed={typed}
+          orderNo={order.orderNumber}
+          typedOrder={typedOrder}
+          onTypedOrderChange={setTypedOrder}
           onTypedChange={setTyped}
           serverError={serverError}
           pending={mutate.isPending}
@@ -636,9 +643,15 @@ function TypedConfirmStep({
   statusChange,
   typed,
   onTypedChange,
+  orderNo,
+  typedOrder,
+  onTypedOrderChange,
   serverError,
   pending,
 }: {
+  readonly orderNo: string;
+  readonly typedOrder: string;
+  readonly onTypedOrderChange: (v: string) => void;
   readonly fieldChangeCount: number;
   readonly changedFields: ReadonlyArray<string>;
   readonly statusChange: { readonly from: OrderStatus; readonly to: OrderStatus } | null;
@@ -688,6 +701,12 @@ function TypedConfirmStep({
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
+        />
+        <TypeToConfirm
+          orderNo={orderNo}
+          value={typedOrder}
+          onChange={onTypedOrderChange}
+          disabled={pending}
         />
       </div>
 

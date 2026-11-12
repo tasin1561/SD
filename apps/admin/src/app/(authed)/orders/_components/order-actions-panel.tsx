@@ -88,7 +88,33 @@ const CANCELLATION_REASONS = (
   { value: OrderCancellationReason.OTHER, label: t('ordersOrderActionsPanel.other') },
 ];
 
-export function OrderActionsPanel({ order }: { readonly order: OrderView }): ReactElement {
+/**
+ * Everything the order's lifecycle actions need, as a hook, so the SAME
+ * state, gating and dialogs serve the page header's More menu and the old
+ * panel below. Nothing here decides anything new: the conditions are the
+ * ones the panel always had, and each opener opens the same dialog.
+ */
+export interface OrderActions {
+  readonly canOverride: boolean;
+  readonly canCancel: boolean;
+  readonly inTerminalState: boolean;
+  readonly cancelPending: boolean;
+  /** DELIVERED + `orders.cancel`; hidden (not disabled) otherwise. */
+  readonly canRequestReturn: boolean;
+  readonly open: {
+    readonly cancel: () => void;
+    readonly override: () => void;
+    readonly release: () => void;
+    readonly restore: () => void;
+    readonly requestReturn: () => void;
+  };
+  /** The dialogs. Mount once, anywhere. */
+  readonly dialogs: ReactElement;
+  /** Post-action result notices (force-mutate / release / restore). */
+  readonly results: ReactElement;
+}
+
+export function useOrderActions(order: OrderView): OrderActions {
   const t = useT();
 
   const canOverride = usePermission('orders.override');
@@ -132,115 +158,8 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
     }
   }
 
-  return (
-    <OoCard>
-      <div className="oo-card__head">
-        <div className="oo-stack oo-stack--tight">
-          <p className="oo-card__title">{t('ordersOrderActionsPanel.lifecycleActions')}</p>
-          <p className="oo-p">{t('ordersOrderActionsPanel.stateMachineGuardedTransitionsThe')}</p>
-        </div>
-      </div>
-
-      <div className="oc-group">
-        <p className="oc-group__label">{t('ordersOrderActionsPanel.saneActions')}</p>
-        <div className="oo-row">
-          <Button
-            variant="destructive"
-            size="md"
-            disabled={inTerminalState || cancel.isPending || !canCancel}
-            onClick={() => setCancelOpen(true)}
-            title={
-              inTerminalState
-                ? t('ordersOrderActionsPanel.alreadyInATerminalState', {
-                    value: order.status.toLowerCase(),
-                  })
-                : t('ordersOrderActionsPanel.cancelViaTheMatrixReleases')
-            }
-          >
-            {t('ordersOrderActionsPanel.cancelOrder')}
-          </Button>
-
-          {/* DELIVERED is terminal for everything else, which is why
-              this sits outside the terminal-state guard above: a
-              customer return is the one lifecycle move a finished
-              order still has. The call-centre case — the customer
-              rings us rather than the seller. */}
-          {order.status === 'DELIVERED' && canCancel && (
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => setReturnOpen(true)}
-              title={t('ordersOrderActionsPanel.theCustomerWantsToSend')}
-            >
-              {t('ordersOrderActionsPanel.requestReturn')}
-            </Button>
-          )}
-        </div>
-        {inTerminalState && (
-          <p className="oo-faint">{t('ordersOrderActionsPanel.thisOrderIsInA')}</p>
-        )}
-      </div>
-
-      <div className="oc-god-panel">
-        <p className="oc-god-panel__title">
-          <ShieldAlert size={14} aria-hidden />
-          {t('ordersOrderActionsPanel.godModeOrd2')}
-        </p>
-        <p className="oc-god-panel__body">
-          {richMessage(t('ordersOrderActionsPanel.bypassTheStateMachineAnd'), {
-            span: <span className="sk-ident">CRITICAL</span>,
-            span2: <span className="sk-ident">hasAdminOverride</span>,
-          })}
-        </p>
-        <div className="oo-row">
-          <Button
-            variant="destructive"
-            size="md"
-            icon={<ShieldAlert size={14} />}
-            onClick={() => setOverrideOpen(true)}
-            disabled={!canOverride}
-            title={
-              canOverride ? undefined : t('ordersOrderActionsPanel.requiresTheGodModeOverride')
-            }
-          >
-            {t('ordersOrderActionsPanel.forceMutate')}
-          </Button>
-          <Button
-            variant="destructive"
-            size="md"
-            onClick={() => setReleaseOpen(true)}
-            disabled={!canOverride}
-            title={
-              canOverride
-                ? t('ordersOrderActionsPanel.releaseEveryActiveReservationCleanup')
-                : t('ordersOrderActionsPanel.requiresSuperAdminRole')
-            }
-          >
-            {t('ordersOrderActionsPanel.releaseReservations')}
-          </Button>
-          {/* The mirror. Sits beside the release because they are the
-              two halves of one question — this order's stock claim —
-              and looking for one while only the other exists is how a
-              stuck order stays stuck. */}
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => setRestoreOpen(true)}
-            disabled={!canOverride}
-            title={
-              canOverride
-                ? t('ordersOrderActionsPanel.reReserveStockForAn')
-                : t('ordersOrderActionsPanel.requiresSuperAdminRole')
-            }
-          >
-            {t('ordersOrderActionsPanel.restoreStockClaim')}
-          </Button>
-        </div>
-        {!canOverride && (
-          <p className="oo-faint">{t('ordersOrderActionsPanel.yourRoleDoesNotInclude')}</p>
-        )}
-      </div>
-
+  const results = (
+    <>
       {restoreNote !== null && (
         <Notice tone="info" role="status">
           <p>
@@ -258,7 +177,11 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
       {lastRelease && (
         <ReleaseResultPanel result={lastRelease} onDismiss={() => setLastRelease(null)} />
       )}
+    </>
+  );
 
+  const dialogs = (
+    <>
       <AdminRequestReturnDialog
         orderId={order.id}
         orderNumber={order.orderNumber}
@@ -266,23 +189,29 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
         onClose={() => setReturnOpen(false)}
       />
 
-      {/* Sane cancel — the reason and note travel with the confirm. */}
+      {/* Sane cancel — the reason and note travel with the confirm.
+          Opens on "Keep order": a stray Enter must not cancel. */}
       <ConfirmDialog
         open={cancelOpen}
         onOpenChange={(o) => {
           if (!o) closeCancel();
         }}
-        title={t('ordersOrderActionsPanel.cancelThisOrder')}
+        title={t('orderDetail.cancel.title', { orderNo: order.orderNumber })}
         entity={order.orderNumber}
         entityIsIdentifier
         consequence={t('ordersOrderActionsPanel.saneAdminCancelDrivesThe')}
         confirmLabel={t('ordersOrderActionsPanel.confirmCancel')}
-        cancelLabel={t('ordersOrderActionsPanel.keepOrder')}
+        cancelLabel={t('orderDetail.cancel.keep')}
         destructive
+        focusSafe
         onConfirm={confirmCancel}
         error={serverError}
       >
         <div className="oo-stack oo-stack--tight">
+          {/* The lifecycle explainer that used to head the Actions card. */}
+          <p className="oo-faint">
+            {t('ordersOrderActionsPanel.stateMachineGuardedTransitionsThe')}
+          </p>
           {/* Money moves here, and the operator should know before they
               press it rather than field the seller's question later.
               Stated as a rule, not a figure: the panel does not know
@@ -346,6 +275,143 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
           );
         }}
       />
+    </>
+  );
+
+  return {
+    canOverride,
+    canCancel,
+    inTerminalState,
+    cancelPending: cancel.isPending,
+    canRequestReturn: order.status === 'DELIVERED' && canCancel,
+    open: {
+      cancel: () => setCancelOpen(true),
+      override: () => setOverrideOpen(true),
+      release: () => setReleaseOpen(true),
+      restore: () => setRestoreOpen(true),
+      requestReturn: () => setReturnOpen(true),
+    },
+    dialogs,
+    results,
+  };
+}
+
+export function OrderActionsPanel({ order }: { readonly order: OrderView }): ReactElement {
+  const t = useT();
+  const a = useOrderActions(order);
+  const { canOverride, canCancel, inTerminalState } = a;
+
+  return (
+    <OoCard>
+      <div className="oo-card__head">
+        <div className="oo-stack oo-stack--tight">
+          <p className="oo-card__title">{t('ordersOrderActionsPanel.lifecycleActions')}</p>
+          <p className="oo-p">{t('ordersOrderActionsPanel.stateMachineGuardedTransitionsThe')}</p>
+        </div>
+      </div>
+
+      <div className="oc-group">
+        <p className="oc-group__label">{t('ordersOrderActionsPanel.saneActions')}</p>
+        <div className="oo-row">
+          <Button
+            variant="destructive"
+            size="md"
+            disabled={inTerminalState || a.cancelPending || !canCancel}
+            onClick={a.open.cancel}
+            title={
+              inTerminalState
+                ? t('ordersOrderActionsPanel.alreadyInATerminalState', {
+                    value: order.status.toLowerCase(),
+                  })
+                : t('ordersOrderActionsPanel.cancelViaTheMatrixReleases')
+            }
+          >
+            {t('ordersOrderActionsPanel.cancelOrder')}
+          </Button>
+
+          {/* DELIVERED is terminal for everything else, which is why
+              this sits outside the terminal-state guard above: a
+              customer return is the one lifecycle move a finished
+              order still has. The call-centre case — the customer
+              rings us rather than the seller. */}
+          {a.canRequestReturn && (
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={a.open.requestReturn}
+              title={t('ordersOrderActionsPanel.theCustomerWantsToSend')}
+            >
+              {t('ordersOrderActionsPanel.requestReturn')}
+            </Button>
+          )}
+        </div>
+        {inTerminalState && (
+          <p className="oo-faint">{t('ordersOrderActionsPanel.thisOrderIsInA')}</p>
+        )}
+      </div>
+
+      <div className="oc-god-panel">
+        <p className="oc-god-panel__title">
+          <ShieldAlert size={14} aria-hidden />
+          {t('ordersOrderActionsPanel.godModeOrd2')}
+        </p>
+        <p className="oc-god-panel__body">
+          {richMessage(t('ordersOrderActionsPanel.bypassTheStateMachineAnd'), {
+            span: <span className="sk-ident">CRITICAL</span>,
+            span2: <span className="sk-ident">hasAdminOverride</span>,
+          })}
+        </p>
+        <div className="oo-row">
+          <Button
+            variant="destructive"
+            size="md"
+            icon={<ShieldAlert size={14} />}
+            onClick={a.open.override}
+            disabled={!canOverride}
+            title={
+              canOverride ? undefined : t('ordersOrderActionsPanel.requiresTheGodModeOverride')
+            }
+          >
+            {t('ordersOrderActionsPanel.forceMutate')}
+          </Button>
+          <Button
+            variant="destructive"
+            size="md"
+            onClick={a.open.release}
+            disabled={!canOverride}
+            title={
+              canOverride
+                ? t('ordersOrderActionsPanel.releaseEveryActiveReservationCleanup')
+                : t('ordersOrderActionsPanel.requiresSuperAdminRole')
+            }
+          >
+            {t('ordersOrderActionsPanel.releaseReservations')}
+          </Button>
+          {/* The mirror. Sits beside the release because they are the
+              two halves of one question — this order's stock claim —
+              and looking for one while only the other exists is how a
+              stuck order stays stuck. */}
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={a.open.restore}
+            disabled={!canOverride}
+            title={
+              canOverride
+                ? t('ordersOrderActionsPanel.reReserveStockForAn')
+                : t('ordersOrderActionsPanel.requiresSuperAdminRole')
+            }
+          >
+            {t('ordersOrderActionsPanel.restoreStockClaim')}
+          </Button>
+        </div>
+        {!canOverride && (
+          <p className="oo-faint">{t('ordersOrderActionsPanel.yourRoleDoesNotInclude')}</p>
+        )}
+      </div>
+
+      {a.results}
+      {a.dialogs}
     </OoCard>
   );
 }
