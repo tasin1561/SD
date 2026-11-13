@@ -1,9 +1,11 @@
 'use client';
 
-import type { ReactElement, ReactNode } from 'react';
+import { useEffect, useRef, type ReactElement, type ReactNode } from 'react';
 import { Tabs } from '@skydrop/ui/app/tabs';
 import '../../_components/benches.css';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 
 export type RtoTab = 'door' | 'transit' | 'bench' | 'receive';
 
@@ -44,8 +46,23 @@ export function RtoTabs({
   // is an hour a seller is being told their goods are still moving.
   const doorUrgent = counts.door > 0;
 
+  // On a phone the four tabs do not fit and the strip scrolls sideways.
+  // The open tab is brought into view, so somebody who lands on the last
+  // one can see which tab they are on without hunting for it.
+  const wrap = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const show = (): void => {
+      const on = wrap.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+      on?.scrollIntoView?.({ block: 'nearest', inline: 'center' });
+    };
+    show();
+    // Again once the counts and the web font have settled the tab widths.
+    const later = window.setTimeout(show, 400);
+    return () => window.clearTimeout(later);
+  }, [active, counts.door, counts.transit, counts.bench]);
+
   return (
-    <div className="wh-rto-tabs" data-door-urgent={doorUrgent ? '1' : undefined}>
+    <div ref={wrap} className="wh-rto-tabs" data-door-urgent={doorUrgent ? '1' : undefined}>
       <Tabs
         label={t('warehouseRtoRtoTabs.rtoViews')}
         value={active}
@@ -74,9 +91,14 @@ export function RtoTabPanel({
   readonly subtitle: string;
   readonly children: ReactNode;
 }): ReactElement {
+  const t = useT();
   return (
     <div role="tabpanel" className="wh-rto-panel">
-      <p className="wh-note">{subtitle}</p>
+      {/* The explanation is one press away rather than above every list. */}
+      <p className="wh-faint ez-titled">
+        {t('easy.aboutThisList')}
+        <InfoButton title={t('easy.aboutThisList')} text={subtitle} />
+      </p>
       {children}
     </div>
   );

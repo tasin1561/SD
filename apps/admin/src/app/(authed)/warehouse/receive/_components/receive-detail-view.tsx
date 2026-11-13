@@ -2,7 +2,7 @@
 
 import '@/components/easy/easy.css';
 import Link from 'next/link';
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Check, ClipboardCheck, PackageX } from 'lucide-react';
 import { useToast } from '@skydrop/ui/components';
 import { Button } from '@skydrop/ui/app/button';
@@ -32,7 +32,9 @@ import { SkuLabelSheetView } from '@/components/sku-label-sheet';
 import { AmendCount } from '../../_components/amend-count';
 import { buildReceiptLines } from './receive-lines';
 import '../../_components/benches.css';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDate, formatDateTime } from '@/i18n/format';
+import { codeLabel } from '@/components/easy/code-label';
 import { richMessage } from '@/i18n/client';
 
 /**
@@ -68,6 +70,14 @@ function recordedQtyOf(l: {
  */
 export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement {
   const t = useT();
+  const locale = useLocale();
+  // The receipt's paperwork is reference; the counting is the job. On a
+  // phone the paperwork starts folded so the first product is on screen,
+  // and one press opens it. On a wider screen it starts open, as before.
+  const [factsOpen, setFactsOpen] = useState(true);
+  useEffect(() => {
+    if (window.matchMedia?.('(max-width: 767px)').matches === true) setFactsOpen(false);
+  }, []);
 
   const skuLabels = useSkuLabelsForReceipt();
   const [labelSheet, setLabelSheet] = useState<SkuLabelSheet | null>(null);
@@ -456,7 +466,12 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
         </div>
       )}
 
-      <section className="wh-card">
+      <details
+        className="wh-card rc-facts"
+        open={factsOpen}
+        onToggle={(e) => setFactsOpen(e.currentTarget.open)}
+      >
+        <summary className="rc-facts__summary">{t('ezReceive.details')}</summary>
         {/* Everything the receipt carries. Somebody at a bench deciding
             whether a carton matches its paperwork should not have to
             open another screen for a field the API already sent. */}
@@ -474,10 +489,13 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
             value={r.sellerReference ?? '—'}
             ident
           />
-          <Field label={t('warehouseReceiveReceiveDetailView.status')} value={r.status} />
+          <Field
+            label={t('warehouseReceiveReceiveDetailView.status')}
+            value={codeLabel(r.status, locale)}
+          />
           <Field
             label={t('warehouseReceiveReceiveDetailView.expectedArrival')}
-            value={r.expectedArrivalAt ? new Date(r.expectedArrivalAt).toLocaleDateString() : '—'}
+            value={r.expectedArrivalAt ? formatDate(r.expectedArrivalAt, locale) : '—'}
           />
           <Field
             label={t('warehouseReceiveReceiveDetailView.warehouse')}
@@ -485,7 +503,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
           />
           <Field
             label={t('warehouseReceiveReceiveDetailView.declared')}
-            value={new Date(r.createdAt).toLocaleString()}
+            value={formatDateTime(r.createdAt, locale)}
           />
           {/* `receivedAt` is stamped at completion; the receipt moving
               to ARRIVING is what "started" means, and the staff id
@@ -496,11 +514,11 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
           />
           <Field
             label={t('warehouseReceiveReceiveDetailView.receivedAt')}
-            value={r.receivedAt ? new Date(r.receivedAt).toLocaleString() : '—'}
+            value={r.receivedAt ? formatDateTime(r.receivedAt, locale) : '—'}
           />
           <Field
             label={t('warehouseReceiveReceiveDetailView.discrepancy')}
-            value={r.hasDiscrepancies ? 'YES' : 'no'}
+            value={r.hasDiscrepancies ? t('easy.yes') : t('easy.no')}
           />
           {/*
             Computed from the LINES, which carry the sku. The stored
@@ -530,7 +548,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
             />
           )}
         </dl>
-      </section>
+      </details>
 
       <div className="wh-stack">
         <SectionHeading title={t('warehouseReceiveReceiveDetailView.products')} />
@@ -576,14 +594,12 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                     </span>
                     <span className="sk-figure">
                       {t('warehouseReceiveReceiveDetailView.mfg', {
-                        value: line.manufacturedAt
-                          ? new Date(line.manufacturedAt).toLocaleDateString()
-                          : '—',
+                        value: line.manufacturedAt ? formatDate(line.manufacturedAt, locale) : '—',
                       })}
                     </span>
                     <span className="sk-figure">
                       {t('warehouseReceiveReceiveDetailView.exp', {
-                        value: line.expiresAt ? new Date(line.expiresAt).toLocaleDateString() : '—',
+                        value: line.expiresAt ? formatDate(line.expiresAt, locale) : '—',
                       })}
                     </span>
                     {line.batch !== null && (

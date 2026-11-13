@@ -1523,3 +1523,70 @@ p.wh-alert {
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
+
+/* A long product code wraps inside its card on a phone instead of pushing
+   the returns bench sideways. */
+.rto-wrap,
+.rto-wrap .sk-ident {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+/* The "what each choice does" opener is finger-sized on a touch screen. */
+@media (pointer: coarse) {
+  button.wh-awb-pick {
+    min-height: 44px;
+  }
+  .wh-details > summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
+/* A long product code wraps inside its card on every bench. */
+.wh-item__sub .sk-ident {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+/* Goods receipt: the paperwork folds away so the counting is on screen. */
+.rc-facts > .rc-facts__summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+.rc-facts[open] > .rc-facts__summary {
+  margin-bottom: var(--sp-3);
+}
+.rc-facts > .rc-facts__summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+/* A small arrow says the paperwork opens and closes. */
+.rc-facts > .rc-facts__summary {
+  justify-content: space-between;
+  list-style: none;
+}
+.rc-facts > .rc-facts__summary::-webkit-details-marker {
+  display: none;
+}
+.rc-facts > .rc-facts__summary::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--fg-muted);
+  border-bottom: 2px solid var(--fg-muted);
+  transform: rotate(45deg);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.rc-facts[open] > .rc-facts__summary::after {
+  transform: rotate(-135deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .rc-facts > .rc-facts__summary::after {
+    transition: none;
+  }
+}

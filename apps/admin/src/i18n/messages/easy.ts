@@ -139,6 +139,10 @@ export const easy = defineMessages({
   'easy.cod': ['COD', 'সিওডি', 'सीओडी'],
   'easy.waitingCount': ['{n} waiting', '{n}টি অপেক্ষায়', '{n} प्रतीक्षा में'],
 
+  'easy.aboutThisList': ['About this list', 'এই তালিকা সম্পর্কে', 'इस सूची के बारे में'],
+  'easy.yes': ['Yes', 'হ্যাঁ', 'हाँ'],
+  'easy.no': ['No', 'না', 'नहीं'],
+  'ezReceive.details': ['Receipt details', 'রিসিটের বিবরণ', 'रसीद का विवरण'],
   'easy.awb': ['AWB', 'এডব্লিউবি', 'एडब्ल्यूबी'],
 
   // ── Needs attention (/nsa) ────────────────────────────────────────────
