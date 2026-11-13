@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 import { AlertTriangle, RotateCw } from 'lucide-react';
 import { useRef, type ReactElement, type ReactNode } from 'react';
 import { Button } from '../button';
+import { AskAiWhy } from '../assistant/ask-why';
 import { useUiT } from '../i18n-client';
 import { useLoopVisible } from '../motion/use-loop-visible';
 import './empty-state.css';
@@ -174,6 +175,7 @@ export function ErrorState({
         <div className="sk-error__title">{title ?? t('ui.error.title')}</div>
         <div className="sk-error__message">{message}</div>
       </div>
+      <AskAiWhy message={message} className="sk-error__askwhy" />
       {retry !== undefined && (
         <Button
           variant="secondary"

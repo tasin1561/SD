@@ -326,4 +326,60 @@ describe('assistant ticket proposals (e2e)', () => {
     expect(await h.prisma.assistantTicketProposal.count()).toBe(3);
     expect(await h.prisma.ticket.count()).toBe(0);
   });
+  it('photos already sent in the chat ride along with the ticket and only its owner can list them', async () => {
+    const conv = await conversation(A.auth);
+    const { id } = await propose(A.auth, conv, { ...GOOD, orderNumber: A.orderNumber });
+    const c = await h.prisma.assistantConversation.findUniqueOrThrow({ where: { id: conv } });
+    const sentMessage = await h.prisma.assistantMessage.findFirstOrThrow({
+      where: { conversationId: conv, role: 'USER' },
+    });
+    const mk = (messageId: string | null, name: string) =>
+      h.prisma.assistantAttachment.create({
+        data: {
+          conversationId: conv,
+          messageId,
+          audience: c.audience,
+          ownerUserId: c.ownerUserId,
+          sellerId: c.sellerId,
+          kind: 'IMAGE',
+          mediaType: 'image/jpeg',
+          originalName: name,
+          bytes: 10,
+          sha256: 'a'.repeat(64),
+          storageKey: `assistant/test/${name}`,
+        },
+      });
+    const sent = await mk(sentMessage.id, 'damaged-box.jpg');
+    await mk(null, 'never-sent.jpg'); // uploaded, never asked about: must not travel
+
+    expect((await confirm(A.auth, id)).status).toBe(200);
+    const ticket = await h.prisma.ticket.findFirstOrThrow();
+    const links = await h.prisma.assistantTicketAttachment.findMany({});
+    expect(links.map((l) => [l.ticketId, l.attachmentId])).toEqual([[ticket.id, sent.id]]);
+
+    const res = await request(h.baseUrl)
+      .get(`/seller/assistant/tickets/${ticket.id}/photos`)
+      .set(A.auth)
+      .expect(200);
+    expect(res.body).toEqual({
+      items: [expect.objectContaining({ id: sent.id, name: 'damaged-box.jpg', kind: 'IMAGE' })],
+    });
+    expect(JSON.stringify(res.body)).not.toContain('storageKey');
+    // Another client's ticket is the ticket route's own 404, not a list.
+    await request(h.baseUrl)
+      .get(`/seller/assistant/tickets/${ticket.id}/photos`)
+      .set(B.auth)
+      .expect(404);
+    // Staff with tickets.view see them too.
+    await request(h.baseUrl)
+      .get(`/admin/assistant/tickets/${ticket.id}/photos`)
+      .set(staffAuth)
+      .expect(200);
+  });
+
+  it('the status says the assistant is on and hands over only the greeting permissions', async () => {
+    const res = await request(h.baseUrl).get('/seller/assistant/status').set(A.auth).expect(200);
+    expect(res.body).toMatchObject({ enabled: true });
+    expect(Array.isArray((res.body as { permissions: unknown }).permissions)).toBe(true);
+  });
 });

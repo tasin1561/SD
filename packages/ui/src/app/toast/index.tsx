@@ -16,6 +16,7 @@ import {
 import { reducedMotion } from '../motion/motion';
 import './toast.css';
 import { useUiT } from '../i18n-client';
+import { AskAiWhy } from '../assistant/ask-why';
 
 export type ToastKind = 'success' | 'error' | 'info';
 
@@ -175,6 +176,12 @@ function ToastView({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
       <div className="sk-toast__text">
         <p className="sk-toast__title">{heading}</p>
         {body !== undefined ? <p className="sk-toast__body">{body}</p> : null}
+        {item.kind === 'error' ? (
+          <AskAiWhy
+            message={body === undefined ? heading : `${heading} ${body}`}
+            className="sk-toast__askwhy"
+          />
+        ) : null}
       </div>
       {item.action ? (
         <button

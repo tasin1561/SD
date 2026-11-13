@@ -33,6 +33,8 @@ import { AssistantHelpService } from './services/assistant-help.service';
 import { AnthropicModelGateway, AssistantModelGateway } from './services/assistant-model-gateway';
 import { AssistantStoreService } from './services/assistant-store.service';
 import { AssistantTicketService } from './services/assistant-ticket.service';
+import { AssistantTicketPhotosService } from './services/assistant-ticket-photos.service';
+import { AssistantStatusService } from './services/assistant-status.service';
 import { AssistantToolRegistry } from './services/assistant-tool-registry.service';
 
 /**
@@ -79,6 +81,8 @@ import { AssistantToolRegistry } from './services/assistant-tool-registry.servic
     AssistantHelpService,
     AssistantToolRegistry,
     AssistantTicketService,
+    AssistantTicketPhotosService,
+    AssistantStatusService,
     AssistantChatService,
     AssistantConversationService,
     AssistantFeedbackService,

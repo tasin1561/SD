@@ -83,6 +83,18 @@ class MemoryProposals {
     r.status = 'DISMISSED';
     return true;
   }
+  linked: Array<{ conversationId: string; ticketId: string; proposalId: string }> = [];
+  linkFails = false;
+  async linkSentAttachmentsToTicket(
+    _s: CallerScope,
+    conversationId: string,
+    ticketId: string,
+    proposalId: string,
+  ) {
+    if (this.linkFails) throw new Error('db down');
+    this.linked.push({ conversationId, ticketId, proposalId });
+    return 1;
+  }
 }
 
 function rig(opts: { openFails?: boolean; delayMs?: number } = {}) {
@@ -139,6 +151,24 @@ describe('confirming a ticket proposal', () => {
     });
     expect(actor).toMatchObject({ type: 'SELLER', sellerUserId: SELLER.userId });
     expect(escalation.escalate).toHaveBeenCalledTimes(1);
+  });
+
+  it('links the photos already sent in the conversation to the new ticket, once per press', async () => {
+    const { store, svc } = rig();
+    const p = store.add();
+    await svc.confirm(SELLER, p.id);
+    expect(store.linked).toEqual([
+      { conversationId: 'c1', ticketId: 'ticket-1', proposalId: p.id },
+    ]);
+    await svc.confirm(SELLER, p.id); // a replay hands back the result and links nothing again
+    expect(store.linked).toHaveLength(1);
+  });
+
+  it('still answers with the ticket when the photos could not be linked', async () => {
+    const { store, svc } = rig();
+    store.linkFails = true;
+    const p = store.add();
+    await expect(svc.confirm(SELLER, p.id)).resolves.toMatchObject({ status: 'CONFIRMED' });
   });
 
   it('two clicks, ten tabs and a replay raise ONE ticket', async () => {
@@ -296,6 +326,8 @@ describe('nothing the model can call raises a ticket (structural)', () => {
         '/assistant.module.ts',
         '/controllers/seller-assistant.controller.ts',
         '/controllers/store-assistant.controller.ts',
+        // READ-ONLY: lists a ticket's photos through the console's own ticket query.
+        '/services/assistant-ticket-photos.service.ts',
         '/services/assistant-ticket.service.ts',
       ].sort(),
     );

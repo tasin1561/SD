@@ -243,6 +243,21 @@ const en = {
   'ui.assistant.qa.findParcel': 'How do I find a parcel?',
   'ui.assistant.qa.placeForCustomer': 'How do I place an order for a customer?',
   'ui.assistant.qa.whyRto': 'Why was a parcel returned?',
+  'ui.assistant.askWhy': 'Ask AI why',
+  'ui.assistant.askWhyQuestion': 'Why did I get this error and what should I do?',
+  'ui.assistant.greet.title': 'What needs my attention?',
+  'ui.assistant.greet.clear': 'Nothing needs your attention right now.',
+  'ui.assistant.greet.line.awaiting': 'Orders waiting for your decision: {n}',
+  'ui.assistant.greet.line.stuck': 'Out for delivery but not delivered: {n}',
+  'ui.assistant.greet.line.failed': 'Failed deliveries: {n}',
+  'ui.assistant.greet.line.balance': 'Your wallet balance is below zero',
+  'ui.assistant.greet.line.calls': 'Calls waiting in the queue: {n}',
+  'ui.assistant.greet.line.manual': 'Parcels waiting for manual placement: {n}',
+  'ui.assistant.greet.explain': 'Explain these',
+  'ui.assistant.greet.explainQuestion':
+    'Please explain these and tell me what to do first: {summary}',
+  'ui.assistant.photos.title': 'Photos sent with this ticket',
+  'ui.assistant.photos.open': 'Open {name}',
 } as const;
 
 export type UiMessageKey = keyof typeof en;
@@ -475,6 +490,20 @@ const bn: Record<UiMessageKey, string> = {
   'ui.assistant.qa.findParcel': 'পার্সেল কীভাবে খুঁজব?',
   'ui.assistant.qa.placeForCustomer': 'গ্রাহকের জন্য অর্ডার কীভাবে দেব?',
   'ui.assistant.qa.whyRto': 'পার্সেল ফেরত এল কেন?',
+  'ui.assistant.askWhy': 'AI-কে জিজ্ঞাসা করুন কেন',
+  'ui.assistant.askWhyQuestion': 'আমি এই ত্রুটি কেন পেলাম এবং আমার কী করা উচিত?',
+  'ui.assistant.greet.title': 'কোন বিষয়ে আমার নজর দরকার?',
+  'ui.assistant.greet.clear': 'এখন আপনার নজর দেওয়ার মতো কিছু নেই।',
+  'ui.assistant.greet.line.awaiting': 'আপনার সিদ্ধান্তের অপেক্ষায় থাকা অর্ডার: {n}',
+  'ui.assistant.greet.line.stuck': 'ডেলিভারির জন্য বেরিয়েছে কিন্তু পৌঁছায়নি: {n}',
+  'ui.assistant.greet.line.failed': 'ডেলিভারি ব্যর্থ: {n}',
+  'ui.assistant.greet.line.balance': 'আপনার ওয়ালেটের ব্যালেন্স শূন্যের নিচে',
+  'ui.assistant.greet.line.calls': 'কিউতে অপেক্ষমাণ কল: {n}',
+  'ui.assistant.greet.line.manual': 'হাতে বুকিংয়ের অপেক্ষায় থাকা পার্সেল: {n}',
+  'ui.assistant.greet.explain': 'এগুলো বুঝিয়ে দিন',
+  'ui.assistant.greet.explainQuestion': 'এগুলো বুঝিয়ে বলুন এবং আগে কী করব জানান: {summary}',
+  'ui.assistant.photos.title': 'এই টিকিটের সাথে পাঠানো ছবি',
+  'ui.assistant.photos.open': '{name} খুলুন',
 };
 
 /**
@@ -722,6 +751,20 @@ const hi: Partial<Record<UiMessageKey, string>> = {
   'ui.assistant.qa.findParcel': 'पार्सल कैसे ढूँढूँ?',
   'ui.assistant.qa.placeForCustomer': 'ग्राहक के लिए ऑर्डर कैसे दूँ?',
   'ui.assistant.qa.whyRto': 'पार्सल वापस क्यों आया?',
+  'ui.assistant.askWhy': 'AI से पूछें क्यों',
+  'ui.assistant.askWhyQuestion': 'मुझे यह एरर क्यों मिला और मुझे क्या करना चाहिए?',
+  'ui.assistant.greet.title': 'किस पर मेरा ध्यान चाहिए?',
+  'ui.assistant.greet.clear': 'अभी आपके ध्यान देने लायक कुछ नहीं है।',
+  'ui.assistant.greet.line.awaiting': 'आपके फ़ैसले का इंतज़ार कर रहे ऑर्डर: {n}',
+  'ui.assistant.greet.line.stuck': 'डिलीवरी के लिए निकले पर पहुँचे नहीं: {n}',
+  'ui.assistant.greet.line.failed': 'डिलीवरी असफल: {n}',
+  'ui.assistant.greet.line.balance': 'आपके वॉलेट का बैलेंस शून्य से नीचे है',
+  'ui.assistant.greet.line.calls': 'कतार में इंतज़ार करती कॉल: {n}',
+  'ui.assistant.greet.line.manual': 'हाथ से बुकिंग के इंतज़ार में पार्सल: {n}',
+  'ui.assistant.greet.explain': 'इन्हें समझाइए',
+  'ui.assistant.greet.explainQuestion': 'इन्हें समझाइए और बताइए पहले क्या करूँ: {summary}',
+  'ui.assistant.photos.title': 'इस टिकट के साथ भेजी गई तस्वीरें',
+  'ui.assistant.photos.open': '{name} खोलें',
 };
 
 export const UI_MESSAGES = { en, bn, hi } as const;

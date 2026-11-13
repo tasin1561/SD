@@ -36,6 +36,7 @@ export const ERROR_CODES: ReadonlyArray<readonly [string, string, string | null]
   ["ASSISTANT_PROPOSAL_ALREADY_DECIDED","assistant","This ticket proposal has already been decided."],
   ["ASSISTANT_PROPOSAL_NOT_FOUND","assistant","Ticket proposal not found"],
   ["ASSISTANT_TICKET_FORBIDDEN","assistant","You do not have permission to raise tickets."],
+  ["ASSISTANT_TICKET_PHOTOS_FORBIDDEN","assistant","You do not have permission to view tickets."],
   ["ASSOCIATE_COPY_SAME_PERSON","reseller-associates","Choose a different person to copy prices from."],
   ["ASSOCIATE_NOT_FOUND","reseller-associates","No such person on this store’s team"],
   ["ASSOCIATE_ORDERS_PAUSED","order","Your store has switched order creation off for you. Everything you have already placed carries on — you can still follow it, cancel it and chase it. Ask your store to switch it back on."],

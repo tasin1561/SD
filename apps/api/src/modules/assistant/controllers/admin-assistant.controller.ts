@@ -34,6 +34,8 @@ import {
   type UploadedFile as UploadedAttachment,
 } from '../services/assistant-attachment.service';
 import { AssistantFeedbackService } from '../services/assistant-feedback.service';
+import { AssistantTicketPhotosService } from '../services/assistant-ticket-photos.service';
+import { AssistantStatusService } from '../services/assistant-status.service';
 import { AssistantChatService } from '../services/assistant-chat.service';
 import { AssistantConversationService } from '../services/assistant-conversation.service';
 
@@ -59,6 +61,8 @@ export class AdminAssistantController {
     private readonly chat: AssistantChatService,
     private readonly attachments: AssistantAttachmentService,
     private readonly feedback: AssistantFeedbackService,
+    private readonly ticketPhotos: AssistantTicketPhotosService,
+    private readonly status: AssistantStatusService,
   ) {}
 
   @Post('conversations')
@@ -146,5 +150,26 @@ export class AdminAssistantController {
     @Body() body: AssistantFeedbackDto,
   ) {
     return this.feedback.rate(scopeFromStaff(staff), id, body.messageId, body.rating, body.comment);
+  }
+
+  @Get('status')
+  @ApiOperation({
+    summary:
+      'Is the assistant switched on for this console, and which permissions the greeting card may use',
+  })
+  statusOf(@CurrentStaff() who: AuthenticatedStaff) {
+    return this.status.status(scopeFromStaff(who));
+  }
+
+  @Get('tickets/:ticketId/photos')
+  @ApiOperation({
+    summary:
+      'The photos that went with a ticket, as short-lived signed download links (needs tickets.view)',
+  })
+  ticketPhotosOf(
+    @CurrentStaff() who: AuthenticatedStaff,
+    @Param('ticketId', uuid()) ticketId: string,
+  ) {
+    return this.ticketPhotos.list(scopeFromStaff(who), ticketId);
   }
 }

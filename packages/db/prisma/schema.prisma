@@ -10766,12 +10766,34 @@ model AssistantAttachment {
   storageKey   String                  @map("storage_key")
   createdAt    DateTime                @default(now()) @map("created_at") @db.Timestamptz
 
-  conversation AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
-  message      AssistantMessage?     @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  conversation AssistantConversation       @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  message      AssistantMessage?           @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  ticketLinks  AssistantTicketAttachment[]
 
   @@index([conversationId, createdAt])
   @@index([messageId])
   @@map("assistant_attachments")
+}
+
+/// 2026-11-13 — a photo the person sent the assistant that went with a ticket
+/// the assistant raised for them (set when they pressed "Raise this ticket").
+/// Tickets themselves carry no files, so this is the only link between the
+/// two. `ticket_id` is a soft reference (no FK), like the proposal's; the
+/// attachment FK is RESTRICT. UNIQUE (ticket_id, attachment_id): a replayed
+/// confirm links nothing twice.
+model AssistantTicketAttachment {
+  id           String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  ticketId     String   @map("ticket_id") @db.Uuid
+  attachmentId String   @map("attachment_id") @db.Uuid
+  proposalId   String?  @map("proposal_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  attachment AssistantAttachment @relation(fields: [attachmentId], references: [id], onDelete: Restrict)
+
+  @@unique([ticketId, attachmentId])
+  @@index([ticketId])
+  @@index([attachmentId])
+  @@map("assistant_ticket_attachments")
 }
 
 /// 2026-11-13 — a support ticket the assistant PROPOSED. The model can only

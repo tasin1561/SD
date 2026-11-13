@@ -5,7 +5,8 @@ import { useParams } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 import { Send } from 'lucide-react';
 import type { ActorType } from '@skydrop/db';
-import { useStoreIdentity } from '@skydrop/auth/client';
+import { useApiClient, useStoreIdentity } from '@skydrop/auth/client';
+import { TicketPhotos } from '@skydrop/ui/app/assistant';
 import { Money } from '@skydrop/ui/components';
 import { ticketStatusKind, ticketStatusLabel } from '@skydrop/ui/status';
 import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
@@ -201,6 +202,7 @@ function TicketBody({ t }: { t: StoreTicketView }): ReactElement {
   const events = useStoreTicketEvents(t.id);
   const reply = useReplyStoreTicket(t.id);
   const toast = useToast();
+  const client = useApiClient();
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const open = t.resolvedAt === null;
@@ -256,6 +258,11 @@ function TicketBody({ t }: { t: StoreTicketView }): ReactElement {
       />
       <Outcome t={t} />
       <Correction t={t} />
+      {/* Photos the person sent the assistant before it raised this ticket; renders nothing when there are none. */}
+      <TicketPhotos
+        ticketId={t.id}
+        fetcher={(id) => client.request(`/api/store/assistant/tickets/${id}/photos`)}
+      />
       <section className="rc-tkt-section">
         <SectionHeading title={tr('tkt.d.conversation')} />
         {t.description !== null ? <p className="rc-tkt-opening">{t.description}</p> : null}

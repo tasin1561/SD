@@ -129,6 +129,9 @@ export function proposalOwnedBy(scope: CallerScope): Prisma.AssistantTicketPropo
   };
 }
 
+/** Files that can ride along with one ticket. */
+export const MAX_TICKET_PHOTOS = 10;
+
 /** Pending proposals one conversation may hold at once (a model cannot flood the screen). */
 export const MAX_PENDING_PROPOSALS = 3;
 
@@ -568,6 +571,50 @@ export class AssistantStoreService {
       where: { id, status: 'CONFIRMED', ticketId: null, requestId: null },
       data: outcome,
     });
+  }
+
+  /**
+   * Link the files the person had ALREADY sent in this conversation to the
+   * ticket their button press raised. Owner columns, the conversation and
+   * "already sent" are all in the WHERE, so a file that is not the caller's,
+   * not this conversation's or not yet asked about is never linked. Idempotent
+   * on UNIQUE (ticket_id, attachment_id): a replayed confirm adds nothing.
+   * Files that were rebuilt away by retention (empty key) are skipped.
+   */
+  async linkSentAttachmentsToTicket(
+    scope: CallerScope,
+    conversationId: string,
+    ticketId: string,
+    proposalId: string,
+  ): Promise<number> {
+    const sent = await this.prisma.client.assistantAttachment.findMany({
+      where: {
+        conversationId,
+        messageId: { not: null },
+        storageKey: { not: '' },
+        ...attachmentOwnedBy(scope),
+      },
+      orderBy: { id: 'asc' },
+      take: MAX_TICKET_PHOTOS,
+      select: { id: true },
+    });
+    if (sent.length === 0) return 0;
+    const made = await this.prisma.client.assistantTicketAttachment.createMany({
+      data: sent.map((a) => ({ ticketId, attachmentId: a.id, proposalId })),
+      skipDuplicates: true,
+    });
+    return made.count;
+  }
+
+  /** The files linked to one ticket, oldest first. Callers must already have proven the ticket is theirs to see. */
+  async ticketAttachments(ticketId: string): Promise<AttachmentRow[]> {
+    const links = await this.prisma.client.assistantTicketAttachment.findMany({
+      where: { ticketId, attachment: { storageKey: { not: '' } } },
+      orderBy: { id: 'asc' },
+      take: MAX_TICKET_PHOTOS,
+      select: { attachment: { select: ATTACHMENT_SELECT } },
+    });
+    return links.map((l) => l.attachment);
   }
 
   async dismissProposal(scope: CallerScope, id: string): Promise<boolean> {

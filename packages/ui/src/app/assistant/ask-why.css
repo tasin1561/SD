@@ -1,0 +1,63 @@
+/* "Ask AI why": a small labelled pill. Colour from the tokens, so light and dark are free. */
+.sk-askwhy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 36px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  background: var(--accent-tint);
+  color: var(--blue-text);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.sk-askwhy svg {
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.sk-askwhy:hover {
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  transform: translateY(-1px);
+}
+.sk-askwhy:hover svg {
+  transform: rotate(12deg) scale(1.1);
+}
+.sk-askwhy:active {
+  transform: translateY(0);
+}
+.sk-askwhy:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .sk-askwhy {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-askwhy,
+  .sk-askwhy svg {
+    transition: none;
+  }
+  .sk-askwhy:hover,
+  .sk-askwhy:hover svg {
+    transform: none;
+  }
+}
+
+/* Where it sits: under an error's message, and under an error toast's text. */
+.sk-error__askwhy {
+  align-self: center;
+}
+.sk-toast__askwhy {
+  justify-self: start;
+  margin-top: var(--sp-1);
+}
