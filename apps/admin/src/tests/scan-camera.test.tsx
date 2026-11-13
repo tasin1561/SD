@@ -176,7 +176,7 @@ describe('camera → the keyboard path', () => {
       ]),
     });
     await user.click(await screen.findByRole('button', { name: 'Scan with the camera' }));
-    await screen.findByText('SH-0001');
+    await screen.findAllByText('SH-0001');
     expect(writesSeen(fetchImpl)).toEqual([
       { url: '/api/admin/courier/handover-scan', method: 'POST', body: { awbNumber: 'AWB-CAM-1' } },
     ]);

@@ -124,6 +124,16 @@ export const easy = defineMessages({
     'चुने हुए ऑर्डर कॉल कतार में जाते हैं।\nएक एजेंट हर ग्राहक को फ़ोन करता है, और ग्राहक के हाँ कहने पर ही ऑर्डर पक्का होता है।',
   ],
 
+  // ── Handover bench ────────────────────────────────────────────────────
+  'ezHandover.countLabel': [
+    'scanned this session',
+    'এই সেশনে স্ক্যান হয়েছে',
+    'इस सत्र में स्कैन हुए',
+  ],
+  'ezHandover.lastScan': ['Last scan', 'শেষ স্ক্যান', 'पिछला स्कैन'],
+  'ezHandover.scanned': ['Scanned', 'স্ক্যান হয়েছে', 'स्कैन हुआ'],
+  'ezHandover.dispatched': ['Dispatched', 'ডিসপ্যাচ হয়েছে', 'रवाना हुआ'],
+
   // ── Re-attempt requests (/reattempt-requests) ─────────────────────────
   'ezReattempt.reasonLabel': [
     'Why the client is asking',

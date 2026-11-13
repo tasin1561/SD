@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { AlertTriangle, OctagonX, ScanLine, Truck } from 'lucide-react';
+import { AlertTriangle, CircleCheck, OctagonX, Truck } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
 import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
 import { PageHeader } from '@skydrop/ui/app/page-header';
@@ -16,6 +16,9 @@ import { ScanSoundToggle } from '@/components/scan-sound-toggle';
 import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
 import { HandoverQueue } from './handover-queue';
 import '../../_components/benches.css';
+import './handover.css';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/client';
 
@@ -44,6 +47,14 @@ export function HandoverBench(): ReactElement {
   const [code, setCode] = useState('');
   const [camera, setCamera] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+
+  // The field takes focus the moment the bench opens. A scan gun types
+  // into whatever has focus, and this field had none on arrival — the
+  // first parcel of every session was scanned into nothing until somebody
+  // noticed and clicked the box (2026-11-13).
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   // After a refusal is acknowledged the field re-enables in the same render
   // that closes the dialog, so focus() at the click finds it still disabled
@@ -78,6 +89,8 @@ export function HandoverBench(): ReactElement {
       manifestDispatched: boolean;
     }>
   >([]);
+
+  const last = done[0];
 
   async function submit(value: string): Promise<void> {
     const awb = value.trim();
@@ -118,8 +131,15 @@ export function HandoverBench(): ReactElement {
           { label: t('warehouseHandoverHandoverBench.handover') },
         ]}
         Link={Link}
-        title={t('warehouseHandoverHandoverBench.handover')}
-        subtitle={t('warehouseHandoverHandoverBench.scanEveryParcelAsIt')}
+        title={
+          <span className="ez-titled">
+            {t('warehouseHandoverHandoverBench.handover')}
+            <InfoButton
+              title={t('warehouseHandoverHandoverBench.handover')}
+              text={`${t('warehouseHandoverHandoverBench.scanEveryParcelAsIt')}\n\n${t('warehouseHandoverHandoverBench.turnThisRequirementOnOr')}`}
+            />
+          </span>
+        }
       />
 
       {block.data != null && (
@@ -167,19 +187,56 @@ export function HandoverBench(): ReactElement {
             <ScanSoundToggle />
           </div>
         </div>
-        <p className="wh-scan__meta">
-          {done.length === 0
-            ? t('warehouseHandoverHandoverBench.nothingScannedYet')
-            : t('warehouseHandoverHandoverBench.scannedInThisSession', { length: done.length })}
-        </p>
+        {/* What the person at the van looks up for between boxes: did
+            that one go in, and how many is that. Large enough to read from
+            arm's length with a parcel in both hands; announced for a
+            screen reader. The full list is further down. */}
+        <div className="ho-tally" aria-live="polite">
+          <div className="ho-tally__count" aria-hidden>
+            <span className="ho-tally__num sk-figure">{done.length}</span>
+            <span className="ho-tally__label">{t('ezHandover.countLabel')}</span>
+          </div>
+          {/* The same count as one sentence, for a screen reader. */}
+          <span className="wh-sr">
+            {t('warehouseHandoverHandoverBench.scannedInThisSession', { length: done.length })}
+          </span>
+          {last !== undefined ? (
+            <div className="ho-last" data-repeat={last.repeat ? '1' : undefined}>
+              <span className="ho-last__icon" aria-hidden>
+                {last.repeat ? <AlertTriangle size={22} /> : <CircleCheck size={22} />}
+              </span>
+              <span className="ho-last__text">
+                <span className="ho-last__kicker">{t('ezHandover.lastScan')}</span>
+                <span className="ho-last__no">{last.shipmentNumber}</span>
+                <span className="sk-ident">{last.awb}</span>
+              </span>
+              <StatusChip
+                kind={last.repeat ? 'draft' : 'delivered'}
+                label={
+                  last.repeat
+                    ? t('warehouseHandoverHandoverBench.alreadyGone')
+                    : last.dispatched
+                      ? t('ezHandover.dispatched')
+                      : t('ezHandover.scanned')
+                }
+                size="sm"
+              />
+            </div>
+          ) : (
+            <p className="wh-scan__meta">{t('warehouseHandoverHandoverBench.nothingScannedYet')}</p>
+          )}
+        </div>
         {/* The manifest is no longer a step, but "what went out on
             Tuesday's van" is still a real question, and this is where
             somebody stands when they ask it. */}
-        <p className="wh-faint">
-          <Link href="/warehouse/manifests" className="wh-link">
+        <p className="wh-faint ez-titled">
+          <Link href="/warehouse/manifests" className="wh-link ho-link">
             {t('warehouseHandoverHandoverBench.manifestHistory')}
-          </Link>{' '}
-          {t('warehouseHandoverHandoverBench.closedOutAutomaticallyAsEach')}
+          </Link>
+          <InfoButton
+            title={t('warehouseHandoverHandoverBench.manifestHistory')}
+            text={t('warehouseHandoverHandoverBench.closedOutAutomaticallyAsEach')}
+          />
         </p>
         {/* The van is asked for automatically when the day's first box
             is packed (CUR-10 amendment #3). A day that failed is not
@@ -231,7 +288,9 @@ export function HandoverBench(): ReactElement {
                     ) : (
                       <StatusChip
                         kind="delivered"
-                        label={d.dispatched ? 'dispatched' : 'scanned'}
+                        // In the reader's language — these two were
+                        // hard-coded English words in every language.
+                        label={d.dispatched ? t('ezHandover.dispatched') : t('ezHandover.scanned')}
                         size="sm"
                       />
                     )
@@ -282,11 +341,6 @@ export function HandoverBench(): ReactElement {
           {t('warehouseHandoverHandoverBench.itHasNotBeenRecorded')}
         </p>
       </Dialog>
-
-      <p className="wh-faint wh-row">
-        <ScanLine size={12} aria-hidden />
-        {t('warehouseHandoverHandoverBench.turnThisRequirementOnOr')}
-      </p>
     </div>
   );
 }
