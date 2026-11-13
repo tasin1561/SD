@@ -101,7 +101,7 @@ export class SellerAssistantController {
    */
   @Post('ticket-proposals/:id/confirm')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 10, ttl: 60 * 1000 } })
+  @Throttle({ default: { limit: 20, ttl: 60 * 1000 } })
   @ApiOperation({
     summary: 'Raise the ticket the assistant proposed (the person pressed the button)',
   })

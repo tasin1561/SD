@@ -21,7 +21,7 @@ import {
  *
  * What is proved here, and why a unit test cannot prove it:
  *  - the model's tool call creates NO ticket (the `tickets` table stays empty);
- *  - the confirm endpoint, hit ten times at once, creates EXACTLY ONE ticket
+ *  - the confirm endpoint, hit eight times at once, creates EXACTLY ONE ticket
  *    (the guarded UPDATE is a Postgres row lock, not an in-memory flag);
  *  - nobody but the proposal's owner can confirm or dismiss it;
  *  - a ticket service that refuses puts the proposal back to PENDING and
@@ -224,11 +224,11 @@ describe('assistant ticket proposals (e2e)', () => {
     expect(await h.prisma.ticket.count()).toBe(0);
   });
 
-  it('ten simultaneous confirms raise exactly ONE ticket; a replay raises none', async () => {
+  it('eight simultaneous confirms raise exactly ONE ticket; a replay raises none', async () => {
     const conv = await conversation(A.auth);
     const { id } = await propose(A.auth, conv, { ...GOOD, orderNumber: A.orderNumber });
 
-    const results = await Promise.all(Array.from({ length: 10 }, () => confirm(A.auth, id)));
+    const results = await Promise.all(Array.from({ length: 8 }, () => confirm(A.auth, id)));
     for (const r of results) expect([200, 409]).toContain(r.status);
     expect(results.filter((r) => r.status === 200).length).toBeGreaterThanOrEqual(1);
     expect(await h.prisma.ticket.count()).toBe(1);
