@@ -79,7 +79,7 @@ describe('assistant panel', () => {
     render(<AssistantWidget console="seller" pathname="/orders" transport={r.transport} />);
     const launcher = screen.getByRole('button', { name: /ask skydrop/i });
     await user.click(launcher);
-    const dialog = await screen.findByRole('dialog', { name: 'Skydrop assistant' });
+    const dialog = await screen.findByRole('dialog', { name: /Skydrop AI assistant/ });
     await waitFor(() => expect(screen.getByLabelText('Ask a question')).toHaveFocus());
     expect(dialog).not.toHaveAttribute('inert');
     await user.keyboard('{Escape}');

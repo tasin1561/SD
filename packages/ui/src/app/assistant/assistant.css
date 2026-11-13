@@ -203,6 +203,20 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* "AI" beside the title — owner, 2026-11-13: anyone must see it is AI. */
+.sk-ai-pill {
+  display: inline-block;
+  margin-inline-start: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  vertical-align: middle;
+}
 .sk-ai-tools {
   display: flex;
   flex: none;

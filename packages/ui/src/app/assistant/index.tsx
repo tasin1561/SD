@@ -758,6 +758,12 @@ export function AssistantWidget({
             )}
             <h2 id={titleId} className="sk-ai-title">
               {view === 'history' ? t('ui.assistant.historyTitle') : t('ui.assistant.title')}
+              {view === 'history' ? null : (
+                // Owner, 2026-11-13: anyone must see at a glance that this is AI.
+                <span className="sk-ai-pill" aria-hidden="true">
+                  {t('ui.assistant.aiBadge')}
+                </span>
+              )}
             </h2>
             <div className="sk-ai-tools">
               <button
