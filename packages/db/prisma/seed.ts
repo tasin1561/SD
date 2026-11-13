@@ -2065,6 +2065,73 @@ const systemSettings: SystemSettingSeed[] = [
       'How many questions one person may ask the AI assistant in a UTC day. Past it, the assistant says it is resting for them until tomorrow. Counts questions, not answers.',
     sellerOverridable: false,
   },
+  {
+    key: 'assistant.portal_staff_enabled',
+    category: 'assistant',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'AI assistant on in the staff console',
+    description:
+      'Switch the AI assistant on or off for staff in the admin console only. Off means staff see it resting; the other consoles are unaffected.',
+    sellerOverridable: false,
+  },
+  {
+    key: 'assistant.portal_seller_enabled',
+    category: 'assistant',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'AI assistant on in the client console',
+    description: 'Switch the AI assistant on or off for clients (sellers) only.',
+    sellerOverridable: false,
+  },
+  {
+    key: 'assistant.portal_store_enabled',
+    category: 'assistant',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'AI assistant on in the member-store console',
+    description: 'Switch the AI assistant on or off for member-store users only.',
+    sellerOverridable: false,
+  },
+  {
+    key: 'assistant.portal_associate_enabled',
+    category: 'assistant',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'AI assistant on in the associate console',
+    description: 'Switch the AI assistant on or off for associates (own-orders store logins) only.',
+    sellerOverridable: false,
+  },
+  {
+    key: 'assistant.attachments_enabled',
+    category: 'assistant',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'AI assistant file attachments',
+    description:
+      'Whether people may attach images and PDFs to a question. Off means new uploads are refused; questions without files keep working.',
+    sellerOverridable: false,
+  },
+  {
+    key: 'assistant.monitor_enabled',
+    category: 'assistant',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'AI monitor enabled',
+    description:
+      'Switch for the AI monitor (the reviewer that watches conversations). Off until the monitor exists; nothing reads it yet.',
+    sellerOverridable: false,
+  },
+  {
+    key: 'assistant.monitor_monthly_budget_usd',
+    category: 'assistant',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '20.00',
+    displayName: 'AI monitor monthly budget (USD)',
+    description:
+      'Hard cap on what the AI monitor may cost in a calendar month, separate from the assistant budget. Nothing reads it until the monitor exists.',
+    sellerOverridable: false,
+  },
 ];
 
 async function seedSystemSettings() {

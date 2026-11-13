@@ -24,11 +24,16 @@ import type { AuthenticatedStoreUser } from '../../../common/types/request';
 import { MAX_ATTACHMENT_BYTES } from '../assistant-attachment-rebuild';
 import { streamAnswer } from '../assistant-sse';
 import { scopeFromStoreUser } from '../assistant-scope';
-import { CreateConversationDto, SendAssistantMessageDto } from '../dto/assistant.dto';
+import {
+  AssistantFeedbackDto,
+  CreateConversationDto,
+  SendAssistantMessageDto,
+} from '../dto/assistant.dto';
 import {
   AssistantAttachmentService,
   type UploadedFile as UploadedAttachment,
 } from '../services/assistant-attachment.service';
+import { AssistantFeedbackService } from '../services/assistant-feedback.service';
 import { AssistantChatService } from '../services/assistant-chat.service';
 import { AssistantConversationService } from '../services/assistant-conversation.service';
 import { AssistantTicketService } from '../services/assistant-ticket.service';
@@ -55,6 +60,7 @@ export class StoreAssistantController {
     private readonly chat: AssistantChatService,
     private readonly attachments: AssistantAttachmentService,
     private readonly ticketProposals: AssistantTicketService,
+    private readonly feedback: AssistantFeedbackService,
   ) {}
 
   @Post('conversations')
@@ -151,5 +157,25 @@ export class StoreAssistantController {
     @Param('attachmentId', uuid()) attachmentId: string,
   ) {
     return this.attachments.downloadUrl(scopeFromStoreUser(user), id, attachmentId);
+  }
+
+  @Post('conversations/:id/feedback')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 60, ttl: 60 * 1000 } })
+  @ApiOperation({
+    summary: 'Thumbs up / down on one of my answers (owner only; never sent to the model)',
+  })
+  rate(
+    @CurrentStoreUser() user: AuthenticatedStoreUser,
+    @Param('id', uuid()) id: string,
+    @Body() body: AssistantFeedbackDto,
+  ) {
+    return this.feedback.rate(
+      scopeFromStoreUser(user),
+      id,
+      body.messageId,
+      body.rating,
+      body.comment,
+    );
   }
 }

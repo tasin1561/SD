@@ -84,6 +84,8 @@ export class AssistantChatService {
     const conv = await this.requireOwned(scope, conversationId);
     const lang = detectReplyLanguage(text);
     const notice = (code: NoticeCode): void => {
+      // Counted for the control panel (code only, fire and forget).
+      void this.store.recordNotice(conv.id, scope.audience, code);
       emit({
         type: 'notice',
         code,
@@ -288,9 +290,10 @@ export class AssistantChatService {
         }
 
         // A normal answer. Stored EXACTLY as returned, thinking blocks included.
-        await this.store.appendMessage(conv.id, 'ASSISTANT', content);
+        const answerId = await this.store.appendMessage(conv.id, 'ASSISTANT', content);
         await this.store.touch(conv.id);
-        emit({ type: 'done', conversationId: conv.id });
+        // `messageId` lets the thumbs under the answer name it.
+        emit({ type: 'done', conversationId: conv.id, messageId: answerId });
         return;
       }
       // Ran out of tool rounds without an answer.

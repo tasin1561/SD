@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { Prisma } from '@skydrop/db';
+import type { AssistantAudience, Prisma } from '@skydrop/db';
 import { SystemSettingsService } from '../../system-settings/services/system-settings.service';
 import { realFromBilledUsd } from '../assistant-pricing';
 import type { CallerScope } from '../assistant.types';
@@ -36,6 +36,7 @@ export class AssistantBudgetService {
 
   async check(scope: CallerScope, now: Date = new Date()): Promise<BudgetVerdict> {
     if (!(await this.enabled())) return { ok: false, code: 'DISABLED' };
+    if (!(await this.portalEnabled(scope.audience))) return { ok: false, code: 'DISABLED' };
 
     const dailyCap = await this.number('assistant.daily_messages_per_user', DEFAULT_DAILY_MESSAGES);
     const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -57,6 +58,28 @@ export class AssistantBudgetService {
       return v !== false;
     } catch {
       return true;
+    }
+  }
+
+  /**
+   * The per-console switch (`assistant.portal_<staff|seller|store|associate>_enabled`),
+   * read on every request like the kill switch, so flipping it needs no deploy.
+   */
+  portalEnabled(audience: AssistantAudience): Promise<boolean> {
+    return this.flag(`assistant.portal_${audience.toLowerCase()}_enabled`, true);
+  }
+
+  /** `assistant.attachments_enabled`: off refuses NEW uploads only. */
+  attachmentsEnabled(): Promise<boolean> {
+    return this.flag('assistant.attachments_enabled', true);
+  }
+
+  private async flag(key: string, fallback: boolean): Promise<boolean> {
+    try {
+      const v = (await this.settings.getByKey(key)).value;
+      return typeof v === 'boolean' ? v : fallback;
+    } catch {
+      return fallback;
     }
   }
 

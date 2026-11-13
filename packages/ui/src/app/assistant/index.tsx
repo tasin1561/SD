@@ -48,6 +48,7 @@ import {
   type AssistantConsole,
 } from './quick-actions';
 import { Markdown } from './markdown';
+import { AnswerFeedback, type AnswerRating } from './feedback';
 import { TicketProposalCard, toTicketProposal, type TicketProposal } from './ticket-card';
 import { readAssistantStream, type HelpLink, type NoticeCode } from './sse';
 import { useAssistantSound } from './sound';
@@ -59,6 +60,7 @@ export * from './markdown';
 export * from './quick-actions';
 export * from './sound';
 export * from './ticket-card';
+export * from './feedback';
 
 /** How the widget reaches the API: each app passes its `ApiClient` (bearer token, single-flight refresh, same-origin proxy). The widget never fetches by itself. */
 export interface AssistantTransport {
@@ -99,6 +101,10 @@ interface ChatMessage {
   readonly attachments?: readonly SentFile[];
   /** Tickets the assistant proposed under this answer (cards with a button). */
   readonly proposals?: readonly TicketProposal[];
+  /** The stored id of this answer, for the thumbs under it. */
+  readonly serverId?: string;
+  /** The person's own rating of it, when one was saved. */
+  readonly rating?: AnswerRating;
 }
 
 interface ConversationRow {
@@ -110,6 +116,8 @@ interface ConversationRow {
 interface ConversationDetail {
   readonly conversation: { readonly id: string };
   readonly messages: ReadonlyArray<{
+    readonly id?: string;
+    readonly rating?: AnswerRating;
     readonly role: 'user' | 'assistant';
     readonly text: string;
     readonly at: string;
@@ -516,6 +524,9 @@ export function AssistantWidget({
             if (card !== null) {
               patchLast((m) => ({ ...m, proposals: [...(m.proposals ?? []), card] }));
             }
+          } else if (ev.type === 'done') {
+            const answerId = ev.messageId;
+            if (answerId !== undefined) patchLast((m) => ({ ...m, serverId: answerId }));
           } else if (ev.type === 'notice') {
             sawNotice = true;
             patchLast((m) => ({
@@ -608,6 +619,8 @@ export function AssistantWidget({
             text: m.text,
             at: m.at,
             status: 'done' as const,
+            ...(m.role === 'assistant' && m.id !== undefined ? { serverId: m.id } : {}),
+            ...(m.rating !== undefined ? { rating: m.rating } : {}),
             ...(owner(idx).length > 0 ? { proposals: owner(idx) } : {}),
             ...(m.attachments !== undefined && m.attachments.length > 0
               ? {
@@ -959,6 +972,21 @@ export function AssistantWidget({
                         </div>
                       </div>
                     ) : null}
+                    {m.role === 'assistant' &&
+                    m.status === 'done' &&
+                    m.text !== '' &&
+                    m.serverId !== undefined &&
+                    conversationId !== null ? (
+                      <AnswerFeedback
+                        key={m.serverId}
+                        base={base}
+                        conversationId={conversationId}
+                        messageId={m.serverId}
+                        initial={m.rating}
+                        transport={transport}
+                        t={t}
+                      />
+                    ) : null}
                     {m.role === 'assistant' && m.status === 'done' && m.text !== '' ? (
                       <button
                         type="button"
@@ -1056,6 +1084,7 @@ export function AssistantWidget({
               <Send size={18} aria-hidden="true" />
             </button>
           </form>
+          <p className="sk-ai-fineprint">{t('ui.assistant.reviewNotice')}</p>
           {dragging ? (
             <div className="sk-ai-drop" aria-hidden="true">
               <Paperclip size={22} />

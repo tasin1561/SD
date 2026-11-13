@@ -458,6 +458,8 @@ export async function resetAssistantState(prisma: PrismaClient): Promise<void> {
     'TRUNCATE TABLE ' +
       [
         'assistant_ticket_proposals',
+        'assistant_feedback',
+        'assistant_notices',
         'assistant_budget_alerts',
         'assistant_attachments',
         'assistant_usage',

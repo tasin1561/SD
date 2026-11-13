@@ -1,6 +1,7 @@
 import { makeTranslator } from '@skydrop/ui/app/i18n';
 import { toCatalogs } from './define';
 import { activity } from './messages/activity';
+import { ai } from './messages/ai';
 import { cc } from './messages/cc';
 import { common } from './messages/common';
 import { confirmation } from './messages/confirmation';
@@ -26,6 +27,7 @@ import { wh } from './messages/wh';
  */
 export const NAMESPACES = [
   activity,
+  ai,
   common,
   confirmation,
   shell,
@@ -47,6 +49,7 @@ export const NAMESPACES = [
 
 const ALL = {
   ...activity,
+  ...ai,
   ...common,
   ...confirmation,
   ...shell,

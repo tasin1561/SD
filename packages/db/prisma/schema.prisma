@@ -10630,18 +10630,24 @@ model AssistantConversation {
   /// ever shown back to that staff member, never to the real owner.
   impersonatedByStaffId String? @map("impersonated_by_staff_id") @db.Uuid
 
-  title     String?
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+  title        String?
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  /// Set by the 180-day retention job once the words, files and comments of
+  /// this conversation have been replaced. Usage and cost rows are kept.
+  anonymisedAt DateTime? @map("anonymised_at") @db.Timestamptz
 
   messages    AssistantMessage[]
   toolCalls   AssistantToolCall[]
   usage       AssistantUsage[]
   attachments AssistantAttachment[]
   proposals   AssistantTicketProposal[]
+  feedback    AssistantFeedback[]
+  notices     AssistantNotice[]
 
   @@index([audience, ownerUserId, updatedAt])
+  @@index([anonymisedAt, updatedAt])
   @@map("assistant_conversations")
 }
 
@@ -10660,6 +10666,7 @@ model AssistantMessage {
 
   conversation AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
   attachments  AssistantAttachment[]
+  feedback     AssistantFeedback[]
 
   @@index([conversationId, id])
   @@map("assistant_messages")
@@ -10833,4 +10840,58 @@ model AssistantBudgetAlert {
 
   @@unique([month, threshold])
   @@map("assistant_budget_alerts")
+}
+
+/// 2026-11-13 — thumbs up / down on one assistant answer.
+enum AssistantFeedbackRating {
+  UP   @map("up")
+  DOWN @map("down")
+
+  @@map("assistant_feedback_rating")
+}
+
+/// One rating per answer per person (UNIQUE message + owner; pressing again
+/// replaces it). Owner-only: a row is only ever written or read back through
+/// the owner columns. NEVER sent to the model and never part of the history it
+/// replays. The comment is customer text, so retention clears it at 180 days.
+model AssistantFeedback {
+  id             String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  messageId      String @map("message_id") @db.Uuid
+  conversationId String @map("conversation_id") @db.Uuid
+
+  audience              AssistantAudience
+  ownerUserId           String            @map("owner_user_id") @db.Uuid
+  sellerId              String?           @map("seller_id") @db.Uuid
+  storeId               String?           @map("store_id") @db.Uuid
+  impersonatedByStaffId String?           @map("impersonated_by_staff_id") @db.Uuid
+
+  rating    AssistantFeedbackRating
+  comment   String?
+  createdAt DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  conversation AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  message      AssistantMessage      @relation(fields: [messageId], references: [id], onDelete: Restrict)
+
+  @@unique([messageId, ownerUserId])
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("assistant_feedback")
+}
+
+/// 2026-11-13 — a fixed notice the assistant showed instead of (or after) an
+/// answer: resting, refused, truncated, failed ... Recorded so the control
+/// panel can show the error and refusal rate. Holds a code, never any text.
+model AssistantNotice {
+  id             String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  conversationId String            @map("conversation_id") @db.Uuid
+  audience       AssistantAudience
+  code           String
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  conversation AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt])
+  @@index([conversationId])
+  @@map("assistant_notices")
 }

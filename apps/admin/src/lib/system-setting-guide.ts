@@ -521,6 +521,103 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     what: 'How many questions one person may ask the assistant in a day (UTC). It counts questions, not answers.',
     example: 'At 60, the 61st question from the same person today gets the “resting” note.',
   },
+  'assistant.portal_staff_enabled': {
+    name: 'AI assistant — staff console',
+    group: 'AI assistant',
+    what: 'Turns the assistant on or off for staff in this admin console only.',
+    example: 'Switch it off to keep the assistant for clients but stop staff using it.',
+    values: onOff(
+      [
+        'Staff can ask the assistant questions.',
+        'Switch it off to keep the assistant for clients but stop staff using it.',
+      ],
+      [
+        'Staff see that the assistant is resting.',
+        'Switch it off to keep the assistant for clients but stop staff using it.',
+      ],
+    ),
+  },
+  'assistant.portal_seller_enabled': {
+    name: 'AI assistant — client console',
+    group: 'AI assistant',
+    what: 'Turns the assistant on or off for clients only.',
+    example: 'Switch it off if clients report a problem and you want to pause just them.',
+    values: onOff(
+      [
+        'Clients can ask the assistant questions.',
+        'Switch it off if clients report a problem and you want to pause just them.',
+      ],
+      [
+        'Clients see that the assistant is resting.',
+        'Switch it off if clients report a problem and you want to pause just them.',
+      ],
+    ),
+  },
+  'assistant.portal_store_enabled': {
+    name: 'AI assistant — member-store console',
+    group: 'AI assistant',
+    what: 'Turns the assistant on or off for member-store users only.',
+    example: 'Switch it off to pause only the member-store console.',
+    values: onOff(
+      [
+        'Member-store users can ask the assistant questions.',
+        'Switch it off to pause only the member-store console.',
+      ],
+      [
+        'Member-store users see that the assistant is resting.',
+        'Switch it off to pause only the member-store console.',
+      ],
+    ),
+  },
+  'assistant.portal_associate_enabled': {
+    name: 'AI assistant — associate console',
+    group: 'AI assistant',
+    what: 'Turns the assistant on or off for associates only.',
+    example: 'Switch it off to pause only the associate console.',
+    values: onOff(
+      [
+        'Associates can ask the assistant questions.',
+        'Switch it off to pause only the associate console.',
+      ],
+      [
+        'Associates see that the assistant is resting.',
+        'Switch it off to pause only the associate console.',
+      ],
+    ),
+  },
+  'assistant.attachments_enabled': {
+    name: 'AI assistant — file attachments',
+    group: 'AI assistant',
+    what: 'Whether people can attach pictures and PDFs to a question.',
+    example:
+      'Switch it off if file uploads are being misused; questions without files keep working.',
+    values: onOff(
+      [
+        'People can attach files to a question.',
+        'Switch it off if file uploads are being misused; questions without files keep working.',
+      ],
+      [
+        'New file uploads are refused; text questions still work.',
+        'Switch it off if file uploads are being misused; questions without files keep working.',
+      ],
+    ),
+  },
+  'assistant.monitor_enabled': {
+    name: 'AI monitor',
+    group: 'AI assistant',
+    what: 'Switch for the AI monitor, the reviewer that watches conversations. It does not exist yet, so this changes nothing today.',
+    example: 'Leave it off until the monitor is built.',
+    values: onOff(
+      ['The monitor reviews conversations.', 'Leave it off until the monitor is built.'],
+      ['The monitor does nothing.', 'Leave it off until the monitor is built.'],
+    ),
+  },
+  'assistant.monitor_monthly_budget_usd': {
+    name: 'AI monitor — monthly budget',
+    group: 'AI assistant',
+    what: 'The most the AI monitor may cost in a calendar month, in US dollars, separate from the assistant budget. The monitor does not exist yet, so nothing reads this today.',
+    example: 'At 20, once the monitor has used $20 of real spend in a month it rests.',
+  },
   'wallet.inbound_freight_mode': {
     name: 'How Bangladesh → India freight is paid',
     group: 'Inbound freight',
