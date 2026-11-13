@@ -149,7 +149,7 @@ export function UnitTracePanel(): ReactElement {
                         unit that went PICKED → IN_STOCK came back off a
                         cancelled box, and that is the interesting part. */}
                     <span className="stk-muted">
-                      <Code value={e.fromStatus} />
+                      {e.fromStatus === null ? '—' : <Code value={e.fromStatus} />}
                     </span>{' '}
                     → <Code value={e.toStatus} />
                   </Td>
