@@ -5,7 +5,6 @@ import type { ReactElement, ReactNode } from 'react';
 import {
   Activity,
   AlertTriangle,
-  Info,
   Banknote,
   Landmark,
   Receipt,
@@ -18,7 +17,8 @@ import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
 import { KpiCard, Odometer, type KpiTone } from '@skydrop/ui/app/kpi-card';
 import { Skeleton } from '@skydrop/ui/app/skeleton';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
-import { TooltipCard } from '@skydrop/ui/app/tooltip-card';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useOrdersList, useReportSummary } from '@/lib/api-hooks';
 import { useTicketsList, useWithdrawalsList } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
@@ -106,7 +106,6 @@ function AttentionCard({
   badge?: string;
   tone?: 'neutral' | 'warn' | 'bad' | 'info';
 }): ReactElement {
-  const t = useT();
   const active = (count ?? 0) > 0;
 
   // A card with work on it carries its tone in THREE places at once —
@@ -152,15 +151,9 @@ function AttentionCard({
         <Link href={href} className="db-attn__link" aria-label={`${area}: ${label}`}>
           {label}
         </Link>
-        <TooltipCard title={t('dashboardDashboardView.whatThisCounts')} description={hint}>
-          <button
-            type="button"
-            className="db-attn__info"
-            aria-label={t('dashboardDashboardView.about', { label })}
-          >
-            <Info size={14} aria-hidden />
-          </button>
-        </TooltipCard>
+        {/* Opens on a press, not a hover: a hover hint cannot be opened on
+            a phone. */}
+        <InfoButton title={label} text={hint} />
       </div>
     </div>
   );
@@ -389,10 +382,17 @@ export function DashboardView(): ReactElement {
   });
 
   return (
-    <div className="af-page">
+    <div className="af-page ez-touch">
       <PageHeader
-        title={t('dashboardDashboardView.overview')}
-        subtitle={t('dashboardDashboardView.whatIsWaitingOnSomeone')}
+        title={
+          <span className="ez-titled">
+            {t('dashboardDashboardView.overview')}
+            <InfoButton
+              title={t('dashboardDashboardView.overview')}
+              text={t('dashboardDashboardView.whatIsWaitingOnSomeone')}
+            />
+          </span>
+        }
         meta={
           <MetaFact tone="good" dot>
             {t('dashboardDashboardView.liveOperations')}

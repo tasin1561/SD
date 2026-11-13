@@ -300,6 +300,9 @@
   outline: none;
 }
 /* Above the cover: the (i) explains, it does not navigate. */
+.db-attn .ez-info {
+  z-index: 1;
+}
 .db-attn__info {
   position: relative;
   z-index: 1;

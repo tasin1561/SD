@@ -201,6 +201,9 @@ export const easy = defineMessages({
     'कूरियर तक जाता है। पार्सल हमारे पास लौटता है और बिक्री समाप्त हो जाती है।',
   ],
 
+  // ── Warehouse hub (/warehouse) ────────────────────────────────────────
+  'ezWh.returns': ['Returns (RTO)', 'রিটার্ন (RTO)', 'वापसी (RTO)'],
+
   // ── Manual placement (/manual-placement) ──────────────────────────────
   'ezPlacement.whyInfo': [
     'Why no connected courier took this parcel. The courier’s own words, when there are any, are shown under the reason.',

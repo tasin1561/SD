@@ -13,6 +13,8 @@ import {
   Hand,
 } from 'lucide-react';
 import './_components/benches.css';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { getT } from '@/i18n/server';
 
 /**
@@ -22,10 +24,17 @@ import { getT } from '@/i18n/server';
 export default async function WarehouseHubPage(): Promise<ReactElement> {
   const { t } = await getT();
   return (
-    <div className="wh-page">
+    <div className="wh-page ez-touch">
       <PageHeader
-        title={t('warehousePage.warehouse')}
-        subtitle={t('warehousePage.consignmentReceivePrintPickPack')}
+        title={
+          <span className="ez-titled">
+            {t('warehousePage.warehouse')}
+            <InfoButton
+              title={t('warehousePage.warehouse')}
+              text={t('warehousePage.consignmentReceivePrintPickPack')}
+            />
+          </span>
+        }
       />
       <div className="wh-hub">
         <Tile
@@ -76,7 +85,7 @@ export default async function WarehouseHubPage(): Promise<ReactElement> {
         <Tile
           href="/warehouse/rto"
           icon={<RotateCcw size={20} />}
-          title="RTO"
+          title={t('ezWh.returns')}
           subtitle={t('warehousePage.receiveReturnsInspectItemsFinalize')}
         />
       </div>
