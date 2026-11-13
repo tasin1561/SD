@@ -185,9 +185,9 @@ export function OrderOmnisearch(): ReactElement | null {
                     <OrderSearchCard
                       order={o}
                       statusText={
-                        locale === 'bn'
-                          ? statusLabel(o.status, 'bn')
-                          : o.status.replaceAll('_', ' ').toLowerCase()
+                        locale === 'en'
+                          ? o.status.replaceAll('_', ' ').toLowerCase()
+                          : statusLabel(o.status, locale)
                       }
                     />
                   </button>

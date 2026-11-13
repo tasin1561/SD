@@ -1,5 +1,6 @@
 'use client';
 
+import { Code } from '@/components/easy/code-label';
 import { useState, type ReactElement } from 'react';
 import type { OrderChargeView } from '@skydrop/api-client';
 import { useComputeOrderCharges, useOrderCharges } from '@/lib/api-hooks';
@@ -217,7 +218,7 @@ function ChargeRow({ charge }: { charge: OrderChargeView }): ReactElement {
       <Td>
         <span className="oo-body">{charge.description ?? humanizeType(charge.type)}</span>
         <span className="oo-sub">
-          {charge.type.toLowerCase().replace(/_/g, ' ')} · {charge.status.toLowerCase()}
+          <Code value={charge.type} /> · <Code value={charge.status} />
         </span>
       </Td>
       <Td className="oo-muted">

@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
@@ -138,6 +139,7 @@ export function ManualScanPanel({
   readonly onOpenChange?: (open: boolean) => void;
 }): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const [innerOpen, setInnerOpen] = useState(false);
   const controlled = controlledOpen !== undefined;
   const open = controlled ? controlledOpen : innerOpen;
@@ -233,7 +235,7 @@ export function ManualScanPanel({
           >
             {SCAN_STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s.replace(/_/g, ' ').toLowerCase()}
+                {code(s)}
               </option>
             ))}
           </Select>
@@ -266,7 +268,7 @@ export function ManualScanPanel({
                 <option value="">{t('ordersManualScanPanel.notStated')}</option>
                 {FAILURE_REASONS.map((r) => (
                   <option key={r} value={r}>
-                    {r.replace(/_/g, ' ').toLowerCase()}
+                    {code(r)}
                   </option>
                 ))}
               </Select>
@@ -302,7 +304,7 @@ export function ManualScanPanel({
                     value:
                       result.skipReason === null || result.skipReason === undefined
                         ? ''
-                        : ` — ${result.skipReason.replace(/_/g, ' ').toLowerCase()}`,
+                        : ` — ${code(result.skipReason)}`,
                   })}
                 </>
               )}
