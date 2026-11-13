@@ -2,6 +2,12 @@ import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { CallCenterModule } from '../call-center/call-center.module';
 import { CourierEscalationModule } from '../courier-escalation/courier-escalation.module';
+import { AddressCheckModule } from '../address-check/address-check.module';
+import { AdminReportsModule } from '../admin-reports/admin-reports.module';
+import { ConsignmentModule } from '../consignment/consignment.module';
+import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
+import { OrderChargesModule } from '../order-charges/order-charges.module';
+import { OrderJourneyModule } from '../order-journey/order-journey.module';
 import { OrderModule } from '../order/order.module';
 import { ResellerOrderModule } from '../reseller-order/reseller-order.module';
 import { SellerRestrictionModule } from '../seller-restriction/seller-restriction.module';
@@ -64,6 +70,15 @@ import { AssistantToolRegistry } from './services/assistant-tool-registry.servic
     // Phase D: the confirm button raises a ticket through the console's own service.
     TicketModule,
     CourierEscalationModule,
+    // Batch B: read-only lookups, each through its module's own
+    // `*-assistant-read.service` (charges, stock, consignments, failed
+    // deliveries, address checks, ops numbers).
+    OrderChargesModule,
+    InventoryStockModule,
+    ConsignmentModule,
+    OrderJourneyModule,
+    AddressCheckModule,
+    AdminReportsModule,
     // The monitor's weekly e-mail goes through the dispatcher the system-issue alerts use.
     NotificationAudienceModule,
   ],

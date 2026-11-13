@@ -70,7 +70,11 @@ describe('assistant tool permission parity', () => {
     '%s requires exactly what its route requires',
     (_n, tool) => {
       const gate = routeGate(tool.mirrors!.controller, tool.mirrors!.handler);
-      expect(gate.keys).toEqual([tool.permission]);
+      // A route may list SEVERAL keys, which mean ANY of them. A tool may
+      // then require ONE of those (stricter, never looser); a single-key
+      // route must match exactly.
+      if (gate.keys.length === 1) expect(gate.keys).toEqual([tool.permission]);
+      else expect(gate.keys).toContain(tool.permission);
       for (const aud of tool.audience) expect(gate.guard).toBe(GUARD_FOR[aud]);
     },
   );

@@ -6,6 +6,14 @@ import { SellerRestrictionService } from '../../seller-restriction/services/sell
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { StoreOrdersService } from '../../reseller-order/services/store-orders.service';
 import { AdminCallQueueService } from '../../call-center/services/admin-call-queue.service';
+import { OrderChargesAssistantReadService } from '../../order-charges/services/order-charges-assistant-read.service';
+import { SellerWalletAssistantReadService } from '../../seller-wallet/services/seller-wallet-assistant-read.service';
+import { SellerStockAssistantReadService } from '../../inventory-stock/services/seller-stock-assistant-read.service';
+import { ConsignmentAssistantReadService } from '../../consignment/services/consignment-assistant-read.service';
+import { OrderJourneyAssistantReadService } from '../../order-journey/services/order-journey-assistant-read.service';
+import { TicketAssistantReadService } from '../../ticket/services/ticket-assistant-read.service';
+import { AddressCheckAssistantReadService } from '../../address-check/services/address-check-assistant-read.service';
+import { ReportsAssistantReadService } from '../../admin-reports/services/reports-assistant-read.service';
 import { validateToolInput } from '../assistant-input';
 import {
   ToolError,
@@ -52,6 +60,14 @@ export class AssistantToolRegistry {
     callQueue: AdminCallQueueService,
     help: AssistantHelpService,
     proposals: AssistantStoreService,
+    charges: OrderChargesAssistantReadService,
+    walletEntries: SellerWalletAssistantReadService,
+    stock: SellerStockAssistantReadService,
+    consignments: ConsignmentAssistantReadService,
+    journeys: OrderJourneyAssistantReadService,
+    ticketReads: TicketAssistantReadService,
+    addressChecks: AddressCheckAssistantReadService,
+    metrics: ReportsAssistantReadService,
   ) {
     this.tools = buildAssistantTools({
       orders,
@@ -62,6 +78,14 @@ export class AssistantToolRegistry {
       callQueue,
       help,
       proposals,
+      charges,
+      walletEntries,
+      stock,
+      consignments,
+      journeys,
+      ticketReads,
+      addressChecks,
+      metrics,
     });
   }
 

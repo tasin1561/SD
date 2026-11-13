@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AdminOrderJourneyController } from './controllers/admin-order-journey.controller';
 import { SellerOrderJourneyController } from './controllers/seller-order-journey.controller';
+import { OrderJourneyAssistantReadService } from './services/order-journey-assistant-read.service';
 import { OrderJourneyService } from './services/order-journey.service';
 import { NslInterpretationService } from '../tracking-events/services/nsl-interpretation.service';
 
@@ -14,6 +15,8 @@ import { NslInterpretationService } from '../tracking-events/services/nsl-interp
  */
 @Module({
   controllers: [SellerOrderJourneyController, AdminOrderJourneyController],
-  providers: [OrderJourneyService, NslInterpretationService],
+  providers: [OrderJourneyService, OrderJourneyAssistantReadService, NslInterpretationService],
+  // Read-only door for the AI assistant (`get_failed_delivery_detail`).
+  exports: [OrderJourneyAssistantReadService],
 })
 export class OrderJourneyModule {}

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TreasuryModule } from '../treasury/treasury.module';
+import { SellerWalletAssistantReadService } from './services/seller-wallet-assistant-read.service';
 import { WalletService } from './services/wallet.service';
 
 /**
@@ -25,7 +26,7 @@ import { WalletService } from './services/wallet.service';
   // it. Making every caller remember instead is the shape WAL-1 has
   // already been forgotten twice.
   imports: [TreasuryModule],
-  providers: [WalletService],
-  exports: [WalletService],
+  providers: [WalletService, SellerWalletAssistantReadService],
+  exports: [WalletService, SellerWalletAssistantReadService],
 })
 export class SellerWalletModule {}

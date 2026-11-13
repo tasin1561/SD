@@ -6,6 +6,7 @@ import { SellerOrderAddressCheckController } from './controllers/seller-order-ad
 import { StoreAddressCheckController } from './controllers/store-address-check.controller';
 import { StoreOrderAddressCheckController } from './controllers/store-order-address-check.controller';
 import { AddressCheckService } from './services/address-check.service';
+import { AddressCheckAssistantReadService } from './services/address-check-assistant-read.service';
 import { OrderAddressCheckReadService } from './services/order-address-check-read.service';
 import { OrderPageV2GateService } from './services/order-page-v2-gate.service';
 import { SolustationHttpService } from './services/solustation-http.service';
@@ -54,6 +55,7 @@ import { SystemIssuesModule } from '../system-issues/system-issues.module';
     AddressCheckService,
     OrderAddressCheckReadService,
     OrderPageV2GateService,
+    AddressCheckAssistantReadService,
     // The background half: re-asking a check that could not be made,
     // and telling Solustation what the courier did. Neither has
     // anybody waiting on it, which is exactly why they are jobs.
@@ -66,6 +68,11 @@ import { SystemIssuesModule } from '../system-issues/system-issues.module';
     OrderAddressCheckBackfillService,
     AddressCheckWorker,
   ],
-  exports: [SolustationHttpService, AddressCheckService, OrderPageV2GateService],
+  exports: [
+    SolustationHttpService,
+    AddressCheckService,
+    OrderPageV2GateService,
+    AddressCheckAssistantReadService,
+  ],
 })
 export class AddressCheckModule {}

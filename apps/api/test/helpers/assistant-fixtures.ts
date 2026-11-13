@@ -103,7 +103,13 @@ export function fakeDeps(orders: readonly FakeOrder[] = []): AssistantToolDeps {
       },
       findForStaff: async (identifier: string) => {
         const o = orders.find((x) => x.orderNumber === identifier);
-        return o ? summary(o) : null;
+        return o
+          ? { ...summary(o), items: [{ sku: 'SKU-1', name: 'Blue kurta', quantity: 2 }] }
+          : null;
+      },
+      resolveForStaff: async (identifier: string) => {
+        const o = orders.find((x) => x.orderNumber === identifier);
+        return o ? { id: `order-${o.orderNumber}`, orderNumber: o.orderNumber } : null;
       },
     },
     tracking: { list: async () => [], detail: async () => ({}) as never },
@@ -117,6 +123,7 @@ export function fakeDeps(orders: readonly FakeOrder[] = []): AssistantToolDeps {
       stats: async () => ({ byStatus: { PENDING: 3 }, openTotal: 3, assignedByAgent: [] }),
     },
     help: new AssistantHelpService(),
+    ...fakeBatchB(orders),
     proposals: {
       createProposal: async (_scope: CallerScope, _conversationId: string, row) => ({
         proposal: {
@@ -134,6 +141,199 @@ export function fakeDeps(orders: readonly FakeOrder[] = []): AssistantToolDeps {
           decidedAt: null,
         },
         created: true,
+      }),
+    },
+  };
+}
+
+/**
+ * Batch B's read services, as fakes that apply the scope they are GIVEN the
+ * way the real ones put it in a `where` clause: a lookup under the wrong
+ * seller returns null, never the other seller's row.
+ */
+export function fakeBatchB(
+  orders: readonly FakeOrder[] = [],
+): Pick<
+  AssistantToolDeps,
+  | 'charges'
+  | 'walletEntries'
+  | 'stock'
+  | 'consignments'
+  | 'journeys'
+  | 'ticketReads'
+  | 'addressChecks'
+  | 'metrics'
+> {
+  const ownedBy = (orderId: string): string | undefined =>
+    orders.find((o) => `order-${o.orderNumber}` === orderId)?.sellerId;
+  return {
+    charges: {
+      forSeller: async (sellerId: string, orderId: string) =>
+        ownedBy(orderId) === sellerId
+          ? {
+              orderNumber: orderId.replace('order-', ''),
+              orderStatus: 'DELIVERED',
+              paymentMode: 'COD',
+              lines: [
+                {
+                  label: 'Base shipping',
+                  type: 'BASE_SHIPPING',
+                  state: 'Estimated',
+                  amountInr: '162.60',
+                  taxRate: null,
+                  taxAmountInr: null,
+                  totalInr: '162.60',
+                  agreed: {
+                    amount: '200.00',
+                    currency: 'BDT',
+                    feeSource: 'SYSTEM_DEFAULT',
+                    fxRate: '0.813',
+                    fxRatePair: 'BDT_INR',
+                    fxRateRecordedAt: '2026-11-01T00:00:00.000Z',
+                  },
+                },
+                {
+                  label: 'GST @ 18%',
+                  type: 'GST',
+                  state: 'Estimated',
+                  amountInr: '29.27',
+                  taxRate: '18.00',
+                  taxAmountInr: null,
+                  totalInr: '29.27',
+                  agreed: null,
+                },
+              ],
+              totalInr: '191.87',
+            }
+          : null,
+    },
+    walletEntries: {
+      entriesForOrder: async (sellerId: string, orderId: string) =>
+        ownedBy(orderId) === sellerId
+          ? [
+              {
+                at: '2026-11-05T10:00:00.000Z',
+                direction: 'ORDER_CHARGES',
+                currency: 'INR',
+                amount: '191.87',
+                reasonCode: null,
+                note: null,
+              },
+            ]
+          : [],
+    },
+    stock: {
+      forSeller: async (sellerId: string, sku: string) =>
+        sellerId === SELLER_A && sku === 'KURTA-BLUE-M'
+          ? {
+              sku,
+              productName: 'Blue kurta',
+              variantLabel: 'M',
+              status: 'ACTIVE',
+              qtyOnHand: 12,
+              qtyReserved: 2,
+              qtyAvailable: 10,
+              qtyInTransit: 30,
+              lowStockThreshold: 5,
+              isLowStock: false,
+            }
+          : null,
+    },
+    consignments: {
+      forSeller: async (sellerId: string, number: string) =>
+        sellerId === SELLER_A && number === 'CN-2026-000001'
+          ? {
+              consignmentNumber: number,
+              status: 'IN_TRANSIT',
+              route: 'BD_TO_IN',
+              sellerReference: null,
+              expectedArrivalAt: null,
+              cancelledAt: null,
+              cancelReason: null,
+              legs: [],
+            }
+          : null,
+    },
+    journeys: {
+      forOrder: async (orderId: string, sellerId: string | null) => {
+        const owner = ownedBy(orderId);
+        if (owner === undefined || (sellerId !== null && owner !== sellerId)) return null;
+        return {
+          orderNumber: orderId.replace('order-', ''),
+          orderStatus: 'DELIVERY_FAILED',
+          parcels: [],
+          failedAttempts: [
+            {
+              attemptNumber: 1,
+              at: '2026-11-06T09:00:00.000Z',
+              reason: 'Customer not available',
+              courierCode: 'EOD-74',
+              meaning: 'Customer was not at the address',
+              canAskForReattempt: true,
+              nextAttemptAt: null,
+              customerReached: false,
+              place: 'Pune',
+            },
+          ],
+        };
+      },
+    },
+    ticketReads: {
+      forSeller: async (sellerId: string, number: string) =>
+        sellerId === SELLER_A && number === 'TK-2026-000003'
+          ? {
+              ticketNumber: number,
+              type: 'LOST_PARCEL',
+              status: 'OPEN',
+              subject: 'Parcel lost',
+              orderNumber: null,
+              shipmentNumber: null,
+              openedAt: '2026-11-02T00:00:00.000Z',
+              resolvedAt: null,
+              lastActivityAt: '2026-11-04T00:00:00.000Z',
+              lastStaffReplyAt: '2026-11-04T00:00:00.000Z',
+              resolutionAmountInr: null,
+            }
+          : null,
+      forStore: async (storeId: string, _viewer, number: string) =>
+        storeId === STORE_1 && number === 'TK-2026-000009'
+          ? {
+              ticketNumber: number,
+              type: 'STORE_ISSUE',
+              status: 'OPEN',
+              subject: 'Damaged parcel',
+              orderNumber: null,
+              shipmentNumber: null,
+              openedAt: '2026-11-02T00:00:00.000Z',
+              resolvedAt: null,
+              lastActivityAt: null,
+              lastStaffReplyAt: null,
+            }
+          : null,
+    },
+    addressChecks: {
+      forOrder: async (orderId: string) =>
+        ownedBy(orderId) === undefined
+          ? null
+          : {
+              available: true,
+              score: 42,
+              status: 'needs_review',
+              recommendedAction: 'confirm_with_customer',
+              poConfidence: null,
+              issues: [{ code: 'MISSING_LANDMARK', message: 'No landmark near the house.' }],
+              suggestions: [{ field: 'locality', reason: 'Two localities share this pincode.' }],
+              questionsForCustomer: ['Which locality is the house in?'],
+              rtoRisk: null,
+            },
+    },
+    metrics: {
+      run: async (input) => ({
+        ...input,
+        unit: 'orders' as const,
+        total: '14',
+        rows: [],
+        note: null,
       }),
     },
   };

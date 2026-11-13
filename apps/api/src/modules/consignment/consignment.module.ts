@@ -13,6 +13,7 @@ import { SellerConsignmentController } from './controllers/seller-consignment.co
 import { ConsignmentCancelService } from './services/consignment-cancel.service';
 import { ConsignmentDispatchService } from './services/consignment-dispatch.service';
 import { ConsignmentLabelService } from './services/consignment-label.service';
+import { ConsignmentAssistantReadService } from './services/consignment-assistant-read.service';
 import { ConsignmentService } from './services/consignment.service';
 import { LabelReprintRequestService } from './services/label-reprint-request.service';
 
@@ -42,8 +43,11 @@ import { LabelReprintRequestService } from './services/label-reprint-request.ser
     ConsignmentLabelService,
     LabelReprintRequestService,
     ConsignmentCancelService,
+    ConsignmentAssistantReadService,
     SellerJwtGuard,
     StaffJwtGuard,
   ],
+  // Read-only door for the AI assistant (`get_my_consignment`).
+  exports: [ConsignmentAssistantReadService],
 })
 export class ConsignmentModule {}

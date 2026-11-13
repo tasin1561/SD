@@ -8,6 +8,7 @@ import { SellerThresholdController } from './seller-threshold.controller';
 import { SellerInventoryModeController } from './seller-inventory-mode.controller';
 import { StockReadService } from './services/stock-read.service';
 import { SellerStockService } from './services/seller-stock.service';
+import { SellerStockAssistantReadService } from './services/seller-stock-assistant-read.service';
 import { SellerThresholdService } from './services/seller-threshold.service';
 import { SellerInventoryModeService } from './services/seller-inventory-mode.service';
 import { StockReservationService } from './services/stock-reservation.service';
@@ -33,6 +34,7 @@ import { ReservationWorker } from './queue/reservation.worker';
   providers: [
     StockReadService,
     SellerStockService,
+    SellerStockAssistantReadService,
     SellerThresholdService,
     SellerInventoryModeService,
     StockReservationService,
@@ -54,6 +56,12 @@ import { ReservationWorker } from './queue/reservation.worker';
   // StockMutationService (sole writer, INV-1), StockAvailabilityService
   // (INV-3 scalar), StockCacheService and StockAlertService all live in
   // inventory-shared and are NOT part of the Module 6/8 contract.
-  exports: [StockReadService, StockReservationService, StockPickAllocationService],
+  exports: [
+    StockReadService,
+    StockReservationService,
+    StockPickAllocationService,
+    // Read-only door for the AI assistant (`get_my_stock`); not part of the Module 6/8 contract.
+    SellerStockAssistantReadService,
+  ],
 })
 export class InventoryStockModule {}
