@@ -5,6 +5,7 @@ import { cc } from './messages/cc';
 import { common } from './messages/common';
 import { confirmation } from './messages/confirmation';
 import { cour } from './messages/cour';
+import { easy } from './messages/easy';
 import { extra } from './messages/extra';
 import { inv } from './messages/inv';
 import { misc } from './messages/misc';
@@ -32,6 +33,7 @@ export const NAMESPACES = [
   extra,
   cc,
   cour,
+  easy,
   inv,
   misc,
   money,
@@ -52,6 +54,7 @@ const ALL = {
   ...extra,
   ...cc,
   ...cour,
+  ...easy,
   ...inv,
   ...misc,
   ...money,

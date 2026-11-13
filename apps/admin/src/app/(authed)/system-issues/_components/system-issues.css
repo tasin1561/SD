@@ -1,4 +1,132 @@
-/* Needs a person — a prioritised queue. Tokens only. */
+/* Needs a person — a light, prioritised list. Tokens only.
+   No boxed cards: a thin line between rows, colour only on the small
+   severity mark, so a long list still reads as calm. */
+
+/* ── The three counts (they also narrow the list) ─────────────────────── */
+.si-counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.si-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: var(--sp-1) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-body);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.si-count:hover {
+  border-color: var(--line-strong);
+}
+.si-count:active {
+  transform: scale(0.98);
+}
+.si-count:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.si-count__num {
+  color: var(--fg-strong);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.si-count__label {
+  font-size: var(--fs-sm);
+}
+.si-count[data-tone='info'] .si-count__num {
+  color: var(--blue-text);
+}
+.si-count[data-tone='warn'] .si-count__num {
+  color: var(--saffron-text);
+}
+.si-count[data-tone='bad'] .si-count__num {
+  color: var(--red-text);
+}
+.si-count[aria-pressed='true'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+}
+
+/* ── The list ─────────────────────────────────────────────────────────── */
+.si-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+.si-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--sp-3) var(--sp-4);
+  min-width: 0;
+  padding: var(--sp-5) 0;
+  border-bottom: 1px solid var(--line);
+}
+@media (min-width: 900px) {
+  .si-row {
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, max-content);
+  }
+}
+.si-row__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+}
+.si-row[data-severity='critical'] .si-row__icon,
+.si-row[data-severity='high'] .si-row__icon {
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.si-row[data-severity='medium'] .si-row__icon {
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.si-row[data-severity='closed'] .si-row__icon {
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.si-row__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.si-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: flex-start;
+  gap: var(--sp-2);
+  min-width: 0;
+  grid-column: 2;
+}
+@media (min-width: 900px) {
+  .si-row__actions {
+    grid-column: 3;
+    justify-content: flex-end;
+    max-width: 22rem;
+  }
+}
 .si-head {
   display: flex;
   flex-wrap: wrap;
@@ -9,10 +137,8 @@
 .si-sev {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   min-height: 22px;
   padding: 0 var(--sp-2);
-  border: 1px solid var(--line);
   border-radius: var(--r-pill);
   background: var(--surface-3);
   color: var(--fg-muted);
@@ -21,37 +147,82 @@
 }
 .si-sev[data-sev='critical'],
 .si-sev[data-sev='high'] {
-  border-color: var(--red-line);
   background: var(--red-tint);
   color: var(--red-on-tint);
 }
 .si-sev[data-sev='medium'] {
-  border-color: var(--saffron-line);
   background: var(--saffron-tint);
   color: var(--saffron-on-tint);
+}
+.si-sev[data-sev='closed'] {
+  background: var(--green-tint);
+  color: var(--green-on-tint);
 }
 .si-title {
   min-width: 0;
   color: var(--fg-strong);
-  font-size: var(--fs-md);
+  font-size: var(--fs-lg);
   font-weight: var(--fw-semibold);
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
 .si-detail {
   max-width: 48rem;
   margin: 0;
   color: var(--fg-body);
-  font-size: var(--fs-sm);
-  line-height: 1.55;
+  font-size: var(--fs-md);
+  line-height: 1.6;
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
-.si-meta {
+.si-meta,
+.si-links {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-2) var(--sp-3);
+  min-width: 0;
 }
-.si-actions {
-  align-content: flex-start;
+.si-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+}
+.si-none {
+  display: grid;
+  justify-items: start;
+  gap: var(--sp-3);
+  padding: var(--sp-5) 0;
+  border-top: 1px solid var(--line);
+  color: var(--fg-body);
+}
+.si-none p {
+  margin: 0;
+}
+@media (pointer: coarse) {
+  .si-link {
+    min-height: 44px;
+  }
+}
+/* On a phone the two actions share the row's full width. */
+@media (max-width: 639px) {
+  .si-row {
+    gap: var(--sp-3);
+    padding: var(--sp-4) 0;
+  }
+  .si-row__actions {
+    grid-column: 1 / -1;
+  }
+  .si-row__actions > button,
+  .si-row__actions > .ez-titled {
+    flex: 1 1 auto;
+  }
+  .si-row__actions > .ez-titled {
+    display: flex;
+  }
+  .si-row__actions > .ez-titled > :first-child {
+    flex: 1 1 auto;
+  }
 }

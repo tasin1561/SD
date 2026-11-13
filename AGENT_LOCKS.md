@@ -10,7 +10,20 @@ One line per claim: `path or glob — date — what for`.
 
 ## Claimed by cloud Claude
 
-_(none yet)_
+Admin "easy pages" redesign (owner's list of 31 admin pages, 2026-11-13): light look, phone-first,
+"i" info buttons with listen, plain words. Screen-only; no API, permission or status-logic changes.
+
+- `apps/admin/src/components/easy/**` — 2026-11-13 — NEW shared pieces for these pages (info button, listen, light page header)
+- `apps/admin/src/i18n/messages/easy.ts` — 2026-11-13 — NEW message file for those pieces
+- `apps/admin/src/app/dev/easy/**` — 2026-11-13 — NEW dev-only test pages
+- `apps/admin/src/app/(authed)/system-issues/**` — 2026-11-13 — batch 1 (pilot)
+- `apps/admin/src/app/(authed)/call-center/**`, `apps/admin/src/app/(authed)/reattempt-requests/**` — 2026-11-13 — batch 2 (call centre)
+- `apps/admin/src/app/(authed)/warehouse/{pack,handover,printing,receive,rto}/**` — 2026-11-13 — batch 3 (benches)
+- `apps/admin/src/app/(authed)/warehouse/page.tsx`, `apps/admin/src/app/(authed)/warehouse/{bins,consignments,holds}/**` — 2026-11-13 — batch 4
+- `apps/admin/src/app/(authed)/{delivery-actions,courier-decisions,manual-placement,nsa}/**` — 2026-11-13 — batch 5
+- `apps/admin/src/app/(authed)/{dashboard,tickets,holds}/**`, `apps/admin/src/app/(authed)/orders/page.tsx`, `apps/admin/src/app/(authed)/orders/_components/orders-index.tsx` — 2026-11-13 — batch 6 (order DETAIL files are not claimed)
+- `apps/admin/src/app/(authed)/inventory/**`, `apps/admin/src/app/(authed)/inventory-units/**` — 2026-11-13 — batch 7
+- Existing admin message files (`apps/admin/src/i18n/messages/*.ts`): not claimed; I add keys only, never rename or remove, and regenerate the assistant help index in the same commit.
 
 ## Claimed by Claude Code
 
