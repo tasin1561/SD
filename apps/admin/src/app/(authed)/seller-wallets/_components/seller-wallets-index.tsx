@@ -43,6 +43,8 @@ import { useFxRatesList } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { MkCard } from './money-parts';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 
 type Filter = 'all' | 'credit' | 'debt' | 'payout';
 
@@ -172,15 +174,22 @@ export function SellerWalletsIndex(): ReactElement {
   }
 
   return (
-    <div className="mk-page">
+    <div className="mk-page ez-touch">
       <PageHeader
-        title={t('sellerWalletsSellerWalletsIndex.clientWallets')}
-        meta={
-          <span className="mk-count sk-figure">
-            {counts.all} {counts.all === 1 ? 'account' : 'accounts'}
+        title={
+          <span className="ez-titled">
+            {t('sellerWalletsSellerWalletsIndex.clientWallets')}
+            <InfoButton
+              title={t('sellerWalletsSellerWalletsIndex.clientWallets')}
+              text={t('sellerWalletsSellerWalletsIndex.whatWeOweClientsWhat')}
+            />
           </span>
         }
-        subtitle={t('sellerWalletsSellerWalletsIndex.whatWeOweClientsWhat')}
+        meta={
+          <span className="mk-count sk-figure">
+            {t(counts.all === 1 ? 'ezMoney.account' : 'ezMoney.accounts', { n: counts.all })}
+          </span>
+        }
         action={
           mayReconcile ? (
             <Button

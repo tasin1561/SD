@@ -25,6 +25,8 @@ import {
 } from '@/lib/ops-hooks';
 import { MkAlert, MkCard } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import type { MessageKey } from '@/i18n/catalog';
 
 /**
@@ -147,10 +149,17 @@ export function BankChangesIndex(): ReactElement {
   const requests = list.data ?? [];
 
   return (
-    <div className="mk-page">
+    <div className="mk-page ez-touch">
       <PageHeader
-        title={t('bankChangesBankChangesIndex.bankDetailChanges')}
-        subtitle={t('bankChangesBankChangesIndex.clientsAskingUsToSend')}
+        title={
+          <span className="ez-titled">
+            {t('bankChangesBankChangesIndex.bankDetailChanges')}
+            <InfoButton
+              title={t('bankChangesBankChangesIndex.bankDetailChanges')}
+              text={t('bankChangesBankChangesIndex.clientsAskingUsToSend')}
+            />
+          </span>
+        }
       />
 
       {list.isLoading ? (

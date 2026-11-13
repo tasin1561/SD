@@ -12,6 +12,9 @@ import { usePermission } from '@/lib/use-permission';
 import { BackLink, MoCard, Notice } from '../../../treasury/_components/money-parts';
 import './bank-account-history.css';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 
@@ -106,13 +109,20 @@ export function BankAccountHistoryIndex(): ReactElement {
   const history = useBankAccountHistory(usePermission('money.view'));
 
   return (
-    <div className="mo-page">
+    <div className="mo-page ez-touch">
       <BackLink href="/bank-accounts" icon={<ArrowLeft size={14} aria-hidden />}>
         {t('bankAccountsHistoryBankAccountHistoryIndex.backToBankAccounts')}
       </BackLink>
       <PageHeader
-        title={t('bankAccountsHistoryBankAccountHistoryIndex.bankAccountHistory')}
-        subtitle={t('bankAccountsHistoryBankAccountHistoryIndex.everyAccountAddedEditedOr')}
+        title={
+          <span className="ez-titled">
+            {t('bankAccountsHistoryBankAccountHistoryIndex.bankAccountHistory')}
+            <InfoButton
+              title={t('bankAccountsHistoryBankAccountHistoryIndex.bankAccountHistory')}
+              text={t('bankAccountsHistoryBankAccountHistoryIndex.everyAccountAddedEditedOr')}
+            />
+          </span>
+        }
       />
 
       {history.isLoading ? (
@@ -160,7 +170,7 @@ export function BankAccountHistoryIndex(): ReactElement {
                   history.data.map((r) => (
                     <Tr key={r.id}>
                       <Td className="mo-nowrap mo-muted">
-                        {new Date(r.at).toLocaleString('en-IN')}
+                        <When iso={r.at} time />
                       </Td>
                       <Td>
                         <StatusChip

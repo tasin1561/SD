@@ -42,6 +42,8 @@ import {
 import { LinkButton, MoCard, MoSection, Notice } from '../../../treasury/_components/money-parts';
 import '../../_components/pnl.css';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { richMessage } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
@@ -70,10 +72,17 @@ export function CarryForwardIndex(): ReactElement {
   const month = picked ?? periods.data?.currentMonth ?? null;
 
   return (
-    <div className="mo-page">
+    <div className="mo-page ez-touch">
       <PageHeader
-        title={t('pnlCarryForwardCarryForwardIndex.carryForwardPL')}
-        subtitle={t('pnlCarryForwardCarryForwardIndex.eachMonthFrozenOnceIt')}
+        title={
+          <span className="ez-titled">
+            {t('pnlCarryForwardCarryForwardIndex.carryForwardPL')}
+            <InfoButton
+              title={t('pnlCarryForwardCarryForwardIndex.carryForwardPL')}
+              text={t('pnlCarryForwardCarryForwardIndex.eachMonthFrozenOnceIt')}
+            />
+          </span>
+        }
         action={
           <LinkButton href="/pnl" variant="ghost" size="sm">
             {t('pnlCarryForwardCarryForwardIndex.livePL')}

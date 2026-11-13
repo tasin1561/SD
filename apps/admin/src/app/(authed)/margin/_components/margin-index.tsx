@@ -18,6 +18,8 @@ import { useRouter } from 'next/navigation';
 import { MoCard, MoSection } from '../../treasury/_components/money-parts';
 import './margin.css';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 
 /**
  * What our lanes actually earn.
@@ -61,10 +63,17 @@ export function MarginIndex(): ReactElement {
   const unpriced = stored.data?.skipped.length ?? 0;
 
   return (
-    <div className="mo-page">
+    <div className="mo-page ez-touch">
       <PageHeader
-        title={t('marginMarginIndex.laneMargin')}
-        subtitle={t('marginMarginIndex.whatWeBilledAgainstWhat')}
+        title={
+          <span className="ez-titled">
+            {t('marginMarginIndex.laneMargin')}
+            <InfoButton
+              title={t('marginMarginIndex.laneMargin')}
+              text={t('marginMarginIndex.whatWeBilledAgainstWhat')}
+            />
+          </span>
+        }
         action={
           <div className="mg-actions">
             <Select

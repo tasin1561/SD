@@ -31,6 +31,9 @@ import {
   MkAlert,
 } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 
 /**
  * Debit a seller's wallet into our bank, or credit it from our bank, with a
@@ -48,10 +51,17 @@ export function WalletTransfersIndex({
   const t = useT();
   const [sellerId, setSellerId] = useState<string | null>(initialSellerId);
   return (
-    <div className="mk-page">
+    <div className="mk-page ez-touch">
       <PageHeader
-        title={t('walletTransfersWalletTransfersIndex.walletTransfers')}
-        subtitle={t('walletTransfersWalletTransfersIndex.takeMoneyOutOfA')}
+        title={
+          <span className="ez-titled">
+            {t('walletTransfersWalletTransfersIndex.walletTransfers')}
+            <InfoButton
+              title={t('walletTransfersWalletTransfersIndex.walletTransfers')}
+              text={t('walletTransfersWalletTransfersIndex.takeMoneyOutOfA')}
+            />
+          </span>
+        }
       />
       <MkSection>
         <SectionHeading
@@ -560,7 +570,9 @@ function TransferHistory({ sellerId }: { readonly sellerId: string | null }): Re
         <TBody>
           {items.map((r) => (
             <Tr key={r.id}>
-              <Td className="mk-when sk-figure">{new Date(r.createdAt).toLocaleString()}</Td>
+              <Td className="mk-when sk-figure">
+                <When iso={r.createdAt} time />
+              </Td>
               <Td className="mk-strong">{r.companyName}</Td>
               <Td>
                 <Money

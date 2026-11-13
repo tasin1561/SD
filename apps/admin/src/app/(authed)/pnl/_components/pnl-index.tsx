@@ -15,6 +15,8 @@ import { istDateLabel, istDay, istDayRange } from '@/lib/ist-day';
 import { LinkButton, MoCard, Notice } from '../../treasury/_components/money-parts';
 import './pnl.css';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { richMessage } from '@/i18n/client';
 
 /**
@@ -49,10 +51,17 @@ export function PnlIndex(): ReactElement {
   const pnl = usePnl(params);
 
   return (
-    <div className="mo-page">
+    <div className="mo-page ez-touch">
       <PageHeader
-        title={t('pnlPnlIndex.profitLoss')}
-        subtitle={t('pnlPnlIndex.whatEachPartOfThe')}
+        title={
+          <span className="ez-titled">
+            {t('pnlPnlIndex.profitLoss')}
+            <InfoButton
+              title={t('pnlPnlIndex.profitLoss')}
+              text={t('pnlPnlIndex.whatEachPartOfThe')}
+            />
+          </span>
+        }
         action={
           // The same figures frozen month by month — for a month that must
           // not move after it has been reported (PNL-CF-1).

@@ -18,6 +18,9 @@ import { usePermission } from '@/lib/use-permission';
 import { useRouter } from 'next/navigation';
 import { MkCard, MkSection } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 
 /**
  * Courier settlements + float reconciliation (R2c).
@@ -45,10 +48,17 @@ export function SettlementsIndex(): ReactElement {
   const shortPaid = recon.data?.shortPaidOrders ?? [];
 
   return (
-    <div className="mk-page">
+    <div className="mk-page ez-touch">
       <PageHeader
-        title={t('settlementsSettlementsIndex.courierSettlements')}
-        subtitle={t('settlementsSettlementsIndex.everyRupeeTheCourierPays')}
+        title={
+          <span className="ez-titled">
+            {t('settlementsSettlementsIndex.courierSettlements')}
+            <InfoButton
+              title={t('settlementsSettlementsIndex.courierSettlements')}
+              text={t('settlementsSettlementsIndex.everyRupeeTheCourierPays')}
+            />
+          </span>
+        }
         action={
           canWrite ? (
             <Button
@@ -212,7 +222,7 @@ export function SettlementsIndex(): ReactElement {
                         </div>
                       </Td>
                       <Td className="mk-when sk-figure">
-                        {new Date(s.receivedAt).toLocaleDateString()}
+                        <When iso={s.receivedAt} />
                       </Td>
                       <Td align="right">
                         <Money amount={s.amountInr} />

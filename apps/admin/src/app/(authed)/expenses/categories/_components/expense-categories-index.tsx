@@ -22,6 +22,8 @@ import { CategoryModal } from '../../_components/category-modal';
 import { BackLink, MoCard } from '../../../treasury/_components/money-parts';
 import '../../_components/expenses.css';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 
 /**
  * What a spend can be filed as.
@@ -46,14 +48,21 @@ export function ExpenseCategoriesIndex(): ReactElement {
   const categories = useExpenseCategories(showInactive);
 
   return (
-    <div className="mo-page">
+    <div className="mo-page ez-touch">
       <div className="mo-stack mo-stack--tight">
         <BackLink href="/expenses" icon={<ArrowLeft size={14} aria-hidden />}>
           {t('expensesCategoriesExpenseCategoriesIndex.backToSpending')}
         </BackLink>
         <PageHeader
-          title={t('expensesCategoriesExpenseCategoriesIndex.spendingCategories')}
-          subtitle={t('expensesCategoriesExpenseCategoriesIndex.whatACostCanBe')}
+          title={
+            <span className="ez-titled">
+              {t('expensesCategoriesExpenseCategoriesIndex.spendingCategories')}
+              <InfoButton
+                title={t('expensesCategoriesExpenseCategoriesIndex.spendingCategories')}
+                text={t('expensesCategoriesExpenseCategoriesIndex.whatACostCanBe')}
+              />
+            </span>
+          }
           action={
             canWrite ? (
               <Button variant="primary" icon={<Plus size={16} />} onClick={() => setAdding(true)}>

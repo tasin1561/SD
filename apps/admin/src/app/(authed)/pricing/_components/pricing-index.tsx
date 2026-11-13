@@ -16,6 +16,8 @@ import { Facts, MoSection, Notice } from '../../treasury/_components/money-parts
 import './pricing.css';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 
@@ -122,10 +124,17 @@ export function PricingIndex(): ReactElement {
   const r = preview.data;
 
   return (
-    <div className="mo-page">
+    <div className="mo-page ez-touch">
       <PageHeader
-        title={t('pricingPricingIndex.pricingPreview')}
-        subtitle={t('pricingPricingIndex.whatTheEngineWouldCharge')}
+        title={
+          <span className="ez-titled">
+            {t('pricingPricingIndex.pricingPreview')}
+            <InfoButton
+              title={t('pricingPricingIndex.pricingPreview')}
+              text={t('pricingPricingIndex.whatTheEngineWouldCharge')}
+            />
+          </span>
+        }
       />
 
       {/* Above the calculator: a shipment nobody priced is worth more
