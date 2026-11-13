@@ -48,6 +48,7 @@ import {
   type AssistantConsole,
 } from './quick-actions';
 import { Markdown } from './markdown';
+import { TicketProposalCard, toTicketProposal, type TicketProposal } from './ticket-card';
 import { readAssistantStream, type HelpLink, type NoticeCode } from './sse';
 import { useAssistantSound } from './sound';
 import './assistant.css';
@@ -57,6 +58,7 @@ export * from './sse';
 export * from './markdown';
 export * from './quick-actions';
 export * from './sound';
+export * from './ticket-card';
 
 /** How the widget reaches the API: each app passes its `ApiClient` (bearer token, single-flight refresh, same-origin proxy). The widget never fetches by itself. */
 export interface AssistantTransport {
@@ -95,6 +97,8 @@ interface ChatMessage {
   readonly retryIds?: readonly string[];
   /** The files that went with a question (chips: name, type, size; never bytes). */
   readonly attachments?: readonly SentFile[];
+  /** Tickets the assistant proposed under this answer (cards with a button). */
+  readonly proposals?: readonly TicketProposal[];
 }
 
 interface ConversationRow {
@@ -117,6 +121,7 @@ interface ConversationDetail {
       readonly pages: number | null;
     }>;
   }>;
+  readonly proposals?: ReadonlyArray<Record<string, unknown> & { readonly createdAt?: string }>;
 }
 
 export const SEEN_KEY = 'skydrop.assistant.seen';
@@ -506,6 +511,11 @@ export function AssistantWidget({
             patchLast((m) => ({ ...m, text: m.text + ev.delta }));
           } else if (ev.type === 'tool') {
             setToolName(ev.name);
+          } else if (ev.type === 'ticket_proposal') {
+            const card = toTicketProposal({ ...ev, status: 'PENDING' });
+            if (card !== null) {
+              patchLast((m) => ({ ...m, proposals: [...(m.proposals ?? []), card] }));
+            }
           } else if (ev.type === 'notice') {
             sawNotice = true;
             patchLast((m) => ({
@@ -577,13 +587,28 @@ export function AssistantWidget({
         convPromise.current = null;
         setPending([]);
         setAttachNote('');
+        // Each proposed ticket sits under the first assistant message written
+        // at or after it (the model proposes, then explains); a proposal with
+        // none after it goes under the last assistant message.
+        const cards = (d.proposals ?? [])
+          .map((p) => ({ at: p.createdAt ?? '', card: toTicketProposal(p) }))
+          .filter((c): c is { at: string; card: TicketProposal } => c.card !== null);
+        const lastAssistant = d.messages.map((m) => m.role).lastIndexOf('assistant');
+        const owner = (idx: number): TicketProposal[] =>
+          cards
+            .filter((c) => {
+              const after = d.messages.findIndex((m) => m.role === 'assistant' && m.at >= c.at);
+              return (after === -1 ? lastAssistant : after) === idx;
+            })
+            .map((c) => c.card);
         setMessages(
-          d.messages.map((m) => ({
+          d.messages.map((m, idx) => ({
             id: nextId(),
             role: m.role,
             text: m.text,
             at: m.at,
             status: 'done' as const,
+            ...(owner(idx).length > 0 ? { proposals: owner(idx) } : {}),
             ...(m.attachments !== undefined && m.attachments.length > 0
               ? {
                   attachments: m.attachments.map((a) => ({
@@ -889,6 +914,16 @@ export function AssistantWidget({
                     {m.attachments !== undefined ? (
                       <SentFiles files={m.attachments} t={t} onDownload={downloadFile} />
                     ) : null}
+                    {m.proposals?.map((p) => (
+                      <TicketProposalCard
+                        key={p.id}
+                        proposal={p}
+                        base={base}
+                        transport={transport}
+                        t={t}
+                        onNavigate={followLink}
+                      />
+                    ))}
                     {m.notice !== undefined ? (
                       <div className="sk-ai-notice" data-code={m.notice.code}>
                         <Info size={16} aria-hidden="true" />

@@ -63,6 +63,18 @@ const WHO: Record<AssistantAudience, string> = {
     "An Associate: a person who sells for a Member store. They can see only the orders they placed themselves. They can never see the store's costs, margins or earnings, so do not discuss those.",
 };
 
+/**
+ * The one thing the assistant can START: a support ticket, and only by
+ * showing a card with a button the person must press. Staff have no such
+ * tool (the admin console has no "raise a ticket" flow), so their prompt
+ * does not mention it.
+ */
+const TICKETS = `
+- The one thing you can start is a support ticket. Offer it only when the person wants help from a human, or you looked and cannot solve it. Use propose_ticket: it only PROPOSES. A card with a "Raise this ticket" button appears, and nothing is created until the person presses it. Always tell them they must press that button, and never say or imply that a ticket has been raised.`;
+
 export function systemPromptFor(audience: AssistantAudience): string {
-  return BASE.replace('{CONSOLE}', CONSOLE[audience]).replace('{WHO}', WHO[audience]);
+  const base = BASE.replace('{CONSOLE}', CONSOLE[audience]).replace('{WHO}', WHO[audience]);
+  if (audience === 'STAFF') return base;
+  const anchor = 'never say or imply that you did it.';
+  return base.replace(anchor, anchor + TICKETS);
 }

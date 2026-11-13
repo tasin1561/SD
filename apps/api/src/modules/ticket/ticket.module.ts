@@ -71,6 +71,8 @@ import { StoreOrderRequestModule } from '../store-order-request/store-order-requ
     StaffJwtGuard,
     StoreJwtGuard,
   ],
-  exports: [TicketService],
+  // StoreIssueService: the assistant's confirm button raises a member store's
+  // issue through the SAME policy gate the store console's form uses.
+  exports: [TicketService, StoreIssueService],
 })
 export class TicketModule {}

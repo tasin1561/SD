@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import type Anthropic from '@anthropic-ai/sdk';
 import { attachmentBlocksIn } from '../assistant-attachment-block';
 import { MAX_QUESTION_ATTACHMENT_BYTES } from '../assistant-attachment-rebuild';
@@ -13,6 +13,7 @@ import { assistantCostUsd } from '../assistant-pricing';
 import { systemPromptFor } from '../assistant-system-prompt';
 import { ASSISTANT_MODEL, type AssistantStreamEvent, type CallerScope } from '../assistant.types';
 import { AssistantAttachmentService, AttachmentUnavailable } from './assistant-attachment.service';
+import { AssistantBudgetAlertService } from './assistant-budget-alert.service';
 import { AssistantBudgetService } from './assistant-budget.service';
 import { AssistantModelGateway, type AssistantModelRequest } from './assistant-model-gateway';
 import { AssistantStoreService, type ConversationRow } from './assistant-store.service';
@@ -55,6 +56,9 @@ export class AssistantChatService {
     private readonly registry: AssistantToolRegistry,
     private readonly gateway: AssistantModelGateway,
     private readonly attachments: AssistantAttachmentService,
+    // Optional so the unit rigs that build this service by hand keep working;
+    // the module always provides it.
+    @Optional() private readonly alerts?: AssistantBudgetAlertService,
   ) {}
 
   /** 404 unless the conversation is the caller's (shared by every endpoint). */
@@ -238,7 +242,10 @@ export class AssistantChatService {
           const results = await Promise.all(
             toolUses.map(async (use) => {
               emit({ type: 'tool', name: use.name });
-              const run = await this.registry.execute(scope, use.name, use.input);
+              const run = await this.registry.execute(scope, use.name, use.input, {
+                conversationId: conv.id,
+                emit,
+              });
               await this.store.recordToolCall({
                 conversationId: conv.id,
                 scope,
@@ -319,6 +326,9 @@ export class AssistantChatService {
       ...tokens,
       costUsd: assistantCostUsd(tokens),
     });
+    // POST-COMMIT of the usage row, not awaited: the 80% / 100% warning can
+    // never delay or fail the person's answer.
+    this.alerts?.afterUsage();
     // The cache is only working if cache_read_input_tokens is > 0 on the
     // second request of a conversation.
     this.log.log(

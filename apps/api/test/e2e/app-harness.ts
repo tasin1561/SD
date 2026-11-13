@@ -31,6 +31,7 @@ import { DeliveryFailedListener } from '../../src/modules/delivery-action/servic
 import { TicketNotifier } from '../../src/modules/ticket/services/ticket-notifier.service';
 import { ResellerOrderMoneyListener } from '../../src/modules/reseller-order-money/services/reseller-order-money.listener';
 import { ResendService } from '../../src/modules/email/services/resend.service';
+import { AssistantBudgetAlertService } from '../../src/modules/assistant/services/assistant-budget-alert.service';
 
 export interface AppHarness {
   app: NestExpressApplication;
@@ -182,6 +183,8 @@ export async function drainAll(app: NestExpressApplication): Promise<void> {
     TicketNotifier,
     // RS-6 phase 3c: a reseller order's money follows each lifecycle event.
     ResellerOrderMoneyListener,
+    // Assistant phase D: the 80% / 100% budget alert runs after the usage row.
+    AssistantBudgetAlertService,
   ];
   for (const token of drainables) {
     try {
@@ -454,6 +457,8 @@ export async function resetAssistantState(prisma: PrismaClient): Promise<void> {
     prisma,
     'TRUNCATE TABLE ' +
       [
+        'assistant_ticket_proposals',
+        'assistant_budget_alerts',
         'assistant_attachments',
         'assistant_usage',
         'assistant_tool_calls',

@@ -7,9 +7,15 @@ import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { StoreOrdersService } from '../../reseller-order/services/store-orders.service';
 import { AdminCallQueueService } from '../../call-center/services/admin-call-queue.service';
 import { validateToolInput } from '../assistant-input';
-import { ToolError, type AssistantTool, type CallerScope } from '../assistant.types';
+import {
+  ToolError,
+  type AssistantTool,
+  type CallerScope,
+  type ToolContext,
+} from '../assistant.types';
 import { buildAssistantTools, type AssistantToolDeps } from '../tools/assistant-tools';
 import { AssistantHelpService } from './assistant-help.service';
+import { AssistantStoreService } from './assistant-store.service';
 
 /** A tool result is cut here so one lookup cannot fill the prompt. */
 export const MAX_TOOL_RESULT_CHARS = 6000;
@@ -45,6 +51,7 @@ export class AssistantToolRegistry {
     storeOrders: StoreOrdersService,
     callQueue: AdminCallQueueService,
     help: AssistantHelpService,
+    proposals: AssistantStoreService,
   ) {
     this.tools = buildAssistantTools({
       orders,
@@ -54,6 +61,7 @@ export class AssistantToolRegistry {
       storeOrders,
       callQueue,
       help,
+      proposals,
     });
   }
 
@@ -112,7 +120,12 @@ export class AssistantToolRegistry {
     }));
   }
 
-  async execute(scope: CallerScope, name: string, rawInput: unknown): Promise<ToolExecution> {
+  async execute(
+    scope: CallerScope,
+    name: string,
+    rawInput: unknown,
+    ctx: ToolContext = { conversationId: '', emit: () => undefined },
+  ): Promise<ToolExecution> {
     const tool = this.toolsFor(scope).find((t) => t.name === name);
     if (tool === undefined) {
       return this.fail('FORBIDDEN', 'That tool is not available.', null);
@@ -128,7 +141,7 @@ export class AssistantToolRegistry {
       );
     }
     try {
-      const result = await tool.run(scope, input);
+      const result = await tool.run(scope, input, ctx);
       let content = JSON.stringify(result);
       if (content.length > MAX_TOOL_RESULT_CHARS) {
         content = `${content.slice(0, MAX_TOOL_RESULT_CHARS)}…[truncated]`;

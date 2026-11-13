@@ -36,6 +36,13 @@ export type AssistantEvent =
       readonly text: string;
       readonly helpLinks: readonly HelpLink[];
     }
+  | {
+      readonly type: 'ticket_proposal';
+      readonly id: string;
+      readonly subject: string;
+      readonly description: string;
+      readonly orderNumber: string | null;
+    }
   | { readonly type: 'done'; readonly conversationId: string };
 
 const NOTICE_CODES: ReadonlySet<string> = new Set([
@@ -62,6 +69,18 @@ export function toAssistantEvent(value: unknown): AssistantEvent | null {
       return typeof value['delta'] === 'string' ? { type: 'text', delta: value['delta'] } : null;
     case 'tool':
       return typeof value['name'] === 'string' ? { type: 'tool', name: value['name'] } : null;
+    case 'ticket_proposal':
+      return typeof value['id'] === 'string' &&
+        typeof value['subject'] === 'string' &&
+        typeof value['description'] === 'string'
+        ? {
+            type: 'ticket_proposal',
+            id: value['id'],
+            subject: value['subject'],
+            description: value['description'],
+            orderNumber: typeof value['orderNumber'] === 'string' ? value['orderNumber'] : null,
+          }
+        : null;
     case 'done':
       return typeof value['conversationId'] === 'string'
         ? { type: 'done', conversationId: value['conversationId'] }

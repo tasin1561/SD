@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { CallerScope } from '../assistant.types';
 import { AssistantChatService } from './assistant-chat.service';
 import { AssistantStoreService, type ConversationRow } from './assistant-store.service';
+import { toProposalView, type ProposalView } from './assistant-ticket.service';
 
 export interface TranscriptLine {
   readonly role: 'user' | 'assistant';
@@ -57,7 +58,12 @@ export class AssistantConversationService {
   async getMine(
     scope: CallerScope,
     id: string,
-  ): Promise<{ conversation: ConversationRow; messages: TranscriptLine[] }> {
+  ): Promise<{
+    conversation: ConversationRow;
+    messages: TranscriptLine[];
+    /** Tickets the assistant proposed here, with where each stands. */
+    proposals: ProposalView[];
+  }> {
     const conversation = await this.chat.requireOwned(scope, id);
     const rows = await this.store.messages(conversation.id);
     const messages: TranscriptLine[] = [];
@@ -84,6 +90,7 @@ export class AssistantConversationService {
           : {}),
       });
     }
-    return { conversation, messages };
+    const proposals = (await this.store.proposals(conversation.id)).map(toProposalView);
+    return { conversation, messages, proposals };
   }
 }

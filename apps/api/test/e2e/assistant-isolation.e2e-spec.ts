@@ -248,7 +248,9 @@ describe('assistant privacy (e2e)', () => {
         .set(B.auth);
       expect(read.status).toBe(404);
       expect(nothing.status).toBe(404);
-      expect(read.body).toEqual(nothing.body);
+      // Same body but for the per-request correlation id.
+      const bare = (b: Record<string, unknown>) => ({ code: b['code'], message: b['message'] });
+      expect(bare(read.body)).toEqual(bare(nothing.body));
       expect(JSON.stringify(read.body)).not.toContain('A-ONLY-WORDS');
 
       // B posting into A's: 404 BEFORE any stream, the model is never reached,

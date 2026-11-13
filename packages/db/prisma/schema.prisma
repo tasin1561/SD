@@ -10639,6 +10639,7 @@ model AssistantConversation {
   toolCalls   AssistantToolCall[]
   usage       AssistantUsage[]
   attachments AssistantAttachment[]
+  proposals   AssistantTicketProposal[]
 
   @@index([audience, ownerUserId, updatedAt])
   @@map("assistant_conversations")
@@ -10764,4 +10765,72 @@ model AssistantAttachment {
   @@index([conversationId, createdAt])
   @@index([messageId])
   @@map("assistant_attachments")
+}
+
+/// 2026-11-13 — a support ticket the assistant PROPOSED. The model can only
+/// ever create one of these (`propose_ticket`); the ticket itself is raised
+/// by the PERSON pressing a button, through the same service the console's
+/// own form uses. PENDING → CONFIRMED (claimed by a guarded `updateMany`, so
+/// two clicks, two tabs or a replay raise exactly one ticket) or → DISMISSED.
+enum AssistantTicketProposalStatus {
+  PENDING   @map("pending")
+  CONFIRMED @map("confirmed")
+  DISMISSED @map("dismissed")
+
+  @@map("assistant_ticket_proposal_status")
+}
+
+/// The owner columns mirror `assistant_conversations` and a row is only ever
+/// read or claimed through them. No FK to people, tickets or orders: those
+/// are soft references, exactly like the conversation's.
+model AssistantTicketProposal {
+  id             String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  conversationId String @map("conversation_id") @db.Uuid
+
+  audience              AssistantAudience
+  ownerUserId           String            @map("owner_user_id") @db.Uuid
+  sellerId              String?           @map("seller_id") @db.Uuid
+  storeId               String?           @map("store_id") @db.Uuid
+  impersonatedByStaffId String?           @map("impersonated_by_staff_id") @db.Uuid
+
+  subject     String
+  description String
+  /// Resolved SERVER-SIDE from the order number the model gave, inside the
+  /// caller's own scope. Null when nothing of theirs matched.
+  orderId     String? @map("order_id") @db.Uuid
+  /// The matched order's canonical number (what the card shows), never the model's text.
+  orderNumber String? @map("order_number")
+
+  status       AssistantTicketProposalStatus @default(PENDING)
+  /// Set once, after the ticket exists.
+  ticketId     String?                       @map("ticket_id") @db.Uuid
+  ticketNumber String?                       @map("ticket_number")
+  /// A member store's issue can be HELD for seller approval instead of opening
+  /// a ticket now; this is that held request.
+  requestId    String?                       @map("request_id") @db.Uuid
+  createdAt    DateTime                      @default(now()) @map("created_at") @db.Timestamptz
+  decidedAt    DateTime?                     @map("decided_at") @db.Timestamptz
+
+  conversation AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+
+  @@index([conversationId, createdAt])
+  @@map("assistant_ticket_proposals")
+}
+
+/// 2026-11-13 — "admins were told the assistant crossed N% of the month's
+/// budget". The UNIQUE (month, threshold) is the dedupe: the first request to
+/// INSERT the row owns the alert and every other (concurrent, replayed or
+/// after a restart) hits the constraint and sends nothing.
+model AssistantBudgetAlert {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// UTC calendar month, `YYYY-MM`.
+  month     String
+  /// 80 or 100.
+  threshold Int
+  spentUsd  Decimal  @map("spent_usd") @db.Decimal(14, 8)
+  budgetUsd Decimal  @map("budget_usd") @db.Decimal(14, 8)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([month, threshold])
+  @@map("assistant_budget_alerts")
 }
