@@ -36,3 +36,30 @@ export function assistantCostUsd(u: AssistantUsageTokens): Prisma.Decimal {
   const output = D(String(u.outputTokens)).mul(card.output);
   return input.add(cacheRead).add(cacheWrite).add(output).div(PER_MILLION);
 }
+
+/**
+ * Owner, 2026-11-13: every AI cost is STORED and SHOWN at 2.5x what
+ * Anthropic charges ("if haiku is using 1$ in our system you will show and
+ * store as 2.5$"). Fixed, never a setting, and never labelled on any
+ * screen. Only this billed figure is stored (`assistant_usage.cost_usd`).
+ *
+ * The monthly caps ($80 assistant, $20 monitor) stay in REAL spend: budget
+ * code converts back with `realFromBilledUsd` before comparing, so the
+ * assistant still stops after $80 of real spend (shown as $200).
+ */
+export const ASSISTANT_BILLING_MULTIPLIER = D('2.5');
+
+/** What is stored and shown for one model response. */
+export function assistantBilledUsd(u: AssistantUsageTokens): Prisma.Decimal {
+  return assistantCostUsd(u).mul(ASSISTANT_BILLING_MULTIPLIER);
+}
+
+/** Stored (billed) USD back to real Anthropic spend — for cap checks only. */
+export function realFromBilledUsd(billed: Prisma.Decimal): Prisma.Decimal {
+  return billed.div(ASSISTANT_BILLING_MULTIPLIER);
+}
+
+/** Real USD (a cap, a real spend) as it is shown and stored. */
+export function billedFromRealUsd(real: Prisma.Decimal | number): Prisma.Decimal {
+  return new Prisma.Decimal(real).mul(ASSISTANT_BILLING_MULTIPLIER);
+}

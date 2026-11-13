@@ -9,7 +9,7 @@ import {
   type ApiFileBlock,
 } from '../assistant-history';
 import { detectReplyLanguage, helpLinks, noticeText, type NoticeCode } from '../assistant-language';
-import { assistantCostUsd } from '../assistant-pricing';
+import { assistantBilledUsd } from '../assistant-pricing';
 import { systemPromptFor } from '../assistant-system-prompt';
 import { ASSISTANT_MODEL, type AssistantStreamEvent, type CallerScope } from '../assistant.types';
 import { AssistantAttachmentService, AttachmentUnavailable } from './assistant-attachment.service';
@@ -324,7 +324,8 @@ export class AssistantChatService {
       scope,
       model: ASSISTANT_MODEL,
       ...tokens,
-      costUsd: assistantCostUsd(tokens),
+      // Stored at the billed figure (2.5x real; see assistant-pricing.ts).
+      costUsd: assistantBilledUsd(tokens),
     });
     // POST-COMMIT of the usage row, not awaited: the 80% / 100% warning can
     // never delay or fail the person's answer.

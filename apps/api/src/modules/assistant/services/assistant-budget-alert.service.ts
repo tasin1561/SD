@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { billedFromRealUsd } from '../assistant-pricing';
 import { AssistantBudgetService } from './assistant-budget.service';
 import { AssistantStoreService } from './assistant-store.service';
 
@@ -78,8 +79,13 @@ export class AssistantBudgetAlertService implements OnModuleDestroy {
 
     const month = monthKey(now);
     const won: number[] = [];
+    // Stored as shown: billed figures (2.5x real), like every AI cost.
+    const shownSpent = billedFromRealUsd(spent);
+    const shownBudget = billedFromRealUsd(budget);
     for (const t of crossed) {
-      if (await this.store.claimBudgetAlert(month, t, spent, budget)) won.push(t);
+      if (await this.store.claimBudgetAlert(month, t, shownSpent, shownBudget.toNumber())) {
+        won.push(t);
+      }
     }
     if (won.length === 0) return;
 
@@ -94,8 +100,8 @@ export class AssistantBudgetAlertService implements OnModuleDestroy {
           : `The AI assistant has used ${top}% of this month’s budget`,
       detail:
         top >= 100
-          ? `Spent $${spent.toFixed(2)} of the $${budget.toFixed(2)} monthly budget (${month}). The assistant now answers with help links only until next month. To keep it answering, raise assistant.monthly_budget_usd in System settings.`
-          : `Spent $${spent.toFixed(2)} of the $${budget.toFixed(2)} monthly budget (${month}). At 100% the assistant switches to help links only for the rest of the month. To change the cap, edit assistant.monthly_budget_usd in System settings.`,
+          ? `Spent $${shownSpent.toFixed(2)} of the $${shownBudget.toFixed(2)} monthly budget (${month}). The assistant now answers with help links only until next month. To keep it answering, raise the assistant's monthly budget in System settings.`
+          : `Spent $${shownSpent.toFixed(2)} of the $${shownBudget.toFixed(2)} monthly budget (${month}). At 100% the assistant switches to help links only for the rest of the month. To change the cap, edit the assistant's monthly budget in System settings.`,
       source: 'assistant-budget',
       dedupeKey: `assistant-budget:${month}:${top}`,
     });

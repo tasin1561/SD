@@ -58,7 +58,7 @@ describe('assistant budget alert', () => {
       kind: 'OTHER',
       dedupeKey: 'assistant-budget:2026-11:80',
     });
-    expect(String(raised[0]!['detail'])).toContain('$64.00 of the $80.00');
+    expect(String(raised[0]!['detail'])).toContain('$160.00 of the $200.00'); // shown billed: 2.5x the real $64 of $80;
   });
 
   it('warns again at 100% (CRITICAL) — once — after the 80% one', async () => {

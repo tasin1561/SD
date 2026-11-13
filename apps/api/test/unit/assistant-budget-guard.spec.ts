@@ -29,7 +29,8 @@ describe('budget guard: Claude is NOT called when the assistant must rest', () =
 
   it('at the monthly budget exactly: no model call, a plain resting notice with help links', async () => {
     const store = new MemoryStore();
-    store.monthCost = new Prisma.Decimal('80');
+    // Stored cost is BILLED (2.5x real): $200 stored = the $80 real cap.
+    store.monthCost = new Prisma.Decimal('200');
     const rig = chatRig([ok()], { store, settings: { 'assistant.monthly_budget_usd': '80' } });
     const events = await ask(rig);
     expect(rig.gateway.requests.length).toBe(0);
@@ -44,7 +45,7 @@ describe('budget guard: Claude is NOT called when the assistant must rest', () =
 
   it('over the monthly budget: no model call', async () => {
     const store = new MemoryStore();
-    store.monthCost = new Prisma.Decimal('80.01');
+    store.monthCost = new Prisma.Decimal('200.03'); // $80.012 real
     const rig = chatRig([ok()], { store, settings: { 'assistant.monthly_budget_usd': 80 } });
     await ask(rig);
     expect(rig.gateway.requests.length).toBe(0);
@@ -52,7 +53,7 @@ describe('budget guard: Claude is NOT called when the assistant must rest', () =
 
   it('just under the budget still answers', async () => {
     const store = new MemoryStore();
-    store.monthCost = new Prisma.Decimal('79.99');
+    store.monthCost = new Prisma.Decimal('199.97'); // $79.988 real
     const rig = chatRig([ok()], { store, settings: { 'assistant.monthly_budget_usd': 80 } });
     await ask(rig);
     expect(rig.gateway.requests.length).toBe(1);
@@ -76,7 +77,7 @@ describe('budget guard: Claude is NOT called when the assistant must rest', () =
 
   it('the budget is read inside the request: raising it takes effect on the next message', async () => {
     const store = new MemoryStore();
-    store.monthCost = new Prisma.Decimal('90');
+    store.monthCost = new Prisma.Decimal('225'); // $90 real
     const settings: Record<string, unknown> = { 'assistant.monthly_budget_usd': 80 };
     const rig = chatRig([ok()], { store, settings });
     await ask(rig);
@@ -109,7 +110,7 @@ describe('budget guard: Claude is NOT called when the assistant must rest', () =
 
   it('a stale or unreadable setting falls back to the defaults (80 USD / 60 a day), not to "unlimited"', async () => {
     const store = new MemoryStore();
-    store.monthCost = new Prisma.Decimal('80');
+    store.monthCost = new Prisma.Decimal('200'); // $80 real
     const rig = chatRig([ok()], { store, settings: {} });
     await ask(rig);
     expect(rig.gateway.requests.length).toBe(0);
