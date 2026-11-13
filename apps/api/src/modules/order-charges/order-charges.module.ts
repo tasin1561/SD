@@ -6,6 +6,7 @@ import { PricingModule } from '../pricing/pricing.module';
 import { AdminChargesBackfillController } from './controllers/admin-charges-backfill.controller';
 import { AdminOrderChargesController } from './controllers/admin-order-charges.controller';
 import { SellerOrderChargesController } from './controllers/seller-order-charges.controller';
+import { OrderChargesAssistantReadService } from './services/order-charges-assistant-read.service';
 import { OrderChargesService } from './services/order-charges.service';
 
 /**
@@ -27,7 +28,7 @@ import { OrderChargesService } from './services/order-charges.service';
     AdminOrderChargesController,
     SellerOrderChargesController,
   ],
-  providers: [OrderChargesService, StaffJwtGuard, SellerJwtGuard],
-  exports: [OrderChargesService],
+  providers: [OrderChargesService, OrderChargesAssistantReadService, StaffJwtGuard, SellerJwtGuard],
+  exports: [OrderChargesService, OrderChargesAssistantReadService],
 })
 export class OrderChargesModule {}

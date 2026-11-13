@@ -18,6 +18,7 @@ import { StoreJwtGuard } from '../../common/guards/store-jwt.guard';
 import { StoreTicketController } from './controllers/store-ticket.controller';
 import { StoreIssueController } from './controllers/store-issue.controller';
 import { StoreIssueService } from './services/store-issue.service';
+import { TicketAssistantReadService } from './services/ticket-assistant-read.service';
 import { ResellerStoreModule } from '../reseller-store/reseller-store.module';
 import { StoreOrderRequestModule } from '../store-order-request/store-order-request.module';
 
@@ -67,12 +68,13 @@ import { StoreOrderRequestModule } from '../store-order-request/store-order-requ
     TicketStateMachineService,
     TicketNotifier,
     StoreIssueService,
+    TicketAssistantReadService,
     SellerJwtGuard,
     StaffJwtGuard,
     StoreJwtGuard,
   ],
   // StoreIssueService: the assistant's confirm button raises a member store's
   // issue through the SAME policy gate the store console's form uses.
-  exports: [TicketService, StoreIssueService],
+  exports: [TicketService, StoreIssueService, TicketAssistantReadService],
 })
 export class TicketModule {}

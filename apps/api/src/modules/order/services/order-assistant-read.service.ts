@@ -143,6 +143,18 @@ export class OrderAssistantReadService {
     return hit === undefined ? null : { id: hit.id, orderNumber: hit.orderNumber };
   }
 
+  /**
+   * Staff: the order an identifier names as `{ id, orderNumber }`, or null.
+   * For the assistant tools that read ABOUT an order (failed delivery,
+   * address check) and must be handed the id by us, never by the model.
+   */
+  async resolveForStaff(identifier: string): Promise<{ id: string; orderNumber: string } | null> {
+    const wanted = identifier.trim().toLowerCase();
+    const page = await this.orders.adminList({ page: 1, pageSize: 10, search: identifier.trim() });
+    const hit = page.items.find((o) => matches(o, wanted));
+    return hit === undefined ? null : { id: hit.id, orderNumber: hit.orderNumber };
+  }
+
   /** Staff: any order, by the same exact identifiers. */
   async findForStaff(identifier: string): Promise<AssistantOrderSummary | null> {
     const wanted = identifier.trim().toLowerCase();

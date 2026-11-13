@@ -61,6 +61,7 @@ describe('the tool list is filtered per request, by audience AND permission', ()
     expect(n).toEqual([
       'explain_error',
       'find_page',
+      'get_failed_delivery_detail',
       'get_ops_queue_counts',
       'get_order',
       'search_help',

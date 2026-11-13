@@ -329,6 +329,10 @@ describe('nothing the model can call raises a ticket (structural)', () => {
         // READ-ONLY: lists a ticket's photos through the console's own ticket query.
         '/services/assistant-ticket-photos.service.ts',
         '/services/assistant-ticket.service.ts',
+        // READ-ONLY (Batch B `get_my_ticket`): the type-only import of
+        // TicketAssistantReadService, which can look a ticket up and nothing else.
+        '/services/assistant-tool-registry.service.ts',
+        '/tools/assistant-tools.ts',
       ].sort(),
     );
   });
