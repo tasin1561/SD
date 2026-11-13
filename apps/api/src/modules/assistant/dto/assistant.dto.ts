@@ -142,6 +142,11 @@ export class AssistantExplorerQueryDto {
   @IsIn(['any', 'error'])
   hadNotice?: 'any' | 'error';
 
+  @ApiPropertyOptional({ enum: ['flagged'] })
+  @IsOptional()
+  @IsIn(['flagged'])
+  monitor?: 'flagged';
+
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)

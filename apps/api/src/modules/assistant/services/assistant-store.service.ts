@@ -610,6 +610,15 @@ export class AssistantStoreService {
     return agg._sum.costUsd ?? new Prisma.Decimal(0);
   }
 
+  /** Everything the overnight monitor has spent since `since` (billed figure). */
+  async monitorCostSince(since: Date): Promise<Prisma.Decimal> {
+    const agg = await this.prisma.client.assistantMonitorUsage.aggregate({
+      where: { createdAt: { gte: since } },
+      _sum: { costUsd: true },
+    });
+    return agg._sum.costUsd ?? new Prisma.Decimal(0);
+  }
+
   /** Questions this person typed since `since` (start of the UTC day). */
   questionsSince(scope: CallerScope, since: Date): Promise<number> {
     return this.prisma.client.assistantMessage.count({

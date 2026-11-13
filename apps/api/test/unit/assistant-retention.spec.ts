@@ -16,6 +16,9 @@ function rig(convs: Array<{ id: string; updatedAt: Date }>, files: string[] = []
     },
     assistantFeedback: { updateMany: jest.fn(async () => void calls.push('fb')) },
     assistantTicketProposal: { updateMany: jest.fn(async () => void calls.push('prop')) },
+    assistantMonitorResult: {
+      updateMany: jest.fn(async (a) => void calls.push(`monitor:${JSON.stringify(a.data)}`)),
+    },
     assistantConversation: {
       update: jest.fn(async (a) => {
         done.add(a.where.id);
@@ -55,6 +58,16 @@ describe('assistant retention (180 days)', () => {
     expect(r.spaces.deleteObjects).toHaveBeenCalledWith(['assistant/a', 'assistant/b']);
     expect(r.calls.some((c) => c.includes(REMOVED))).toBe(true);
     expect(r.calls).toContain(`conv:true:${old.toISOString()}`);
+    // The monitor's quotes and summary are words from the conversation: cleared too.
+    const m = r.calls.find((c) => c.startsWith('monitor:')) ?? '';
+    expect(JSON.parse(m.slice('monitor:'.length))).toMatchObject({
+      safetyQuote: null,
+      hallucinationQuote: null,
+      correctReason: null,
+      knowledgeGap: null,
+      uiConfusion: null,
+      summary: REMOVED,
+    });
     // Second pass: the conversation is no longer selected, nothing is rewritten.
     const before = r.calls.length;
     const second = await r.svc.run(new Date('2026-11-14T00:00:00Z'));

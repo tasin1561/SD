@@ -20,7 +20,9 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { AssistantControlDto, AssistantExplorerQueryDto } from '../dto/assistant.dto';
 import { AssistantBillingService } from '../services/assistant-billing.service';
+import { AssistantMonitorPanelService } from '../services/assistant-monitor-panel.service';
 import { AssistantPanelService } from '../services/assistant-panel.service';
+import { AssistantMonitorWorker } from '../queue/assistant-monitor.worker';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -43,6 +45,8 @@ export class AdminAssistantPanelController {
   constructor(
     private readonly billing: AssistantBillingService,
     private readonly panel: AssistantPanelService,
+    private readonly monitor: AssistantMonitorPanelService,
+    private readonly monitorWorker: AssistantMonitorWorker,
   ) {}
 
   @Get('billing/monthly')
@@ -81,6 +85,28 @@ export class AdminAssistantPanelController {
     @Body() body: AssistantControlDto,
   ) {
     return this.panel.setControl(staff.id, key, body.value);
+  }
+
+  @Get('monitor')
+  @ApiOperation({
+    summary: 'Overnight monitor: runs, budget, themes, knowledge gaps (no conversation text)',
+  })
+  monitorOverview() {
+    return this.monitor.overview();
+  }
+
+  @Get('monitor/flags')
+  @RequirePermissions('assistant.conversations.read')
+  @ApiOperation({ summary: 'Conversations the monitor flagged for safety, newest first (audited)' })
+  monitorFlags(@CurrentStaff() staff: AuthenticatedStaff) {
+    return this.monitor.flags(staff.id);
+  }
+
+  @Post('monitor/run-now')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Queue a monitor pass now (audited; refused while the monitor is off)' })
+  monitorRunNow(@CurrentStaff() staff: AuthenticatedStaff) {
+    return this.monitor.requestRunNow(staff.id, () => this.monitorWorker.enqueueRunNow());
   }
 
   @Get('conversations')

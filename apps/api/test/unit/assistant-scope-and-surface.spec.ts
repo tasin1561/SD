@@ -198,6 +198,11 @@ describe('the assistant is READ-ONLY (phase A; phase D adds ONE ticket the perso
       'assistant-billing.service.ts',
       'assistant-panel.service.ts',
       'assistant-retention.service.ts',
+      // The overnight monitor: aggregates across owners, writes only its own tables
+      // (`assistant-monitor-isolation.spec.ts` pins that).
+      'assistant-monitor.service.ts',
+      'assistant-monitor-panel.service.ts',
+      'assistant-monitor-digest.service.ts',
     ];
     const offenders = sources(dir)
       .filter((f) => !f.endsWith('assistant-store.service.ts'))
@@ -222,9 +227,15 @@ describe('the assistant is READ-ONLY (phase A; phase D adds ONE ticket the perso
         ),
       )
       .map((f) => f.slice(dir.length));
-    expect(offenders).toEqual(['/services/assistant-model-gateway.ts']);
-    expect(readFileSync(join(dir, 'services/assistant-model-gateway.ts'), 'utf8')).not.toMatch(
-      /(log|warn|error)\([^)]*anthropicApiKey/,
-    );
+    // The batch gateway (overnight monitor) builds its client from the same env key.
+    expect(offenders).toEqual([
+      '/services/assistant-batch-gateway.ts',
+      '/services/assistant-model-gateway.ts',
+    ]);
+    for (const g of ['assistant-model-gateway.ts', 'assistant-batch-gateway.ts']) {
+      expect(readFileSync(join(dir, 'services', g), 'utf8')).not.toMatch(
+        /(log|warn|error)\([^)]*anthropicApiKey/,
+      );
+    }
   });
 });

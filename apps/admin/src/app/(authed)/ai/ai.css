@@ -428,3 +428,28 @@ g[data-dim='1'] .ai-chart__bar {
 .ai-pad + .sk-table-wrap .sk-th:first-child {
   white-space: nowrap;
 }
+
+/* Monitor tab */
+.ai-mon__dl {
+  display: grid;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0 0;
+}
+.ai-mon__dl > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr);
+  gap: var(--sp-3);
+}
+.ai-mon__dl dt {
+  color: var(--fg-muted);
+}
+.ai-mon__dl dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 520px) {
+  .ai-mon__dl > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}

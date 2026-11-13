@@ -16,6 +16,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { AcAlert, AcSection } from '../../settings/_components/ac-parts';
 import { useAiConversations } from '../_lib/ai-hooks';
+import { MonitorChips } from './ai-monitor-parts';
 
 const PAGE = 25;
 
@@ -25,6 +26,7 @@ interface Filters {
   rating: string;
   hadNotice: string;
   hasAttachment: string;
+  monitor: string;
   from: string;
   to: string;
 }
@@ -34,6 +36,7 @@ const EMPTY: Filters = {
   rating: '',
   hadNotice: '',
   hasAttachment: '',
+  monitor: '',
   from: '',
   to: '',
 };
@@ -110,6 +113,14 @@ export function AiConversations(): ReactElement {
             {opt('', t('ai.any'))}
             {opt('true', t('ai.conv.withAttachment'))}
           </Select>
+          <Select
+            label={t('ai.mon.filter')}
+            value={f.monitor}
+            onChange={(e) => set('monitor', e.target.value)}
+          >
+            {opt('', t('ai.any'))}
+            {opt('flagged', t('ai.mon.flaggedOnly'))}
+          </Select>
           <DateField
             label={t('ai.dash.from')}
             value={f.from}
@@ -181,6 +192,7 @@ export function AiConversations(): ReactElement {
                       )}
                       {r.up > 0 && <ThumbsUp size={14} aria-label={t('ai.conv.thumbsUp')} />}
                       {r.down > 0 && <ThumbsDown size={14} aria-label={t('ai.conv.thumbsDown')} />}
+                      {r.monitor !== null && <MonitorChips m={r.monitor} />}
                       {r.notices > 0 && (
                         <StatusChip
                           kind="pending"

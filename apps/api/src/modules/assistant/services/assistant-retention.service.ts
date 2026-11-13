@@ -92,6 +92,18 @@ export class AssistantRetentionService {
         where: { conversationId: id },
         data: { comment: null },
       });
+      // The monitor's quotes and summary are words from this conversation.
+      await tx.assistantMonitorResult.updateMany({
+        where: { conversationId: id },
+        data: {
+          correctReason: null,
+          hallucinationQuote: null,
+          safetyQuote: null,
+          knowledgeGap: null,
+          uiConfusion: null,
+          summary: REMOVED,
+        },
+      });
       await tx.assistantTicketProposal.updateMany({
         where: { conversationId: id },
         data: { subject: REMOVED, description: REMOVED, orderNumber: null },

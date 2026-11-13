@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { AssistantAudience, Prisma } from '@skydrop/db';
+import { Prisma, type AssistantAudience } from '@skydrop/db';
 import { SystemSettingsService } from '../../system-settings/services/system-settings.service';
 import { realFromBilledUsd } from '../assistant-pricing';
 import type { CallerScope } from '../assistant.types';
@@ -11,6 +11,7 @@ export type BudgetVerdict =
 
 export const DEFAULT_MONTHLY_BUDGET_USD = 80;
 export const DEFAULT_DAILY_MESSAGES = 60;
+export const DEFAULT_MONITOR_BUDGET_USD = 20;
 
 /**
  * "Should this request call the model at all?" — read INSIDE the request,
@@ -106,6 +107,36 @@ export class AssistantBudgetService {
   /** The monthly cap in USD (`assistant.monthly_budget_usd`, default $80). */
   monthlyBudgetUsd(): Promise<number> {
     return this.number('assistant.monthly_budget_usd', DEFAULT_MONTHLY_BUDGET_USD);
+  }
+
+  // ── the overnight monitor's line ───────────────────────────────────
+  // Same shape as the assistant's, with its own cap. These three are the
+  // ONLY readers of `assistant_monitor_usage.cost_usd` for a cap decision.
+
+  /** `assistant.monitor_enabled`: OFF unless an admin turned it on. */
+  monitorEnabled(): Promise<boolean> {
+    return this.flag('assistant.monitor_enabled', false);
+  }
+
+  /** The monitor's monthly cap in REAL USD (`assistant.monitor_monthly_budget_usd`, default $20). */
+  monitorMonthlyBudgetUsd(): Promise<number> {
+    return this.number('assistant.monitor_monthly_budget_usd', DEFAULT_MONITOR_BUDGET_USD);
+  }
+
+  /** What the monitor has spent this UTC month, in REAL USD (stored / 2.5). */
+  async monitorMonthlySpendUsd(now: Date = new Date()): Promise<Prisma.Decimal> {
+    const billed = await this.store.monitorCostSince(
+      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+    );
+    return realFromBilledUsd(billed);
+  }
+
+  /** Real USD the monitor may still spend this month (never negative). */
+  async monitorRemainingUsd(now: Date = new Date()): Promise<Prisma.Decimal> {
+    const left = new Prisma.Decimal(await this.monitorMonthlyBudgetUsd()).sub(
+      await this.monitorMonthlySpendUsd(now),
+    );
+    return left.isNegative() ? new Prisma.Decimal(0) : left;
   }
 
   private async number(key: string, fallback: number): Promise<number> {
