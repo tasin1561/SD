@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { PackageCheck, Truck } from 'lucide-react';
@@ -40,6 +41,7 @@ import { useT, useLocale } from '@/i18n/client';
 export function ManifestDetailView({ id }: { readonly id: string }): ReactElement {
   const locale = useLocale();
   const t = useT();
+  const code = useCodeLabel();
   const router = useRouter();
   const toast = useToast();
   const detail = useManifestDetail(id);
@@ -148,7 +150,7 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
           status: m.status,
           shipmentCount: m.shipmentCount,
         })}
-        meta={<StatusChip kind="neutral" label={m.status.replace(/_/g, ' ')} />}
+        meta={<StatusChip kind="neutral" label={code(m.status)} />}
         action={
           <Actions>
             {isDraft && (

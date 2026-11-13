@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { When } from '@/components/easy/when';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Check, Mail, Phone, Send, UserRound } from 'lucide-react';
@@ -69,6 +70,7 @@ export function LeadDrawer({
   readonly onClose: () => void;
 }): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const canWrite = usePermission('leads.manage');
   const canInvite = usePermission('sellers.invite');
   const toast = useToast();
@@ -191,7 +193,7 @@ export function LeadDrawer({
         <div className="ac-meta">
           <StatusChip
             kind={inviteLeadStatusKind(lead.status as InviteLeadStatus)}
-            label={lead.status.toLowerCase()}
+            label={code(lead.status)}
             size="sm"
           />
           {lead.submissionCount > 1 && (
@@ -259,7 +261,7 @@ export function LeadDrawer({
         >
           {Object.keys(STATUS_COPY(t)).map((s) => (
             <option key={s} value={s}>
-              {s.toLowerCase()}
+              {code(s)}
             </option>
           ))}
         </Select>

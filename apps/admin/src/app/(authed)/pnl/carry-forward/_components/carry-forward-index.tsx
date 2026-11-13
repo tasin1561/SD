@@ -1,5 +1,6 @@
 'use client';
 
+import { Code } from '@/components/easy/code-label';
 import Link from 'next/link';
 import { Fragment, useState, type ReactElement, type ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, Layers, Lock, ShieldAlert } from 'lucide-react';
@@ -1324,7 +1325,9 @@ function BackfillPanel(): ReactElement {
                 result.months.map((m) => (
                   <Tr key={m.month}>
                     <Td className="sk-ident">{m.month}</Td>
-                    <Td>{m.action.replaceAll('_', ' ').toLowerCase()}</Td>
+                    <Td>
+                      <Code value={m.action} />
+                    </Td>
                     <Td align="right">
                       {m.netInr === null ? (
                         '—'

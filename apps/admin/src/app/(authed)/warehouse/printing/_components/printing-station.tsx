@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { When } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
@@ -710,6 +711,7 @@ function ReprintTab(): ReactElement {
 
 function BatchesTab(): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const [search, setSearch] = useState('');
   const batches = usePickBatches(search);
   const buildList = useBuildPickList();
@@ -902,7 +904,7 @@ function BatchesTab(): ReactElement {
                               ? 'cancelled'
                               : 'draft'
                       }
-                      label={b.status.toLowerCase()}
+                      label={code(b.status)}
                       size="sm"
                     />
                   </Td>

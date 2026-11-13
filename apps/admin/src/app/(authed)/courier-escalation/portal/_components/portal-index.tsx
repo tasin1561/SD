@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import { When } from '@/components/easy/when';
 import '@/components/easy/easy.css';
@@ -52,6 +53,7 @@ import { useT } from '@/i18n/client';
  */
 export function CourierPortalIndex(): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const runs = useCourierPortalRuns();
   const taxonomy = useCourierTaxonomy();
   const channel = useCourierChannel();
@@ -163,7 +165,7 @@ export function CourierPortalIndex(): ReactElement {
                     <StatusChip
                       size="sm"
                       kind={r.mode === 'LIVE' ? 'in-transit' : 'draft'}
-                      label={r.mode.toLowerCase()}
+                      label={code(r.mode)}
                     />
                   </Td>
                   <Td>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import { When } from '@/components/easy/when';
@@ -162,6 +163,7 @@ function people(n: number): string {
 
 export function BroadcastsView(): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const [audienceIdx, setAudienceIdx] = useState(0);
   const [audienceValues, setAudienceValues] = useState<string[]>([]);
   const [channels, setChannels] = useState<string[]>(['IN_APP']);
@@ -420,7 +422,7 @@ export function BroadcastsView(): ReactElement {
                               ? 'failed'
                               : 'pending'
                         }
-                        label={b.status.toLowerCase()}
+                        label={code(b.status)}
                         size="sm"
                       />
                     </Td>

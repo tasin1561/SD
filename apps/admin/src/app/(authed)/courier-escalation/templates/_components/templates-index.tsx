@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
@@ -55,6 +56,7 @@ import { useT } from '@/i18n/client';
  */
 export function CourierTemplatesIndex(): ReactElement {
   const tr = useT();
+  const code = useCodeLabel();
   const candidates = useCourierTemplateCandidates();
   const templates = useCourierTemplates();
   // FE-2: cosmetic. Promotion is refused server-side without this.
@@ -204,7 +206,7 @@ export function CourierTemplatesIndex(): ReactElement {
                     <StatusChip
                       size="sm"
                       kind={c.status === 'PROMOTED' ? 'delivered' : 'cancelled'}
-                      label={c.status.toLowerCase()}
+                      label={code(c.status)}
                     />
                   </Td>
                 </Tr>

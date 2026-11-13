@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { When } from '@/components/easy/when';
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
@@ -19,6 +20,7 @@ const PAGE_SIZE = 25;
 
 export function ManifestsIndex(): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const router = useRouter();
   const [status, setStatus] = useState<ManifestStatus | ''>('');
   const [page, setPage] = useState(1);
@@ -90,7 +92,7 @@ export function ManifestsIndex(): ReactElement {
                     </Link>
                   </Td>
                   <Td>
-                    <StatusChip size="sm" kind="neutral" label={m.status.replace(/_/g, ' ')} />
+                    <StatusChip size="sm" kind="neutral" label={code(m.status)} />
                   </Td>
                   <Td className="stk-muted">{m.courierCode}</Td>
                   <Td align="right" className="sk-figure">

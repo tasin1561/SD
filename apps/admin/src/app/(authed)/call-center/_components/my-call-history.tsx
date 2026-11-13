@@ -1,5 +1,6 @@
 'use client';
 
+import { Code } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
@@ -100,7 +101,9 @@ export function MyCallHistory(): ReactElement {
                     (data?.items ?? []).map((r) => (
                       <Tr key={r.attemptId}>
                         <Td className="oo-nowrap">{new Date(r.startedAt).toLocaleString()}</Td>
-                        <Td>{r.outcome.toLowerCase().replace(/_/g, ' ')}</Td>
+                        <Td>
+                          <Code value={r.outcome} />
+                        </Td>
                         <Td className="sk-figure">{duration(r.durationSeconds)}</Td>
                         <Td>
                           {/* The order, not the attempt: the attempt is a

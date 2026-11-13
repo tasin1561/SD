@@ -1,5 +1,6 @@
 'use client';
 
+import { Code, useCodeLabel } from '@/components/easy/code-label';
 import { useState, type ReactElement } from 'react';
 import { Ident, Money, Num } from '@skydrop/ui/components';
 import { CalendarPlus, ClipboardCheck, ListChecks, TriangleAlert } from 'lucide-react';
@@ -58,6 +59,7 @@ const COUNT_TYPES = ['FULL', 'ZONE', 'SAMPLE', 'SKU_TARGETED', 'ABC_CLASSIFICATI
  */
 export function CycleCountsIndex(): ReactElement {
   const tr = useT();
+  const code = useCodeLabel();
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -128,7 +130,7 @@ export function CycleCountsIndex(): ReactElement {
             <option value="">{tr('inventoryCycleCountsCycleCountsIndex.allStatuses')}</option>
             {['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map((s) => (
               <option key={s} value={s}>
-                {s.replace(/_/g, ' ').toLowerCase()}
+                {code(s)}
               </option>
             ))}
           </Select>
@@ -169,7 +171,9 @@ export function CycleCountsIndex(): ReactElement {
                     <Td className="sk-figure stk-nowrap">
                       {new Date(c.countDate).toLocaleDateString('en-IN')}
                     </Td>
-                    <Td>{c.countType.replace(/_/g, ' ').toLowerCase()}</Td>
+                    <Td>
+                      <Code value={c.countType} />
+                    </Td>
                     <Td>
                       <Ident value={c.warehouseId} />
                     </Td>
@@ -226,6 +230,7 @@ function countKind(status: string): 'draft' | 'pending' | 'delivered' | 'cancell
 
 function ScheduleCount({ open, onClose }: { open: boolean; onClose: () => void }): ReactElement {
   const tr = useT();
+  const code = useCodeLabel();
   const warehouses = useWarehouseOptions();
   const [warehouseId, setWarehouseId] = useState('');
   const [countType, setCountType] = useState<string>('FULL');
@@ -292,7 +297,7 @@ function ScheduleCount({ open, onClose }: { open: boolean; onClose: () => void }
         >
           {COUNT_TYPES.map((t) => (
             <option key={t} value={t}>
-              {t.replace(/_/g, ' ').toLowerCase()}
+              {code(t)}
             </option>
           ))}
         </Select>
@@ -373,7 +378,7 @@ function CountDetail({
           <span className="adj-sub">
             <StatusChip size="sm" kind={countKind(count.status)} label={pretty(count.status)} />
             <span className="stk-faint">
-              {count.countType.replace(/_/g, ' ').toLowerCase()} ·{' '}
+              <Code value={count.countType} /> ·{' '}
               {new Date(count.countDate).toLocaleDateString('en-IN')}
             </span>
           </span>

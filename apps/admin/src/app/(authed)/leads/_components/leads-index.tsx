@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
@@ -83,6 +84,7 @@ function waitTone(iso: string): AcTone {
 
 export function LeadsIndex(): ReactElement {
   const tr = useT();
+  const code = useCodeLabel();
   const [tab, setTab] = useState(0);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<InviteLead | null>(null);
@@ -234,7 +236,7 @@ export function LeadsIndex(): ReactElement {
                       <Td>
                         <StatusChip
                           kind={inviteLeadStatusKind(lead.status as InviteLeadStatus)}
-                          label={lead.status.toLowerCase()}
+                          label={code(lead.status)}
                           size="sm"
                         />
                       </Td>

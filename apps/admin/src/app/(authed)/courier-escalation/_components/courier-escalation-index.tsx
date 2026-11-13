@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
@@ -58,6 +59,7 @@ import { richMessage } from '@/i18n/client';
  */
 export function CourierEscalationIndex(): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
 
   const toast = useToast();
   const outbox = useCourierOutbox();
@@ -479,7 +481,7 @@ export function CourierEscalationIndex(): ReactElement {
                               ? 'in-transit'
                               : 'draft'
                         }
-                        label={item.status.replace(/_/g, ' ').toLowerCase()}
+                        label={code(item.status)}
                       />
                       {item.lastError != null ? (
                         <span className="af-small ce-error-text">{item.lastError}</span>

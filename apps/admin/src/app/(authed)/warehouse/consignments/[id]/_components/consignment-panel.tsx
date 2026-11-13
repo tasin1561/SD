@@ -1,5 +1,6 @@
 'use client';
 
+import { Code as CodeText } from '@/components/easy/code-label';
 import Link from 'next/link';
 import { useMemo, useState, type ReactElement } from 'react';
 import { ConsignmentLeg, ConsignmentRoute, InboundFreightMode, LabellingSite } from '@skydrop/db';
@@ -443,7 +444,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                       <span key={f.id}>
                         {i > 0 ? '  ·  ' : ''}
                         <Money amount={f.totalInr} currency="INR" convert={false} /> ·{' '}
-                        {f.status.toLowerCase()}
+                        <CodeText value={f.status} />
                       </span>
                     )),
             },

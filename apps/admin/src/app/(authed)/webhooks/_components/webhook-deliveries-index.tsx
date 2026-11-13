@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import { When } from '@/components/easy/when';
@@ -35,6 +36,7 @@ const STATUSES = [
 
 export function WebhookDeliveriesIndex(): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const canRetry = usePermission('webhooks.retry');
   const [status, setStatus] = useState<string>('');
   const [sellerId, setSellerId] = useState('');
@@ -167,11 +169,7 @@ export function WebhookDeliveriesIndex(): ReactElement {
                   </span>
                 </Td>
                 <Td>
-                  <StatusChip
-                    size="sm"
-                    kind={statusKind(d.status)}
-                    label={d.status.replaceAll('_', ' ')}
-                  />
+                  <StatusChip size="sm" kind={statusKind(d.status)} label={code(d.status)} />
                 </Td>
                 <Td align="right">
                   <span className="sk-figure af-small">

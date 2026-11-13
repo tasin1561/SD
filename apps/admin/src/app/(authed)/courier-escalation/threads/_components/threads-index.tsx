@@ -1,5 +1,6 @@
 'use client';
 
+import { Code } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import { When } from '@/components/easy/when';
 import '@/components/easy/easy.css';
@@ -349,7 +350,9 @@ function Message({ message }: { readonly message: CourierThreadMessage }): React
         <span className="af-small">
           <When iso={message.occurredAt} time />
         </span>
-        <span className="af-faint">{message.channel.toLowerCase()}</span>
+        <span className="af-faint">
+          <Code value={message.channel} />
+        </span>
         {message.state !== null ? (
           <StatusChip size="sm" kind={stateKind(message.state)} label={humanise(message.state)} />
         ) : null}

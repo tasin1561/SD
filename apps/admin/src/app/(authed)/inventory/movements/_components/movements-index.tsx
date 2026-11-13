@@ -1,5 +1,6 @@
 'use client';
 
+import { Code, useCodeLabel } from '@/components/easy/code-label';
 import { useState, type ReactElement } from 'react';
 import { StockMovementType } from '@skydrop/db';
 import { Ident, Num } from '@skydrop/ui/components';
@@ -50,6 +51,7 @@ export function MovementsIndex({
   readonly initialBinId?: string;
 }): ReactElement {
   const tr = useT();
+  const code = useCodeLabel();
   const locale = useLocale();
   const warehouses = useWarehouseOptions();
   const [variantId, setVariantId] = useState('');
@@ -162,7 +164,7 @@ export function MovementsIndex({
             <option value="">{tr('inventoryMovementsMovementsIndex.allTypes')}</option>
             {MOVEMENT_TYPES.map((t) => (
               <option key={t} value={t}>
-                {t.replace(/_/g, ' ').toLowerCase()}
+                {code(t)}
               </option>
             ))}
           </Select>
@@ -196,7 +198,9 @@ export function MovementsIndex({
                 {items.map((m) => (
                   <Tr key={m.id}>
                     <Td className="sk-figure stk-nowrap">{formatDateTime(m.createdAt, locale)}</Td>
-                    <Td>{m.type.replace(/_/g, ' ').toLowerCase()}</Td>
+                    <Td>
+                      <Code value={m.type} />
+                    </Td>
                     <Td>
                       <Ident value={m.variantId} />
                     </Td>

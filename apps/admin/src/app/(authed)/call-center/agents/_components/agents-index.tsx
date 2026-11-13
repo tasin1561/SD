@@ -1,5 +1,6 @@
 'use client';
 
+import { Code } from '@/components/easy/code-label';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Num } from '@skydrop/ui/components';
 import { Headset, PhoneCall, UserCheck } from 'lucide-react';
@@ -398,7 +399,9 @@ function AgentDetail({
                 <TBody>
                   {outcomes.map(([outcome, count]) => (
                     <Tr key={outcome}>
-                      <Td>{outcome.replace(/_/g, ' ').toLowerCase()}</Td>
+                      <Td>
+                        <Code value={outcome} />
+                      </Td>
                       <Td align="right">
                         <Num value={count} />
                       </Td>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import { useState, type ReactElement } from 'react';
 import { AlertTriangle } from 'lucide-react';
@@ -141,6 +142,7 @@ export function PickupsIndex(): ReactElement {
 
 function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const toast = useToast();
   const close = useClosePickup();
   const release = useReleasePickupDay();
@@ -192,7 +194,7 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
         <Num value={row.expectedPackageCount} />
       </Td>
       <Td>
-        <StatusChip size="sm" kind={pickupKind(row.status)} label={row.status.toLowerCase()} />
+        <StatusChip size="sm" kind={pickupKind(row.status)} label={code(row.status)} />
         {row.courierMessage !== null && row.courierMessage !== '' && (
           <span className="stk-sub pku-message" title={row.courierMessage}>
             {row.courierMessage}

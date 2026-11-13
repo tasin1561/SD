@@ -1,5 +1,6 @@
 'use client';
 
+import { Code } from '@/components/easy/code-label';
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { AlertTriangle, ArrowLeftRight, BookMarked, ChevronRight, ShieldCheck } from 'lucide-react';
@@ -447,7 +448,7 @@ export function TreasuryIndex(): ReactElement {
                         </Td>
                         <Td>{e.accountLabel}</Td>
                         <Td>
-                          {e.type.replaceAll('_', ' ').toLowerCase()}
+                          <Code value={e.type} />
                           {e.categoryName !== null && (
                             <span className="mo-faint"> · {e.categoryName}</span>
                           )}

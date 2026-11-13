@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { startTransition, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Ident, Num } from '@skydrop/ui/components';
@@ -62,6 +63,7 @@ const MIN_RESCHEDULE_REASON = 5;
  */
 export function QueueIndex(): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const router = useRouter();
   // Defaults to OPEN, matching this page's own subtitle: "what is
   // waiting to be confirmed, and who is holding it". A COMPLETED row is
@@ -273,11 +275,7 @@ export function QueueIndex(): ReactElement {
                     )}
                   </Td>
                   <Td>
-                    <StatusChip
-                      size="sm"
-                      kind={queueKind(e.status)}
-                      label={e.status.toLowerCase()}
-                    />
+                    <StatusChip size="sm" kind={queueKind(e.status)} label={code(e.status)} />
                   </Td>
                   <Td align="right">
                     <div className="cc-row-actions">

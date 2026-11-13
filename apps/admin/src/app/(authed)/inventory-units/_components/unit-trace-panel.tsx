@@ -1,5 +1,6 @@
 'use client';
 
+import { Code } from '@/components/easy/code-label';
 import { useState, type ReactElement } from 'react';
 import { ScanLine } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
@@ -148,9 +149,9 @@ export function UnitTracePanel(): ReactElement {
                         unit that went PICKED → IN_STOCK came back off a
                         cancelled box, and that is the interesting part. */}
                     <span className="stk-muted">
-                      {e.fromStatus === null ? '—' : e.fromStatus.toLowerCase().replace(/_/g, ' ')}
+                      <Code value={e.fromStatus} />
                     </span>{' '}
-                    → {e.toStatus.toLowerCase().replace(/_/g, ' ')}
+                    → <Code value={e.toStatus} />
                   </Td>
                   <Td>{e.gate}</Td>
                   <Td>

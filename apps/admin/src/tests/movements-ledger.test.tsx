@@ -120,7 +120,7 @@ describe('the type filter', () => {
   it('offers the give-back by name', () => {
     render(<MovementsIndex />);
     expect(
-      within(screen.getByLabelText('Type')).getByRole('option', { name: 'pack reversed' }),
+      within(screen.getByLabelText('Type')).getByRole('option', { name: 'Packing undone' }),
     ).toBeDefined();
   });
 });

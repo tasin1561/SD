@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { useState, type ReactElement } from 'react';
 import { Ident, Money, Num } from '@skydrop/ui/components';
 import { Check, ClipboardList, Hourglass, Scale, X } from 'lucide-react';
@@ -65,6 +66,7 @@ export function AdjustmentsIndex({
   readonly prefill?: AdjustmentPrefill | null;
 } = {}): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const [status, setStatus] = useState<string>('PENDING');
   const [sellerId, setSellerId] = useState('');
   const [page, setPage] = useState(1);
@@ -138,7 +140,7 @@ export function AdjustmentsIndex({
             <option value="">{t('inventoryAdjustmentsAdjustmentsIndex.allStatuses')}</option>
             {STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s.replace(/_/g, ' ').toLowerCase()}
+                {code(s)}
               </option>
             ))}
           </Select>

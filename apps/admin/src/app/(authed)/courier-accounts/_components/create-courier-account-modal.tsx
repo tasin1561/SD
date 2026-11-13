@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { useState, type ReactElement } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
@@ -65,6 +66,7 @@ export function CreateCourierAccountModal({
   readonly onOpenChange: (open: boolean) => void;
 }): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const toast = useToast();
   const create = useCreateCourierAccount();
 
@@ -188,7 +190,7 @@ export function CreateCourierAccountModal({
           >
             {Object.values(CredentialEnvironment).map((env) => (
               <option key={env} value={env}>
-                {env.toLowerCase()}
+                {code(env)}
               </option>
             ))}
           </Select>
