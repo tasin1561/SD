@@ -325,6 +325,7 @@ describe('assistant recommendations (e2e)', () => {
       .set(owner)
       .expect(200);
     const vA = await live();
+    chatRequests = []; // the gate's own requests are not part of this story
 
     // Conversation 1 starts on version A and asks twice; between turns an owner rolls back.
     const c1 = await store.createConversation(SELLER, null);
