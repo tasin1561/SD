@@ -103,6 +103,26 @@ export const easy = defineMessages({
     'ग्राहक को फ़ोन करने के बाद यह चुनें। उन्होंने क्या कहा, नीचे के खाने में लिखें।\nऑर्डर में कोई बदलाव नहीं होता।',
   ],
 
+  // ── Call queue ────────────────────────────────────────────────────────
+  'ezQueue.open': ['Open', 'খোলা', 'खुली'],
+  'ezQueue.waiting': ['Waiting', 'অপেক্ষায়', 'इंतज़ार में'],
+  'ezQueue.withAgent': ['With an agent', 'এজেন্টের কাছে', 'एजेंट के पास'],
+  'ezQueue.finished': ['Finished', 'শেষ হয়েছে', 'पूरी हुई'],
+  'ezQueue.expired': ['Timed out', 'সময় শেষ', 'समय निकल गया'],
+  'ezQueue.all': ['All', 'সব', 'सभी'],
+  'ezQueue.statusInfo': [
+    'Open: every call still to be made, waiting or with an agent.\nWaiting: nobody has picked it up yet.\nWith an agent: an agent is holding it now.\nFinished: the call was made and an outcome was recorded.\nTimed out: an agent held it too long without calling, so it went back to waiting.\nAll: everything, finished ones included.',
+    'খোলা: যে কলগুলো এখনো করা বাকি, অপেক্ষায় বা এজেন্টের কাছে।\nঅপেক্ষায়: এখনো কেউ নেয়নি।\nএজেন্টের কাছে: একজন এজেন্ট এখন এটি ধরে আছেন।\nশেষ হয়েছে: কল করা হয়েছে এবং ফলাফল লেখা হয়েছে।\nসময় শেষ: এজেন্ট কল না করে অনেকক্ষণ ধরে রেখেছিলেন, তাই এটি আবার অপেক্ষায় ফিরে গেছে।\nসব: সবকিছু, শেষ হওয়াগুলোসহ।',
+    'खुली: वे सभी कॉल जो अभी करनी बाकी हैं, इंतज़ार में या एजेंट के पास।\nइंतज़ार में: अभी किसी ने नहीं ली।\nएजेंट के पास: एक एजेंट अभी इसे पकड़े हुए है।\nपूरी हुई: कॉल हो गई और नतीजा दर्ज हो गया।\nसमय निकल गया: एजेंट ने बिना कॉल किए बहुत देर रखी, इसलिए यह फिर इंतज़ार में चली गई।\nसभी: सब कुछ, पूरी हुई कॉल समेत।',
+  ],
+
+  // ── Awaiting confirmation ─────────────────────────────────────────────
+  'ezAwaiting.sendInfo': [
+    'Puts the chosen orders into the call queue.\nAn agent phones each customer, and the order is confirmed only if the customer says yes.',
+    'বাছাই করা অর্ডারগুলো কল কিউতে যায়।\nএকজন এজেন্ট প্রতিটি গ্রাহককে ফোন করেন, এবং গ্রাহক হ্যাঁ বললে তবেই অর্ডার কনফার্ম হয়।',
+    'चुने हुए ऑर्डर कॉल कतार में जाते हैं।\nएक एजेंट हर ग्राहक को फ़ोन करता है, और ग्राहक के हाँ कहने पर ही ऑर्डर पक्का होता है।',
+  ],
+
   // ── Re-attempt requests (/reattempt-requests) ─────────────────────────
   'ezReattempt.reasonLabel': [
     'Why the client is asking',

@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { Money } from '@skydrop/ui/components';
 import { PageHeader } from '@skydrop/ui/app/page-header';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton, type AsyncPhase } from '@skydrop/ui/app/async-button';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
@@ -178,8 +180,12 @@ function Page(): ReactElement {
       <PageHeader
         breadcrumbs={[{ label: t('awaiting.crumbOps') }, { label: t('awaiting.title') }]}
         Link={Link}
-        title={t('awaiting.title')}
-        subtitle={t('awaiting.subtitle')}
+        title={
+          <span className="ez-titled">
+            {t('awaiting.title')}
+            <InfoButton title={t('awaiting.title')} text={t('awaiting.subtitle')} />
+          </span>
+        }
         meta={
           list.data === undefined ? undefined : (
             <span className="aw-count">{t('awaiting.count', { total: list.data.total })}</span>
@@ -235,32 +241,38 @@ function Page(): ReactElement {
         <div className="aw-bar__actions">
           {/* Second, deliberately quieter action: a skipped COD call is not
               the routine move, and the dialog restates what it costs. */}
-          <Button
-            variant="secondary"
-            size="md"
-            icon={<PhoneOff size={16} />}
-            disabled={selection.count === 0}
-            title={t('awaiting.confirmNowHint')}
-            onClick={() => {
-              setConfirmRefusal(null);
-              setAskConfirm(true);
-            }}
-          >
-            {t('awaiting.confirmNow')}
-          </Button>
-          <AsyncButton
-            size="md"
-            icon={<PhoneOutgoing size={16} />}
-            state={phase}
-            labels={{
-              idle: t('awaiting.send'),
-              busy: t('awaiting.sending'),
-              done: doneLabel,
-              error: results === null ? t('awaiting.sendFailed') : t('awaiting.nothingSent'),
-            }}
-            disabled={selection.count === 0}
-            onClick={() => void onSend()}
-          />
+          <span className="ez-titled">
+            <Button
+              variant="secondary"
+              size="md"
+              icon={<PhoneOff size={16} />}
+              disabled={selection.count === 0}
+              title={t('awaiting.confirmNowHint')}
+              onClick={() => {
+                setConfirmRefusal(null);
+                setAskConfirm(true);
+              }}
+            >
+              {t('awaiting.confirmNow')}
+            </Button>
+            <InfoButton title={t('awaiting.confirmNow')} text={t('awaiting.confirmNowHint')} />
+          </span>
+          <span className="ez-titled">
+            <AsyncButton
+              size="md"
+              icon={<PhoneOutgoing size={16} />}
+              state={phase}
+              labels={{
+                idle: t('awaiting.send'),
+                busy: t('awaiting.sending'),
+                done: doneLabel,
+                error: results === null ? t('awaiting.sendFailed') : t('awaiting.nothingSent'),
+              }}
+              disabled={selection.count === 0}
+              onClick={() => void onSend()}
+            />
+            <InfoButton title={t('awaiting.send')} text={t('ezAwaiting.sendInfo')} />
+          </span>
         </div>
       </div>
 
@@ -453,12 +465,15 @@ function Row({
         <span className="aw-client">{row.clientName}</span>
         {row.callsRequired && (
           <div>
-            <StatusChip
-              size="sm"
-              kind="pending"
-              label={t('awaiting.callsBackOn')}
-              title={t('awaiting.callsBackOnTitle')}
-            />
+            <span className="ez-titled">
+              <StatusChip
+                size="sm"
+                kind="pending"
+                label={t('awaiting.callsBackOn')}
+                title={t('awaiting.callsBackOnTitle')}
+              />
+              <InfoButton title={t('awaiting.callsBackOn')} text={t('awaiting.callsBackOnTitle')} />
+            </span>
           </div>
         )}
       </Td>

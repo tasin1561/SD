@@ -36,7 +36,7 @@ describe('AwaitingConfirmationIndex', () => {
       identity: makeStaff(['CALL_AGENT'], ['orders.view']),
     });
     expect(container.querySelector('.aw-page')).toBeNull();
-    expect(screen.queryByRole('button', { name: /send for confirmation call/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^send for confirmation call$/i })).toBeNull();
   });
 
   it('says honestly when no client has calls off', async () => {
@@ -114,7 +114,7 @@ describe('AwaitingConfirmationIndex', () => {
     await screen.findByText('SD-1');
     await user.click(screen.getByLabelText('Select SD-1'));
     await user.click(screen.getByLabelText('Select SD-2'));
-    await user.click(screen.getByRole('button', { name: /send for confirmation call/i }));
+    await user.click(screen.getByRole('button', { name: /^send for confirmation call$/i }));
 
     await waitFor(() => {
       const post = fetchImpl.mock.calls.find((c) => /confirmation-calls/.test(String(c[0])));
@@ -160,7 +160,7 @@ describe('AwaitingConfirmationIndex', () => {
     renderWithProviders(<AwaitingConfirmationIndex />, { identity: WITH, fetchImpl });
     await screen.findByText('SD-1');
     await user.click(screen.getByLabelText('Select SD-1'));
-    await user.click(screen.getByRole('button', { name: /send for confirmation call/i }));
+    await user.click(screen.getByRole('button', { name: /^send for confirmation call$/i }));
     const region = await screen.findByText(/Nothing was sent/);
     expect(region).toBeInTheDocument();
     expect(
@@ -199,7 +199,7 @@ describe('AwaitingConfirmationIndex', () => {
     await screen.findByText('SD-1');
     await user.click(screen.getByLabelText('Select SD-1'));
     await user.click(screen.getByLabelText('Select SD-2'));
-    await user.click(screen.getByRole('button', { name: /confirm now, no call/i }));
+    await user.click(screen.getByRole('button', { name: /^confirm now, no call$/i }));
 
     // Nothing has fired yet: the operator has to agree to skip the call.
     expect(fetchImpl.mock.calls.some((c) => /confirm-without-call/.test(String(c[0])))).toBe(false);

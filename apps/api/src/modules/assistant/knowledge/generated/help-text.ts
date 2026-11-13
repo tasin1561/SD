@@ -255,6 +255,8 @@ export const PORTAL_TEXT_ADMIN: ReadonlyArray<TextRow> = [
   ["ezCall.guideTechnical","Pick this when the call dropped or the phone system failed.\nThe order goes straight back into the queue. This does not use up a try."],
   ["ezCall.guideLanguage","Pick this when you and the customer could not understand each other.\nThe order goes back into the queue for another agent. This does not use up a try."],
   ["ezCall.guideSpoke","Pick this after you have phoned the customer. Write what they said in the box below.\nThe order itself does not change."],
+  ["ezQueue.statusInfo","Open: every call still to be made, waiting or with an agent.\nWaiting: nobody has picked it up yet.\nWith an agent: an agent is holding it now.\nFinished: the call was made and an outcome was recorded.\nTimed out: an agent held it too long without calling, so it went back to waiting.\nAll: everything, finished ones included."],
+  ["ezAwaiting.sendInfo","Puts the chosen orders into the call queue.\nAn agent phones each customer, and the order is confirmed only if the customer says yes."],
   ["ezReattempt.approveInfo","The order goes back into the call queue and an agent phones the customer again.\n\nYou choose how many extra calls to allow.\n\nThe customer already said no once, so read the client’s reason first."],
   ["callCenterCustomerRiskStrip.returnRate","{pct} of this customer's parcels came back"],
   ["warehouseRtoRtoItemRow.mismatchMissingRestock","A missing unit cannot go back on the shelf — you probably mean Write off."],
