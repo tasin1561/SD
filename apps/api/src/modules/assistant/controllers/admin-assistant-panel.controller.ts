@@ -96,9 +96,9 @@ export class AdminAssistantPanelController {
   open(
     @CurrentStaff() staff: AuthenticatedStaff,
     @Param('id', uuid()) id: string,
-    @Query('reason') reason?: string,
+    @Query('reason') reason?: unknown,
   ) {
-    return this.panel.open(staff.id, id, reason?.slice(0, 300));
+    return this.panel.open(staff.id, id, auditReason(reason));
   }
 
   @Post('conversations/:id/messages/:messageId/reveal')
@@ -109,9 +109,9 @@ export class AdminAssistantPanelController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @Param('id', uuid()) id: string,
     @Param('messageId', uuid()) messageId: string,
-    @Query('reason') reason?: string,
+    @Query('reason') reason?: unknown,
   ) {
-    return this.panel.reveal(staff.id, id, messageId, reason?.slice(0, 300));
+    return this.panel.reveal(staff.id, id, messageId, auditReason(reason));
   }
 
   @Get('conversations/:id/attachments/:attachmentId/download')
@@ -124,4 +124,14 @@ export class AdminAssistantPanelController {
   ) {
     return this.panel.downloadAttachment(staff.id, id, attachmentId);
   }
+}
+
+/**
+ * The optional "why" written into the audit row. A repeated query parameter
+ * (`?reason=a&reason=b`) arrives as an ARRAY, not a string (CodeQL
+ * js/type-confusion-through-parameter-tampering): only a plain string is
+ * kept, trimmed to 300 characters; anything else is dropped.
+ */
+export function auditReason(raw: unknown): string | undefined {
+  return typeof raw === 'string' ? raw.slice(0, 300) : undefined;
 }
