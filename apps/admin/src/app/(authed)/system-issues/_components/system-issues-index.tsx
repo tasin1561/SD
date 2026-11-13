@@ -164,7 +164,7 @@ export function SystemIssuesIndex(): ReactElement {
   }
 
   return (
-    <div className="af-page">
+    <div className="af-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: t('systemIssuesSystemIssuesIndex.operations') },

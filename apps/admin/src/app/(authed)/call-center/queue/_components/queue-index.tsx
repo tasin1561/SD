@@ -96,7 +96,7 @@ export function QueueIndex(): ReactElement {
   }
 
   return (
-    <div className="oo-page">
+    <div className="oo-page ez-touch">
       <PageHeader
         title={
           <span className="ez-titled">

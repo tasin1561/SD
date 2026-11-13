@@ -59,7 +59,7 @@ export function AgentsIndex(): ReactElement {
   const holding = items.reduce((n, a) => n + a.activeAssigned, 0);
 
   return (
-    <div className="oo-page">
+    <div className="oo-page ez-touch">
       <PageHeader
         title={
           <span className="ez-titled">

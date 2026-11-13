@@ -408,3 +408,45 @@ button.ez-guide__pick:hover {
     padding: 0 var(--sp-4);
   }
 }
+
+/* ── A page worked from a phone ───────────────────────────────────────────
+   Put `ez-touch` on a page's root. On a touch screen every button, link
+   styled as a button, dropdown and text field inside it is finger-sized
+   (44px), and a long value — an email, a company name — wraps inside its
+   card instead of pushing the page sideways. The selectors are qualified
+   with the tag because the global coarse-pointer rule in legacy.css
+   (`button:not(.skydrop-hit)`) outranks a bare class. */
+@media (max-width: 767px) {
+  .ez-touch td,
+  .ez-touch dd {
+    overflow-wrap: anywhere;
+  }
+}
+@media (pointer: coarse) {
+  .ez-touch button.sk-btn,
+  .ez-touch a.sk-btn,
+  .ez-touch button.sk-filter__reset,
+  .ez-touch select.sk-select__native,
+  .ez-touch input.sk-field__input {
+    min-height: 44px;
+  }
+  .ez-touch a.sk-ident {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  /* The tick box keeps its drawn size; its touch area grows around it. */
+  .ez-touch input.sk-check__input {
+    position: relative;
+  }
+  .ez-touch input.sk-check__input::after {
+    content: '';
+    position: absolute;
+    inset: -12px;
+  }
+  /* Stays a 24px circle (the global rule would stretch it to an oval);
+     its ::after already gives it a 44px touch area. */
+  button.ez-info.ez-info {
+    min-height: 24px;
+  }
+}

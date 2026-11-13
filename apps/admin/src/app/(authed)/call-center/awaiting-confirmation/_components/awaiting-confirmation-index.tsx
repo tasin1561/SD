@@ -176,7 +176,7 @@ function Page(): ReactElement {
         : t('awaiting.sentOf', { sent, total: results.length });
 
   return (
-    <div className="oo-page aw-page">
+    <div className="oo-page aw-page ez-touch">
       <PageHeader
         breadcrumbs={[{ label: t('awaiting.crumbOps') }, { label: t('awaiting.title') }]}
         Link={Link}

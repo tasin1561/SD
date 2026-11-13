@@ -124,7 +124,7 @@ export function HandoverBench(): ReactElement {
   }
 
   return (
-    <div className="wh-page">
+    <div className="wh-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: t('warehouseHandoverHandoverBench.warehouse'), href: '/warehouse' },
