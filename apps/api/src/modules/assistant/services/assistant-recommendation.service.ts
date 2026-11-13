@@ -154,10 +154,24 @@ export class AssistantRecommendationService {
   // ── drafting ───────────────────────────────────────────────────────
 
   /**
-   * Draft recommendations from the monitor's recent themes. Only a person
-   * asks for this (the button), through the queue. Topics that already have a
-   * recommendation are not drafted again.
+   * Draft recommendations from the monitor's recent themes — on the button,
+   * and hourly through `autoDraftFromThemes` (owner chained it 2026-11-14).
+   * Topics that already have a recommendation are not drafted again.
    */
+  /**
+   * The hourly chained run (owner, 2026-11-14): the same drafting as the
+   * button, but only while the monitor is switched on — with the monitor off
+   * there are no new themes to draft from and nothing should spend.
+   */
+  async autoDraftFromThemes(): Promise<{
+    drafted: number;
+    refused: number;
+    skippedBudget: number;
+  } | null> {
+    if (!(await this.budget.monitorEnabled())) return null;
+    return this.draftFromThemes();
+  }
+
   async draftFromThemes(): Promise<{ drafted: number; refused: number; skippedBudget: number }> {
     const out = { drafted: 0, refused: 0, skippedBudget: 0 };
     if (!this.gateway.isConfigured()) return out;
