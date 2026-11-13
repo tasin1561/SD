@@ -1,5 +1,6 @@
 'use client';
 
+import { pageDateTag } from '@/components/easy/when';
 import { useState, type ReactElement } from 'react';
 import { CheckCircle2, PauseCircle, RefreshCw } from 'lucide-react';
 import { Money } from '@skydrop/ui/components';
@@ -104,7 +105,7 @@ function egressLine(
 }
 
 function fmtWhen(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
+  return new Date(iso).toLocaleString(pageDateTag(), {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone: 'Asia/Kolkata',

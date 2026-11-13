@@ -433,6 +433,7 @@ button.ez-guide__pick:hover {
   .ez-touch button.sk-filter__reset,
   .ez-touch button.oo-search-btn,
   .ez-touch button.sk-tabs__tab,
+  .ez-touch button.tr-account,
   .ez-touch button.sk-drop__btn,
   .ez-touch button.sk-th__sort,
   .ez-touch button.af-disclose,
@@ -447,6 +448,8 @@ button.ez-guide__pick:hover {
   }
   .ez-touch a.sk-ident,
   .ez-touch td a.mk-name,
+  .ez-touch td a.mk-inline-link,
+  .ez-touch td a.ac-link,
   .ez-touch td a.mo-link,
   .ez-touch td button.mk-inline-link,
   .ez-touch td a.oo-link,

@@ -1,5 +1,6 @@
 'use client';
 
+import { pageDateTag } from '@/components/easy/when';
 import { Code } from '@/components/easy/code-label';
 import Link from 'next/link';
 import { Fragment, useState, type ReactElement, type ReactNode } from 'react';
@@ -176,7 +177,7 @@ function statusWord(t: Translate<MessageKey>, s: PnlMonthStatus): string {
 
 /** An IST date and time, whatever zone the browser is in. */
 function istDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
+  return new Date(iso).toLocaleString(pageDateTag(), {
     timeZone: 'Asia/Kolkata',
     dateStyle: 'medium',
     timeStyle: 'short',

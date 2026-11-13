@@ -1,5 +1,6 @@
 'use client';
 
+import { pageDateTag } from '@/components/easy/when';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { AlertTriangle, Archive, RotateCcw, ShieldAlert } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
@@ -141,7 +142,7 @@ export function BinCollapseIndex(): ReactElement {
 // ── the backups ───────────────────────────────────────────────────────
 
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+  return new Date(iso).toLocaleString(pageDateTag(), { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 /** Whole days from now until `iso`, floored; negative once it has passed. */

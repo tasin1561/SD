@@ -1,5 +1,7 @@
 'use client';
 
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 import { useCodeLabel } from '@/components/easy/code-label';
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
@@ -62,13 +64,15 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
     );
   if (detail.isError)
     return (
-      <ErrorState
-        message={serverVerdict(
-          detail.error,
-          t('warehouseManifestsManifestDetailView.failedToLoad'),
-        )}
-        retry={() => void detail.refetch()}
-      />
+      <div className="ez-touch ez-wrap">
+        <ErrorState
+          message={serverVerdict(
+            detail.error,
+            t('warehouseManifestsManifestDetailView.failedToLoad'),
+          )}
+          retry={() => void detail.refetch()}
+        />
+      </div>
     );
   if (!detail.data)
     return (
@@ -249,7 +253,7 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
                     )}
                   </Td>
                   <Td className="stk-muted sk-figure stk-nowrap">
-                    {s.packCompletedAt ? new Date(s.packCompletedAt).toLocaleString() : '—'}
+                    {s.packCompletedAt ? <When iso={s.packCompletedAt} time /> : '—'}
                   </Td>
                 </Tr>
               ))}

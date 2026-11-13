@@ -342,7 +342,7 @@ function UnsettledTable({
                 </Link>
               </Td>
               <Td className="mk-when sk-figure">
-                {r.deliveredAt === null ? '—' : new Date(r.deliveredAt).toLocaleDateString()}
+                {r.deliveredAt === null ? '—' : <When iso={r.deliveredAt} />}
               </Td>
               <Td align="right">
                 <Num value={r.ageDays} suffix="d" />

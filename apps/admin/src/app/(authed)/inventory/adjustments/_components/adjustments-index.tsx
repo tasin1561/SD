@@ -1,5 +1,6 @@
 'use client';
 
+import { When } from '@/components/easy/when';
 import { useCodeLabel } from '@/components/easy/code-label';
 import { useState, type ReactElement } from 'react';
 import { Ident, Money, Num } from '@skydrop/ui/components';
@@ -190,9 +191,7 @@ export function AdjustmentsIndex({
               <TBody>
                 {items.map((a) => (
                   <Tr key={a.id}>
-                    <Td className="sk-figure stk-nowrap">
-                      {new Date(a.initiatedAt).toLocaleDateString('en-IN')}
-                    </Td>
+                    <Td className="sk-figure stk-nowrap">{<When iso={a.initiatedAt} />}</Td>
                     <Td>{a.type}</Td>
                     <Td>{a.reasonCode ?? '—'}</Td>
                     <Td align="right" className="sk-figure">

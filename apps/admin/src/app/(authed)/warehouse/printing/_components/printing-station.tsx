@@ -1,7 +1,7 @@
 'use client';
 
 import { useCodeLabel } from '@/components/easy/code-label';
-import { When } from '@/components/easy/when';
+import { When, pageDateTag } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import Link from 'next/link';
@@ -1355,7 +1355,7 @@ function StickerHistory(): ReactElement {
 
 function StickerHistoryRow({ p }: { p: SkuLabelPrint }): ReactElement {
   const t = useT();
-  const when = new Date(p.at).toLocaleString('en-IN', {
+  const when = new Date(p.at).toLocaleString(pageDateTag(), {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',

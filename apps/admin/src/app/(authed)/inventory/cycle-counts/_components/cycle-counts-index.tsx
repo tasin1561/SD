@@ -1,5 +1,6 @@
 'use client';
 
+import { When } from '@/components/easy/when';
 import { Code, useCodeLabel } from '@/components/easy/code-label';
 import { useState, type ReactElement } from 'react';
 import { Ident, Money, Num } from '@skydrop/ui/components';
@@ -168,9 +169,7 @@ export function CycleCountsIndex(): ReactElement {
               <TBody>
                 {items.map((c) => (
                   <Tr key={c.id}>
-                    <Td className="sk-figure stk-nowrap">
-                      {new Date(c.countDate).toLocaleDateString('en-IN')}
-                    </Td>
+                    <Td className="sk-figure stk-nowrap">{<When iso={c.countDate} />}</Td>
                     <Td>
                       <Code value={c.countType} />
                     </Td>
@@ -378,8 +377,7 @@ function CountDetail({
           <span className="adj-sub">
             <StatusChip size="sm" kind={countKind(count.status)} label={pretty(count.status)} />
             <span className="stk-faint">
-              <Code value={count.countType} /> ·{' '}
-              {new Date(count.countDate).toLocaleDateString('en-IN')}
+              <Code value={count.countType} /> · {<When iso={count.countDate} />}
             </span>
           </span>
         )

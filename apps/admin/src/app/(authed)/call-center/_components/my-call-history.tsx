@@ -1,5 +1,6 @@
 'use client';
 
+import { When } from '@/components/easy/when';
 import { Code } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
@@ -100,7 +101,7 @@ export function MyCallHistory(): ReactElement {
                   ) : (
                     (data?.items ?? []).map((r) => (
                       <Tr key={r.attemptId}>
-                        <Td className="oo-nowrap">{new Date(r.startedAt).toLocaleString()}</Td>
+                        <Td className="oo-nowrap">{<When iso={r.startedAt} time />}</Td>
                         <Td>
                           <Code value={r.outcome} />
                         </Td>

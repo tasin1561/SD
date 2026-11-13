@@ -1,5 +1,6 @@
 'use client';
 
+import { pageDateTag } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
@@ -21,7 +22,9 @@ import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/client';
 
 function when(iso: string | null): string {
-  return iso === null ? '—' : new Date(iso).toISOString().slice(0, 16).replace('T', ' ');
+  return iso === null
+    ? '—'
+    : new Date(iso).toLocaleString(pageDateTag(), { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 /**

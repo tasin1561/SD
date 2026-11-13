@@ -1,5 +1,6 @@
 'use client';
 
+import { pageDateTag } from '@/components/easy/when';
 import { Code as CodeText } from '@/components/easy/code-label';
 import Link from 'next/link';
 import { useMemo, useState, type ReactElement } from 'react';
@@ -78,7 +79,7 @@ import type { MessageKey } from '@/i18n/catalog';
 const dt = (v: string | null): string =>
   v === null
     ? '—'
-    : new Date(v).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+    : new Date(v).toLocaleString(pageDateTag(), { dateStyle: 'medium', timeStyle: 'short' });
 
 export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement {
   const t = useT();
