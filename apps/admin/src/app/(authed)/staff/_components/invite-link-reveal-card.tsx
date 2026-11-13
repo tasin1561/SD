@@ -5,7 +5,8 @@ import { Link2 } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
 import type { CreatedStaffInvitation } from '@skydrop/api-client';
 import { AcCallout, AcRevealValue } from '../../settings/_components/ac-parts';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
 
 /**
  * One-shot invitation-link reveal. The plaintext token is only
@@ -21,6 +22,7 @@ export function InviteLinkRevealCard({
   readonly onDismiss: () => void;
 }): ReactElement {
   const t = useT();
+  const locale = useLocale();
   return (
     <section className="ac-card" data-tone="warn" aria-live="polite">
       <div className="ac-card__head">
@@ -43,7 +45,7 @@ export function InviteLinkRevealCard({
       </div>
       <AcCallout tone="warn" icon={<Link2 size={15} />}>
         {t('staffInviteLinkRevealCard.thisIsTheOnlyTime', {
-          value: new Date(invitation.expiresAt).toLocaleString(),
+          value: formatDateTime(invitation.expiresAt, locale),
         })}
       </AcCallout>
       <AcRevealValue

@@ -11,7 +11,8 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { AcCard } from '../../settings/_components/ac-parts';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDate } from '@/i18n/format';
 
 /**
  * Inline panel listing pending invitations on the sellers page. Most
@@ -20,6 +21,7 @@ import { useT } from '@/i18n/client';
  */
 export function InvitationsPanel(): ReactElement {
   const t = useT();
+  const locale = useLocale();
   const [expanded, setExpanded] = useState(false);
   const list = useInvitationsList();
   const canInvite = usePermission('sellers.invite');
@@ -83,7 +85,7 @@ export function InvitationsPanel(): ReactElement {
                       />
                       <span className="sk-figure">
                         {t('sellersInvitationsPanel.expires', {
-                          value: new Date(inv.expiresAt).toISOString().slice(0, 10),
+                          value: formatDate(inv.expiresAt, locale),
                         })}
                       </span>
                     </div>
