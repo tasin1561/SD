@@ -326,7 +326,7 @@ export default function AiRecommendationsDevPage(): ReactElement | null {
   }, []);
   if (!ready) return null;
   return (
-    <LocaleProvider locale={locale}>
+    <LocaleProvider initialLocale={locale}>
       <AuthProvider<StaffMe> identityKind="staff" initialIdentity={ME}>
         <QueryProvider>
           <ToastProvider>
