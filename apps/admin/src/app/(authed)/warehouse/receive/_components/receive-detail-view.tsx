@@ -1,5 +1,6 @@
 'use client';
 
+import '@/components/easy/easy.css';
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { Check, ClipboardCheck, PackageX } from 'lucide-react';
@@ -101,7 +102,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
 
   if (detail.isLoading)
     return (
-      <div className="wh-page">
+      <div className="wh-page ez-touch">
         <section className="wh-card">
           <SkeletonRows rows={6} cols={3} label={t('warehouseReceiveReceiveDetailView.loading')} />
         </section>
@@ -325,7 +326,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   const recordedCount = r.lines.filter((l) => l.countedAt != null).length;
 
   return (
-    <div className="wh-page">
+    <div className="wh-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: t('warehouseReceiveReceiveDetailView.warehouse'), href: '/warehouse' },

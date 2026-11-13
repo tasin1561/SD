@@ -1,5 +1,6 @@
 'use client';
 
+import '@/components/easy/easy.css';
 import Link from 'next/link';
 import { useEffect, useState, type KeyboardEvent, type ReactElement } from 'react';
 import { Check, Download, FileCheck2, PackageMinus, Printer, Search, Tags, X } from 'lucide-react';
@@ -121,7 +122,7 @@ export function PrintingStation(): ReactElement {
   const [tab, setTab] = useState<Tab>('labels');
 
   return (
-    <div className="wh-page">
+    <div className="wh-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: t('warehousePrintingPrintingStation.warehouse'), href: '/warehouse' },

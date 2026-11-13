@@ -1,3 +1,4 @@
+import '@/components/easy/easy.css';
 import type { ReactElement } from 'react';
 import { PageHeader } from '@skydrop/ui/app/page-header';
 import { ReceiveIndex } from './_components/receive-index';
@@ -7,7 +8,7 @@ import { getT } from '@/i18n/server';
 export default async function ReceivePage(): Promise<ReactElement> {
   const { t } = await getT();
   return (
-    <div className="wh-page">
+    <div className="wh-page ez-touch">
       <PageHeader
         title={t('warehouseReceivePage.receiveStation')}
         subtitle={t('warehouseReceivePage.whereCountingHappensStartReceiving')}
