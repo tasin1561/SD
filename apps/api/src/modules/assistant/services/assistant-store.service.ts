@@ -41,7 +41,6 @@ export interface ConversationRow {
 export function ownedBy(scope: CallerScope): Prisma.AssistantConversationWhereInput {
   return {
     audience: scope.audience,
-    ownerUserId: scope.userId,
     impersonatedByStaffId: scope.impersonatingStaffId,
     deletedAt: null,
   };
