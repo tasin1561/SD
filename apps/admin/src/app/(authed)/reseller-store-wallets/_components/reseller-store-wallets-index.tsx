@@ -1,5 +1,6 @@
 'use client';
 
+import { pageDateTag } from '@/components/easy/when';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
@@ -48,7 +49,7 @@ import '@/components/easy/easy.css';
 function when(iso: string | null): string {
   return iso === null
     ? '—'
-    : new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+    : new Date(iso).toLocaleString(pageDateTag(), { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 const TOPUP_STATUSES: readonly TopupRequestStatus[] = [

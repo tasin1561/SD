@@ -1,5 +1,6 @@
 'use client';
 
+import { pageDateTag } from '@/components/easy/when';
 import { useState, type ReactElement } from 'react';
 import { useStaffIdentity } from '@skydrop/auth/client';
 import { useToast } from '@skydrop/ui/components';
@@ -31,7 +32,7 @@ const STATE_LABEL = (t: Translate<MessageKey>): Record<LabelReprintState, string
 });
 
 function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
+  return new Date(iso).toLocaleString(pageDateTag(), {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',

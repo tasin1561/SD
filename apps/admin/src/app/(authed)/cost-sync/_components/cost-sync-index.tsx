@@ -1,5 +1,6 @@
 'use client';
 
+import { pageDateTag } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
@@ -55,7 +56,7 @@ import type { MessageKey } from '@/i18n/catalog';
  * nothing.
  */
 function fmtWhen(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
+  return new Date(iso).toLocaleString(pageDateTag(), {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone: 'Asia/Kolkata',
@@ -64,7 +65,7 @@ function fmtWhen(iso: string): string {
 
 function fmtDay(iso: string | null): string {
   if (iso === null) return '—';
-  return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+  return new Date(iso).toLocaleDateString(pageDateTag(), { day: '2-digit', month: 'short' });
 }
 
 function runTone(run: WalletSyncRun): 'delivered' | 'pending' | 'failed' {

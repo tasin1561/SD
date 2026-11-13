@@ -1,5 +1,6 @@
 'use client';
 
+import { pageDateTag } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import Link from 'next/link';
@@ -38,7 +39,7 @@ import { richMessage } from '@/i18n/client';
 function when(iso: string | null): string {
   return iso === null
     ? '—'
-    : new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+    : new Date(iso).toLocaleString(pageDateTag(), { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 const EVENT_WORDS = (tr: Translate<MessageKey>): Record<string, string> => ({

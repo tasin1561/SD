@@ -1,5 +1,6 @@
 'use client';
 
+import { pageDateTag } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import Link from 'next/link';
@@ -21,7 +22,7 @@ import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/client';
 
 function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+  return new Date(iso).toLocaleString(pageDateTag(), { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 /**
