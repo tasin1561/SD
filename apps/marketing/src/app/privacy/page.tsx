@@ -122,6 +122,10 @@ export default function PrivacyPage(): ReactElement {
               returns and disputes, and meet tax and accounting obligations, then deleted or
               anonymised. Backups expire on a fixed schedule and are kept no longer than 24 months.
             </p>
+            <p>
+              Conversations with the AI assistant inside our apps may be reviewed by authorised
+              Skydrop staff to improve it, and are kept for 180 days, then anonymised.
+            </p>
           </Section>
 
           <Section title="How we protect it">

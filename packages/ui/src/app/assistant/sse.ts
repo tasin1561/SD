@@ -43,7 +43,7 @@ export type AssistantEvent =
       readonly description: string;
       readonly orderNumber: string | null;
     }
-  | { readonly type: 'done'; readonly conversationId: string };
+  | { readonly type: 'done'; readonly conversationId: string; readonly messageId?: string };
 
 const NOTICE_CODES: ReadonlySet<string> = new Set([
   'DISABLED',
@@ -83,7 +83,11 @@ export function toAssistantEvent(value: unknown): AssistantEvent | null {
         : null;
     case 'done':
       return typeof value['conversationId'] === 'string'
-        ? { type: 'done', conversationId: value['conversationId'] }
+        ? {
+            type: 'done',
+            conversationId: value['conversationId'],
+            ...(typeof value['messageId'] === 'string' ? { messageId: value['messageId'] } : {}),
+          }
         : null;
     case 'notice': {
       const code = value['code'];

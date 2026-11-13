@@ -124,4 +124,4 @@ export type AssistantStreamEvent =
       readonly description: string;
       readonly orderNumber: string | null;
     }
-  | { readonly type: 'done'; readonly conversationId: string };
+  | { readonly type: 'done'; readonly conversationId: string; readonly messageId?: string };

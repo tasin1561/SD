@@ -1003,3 +1003,104 @@
     transform: none;
   }
 }
+
+/* ── Thumbs under an answer + the review line ─────────────────────── */
+.sk-ai-fb {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  align-self: flex-start;
+  min-width: 0;
+  max-width: 100%;
+}
+.sk-ai-fb__row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.sk-ai-fb__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -8px 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-faint);
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+.sk-ai-fb__btn:hover {
+  color: var(--blue-text);
+}
+.sk-ai-fb__btn[data-on='1'] {
+  color: var(--blue-text);
+  background: var(--blue-tint);
+}
+.sk-ai-fb__btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.sk-ai-fb__btn:focus-visible,
+.sk-ai-fb__skip:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.sk-ai-fb__note {
+  margin-left: var(--sp-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.sk-ai-fb__ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.sk-ai-fb__text {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-input);
+  color: var(--fg-body);
+  font: inherit;
+  font-size: 16px; /* 16px stops iOS zooming the page on focus */
+}
+.sk-ai-fb__acts {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+}
+.sk-ai-fb__count {
+  margin-right: auto;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.sk-ai-fb__skip {
+  min-height: 44px;
+  padding: 0 var(--sp-2);
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+/* One muted line in the footer. Not a banner: no icon, no dismiss, nothing to click. */
+.sk-ai-fineprint {
+  margin: 0;
+  padding: 0 var(--sp-3) calc(var(--sp-2) + env(safe-area-inset-bottom));
+  background: var(--surface-2);
+  color: var(--fg-faint);
+  font-size: var(--fs-2xs);
+  line-height: 1.3;
+  text-align: center;
+}

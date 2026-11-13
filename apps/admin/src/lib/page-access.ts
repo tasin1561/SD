@@ -172,6 +172,9 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   ['/impersonation', 'support.impersonate.review'],
   ['/system/capacity', 'system.capacity.view'],
   ['/settings', 'system.settings.view'],
+  // The AI control panel (billing, dashboard, controls). Reading conversations is a
+  // second key checked by the API on every call and by the page itself.
+  ['/ai', 'assistant.admin'],
 ];
 
 /** The permission a path needs, or null when it needs none. */

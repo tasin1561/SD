@@ -24,11 +24,16 @@ import type { AuthenticatedStaff } from '../../../common/types/request';
 import { MAX_ATTACHMENT_BYTES } from '../assistant-attachment-rebuild';
 import { streamAnswer } from '../assistant-sse';
 import { scopeFromStaff } from '../assistant-scope';
-import { CreateConversationDto, SendAssistantMessageDto } from '../dto/assistant.dto';
+import {
+  AssistantFeedbackDto,
+  CreateConversationDto,
+  SendAssistantMessageDto,
+} from '../dto/assistant.dto';
 import {
   AssistantAttachmentService,
   type UploadedFile as UploadedAttachment,
 } from '../services/assistant-attachment.service';
+import { AssistantFeedbackService } from '../services/assistant-feedback.service';
 import { AssistantChatService } from '../services/assistant-chat.service';
 import { AssistantConversationService } from '../services/assistant-conversation.service';
 
@@ -53,6 +58,7 @@ export class AdminAssistantController {
     private readonly conversations: AssistantConversationService,
     private readonly chat: AssistantChatService,
     private readonly attachments: AssistantAttachmentService,
+    private readonly feedback: AssistantFeedbackService,
   ) {}
 
   @Post('conversations')
@@ -126,5 +132,19 @@ export class AdminAssistantController {
     @Param('attachmentId', uuid()) attachmentId: string,
   ) {
     return this.attachments.downloadUrl(scopeFromStaff(staff), id, attachmentId);
+  }
+
+  @Post('conversations/:id/feedback')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 60, ttl: 60 * 1000 } })
+  @ApiOperation({
+    summary: 'Thumbs up / down on one of my answers (owner only; never sent to the model)',
+  })
+  rate(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('id', uuid()) id: string,
+    @Body() body: AssistantFeedbackDto,
+  ) {
+    return this.feedback.rate(scopeFromStaff(staff), id, body.messageId, body.rating, body.comment);
   }
 }

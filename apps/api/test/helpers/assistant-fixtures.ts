@@ -172,14 +172,20 @@ export class MemoryStore {
     content: unknown,
     isQuestion = false,
   ) {
+    const id = `m${String(++this.seq).padStart(6, '0')}`;
     this.rows.push({
-      id: `m${String(++this.seq).padStart(6, '0')}`,
+      id,
       conversationId,
       role,
       content,
       isQuestion,
       createdAt: new Date(),
     });
+    return id;
+  }
+  notices: Array<{ conversationId: string; code: string }> = [];
+  async recordNotice(conversationId: string, _audience: string, code: string) {
+    this.notices.push({ conversationId, code });
   }
   // ── attachments: the same ownership predicate the real store applies ──
   attachments: Array<

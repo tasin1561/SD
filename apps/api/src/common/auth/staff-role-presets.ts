@@ -104,6 +104,16 @@ const ADMIN_EXCLUDES_IMPERSONATION: readonly PermissionKey[] = [
   'support.impersonate.review',
 ];
 
+/**
+ * The AI assistant panel (2026-11-13, owner decision): billing, controls and
+ * above all the READING of other people's conversations belong to Super Admin
+ * alone until the owner hands them out by name.
+ */
+const ADMIN_EXCLUDES_ASSISTANT_PANEL: readonly PermissionKey[] = [
+  'assistant.admin',
+  'assistant.conversations.read',
+];
+
 /** A read key by NAME, which is the only honest test available. */
 function isViewKey(key: PermissionKey): boolean {
   return key.endsWith('.view');
@@ -120,6 +130,7 @@ const ADMIN_EXCLUDED = new Set<string>([
   ...ADMIN_EXCLUDES_ACCESS_AND_BANKING,
   ...ADMIN_EXCLUDES_INVARIANT_BYPASSES,
   ...ADMIN_EXCLUDES_IMPERSONATION,
+  ...ADMIN_EXCLUDES_ASSISTANT_PANEL,
 ]);
 
 export const STAFF_ROLE_PRESETS: readonly StaffRolePreset[] = [

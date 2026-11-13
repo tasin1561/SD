@@ -5,6 +5,10 @@ import { AssistantStoreService, type ConversationRow } from './assistant-store.s
 import { toProposalView, type ProposalView } from './assistant-ticket.service';
 
 export interface TranscriptLine {
+  /** The stored message id: what the thumbs under an answer name. */
+  readonly id: string;
+  /** The caller's own rating of this answer, if any. */
+  readonly rating?: 'up' | 'down';
   readonly role: 'user' | 'assistant';
   readonly text: string;
   readonly at: string;
@@ -68,11 +72,19 @@ export class AssistantConversationService {
     const rows = await this.store.messages(conversation.id);
     const messages: TranscriptLine[] = [];
     const sent = await this.store.sentAttachments(conversation.id);
+    const ratings = new Map(
+      (await this.store.feedbackFor(scope, conversation.id)).map((f) => [f.messageId, f.rating]),
+    );
     for (const r of rows) {
       const text = visibleText(r.content);
       const files = sent.filter((a) => a.messageId === r.id);
       if (text.trim() === '' && files.length === 0) continue;
+      const rated = ratings.get(r.id);
       messages.push({
+        id: r.id,
+        ...(rated !== undefined
+          ? { rating: rated === 'UP' ? ('up' as const) : ('down' as const) }
+          : {}),
         role: r.role === 'USER' ? 'user' : 'assistant',
         text,
         at: r.createdAt.toISOString(),

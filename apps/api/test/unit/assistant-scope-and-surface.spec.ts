@@ -188,9 +188,20 @@ describe('the assistant is READ-ONLY (phase A; phase D adds ONE ticket the perso
     expect(offenders).toEqual([]);
   });
 
-  it('only the store service touches prisma', () => {
+  it('only the store service touches prisma (plus the three control-panel services below)', () => {
+    // 2026-11-13, AI control panel: the STAFF-ONLY billing/explorer reads and the
+    // 180-day retention rewrite aggregate across every owner, which the
+    // owner-scoped store deliberately cannot. They are named here so a fourth
+    // file cannot join them unnoticed; `assistant-panel-surface.spec.ts` pins
+    // what they may do.
+    const PANEL = [
+      'assistant-billing.service.ts',
+      'assistant-panel.service.ts',
+      'assistant-retention.service.ts',
+    ];
     const offenders = sources(dir)
       .filter((f) => !f.endsWith('assistant-store.service.ts'))
+      .filter((f) => !PANEL.some((n) => f.endsWith(n)))
       .filter((f) => /PrismaService|prisma\.client/.test(readFileSync(f, 'utf8')))
       .map((f) => f.slice(dir.length));
     expect(offenders).toEqual([]);

@@ -199,9 +199,81 @@ export class AssistantStoreService {
     role: AssistantMessageRole,
     content: unknown,
     isQuestion = false,
-  ): Promise<void> {
-    await this.prisma.client.assistantMessage.create({
+  ): Promise<string> {
+    const row = await this.prisma.client.assistantMessage.create({
       data: { conversationId, role, content: asJson(content), isQuestion },
+      select: { id: true },
+    });
+    return row.id;
+  }
+
+  /** A fixed notice that was shown. A CODE only, never text. Best effort: never breaks an answer. */
+  async recordNotice(
+    conversationId: string,
+    audience: AssistantAudience,
+    code: string,
+  ): Promise<void> {
+    try {
+      await this.prisma.client.assistantNotice.create({
+        data: { conversationId, audience, code },
+      });
+    } catch {
+      // A missing statistic must not turn a notice into a 500.
+    }
+  }
+
+  // ── feedback (thumbs) ─────────────────────────────────────────────
+  // Owner-only: written and read back through the owner columns. Never part
+  // of what the model is sent.
+
+  /** The ASSISTANT message `messageId`, if it is in a conversation the caller owns. */
+  async findOwnedAnswer(
+    scope: CallerScope,
+    messageId: string,
+  ): Promise<{ id: string; conversationId: string } | null> {
+    return this.prisma.client.assistantMessage.findFirst({
+      where: { id: messageId, role: 'ASSISTANT', conversation: ownedBy(scope) },
+      select: { id: true, conversationId: true },
+    });
+  }
+
+  async upsertFeedback(
+    scope: CallerScope,
+    msg: { id: string; conversationId: string },
+    rating: 'UP' | 'DOWN',
+    comment: string | null,
+  ): Promise<void> {
+    await this.prisma.client.assistantFeedback.upsert({
+      where: { messageId_ownerUserId: { messageId: msg.id, ownerUserId: scope.userId } },
+      create: {
+        messageId: msg.id,
+        conversationId: msg.conversationId,
+        audience: scope.audience,
+        ownerUserId: scope.userId,
+        sellerId: scope.sellerId,
+        storeId: scope.storeId,
+        impersonatedByStaffId: scope.impersonatingStaffId,
+        rating,
+        comment,
+      },
+      update: { rating, comment },
+    });
+  }
+
+  async removeFeedback(scope: CallerScope, messageId: string): Promise<void> {
+    await this.prisma.client.assistantFeedback.deleteMany({
+      where: { messageId, ownerUserId: scope.userId, audience: scope.audience },
+    });
+  }
+
+  /** The caller's own ratings in a conversation, by message id. */
+  async feedbackFor(
+    scope: CallerScope,
+    conversationId: string,
+  ): Promise<Array<{ messageId: string; rating: 'UP' | 'DOWN' }>> {
+    return this.prisma.client.assistantFeedback.findMany({
+      where: { conversationId, ownerUserId: scope.userId, audience: scope.audience },
+      select: { messageId: true, rating: true },
     });
   }
 

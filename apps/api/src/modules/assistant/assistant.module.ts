@@ -9,6 +9,12 @@ import { SellerTrackingModule } from '../seller-tracking/seller-tracking.module'
 import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { SystemSettingsModule } from '../system-settings/system-settings.module';
 import { TicketModule } from '../ticket/ticket.module';
+import { AdminAssistantPanelController } from './controllers/admin-assistant-panel.controller';
+import { AssistantRetentionWorker } from './queue/assistant-retention.worker';
+import { AssistantBillingService } from './services/assistant-billing.service';
+import { AssistantFeedbackService } from './services/assistant-feedback.service';
+import { AssistantPanelService } from './services/assistant-panel.service';
+import { AssistantRetentionService } from './services/assistant-retention.service';
 import { AdminAssistantController } from './controllers/admin-assistant.controller';
 import { SellerAssistantController } from './controllers/seller-assistant.controller';
 import { StoreAssistantController } from './controllers/store-assistant.controller';
@@ -51,7 +57,12 @@ import { AssistantToolRegistry } from './services/assistant-tool-registry.servic
     TicketModule,
     CourierEscalationModule,
   ],
-  controllers: [AdminAssistantController, SellerAssistantController, StoreAssistantController],
+  controllers: [
+    AdminAssistantController,
+    AdminAssistantPanelController,
+    SellerAssistantController,
+    StoreAssistantController,
+  ],
   providers: [
     AssistantStoreService,
     AssistantAttachmentService,
@@ -62,6 +73,11 @@ import { AssistantToolRegistry } from './services/assistant-tool-registry.servic
     AssistantTicketService,
     AssistantChatService,
     AssistantConversationService,
+    AssistantFeedbackService,
+    AssistantBillingService,
+    AssistantPanelService,
+    AssistantRetentionService,
+    AssistantRetentionWorker,
     { provide: AssistantModelGateway, useClass: AnthropicModelGateway },
   ],
 })

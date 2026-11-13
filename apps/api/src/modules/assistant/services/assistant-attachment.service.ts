@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import type Anthropic from '@anthropic-ai/sdk';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
@@ -18,6 +19,7 @@ import {
   rebuildAttachment,
 } from '../assistant-attachment-rebuild';
 import type { CallerScope } from '../assistant.types';
+import { AssistantBudgetService } from './assistant-budget.service';
 import { AssistantStoreService, type AttachmentRow } from './assistant-store.service';
 
 /** Unsent files one conversation may hold: stops a loop of uploads that are never asked about. */
@@ -73,6 +75,9 @@ export class AssistantAttachmentService {
   constructor(
     private readonly store: AssistantStoreService,
     private readonly spaces: SpacesService,
+    // Optional so the unit rigs that build this service by hand keep working;
+    // the module always provides it.
+    @Optional() private readonly budget?: AssistantBudgetService,
   ) {}
 
   refusalCounts(): Record<string, number> {
@@ -103,6 +108,13 @@ export class AssistantAttachmentService {
     file: UploadedFile | undefined,
   ): Promise<AttachmentView> {
     await this.requireConversation(scope, conversationId);
+    // Control panel switch: off refuses NEW uploads; text questions keep working.
+    if (this.budget !== undefined && !(await this.budget.attachmentsEnabled())) {
+      throw new BadRequestException({
+        code: 'ATTACHMENTS_DISABLED',
+        message: 'Attaching files is switched off right now.',
+      });
+    }
     if (file === undefined || !Buffer.isBuffer(file.buffer)) {
       throw new BadRequestException({
         code: 'ATTACHMENT_MISSING',
@@ -242,6 +254,25 @@ export class AssistantAttachmentService {
       out.set(id, apiBlockFor(row.mediaType, bytes));
     }
     return out;
+  }
+
+  /**
+   * STAFF READING (control panel): a signed download for any attachment of a
+   * conversation. The CALLER (the panel service) has already checked
+   * `assistant.conversations.read` and writes the audit row; there is no
+   * ownership predicate here on purpose.
+   */
+  async downloadUrlForReview(
+    conversationId: string,
+    attachmentId: string,
+  ): Promise<{ url: string; expiresInSeconds: number; name: string }> {
+    const [row] = await this.store.attachmentsByIds(conversationId, [attachmentId]);
+    if (row === undefined || row.storageKey === '') throw notFound();
+    const url = await this.spaces.presignGetUrl(row.storageKey, DOWNLOAD_TTL_SECONDS, {
+      contentDisposition: dispositionFor(row.originalName),
+      contentType: row.mediaType,
+    });
+    return { url, expiresInSeconds: DOWNLOAD_TTL_SECONDS, name: row.originalName };
   }
 
   /** The caller's own attachment, as a short-lived signed URL that downloads (never renders). */

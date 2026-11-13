@@ -709,6 +709,21 @@ export const PERMISSIONS = [
     group: 'System',
   },
   {
+    key: 'assistant.admin',
+    label: 'Run the AI assistant panel',
+    description:
+      'The AI billing, dashboard and controls: what the assistant costs month by month and day by day, how it is used, and the switches and limits that govern it (including the kill switch). Super Admin only by default.',
+    group: 'System',
+  },
+  {
+    key: 'assistant.conversations.read',
+    label: 'Read AI assistant conversations',
+    description:
+      'Open what people asked the assistant and what it answered, including tool results and attached files. Every conversation opened is recorded in the audit log, and phone numbers stay masked until a reveal is clicked (which is also recorded). Super Admin only by default.',
+    group: 'System',
+    dangerous: true,
+  },
+  {
     key: 'staff.view',
     label: 'View staff',
     description: 'Who has an account and what they can do.',
