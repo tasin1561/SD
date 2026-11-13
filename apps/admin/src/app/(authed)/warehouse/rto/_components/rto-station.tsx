@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@skydrop/ui/components';
 import { Button } from '@skydrop/ui/app/button';
@@ -181,6 +181,10 @@ export function RtoStation(): ReactElement {
   const params = useSearchParams();
   const [awb, setAwb] = useState('');
   const [shipmentId, setShipmentId] = useState<string | null>(null);
+  // The AWB box takes the cursor when the Receive tab opens with no parcel
+  // loaded, so a scan gun types into it without a click first. Receiving
+  // itself still needs the button: Enter deliberately does nothing here.
+  const awbRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [camera, setCamera] = useState(false);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
@@ -198,6 +202,9 @@ export function RtoStation(): ReactElement {
   const tab: RtoTab = TAB_VALUES.includes(params.get('tab') as RtoTab)
     ? (params.get('tab') as RtoTab)
     : 'door';
+  useEffect(() => {
+    if (tab === 'receive' && shipmentId === null) awbRef.current?.focus();
+  }, [tab, shipmentId]);
   const go = useCallback(
     (next: RtoTab) => {
       const q = new URLSearchParams(params.toString());
@@ -364,6 +371,7 @@ export function RtoStation(): ReactElement {
           <h2 className="wh-title">{tr('warehouseRtoRtoStation.receive')}</h2>
           <div className="wh-fields wh-receive-awb">
             <TextField
+              ref={awbRef}
               label={tr('warehouseRtoRtoStation.awbNumber')}
               inputClassName="sk-ident"
               value={awb}

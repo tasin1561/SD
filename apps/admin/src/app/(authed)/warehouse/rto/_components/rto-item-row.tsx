@@ -273,7 +273,7 @@ export function RtoItemRow({
               {item.productName}
               {item.variantLabel ? <span className="wh-note"> · {item.variantLabel}</span> : null}
             </div>
-            <div className="wh-item__sub">
+            <div className="wh-item__sub rto-wrap">
               <span className="sk-ident">{item.skuCode}</span> ·{' '}
               <span className="sk-figure">
                 {tr('warehouseRtoRtoItemRow.qty', { quantity: item.quantity })}
@@ -293,7 +293,6 @@ export function RtoItemRow({
           <div className="wh-fields" data-cols="2">
             <Select
               label={tr('warehouseRtoRtoItemRow.condition')}
-              hint={tr('warehouseRtoRtoItemRow.whatYouFoundInThe')}
               value={condition}
               onChange={(e) => setCondition(e.target.value)}
               disabled={saving}
@@ -325,6 +324,9 @@ export function RtoItemRow({
           {selected === undefined ? null : <p className="wh-note">{selected.effect}</p>}
           <details className="wh-details">
             <summary>{tr('warehouseRtoRtoItemRow.whatEachChoiceDoes')}</summary>
+            {/* The Condition hint used to sit under the dropdown on every
+                line; it is here now, one press away. */}
+            <p>{tr('warehouseRtoRtoItemRow.whatYouFoundInThe')}</p>
             <p>{DISPOSITION_HINT(tr)}</p>
           </details>
           <TextField

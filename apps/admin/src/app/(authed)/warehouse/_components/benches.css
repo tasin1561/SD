@@ -1523,3 +1523,22 @@ p.wh-alert {
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
+
+/* A long product code wraps inside its card on a phone instead of pushing
+   the returns bench sideways. */
+.rto-wrap,
+.rto-wrap .sk-ident {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+/* The "what each choice does" opener is finger-sized on a touch screen. */
+@media (pointer: coarse) {
+  button.wh-awb-pick {
+    min-height: 44px;
+  }
+  .wh-details > summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
