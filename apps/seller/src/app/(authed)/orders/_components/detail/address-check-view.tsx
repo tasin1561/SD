@@ -70,9 +70,8 @@ const FIELD_WORD: Readonly<Record<string, UiMessageKey>> = {
 };
 
 /** Does the check have something to fix? Drives the card's warning edge and the summary line. */
-export function addressNeedsFix(result: AddressCheckResult | null | undefined): boolean {
-  return result !== null && result !== undefined && result.available && result.issues.length > 0;
-}
+/** The shared rule: highlighted only below a score of 60 (owner, 2026-11-13). */
+export { addressNeedsFix } from '@skydrop/ui/app/address-check';
 
 export function AddressCheckView({
   result,

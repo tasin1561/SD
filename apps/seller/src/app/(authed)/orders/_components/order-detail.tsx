@@ -392,22 +392,38 @@ function OrderBody({
     collectableMismatch: collectableMismatch(parcel),
   });
 
+  // "1 line · 1 unit · 500 g." — what the header's facts row used to say.
+  const lineCount = order.items.length;
+  const unitCount = order.items.reduce((n, i) => n + i.quantity, 0);
+  const contents = [
+    t(lineCount === 1 ? 'orderPage.lineOne' : 'orderPage.lineMany', { count: lineCount }),
+    t(unitCount === 1 ? 'orderPage.unitOne' : 'orderPage.unitMany', { count: unitCount }),
+    order.totalWeightGrams === null ? null : `${order.totalWeightGrams} g`,
+  ]
+    .filter((x): x is string => x !== null)
+    .join(' · ')
+    .concat('.');
   return (
     <>
       <div className="cod-summary" aria-label={t('orderPage.sum.label')}>
+        {/* One paragraph: where it is, what is next, the money, and what is
+            in it — the header no longer repeats any of these (owner,
+            2026-11-13: "the header is looking too messy"). */}
         <p>
           {summary.where !== null ? t(summary.where) : null}
           {summary.next !== null ? ` ${t(summary.next)}` : null}
+          {summary.collectInr !== null ? (
+            <>
+              {' '}
+              {richMessage(t('orderPage.sum.collect'), {
+                money: <Money amount={summary.collectInr} size="md" />,
+              })}
+            </>
+          ) : summary.prepaid ? (
+            ` ${t('orderPage.sum.prepaid')}`
+          ) : null}{' '}
+          <span className="cod-summary__contents">{contents}</span>
         </p>
-        {summary.collectInr !== null ? (
-          <p>
-            {richMessage(t('orderPage.sum.collect'), {
-              money: <Money amount={summary.collectInr} size="md" />,
-            })}
-          </p>
-        ) : summary.prepaid ? (
-          <p>{t('orderPage.sum.prepaid')}</p>
-        ) : null}
         {summary.addressFix && (
           <p className="cod-summary__warn">
             <AlertTriangle size={16} aria-hidden />
@@ -831,6 +847,7 @@ function ItemsCard({
               <Th className="ord-thumb-cell" aria-label={t('orderDetail.picture')} />
               <Th>{t('orderDetail.sku')}</Th>
               <Th>{t('orderDetail.product')}</Th>
+              <Th align="right">{t('orderPage.col.price')}</Th>
               <Th align="right">{t('orderDetail.qty')}</Th>
               <Th align="right">{t('orderDetail.unitWeight')}</Th>
             </Tr>
@@ -838,7 +855,7 @@ function ItemsCard({
           <TBody>
             {order.items.length === 0 && (
               // A header row over nothing says less than a sentence does.
-              <TableEmpty colSpan={5}>{t('orderDetail.noItemsRecordedOn')}</TableEmpty>
+              <TableEmpty colSpan={6}>{t('orderDetail.noItemsRecordedOn')}</TableEmpty>
             )}
             {order.items.map((item) => (
               <Tr key={item.id}>
@@ -856,6 +873,13 @@ function ItemsCard({
                     {item.productName}
                     {item.variantLabel && <span className="cod-faint"> · {item.variantLabel}</span>}
                   </span>
+                </Td>
+                <Td align="right">
+                  <ItemPrice
+                    price={item.unitPriceInr}
+                    declared={item.unitDeclaredValueInr}
+                    quantity={item.quantity}
+                  />
                 </Td>
                 <Td align="right">
                   <span className="sk-figure">{item.quantity}</span>
@@ -995,5 +1019,40 @@ function OrderInvoiceSection({
         </a>
       )}
     </div>
+  );
+}
+
+/**
+ * The item's price (owner, 2026-11-13: "show the product price too"): the
+ * unit price the order was placed with, and the line total when there is
+ * more than one. An older order placed without a price shows its declared
+ * value, labelled as such, rather than a blank.
+ */
+function ItemPrice({
+  price,
+  declared,
+  quantity,
+}: {
+  readonly price: string | null;
+  readonly declared: string | null;
+  readonly quantity: number;
+}): ReactElement {
+  const t = useT();
+  const unit = price ?? declared;
+  if (unit === null) return <Dash />;
+  const total = (Number(unit) * quantity).toFixed(2);
+  return (
+    <span className="cod-price">
+      <Money amount={unit} />
+      {price === null ? <span className="cod-faint">{t('orderPage.price.declared')}</span> : null}
+      {quantity > 1 ? (
+        <span className="cod-faint">
+          {richMessage(t('orderPage.price.lineTotal'), {
+            amount: <Money amount={total} />,
+            count: String(quantity),
+          })}
+        </span>
+      ) : null}
+    </span>
   );
 }

@@ -120,6 +120,26 @@ export interface AddressCheckResult {
   readonly providersUsed: readonly string[];
 }
 
+/**
+ * The ONE rule for "this address needs a fix" (owner, 2026-11-13: "in our
+ * whole system if the address validation score is less than 60 only then
+ * highlight"). Issues on a good score are still LISTED, never highlighted.
+ * Every console reads this; nobody keeps their own threshold.
+ */
+export const ADDRESS_FIX_BELOW_SCORE = 60;
+
+export function addressNeedsFix(
+  result: Pick<AddressCheckResult, 'available' | 'score'> | null | undefined,
+): boolean {
+  return (
+    result !== null &&
+    result !== undefined &&
+    result.available &&
+    result.score !== null &&
+    result.score < ADDRESS_FIX_BELOW_SCORE
+  );
+}
+
 export interface AddressCheckPanelProps {
   /** Null before the first check has been asked for. */
   readonly result: AddressCheckResult | null;

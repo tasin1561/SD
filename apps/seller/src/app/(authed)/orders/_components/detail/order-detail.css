@@ -106,9 +106,8 @@
   min-height: 56px;
   padding: 6px var(--sp-3);
   border: 1px solid var(--line);
-  border-radius: var(--r-md);
+  border-radius: var(--r-md) var(--r-md) 0 0;
   background: var(--surface);
-  box-shadow: var(--elev-1);
 }
 @media (min-width: 640px) {
   .cod-bar {
@@ -237,23 +236,33 @@
 .cod-meta {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--sp-2) var(--sp-4);
   min-width: 0;
-  padding-inline: var(--sp-1);
+  /* The bottom half of the header card: joined to the bar above across the
+     page grid's gap (owner, 2026-11-13: "the header is looking too messy"). */
+  margin-top: calc(-1 * var(--sp-3) - 1px);
+  padding: var(--sp-2) var(--sp-3) var(--sp-3) calc(var(--sp-3) + 44px + var(--sp-2));
+  border: 1px solid var(--line);
+  border-top-color: var(--line-faint, var(--line));
+  border-radius: 0 0 var(--r-md) var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--elev-1);
 }
-.cod-meta__info {
-  display: grid;
-  flex: 1 1 24rem;
-  gap: var(--sp-2);
-  min-width: 0;
-}
-.cod-meta__chips {
+.cod-meta__line {
   display: flex;
+  flex: 1 1 20rem;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-2);
+  align-items: baseline;
+  gap: 2px var(--sp-4);
   min-width: 0;
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.cod-bar__pay {
+  flex: none;
 }
 .cod-pill {
   display: inline-flex;
@@ -278,51 +287,6 @@
   font-size: 0.875rem;
   overflow-wrap: anywhere;
 }
-.cod-facts {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  color: var(--fg-muted);
-  font-size: 0.8125rem;
-  line-height: 1.5rem;
-}
-.cod-facts > li {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 4px;
-  min-width: 0;
-}
-/* The separator LEADS each fact and the list's first 1.25rem is clipped,
-   so a dot that starts a wrapped line is never seen and none trails a line
-   end (owner, 2026-11-12: stray "·" at line ends on phones). */
-.cod-facts {
-  margin-inline-start: -1.25rem;
-  clip-path: inset(0 0 0 1.25rem);
-}
-.cod-facts > li::before {
-  content: '·';
-  display: inline-block;
-  width: 1.25rem;
-  text-align: center;
-  color: var(--fg-muted);
-}
-.cod-fact--money {
-  color: var(--fg-strong);
-  font-size: 1.125rem;
-  font-weight: var(--fw-semibold);
-}
-.cod-fact--money .skydrop-tabular {
-  font-size: 1.125rem;
-}
-.cod-facts .skydrop-tabular,
-.cod-facts .cod-fact {
-  font-size: inherit;
-}
-
 .cod-actions {
   display: flex;
   flex-wrap: wrap;
@@ -342,7 +306,10 @@
   margin-inline-start: var(--sp-4);
 }
 @media (max-width: 639.98px) {
-  .cod-meta__info {
+  .cod-meta {
+    padding-inline-start: var(--sp-3);
+  }
+  .cod-meta__line {
     flex-basis: 100%;
   }
   .cod-actions {
@@ -1616,4 +1583,15 @@ button.cod-call__head:hover {
 .cod-page .cod-wrap {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+/* Item price: unit price, then (muted) "declared value" or the line total. */
+.cod-price {
+  display: inline-grid;
+  justify-items: end;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.cod-price .cod-faint {
+  font-size: 0.8125rem;
 }

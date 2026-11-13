@@ -5,7 +5,6 @@ import { ArrowLeft, LifeBuoy, Pencil, PhoneCall, Truck, Undo2, XCircle } from 'l
 import type { ReactElement, ReactNode } from 'react';
 import type { OrderStatus } from '@skydrop/db';
 import type { OrderView } from '@skydrop/api-client';
-import { Money } from '@skydrop/ui/components';
 import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
 import { Button } from '@skydrop/ui/app/button';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
@@ -64,56 +63,8 @@ export function OrderHeader({
   );
   const status = order.status as OrderStatus;
   const crumb = `${t('orderDetail.clientConsole')} › ${t('orderDetail.orders')}`;
-  const cod = order.paymentMode === 'COD' && order.codAmountInr !== null;
-  const lines = order.items.length;
-  const units = order.items.reduce((n, i) => n + i.quantity, 0);
   const primaryAsk = actions.askAdmin !== null;
   const primaryReattempt = !primaryAsk && actions.reattempt !== null;
-
-  const facts: Array<ReactElement | null> = [
-    cod ? (
-      <span key="money" className="cod-fact cod-fact--money">
-        {richMessage(t('orderPage.toCollectFact'), {
-          amount: <Money amount={order.codAmountInr ?? '0'} size="md" />,
-        })}
-      </span>
-    ) : (
-      <span key="money" className="cod-fact cod-fact--money">
-        {t('orderDetail.prepaid')}
-      </span>
-    ),
-    order.declaredValueInr !== null ? (
-      <span key="decl" className="cod-fact">
-        {t('orderPage.pay.declared')} <Money amount={order.declaredValueInr} />
-      </span>
-    ) : null,
-    <span key="lines" className="cod-fact">
-      {t(lines === 1 ? 'orderPage.lineOne' : 'orderPage.lineMany', { count: lines })}
-    </span>,
-    <span key="units" className="cod-fact">
-      {t(units === 1 ? 'orderPage.unitOne' : 'orderPage.unitMany', { count: units })}
-    </span>,
-    <span key="w" className="cod-fact">
-      {order.totalWeightGrams === null ? (
-        <span className="cod-faint">
-          {t('orderDetail.weight')}: {t('orderDetail.notRecorded')}
-        </span>
-      ) : (
-        `${order.totalWeightGrams} g`
-      )}
-    </span>,
-    <span key="placed" className="cod-fact">
-      {richMessage(t('orderPage.placedAt'), { when: when(order.placedAt) })}
-    </span>,
-    <span key="upd" className="cod-fact">
-      {richMessage(t('orderPage.updatedAt'), { when: when(order.updatedAt) })}
-    </span>,
-    // "Last moved" is the order's updatedAt, as it was on the old tile.
-    <span key="moved" className="cod-fact">
-      {richMessage(t('orderPage.lastMovedAt'), { when: when(order.updatedAt) })}
-    </span>,
-  ];
-  const shownFacts = facts.filter((x): x is ReactElement => x !== null);
 
   return (
     <header className="cod-head">
@@ -139,38 +90,33 @@ export function OrderHeader({
           size="md"
           className="cod-bar__chip"
         />
+        <span className="cod-pill cod-bar__pay" data-tone="accent">
+          {order.paymentMode === 'COD' ? t('orderDetail.cashOnDelivery') : t('orderDetail.prepaid')}
+        </span>
+        {order.storeKind === 'RESELLER' && (
+          <span className="cod-pill cod-bar__pay">
+            {richMessage(t('orderDetail.soldBy'), {
+              t: order.storeNameSnapshot ?? t('orderDetail.aMemberStore'),
+            })}
+          </span>
+        )}
       </div>
 
       <div className="cod-meta">
-        <div className="cod-meta__info">
-          <div className="cod-meta__chips">
-            <span className="cod-pill" data-tone="accent">
-              {order.paymentMode === 'COD'
-                ? t('orderDetail.cashOnDelivery')
-                : t('orderDetail.prepaid')}
+        {/* One quiet line: your reference and when. "Updated" is gone — it
+            was always the same time as "Last moved" (owner, 2026-11-13). The
+            amount, contents and weight are in the summary sentence below. */}
+        <p className="cod-meta__line">
+          {order.sellerOrderRef ? (
+            <span className="cod-ref">
+              {richMessage(t('orderDetail.yourRef'), {
+                span: <span className="sk-ident">{order.sellerOrderRef}</span>,
+              })}
             </span>
-            {order.storeKind === 'RESELLER' && (
-              <span className="cod-pill">
-                {richMessage(t('orderDetail.soldBy'), {
-                  t: order.storeNameSnapshot ?? t('orderDetail.aMemberStore'),
-                })}
-              </span>
-            )}
-            {order.sellerOrderRef ? (
-              <span className="cod-ref">
-                {richMessage(t('orderDetail.yourRef'), {
-                  span: <span className="sk-ident">{order.sellerOrderRef}</span>,
-                })}
-              </span>
-            ) : null}
-          </div>
-
-          <ul className="cod-facts" aria-label={t('orderPage.orderFacts')}>
-            {shownFacts.map((f) => (
-              <li key={f.key}>{f}</li>
-            ))}
-          </ul>
-        </div>
+          ) : null}
+          <span>{richMessage(t('orderPage.placedAt'), { when: when(order.placedAt) })}</span>
+          <span>{richMessage(t('orderPage.lastMovedAt'), { when: when(order.updatedAt) })}</span>
+        </p>
 
         <div className="cod-actions" role="group" aria-label={t('orderPage.actions')}>
           {/* The two things a seller can DO about a live parcel, beside the
