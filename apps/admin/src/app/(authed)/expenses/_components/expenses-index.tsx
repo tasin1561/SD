@@ -182,8 +182,15 @@ function SpendingTab({
 
   return (
     <MoSection
-      title={tr('expensesExpensesIndex.spendingLedger')}
-      note={tr('expensesExpensesIndex.everyExpenseRecordedNewestFirst')}
+      title={
+        <span className="ez-titled">
+          {tr('expensesExpensesIndex.spendingLedger')}
+          <InfoButton
+            title={tr('expensesExpensesIndex.spendingLedger')}
+            text={tr('expensesExpensesIndex.everyExpenseRecordedNewestFirst')}
+          />
+        </span>
+      }
       flush
       action={
         <div className="mo-row">
@@ -506,8 +513,15 @@ function InvestmentsTab({
 
   return (
     <MoSection
-      title={tr('expensesExpensesIndex.investments')}
-      note={tr('expensesExpensesIndex.capitalPlacedWhereItCan')}
+      title={
+        <span className="ez-titled">
+          {tr('expensesExpensesIndex.investments')}
+          <InfoButton
+            title={tr('expensesExpensesIndex.investments')}
+            text={tr('expensesExpensesIndex.capitalPlacedWhereItCan')}
+          />
+        </span>
+      }
       flush
       action={
         <Checkbox

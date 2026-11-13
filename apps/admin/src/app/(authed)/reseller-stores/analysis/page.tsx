@@ -154,8 +154,15 @@ export default function ResellerAnalysisPage(): ReactElement {
         </AcSection>
 
         <AcSection
-          title={tr('resellerStoresAnalysisPage.disputes')}
-          note={tr('resellerStoresAnalysisPage.ticketsOnMemberStoreOrders')}
+          title={
+            <span className="ez-titled">
+              {tr('resellerStoresAnalysisPage.disputes')}
+              <InfoButton
+                title={tr('resellerStoresAnalysisPage.disputes')}
+                text={tr('resellerStoresAnalysisPage.ticketsOnMemberStoreOrders')}
+              />
+            </span>
+          }
           bare
         >
           {disputes.isPending && (
@@ -252,8 +259,15 @@ export default function ResellerAnalysisPage(): ReactElement {
 
         {mayFloat && (
           <AcSection
-            title={tr('resellerStoresAnalysisPage.floatAndAdvances')}
-            note={tr('resellerStoresAnalysisPage.storeBalancesANegativeOne')}
+            title={
+              <span className="ez-titled">
+                {tr('resellerStoresAnalysisPage.floatAndAdvances')}
+                <InfoButton
+                  title={tr('resellerStoresAnalysisPage.floatAndAdvances')}
+                  text={tr('resellerStoresAnalysisPage.storeBalancesANegativeOne')}
+                />
+              </span>
+            }
             bare
           >
             {float.isPending && (

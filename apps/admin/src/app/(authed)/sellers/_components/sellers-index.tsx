@@ -1,5 +1,6 @@
 'use client';
 
+import { When } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import Link from 'next/link';
@@ -143,12 +144,12 @@ export function SellersIndex(): ReactElement {
                     </Td>
                     <Td>
                       <span className="sk-figure ac-faint">
-                        {s.approvedAt ? new Date(s.approvedAt).toISOString().slice(0, 10) : '—'}
+                        {s.approvedAt ? <When iso={s.approvedAt} /> : '—'}
                       </span>
                     </Td>
                     <Td>
                       <span className="sk-figure ac-faint">
-                        {new Date(s.createdAt).toISOString().slice(0, 10)}
+                        <When iso={s.createdAt} />
                       </span>
                     </Td>
                   </Tr>

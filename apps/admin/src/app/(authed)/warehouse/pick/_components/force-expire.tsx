@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
@@ -62,8 +64,15 @@ export function ForceExpirePick(): ReactElement {
   return (
     <section className="wh-card wh-stack">
       <SectionHeading
-        title={t('warehousePickForceExpire.stuckPick')}
-        note={t('warehousePickForceExpire.releaseAClaimAPicker')}
+        title={
+          <span className="ez-titled">
+            {t('warehousePickForceExpire.stuckPick')}
+            <InfoButton
+              title={t('warehousePickForceExpire.stuckPick')}
+              text={t('warehousePickForceExpire.releaseAClaimAPicker')}
+            />
+          </span>
+        }
         action={
           <Button variant="secondary" size="md" onClick={() => setOpen(true)}>
             {t('warehousePickForceExpire.releaseAStuckPick')}

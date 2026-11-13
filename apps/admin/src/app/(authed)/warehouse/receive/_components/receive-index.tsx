@@ -1,5 +1,6 @@
 'use client';
 
+import { When } from '@/components/easy/when';
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { GoodsReceiptStatus } from '@skydrop/db';
@@ -190,10 +191,10 @@ export function ReceiveIndex(): ReactElement {
                     {r.lines.length}
                   </Td>
                   <Td className="sk-figure wh-faint">
-                    {new Date(r.createdAt).toISOString().slice(0, 10)}
+                    <When iso={r.createdAt} />
                   </Td>
                   <Td className="sk-figure wh-faint">
-                    {new Date(r.updatedAt).toISOString().slice(0, 16).replace('T', ' ')}
+                    <When iso={r.updatedAt} time />
                   </Td>
                 </Tr>
               ))}

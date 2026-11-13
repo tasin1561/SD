@@ -321,8 +321,15 @@ export function PricingIndex(): ReactElement {
           </MoSection>
 
           <MoSection
-            title={t('pricingPricingIndex.margin')}
-            note={t('pricingPricingIndex.internalOnlyNeverShownTo')}
+            title={
+              <span className="ez-titled">
+                {t('pricingPricingIndex.margin')}
+                <InfoButton
+                  title={t('pricingPricingIndex.margin')}
+                  text={t('pricingPricingIndex.internalOnlyNeverShownTo')}
+                />
+              </span>
+            }
           >
             <Facts
               items={[

@@ -132,8 +132,15 @@ export function SettlementsIndex(): ReactElement {
       {/* ── overdue orders ── */}
       <MkSection>
         <SectionHeading
-          title={t('settlementsSettlementsIndex.overdue')}
-          note={t('settlementsSettlementsIndex.deliveredCodCollectedByThe')}
+          title={
+            <span className="ez-titled">
+              {t('settlementsSettlementsIndex.overdue')}
+              <InfoButton
+                title={t('settlementsSettlementsIndex.overdue')}
+                text={t('settlementsSettlementsIndex.deliveredCodCollectedByThe')}
+              />
+            </span>
+          }
         />
         {recon.isLoading ? (
           <SkeletonRows
@@ -159,8 +166,15 @@ export function SettlementsIndex(): ReactElement {
       {shortPaid.length > 0 && (
         <MkSection>
           <SectionHeading
-            title={t('settlementsSettlementsIndex.shortPaid')}
-            note={t('settlementsSettlementsIndex.aPayoutAllocatedLessThan')}
+            title={
+              <span className="ez-titled">
+                {t('settlementsSettlementsIndex.shortPaid')}
+                <InfoButton
+                  title={t('settlementsSettlementsIndex.shortPaid')}
+                  text={t('settlementsSettlementsIndex.aPayoutAllocatedLessThan')}
+                />
+              </span>
+            }
           />
           <UnsettledTable
             caption={t('settlementsSettlementsIndex.shortPaidOrders')}
@@ -172,8 +186,15 @@ export function SettlementsIndex(): ReactElement {
       {/* ── the payout log ── */}
       <MkSection>
         <SectionHeading
-          title={t('settlementsSettlementsIndex.recordedPayouts')}
-          note={t('settlementsSettlementsIndex.eachBankCreditAndThe')}
+          title={
+            <span className="ez-titled">
+              {t('settlementsSettlementsIndex.recordedPayouts')}
+              <InfoButton
+                title={t('settlementsSettlementsIndex.recordedPayouts')}
+                text={t('settlementsSettlementsIndex.eachBankCreditAndThe')}
+              />
+            </span>
+          }
         />
         {list.isError ? (
           <ErrorState

@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Button } from '@skydrop/ui/app/button';
@@ -53,8 +55,15 @@ export function MyCallHistory(): ReactElement {
   return (
     <section className="oo-section">
       <SectionHeading
-        title={t('callCenterMyCallHistory.myCalls')}
-        note={t('callCenterMyCallHistory.everythingYouHaveLoggedNewest')}
+        title={
+          <span className="ez-titled">
+            {t('callCenterMyCallHistory.myCalls')}
+            <InfoButton
+              title={t('callCenterMyCallHistory.myCalls')}
+              text={t('callCenterMyCallHistory.everythingYouHaveLoggedNewest')}
+            />
+          </span>
+        }
         action={
           <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
             {open ? t('callCenterMyCallHistory.hide') : t('callCenterMyCallHistory.show')}

@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import Link from 'next/link';
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { TriangleAlert } from 'lucide-react';
@@ -75,8 +77,15 @@ export function CreditAfterConfirmationPanel({
 
   return (
     <AcSection
-      title={t('sellersCreditAfterConfirmationPanel.memberStoresCreditAfterConfirmation')}
-      note={t('sellersCreditAfterConfirmationPanel.letsThisClientSStore')}
+      title={
+        <span className="ez-titled">
+          {t('sellersCreditAfterConfirmationPanel.memberStoresCreditAfterConfirmation')}
+          <InfoButton
+            title={t('sellersCreditAfterConfirmationPanel.memberStoresCreditAfterConfirmation')}
+            text={t('sellersCreditAfterConfirmationPanel.letsThisClientSStore')}
+          />
+        </span>
+      }
     >
       {status.isPending ? (
         <SkeletonRows rows={1} cols={2} label={t('sellersCreditAfterConfirmationPanel.loading')} />

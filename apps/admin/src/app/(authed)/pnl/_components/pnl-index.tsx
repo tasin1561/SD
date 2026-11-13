@@ -174,8 +174,15 @@ export function PnlIndex(): ReactElement {
 
           <section className="mo-section">
             <SectionHeading
-              title={t('pnlPnlIndex.bySource')}
-              note={t('pnlPnlIndex.openALineToSee')}
+              title={
+                <span className="ez-titled">
+                  {t('pnlPnlIndex.bySource')}
+                  <InfoButton
+                    title={t('pnlPnlIndex.bySource')}
+                    text={t('pnlPnlIndex.openALineToSee')}
+                  />
+                </span>
+              }
             />
             <Accordion value={expanded} onValueChange={setExpanded}>
               {pnl.data.lines.map((l) => {

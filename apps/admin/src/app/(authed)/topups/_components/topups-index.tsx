@@ -190,7 +190,7 @@ export function TopupsIndex(): ReactElement {
               {rows.map((t) => (
                 <Tr key={t.id}>
                   <Td className="mk-when sk-figure">
-                    {new Date(t.createdAt).toISOString().slice(0, 10)}
+                    <When iso={t.createdAt} />
                   </Td>
                   {/* The company, not the uuid. An operator matching
                       this against a bank statement needs the name the

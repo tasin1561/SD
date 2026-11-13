@@ -184,8 +184,15 @@ function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElem
   return (
     <MkSection>
       <SectionHeading
-        title={tr('resellerStoreWalletsResellerStoreWalletsIndex.topUpClaims')}
-        note={tr('resellerStoreWalletsResellerStoreWalletsIndex.aStoreSayingItSent')}
+        title={
+          <span className="ez-titled">
+            {tr('resellerStoreWalletsResellerStoreWalletsIndex.topUpClaims')}
+            <InfoButton
+              title={tr('resellerStoreWalletsResellerStoreWalletsIndex.topUpClaims')}
+              text={tr('resellerStoreWalletsResellerStoreWalletsIndex.aStoreSayingItSent')}
+            />
+          </span>
+        }
         action={
           <Select
             label={tr('resellerStoreWalletsResellerStoreWalletsIndex.status')}
@@ -429,8 +436,15 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
   return (
     <MkSection>
       <SectionHeading
-        title={tr('resellerStoreWalletsResellerStoreWalletsIndex.withdrawalRequests')}
-        note={tr('resellerStoreWalletsResellerStoreWalletsIndex.aStoreAskingToBe')}
+        title={
+          <span className="ez-titled">
+            {tr('resellerStoreWalletsResellerStoreWalletsIndex.withdrawalRequests')}
+            <InfoButton
+              title={tr('resellerStoreWalletsResellerStoreWalletsIndex.withdrawalRequests')}
+              text={tr('resellerStoreWalletsResellerStoreWalletsIndex.aStoreAskingToBe')}
+            />
+          </span>
+        }
         action={
           <Select
             label={tr('resellerStoreWalletsResellerStoreWalletsIndex.status')}

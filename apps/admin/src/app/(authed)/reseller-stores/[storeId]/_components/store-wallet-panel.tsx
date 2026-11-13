@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import Link from 'next/link';
 import type { ReactElement } from 'react';
 import { ArrowRight, History } from 'lucide-react';
@@ -46,8 +48,15 @@ export function StoreWalletPanel({ storeId }: { readonly storeId: string }): Rea
 
   return (
     <AcSection
-      title={t('resellerStoresStoreIdStoreWalletPanel.wallet')}
-      note={t('resellerStoresStoreIdStoreWalletPanel.aLedgerBetweenTheStore')}
+      title={
+        <span className="ez-titled">
+          {t('resellerStoresStoreIdStoreWalletPanel.wallet')}
+          <InfoButton
+            title={t('resellerStoresStoreIdStoreWalletPanel.wallet')}
+            text={t('resellerStoresStoreIdStoreWalletPanel.aLedgerBetweenTheStore')}
+          />
+        </span>
+      }
       bare
       action={
         <Link

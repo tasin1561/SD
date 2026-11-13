@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import type { ReactElement } from 'react';
 import { Money, Num, ProductThumb } from '@skydrop/ui/components';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
@@ -119,8 +121,15 @@ export function CatalogueTerms({ storeId }: { storeId: string }): ReactElement {
   })();
   return (
     <AcSection
-      title={t('resellerStoresStoreIdCatalogueTerms.catalogueTerms')}
-      note={t('resellerStoresStoreIdCatalogueTerms.whatTheClientLetsThis')}
+      title={
+        <span className="ez-titled">
+          {t('resellerStoresStoreIdCatalogueTerms.catalogueTerms')}
+          <InfoButton
+            title={t('resellerStoresStoreIdCatalogueTerms.catalogueTerms')}
+            text={t('resellerStoresStoreIdCatalogueTerms.whatTheClientLetsThis')}
+          />
+        </span>
+      }
       flush
     >
       {body}

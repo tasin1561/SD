@@ -195,8 +195,15 @@ export function BankAccountsPanel(): ReactElement | null {
         }
       />
       <MoSection
-        title={t('bankAccountsBankAccountsPanel.accountsOfferedToClients')}
-        note={t('bankAccountsBankAccountsPanel.retiringOneKeepsEveryPast')}
+        title={
+          <span className="ez-titled">
+            {t('bankAccountsBankAccountsPanel.accountsOfferedToClients')}
+            <InfoButton
+              title={t('bankAccountsBankAccountsPanel.accountsOfferedToClients')}
+              text={t('bankAccountsBankAccountsPanel.retiringOneKeepsEveryPast')}
+            />
+          </span>
+        }
         flush
         action={
           <div className="mo-row">

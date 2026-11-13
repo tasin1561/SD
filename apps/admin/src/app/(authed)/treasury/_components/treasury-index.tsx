@@ -261,8 +261,15 @@ export function TreasuryIndex(): ReactElement {
           )}
 
           <MoSection
-            title={t('treasuryTreasuryIndex.accounts')}
-            note={t('treasuryTreasuryIndex.openOneToSeeWhose')}
+            title={
+              <span className="ez-titled">
+                {t('treasuryTreasuryIndex.accounts')}
+                <InfoButton
+                  title={t('treasuryTreasuryIndex.accounts')}
+                  text={t('treasuryTreasuryIndex.openOneToSeeWhose')}
+                />
+              </span>
+            }
             flush
           >
             <Table caption={t('treasuryTreasuryIndex.ourBankAccounts')}>
@@ -383,8 +390,15 @@ export function TreasuryIndex(): ReactElement {
           </MoSection>
 
           <MoSection
-            title={t('treasuryTreasuryIndex.recentMovements')}
-            note={t('treasuryTreasuryIndex.appendOnlyACorrectionIs')}
+            title={
+              <span className="ez-titled">
+                {t('treasuryTreasuryIndex.recentMovements')}
+                <InfoButton
+                  title={t('treasuryTreasuryIndex.recentMovements')}
+                  text={t('treasuryTreasuryIndex.appendOnlyACorrectionIs')}
+                />
+              </span>
+            }
             flush
           >
             {entries.isError ? (

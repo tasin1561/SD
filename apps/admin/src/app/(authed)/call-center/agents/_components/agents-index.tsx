@@ -415,8 +415,15 @@ function AgentDetail({
           <section className="oo-section">
             <SectionHeading
               as="h3"
-              title={t('callCenterAgentsAgentsIndex.capacity')}
-              note={t('callCenterAgentsAgentsIndex.howManyCallsThisAgent')}
+              title={
+                <span className="ez-titled">
+                  {t('callCenterAgentsAgentsIndex.capacity')}
+                  <InfoButton
+                    title={t('callCenterAgentsAgentsIndex.capacity')}
+                    text={t('callCenterAgentsAgentsIndex.howManyCallsThisAgent')}
+                  />
+                </span>
+              }
             />
             <TextField
               id="ag-max"

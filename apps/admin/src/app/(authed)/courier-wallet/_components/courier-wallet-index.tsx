@@ -181,8 +181,15 @@ export function CourierWalletIndex(): ReactElement {
 
       {neverArrived.length > 0 ? (
         <MoSection
-          title={tr('courierWalletCourierWalletIndex.moneyThatLeftOurBank')}
-          note={tr('courierWalletCourierWalletIndex.eitherTheReferenceOnOur')}
+          title={
+            <span className="ez-titled">
+              {tr('courierWalletCourierWalletIndex.moneyThatLeftOurBank')}
+              <InfoButton
+                title={tr('courierWalletCourierWalletIndex.moneyThatLeftOurBank')}
+                text={tr('courierWalletCourierWalletIndex.eitherTheReferenceOnOur')}
+              />
+            </span>
+          }
           tone="critical"
           flush
         >
@@ -277,8 +284,15 @@ export function CourierWalletIndex(): ReactElement {
       </MoSection>
 
       <MoSection
-        title={tr('courierWalletCourierWalletIndex.rechargesAtTheCourier')}
-        note={tr('courierWalletCourierWalletIndex.matchedOnTheBankS')}
+        title={
+          <span className="ez-titled">
+            {tr('courierWalletCourierWalletIndex.rechargesAtTheCourier')}
+            <InfoButton
+              title={tr('courierWalletCourierWalletIndex.rechargesAtTheCourier')}
+              text={tr('courierWalletCourierWalletIndex.matchedOnTheBankS')}
+            />
+          </span>
+        }
         action={
           <Select
             label={tr('courierWalletCourierWalletIndex.matchState')}

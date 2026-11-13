@@ -1,5 +1,6 @@
 'use client';
 
+import { When } from '@/components/easy/when';
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { ManifestStatus } from '@skydrop/db';
@@ -96,12 +97,10 @@ export function ManifestsIndex(): ReactElement {
                     {m.shipmentCount}
                   </Td>
                   <Td className="stk-muted sk-figure stk-nowrap">
-                    {new Date(m.createdAt).toISOString().slice(0, 16).replace('T', ' ')}
+                    <When iso={m.createdAt} time />
                   </Td>
                   <Td className="stk-muted sk-figure stk-nowrap">
-                    {m.closedAt
-                      ? new Date(m.closedAt).toISOString().slice(0, 16).replace('T', ' ')
-                      : '—'}
+                    {m.closedAt ? <When iso={m.closedAt} time /> : '—'}
                   </Td>
                 </Tr>
               ))}

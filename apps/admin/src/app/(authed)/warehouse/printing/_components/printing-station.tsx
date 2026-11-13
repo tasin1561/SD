@@ -1292,8 +1292,15 @@ function StickerHistory(): ReactElement {
   return (
     <section className="wh-card wh-stack">
       <SectionHeading
-        title={t('warehousePrintingPrintingStation.recentlyPrintedStickers')}
-        note={t('warehousePrintingPrintingStation.everyProductLabelSheetBuilt')}
+        title={
+          <span className="ez-titled">
+            {t('warehousePrintingPrintingStation.recentlyPrintedStickers')}
+            <InfoButton
+              title={t('warehousePrintingPrintingStation.recentlyPrintedStickers')}
+              text={t('warehousePrintingPrintingStation.everyProductLabelSheetBuilt')}
+            />
+          </span>
+        }
       />
       {history.isLoading ? (
         <SkeletonRows rows={4} cols={5} label={t('warehousePrintingPrintingStation.loading')} />

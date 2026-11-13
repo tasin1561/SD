@@ -1,5 +1,6 @@
 'use client';
 
+import { When } from '@/components/easy/when';
 import '@/components/easy/easy.css';
 import Link from 'next/link';
 import { ArrowLeftRight, Eye, PackageSearch, PencilLine, ShieldAlert } from 'lucide-react';
@@ -174,7 +175,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
                 label: t('sellersSellerDetail.emailVerified'),
                 value: d.emailVerifiedAt ? (
                   <span className="sk-figure">
-                    {new Date(d.emailVerifiedAt).toISOString().slice(0, 10)}
+                    <When iso={d.emailVerifiedAt} />
                   </span>
                 ) : (
                   <span className="ac-faint">{t('sellersSellerDetail.pending')}</span>
@@ -184,7 +185,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
                 label: t('sellersSellerDetail.approved'),
                 value: (
                   <span className="sk-figure">
-                    {d.approvedAt ? new Date(d.approvedAt).toISOString().slice(0, 10) : '—'}
+                    {d.approvedAt ? <When iso={d.approvedAt} /> : '—'}
                   </span>
                 ),
               },
@@ -192,7 +193,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
                 label: t('sellersSellerDetail.created'),
                 value: (
                   <span className="sk-figure">
-                    {new Date(d.createdAt).toISOString().slice(0, 16)}
+                    <When iso={d.createdAt} time />
                   </span>
                 ),
               },

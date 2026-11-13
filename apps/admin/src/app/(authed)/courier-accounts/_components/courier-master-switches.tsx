@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import { Power } from 'lucide-react';
 import { SectionHeading } from '@skydrop/ui/app/page-header';
@@ -91,8 +93,15 @@ export function CourierMasterSwitches(): ReactElement {
   return (
     <AfCard>
       <SectionHeading
-        title={t('courierAccountsCourierMasterSwitches.couriers')}
-        note={t('courierAccountsCourierMasterSwitches.whetherEachCourierReceivesNew')}
+        title={
+          <span className="ez-titled">
+            {t('courierAccountsCourierMasterSwitches.couriers')}
+            <InfoButton
+              title={t('courierAccountsCourierMasterSwitches.couriers')}
+              text={t('courierAccountsCourierMasterSwitches.whetherEachCourierReceivesNew')}
+            />
+          </span>
+        }
       />
       {couriers.isPending ? (
         <SkeletonRows

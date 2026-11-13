@@ -65,8 +65,15 @@ export function WalletTransfersIndex({
       />
       <MkSection>
         <SectionHeading
-          title={t('walletTransfersWalletTransfersIndex.newTransfer')}
-          note={t('walletTransfersWalletTransfersIndex.notACorrectionThisMoves')}
+          title={
+            <span className="ez-titled">
+              {t('walletTransfersWalletTransfersIndex.newTransfer')}
+              <InfoButton
+                title={t('walletTransfersWalletTransfersIndex.newTransfer')}
+                text={t('walletTransfersWalletTransfersIndex.notACorrectionThisMoves')}
+              />
+            </span>
+          }
         />
         {sellerId === null ? (
           <SellerPicker onPick={setSellerId} />

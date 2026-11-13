@@ -1,5 +1,6 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -78,8 +79,15 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
   const c = t.current;
   return (
     <AcSection
-      title={tr('resellerStoresStoreIdPage.terms')}
-      note={tr('resellerStoresStoreIdPage.whoPaysWhichSkydropFee')}
+      title={
+        <span className="ez-titled">
+          {tr('resellerStoresStoreIdPage.terms')}
+          <InfoButton
+            title={tr('resellerStoresStoreIdPage.terms')}
+            text={tr('resellerStoresStoreIdPage.whoPaysWhichSkydropFee')}
+          />
+        </span>
+      }
       bare
     >
       {c === null ? (
@@ -342,8 +350,15 @@ export default function AdminResellerStorePage(): ReactElement {
         <StoreWalletPanel storeId={s.id} />
 
         <AcSection
-          title={tr('resellerStoresStoreIdPage.statusHistory')}
-          note={tr('resellerStoresStoreIdPage.everyChangeToThisStore')}
+          title={
+            <span className="ez-titled">
+              {tr('resellerStoresStoreIdPage.statusHistory')}
+              <InfoButton
+                title={tr('resellerStoresStoreIdPage.statusHistory')}
+                text={tr('resellerStoresStoreIdPage.everyChangeToThisStore')}
+              />
+            </span>
+          }
         >
           {events.length === 0 ? (
             <EmptyState bare title={tr('resellerStoresStoreIdPage.noHistory')} />
@@ -378,8 +393,15 @@ export default function AdminResellerStorePage(): ReactElement {
         </AcSection>
 
         <AcSection
-          title={tr('resellerStoresStoreIdPage.team')}
-          note={tr('resellerStoresStoreIdPage.loginsOnTheMemberStore')}
+          title={
+            <span className="ez-titled">
+              {tr('resellerStoresStoreIdPage.team')}
+              <InfoButton
+                title={tr('resellerStoresStoreIdPage.team')}
+                text={tr('resellerStoresStoreIdPage.loginsOnTheMemberStore')}
+              />
+            </span>
+          }
           flush
         >
           {s.team.members.length === 0 && s.team.invitations.length === 0 ? (
