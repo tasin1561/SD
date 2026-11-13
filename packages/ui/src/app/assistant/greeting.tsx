@@ -184,6 +184,17 @@ export function lineText(t: Translate<UiMessageKey>, l: GreetingLine): string {
   return t(l.key, { n: String(l.count) });
 }
 
+/**
+ * The row's visible words WITHOUT the number: the round badge beside it
+ * already shows the count, so "4 · Orders waiting for your decision: 4"
+ * said it twice (owner review, 2026-11-13). Every language's string ends in
+ * ": {n}", which is what is trimmed. The link keeps the full sentence as its
+ * accessible name, so a screen reader still hears the count.
+ */
+export function lineLabel(t: Translate<UiMessageKey>, l: GreetingLine): string {
+  return t(l.key, { n: '' }).replace(/[\s:：]+$/u, '');
+}
+
 export function GreetingCard({
   lines,
   t,
@@ -218,11 +229,16 @@ export function GreetingCard({
           <ul className="sk-ai-greet__list">
             {lines.map((l) => (
               <li key={l.key}>
-                <a className="sk-ai-greet__row" href={l.href} onClick={onOpen(l.href)}>
+                <a
+                  className="sk-ai-greet__row"
+                  href={l.href}
+                  onClick={onOpen(l.href)}
+                  aria-label={lineText(t, l)}
+                >
                   <span className="sk-ai-greet__count" aria-hidden="true">
                     {l.key === 'ui.assistant.greet.line.balance' ? '!' : l.count}
                   </span>
-                  <span className="sk-ai-greet__text">{lineText(t, l)}</span>
+                  <span className="sk-ai-greet__text">{lineLabel(t, l)}</span>
                   <ChevronRight size={16} aria-hidden="true" className="sk-ai-greet__go" />
                 </a>
               </li>

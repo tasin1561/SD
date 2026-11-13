@@ -193,12 +193,19 @@
   color: var(--blue-text);
 }
 .sk-ai-title {
+  display: flex;
   flex: 1;
+  align-items: center;
   min-width: 0;
   margin: 0;
   font-size: var(--fs-md);
   font-weight: 700;
   color: var(--fg-strong);
+}
+/* The words shorten; the AI pill never does (owner review 2026-11-13: the
+   pill was being cut off by the ellipsis). */
+.sk-ai-title__text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -206,6 +213,7 @@
 /* "AI" beside the title — owner, 2026-11-13: anyone must see it is AI. */
 .sk-ai-pill {
   display: inline-block;
+  flex: none;
   margin-inline-start: 8px;
   padding: 1px 7px;
   border-radius: 999px;
