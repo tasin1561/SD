@@ -231,7 +231,7 @@ export const STAFF_GAP_GUIDES: readonly Guide[] = [
           'There is one flat delivery fee per client, anywhere in India. A per-client override beats the global default.',
           'A returned parcel costs the delivery fee plus a return fee. The return fee is charged when the parcel is physically received, not when a courier scan says it is coming back.',
           'If a returned order’s delivery fee is still unpaid, it is also taken when the return is received.',
-          'Past orders show charges as they were persisted. They are never recomputed.',
+          'Past orders show charges as they were persisted. They are never worked out again.',
           'A fee that works out to 0 is flagged and is refused rather than saved as a real price.',
         ],
       },
