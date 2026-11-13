@@ -21,6 +21,8 @@ import { useAdminTicket, useTicketEvents, useTransitionTicket } from '@/lib/ops-
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { AdminTicketConversation } from './admin-ticket-conversation';
+import { TicketPhotos } from '@skydrop/ui/app/assistant';
+import { useApiClient } from '@skydrop/auth/client';
 import { StoreDisputeSettle } from './store-dispute-settle';
 import { useLocale, useT } from '@/i18n/client';
 import { formatDateTime } from '@/i18n/format';
@@ -94,6 +96,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
   const tr = useT();
   const locale = useLocale();
   const toast = useToast();
+  const client = useApiClient();
   const ticket = useAdminTicket(ticketId);
   const events = useTicketEvents(ticketId);
   const transition = useTransitionTicket();
@@ -262,6 +265,13 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
           Same change as the seller page.
         */}
       </AfCard>
+
+      {/* Photos the person sent the assistant before it raised this ticket.
+          Draws nothing when there are none, or when the call is refused. */}
+      <TicketPhotos
+        ticketId={t.id}
+        fetcher={(id) => client.request(`/api/admin/assistant/tickets/${id}/photos`)}
+      />
 
       {/* The conversation FIRST — it is what the ticket is. The courier
           exchange and the status machinery are how we act on it. */}

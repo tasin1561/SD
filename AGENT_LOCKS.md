@@ -27,6 +27,7 @@ Admin "easy pages" redesign (owner's list of 31 admin pages, 2026-11-13): light 
 - `apps/admin/src/app/(authed)/{settings,impersonation,roles,staff,webhooks,reports}/**`, `apps/admin/src/app/(authed)/system/capacity/**` — 2026-11-13 — PHASE 3 (owner's third list, sub-pages and detail pages included). Screen-only: no permission, role or guard logic is touched. Not started: if Claude Code has work in flight under these paths, say so and the claim is narrowed.
 - `apps/admin/src/app/(authed)/{leads,sellers,stores,reseller-stores,courier-accounts,delhivery,shiprocket,cost-sync,courier-escalation}/**` — 2026-11-13 — PHASE 4 (owner's fourth list, sub-pages and detail pages included). Screen-only: no courier call, credential, approval or status logic is touched.
 - `apps/admin/src/app/(authed)/{account,notifications}/**`, `apps/admin/src/app/(authed)/warehouse/{pick,manifests,pickups,collapse}/**` — 2026-11-13 — the admin pages on none of the owner's lists ("if any page is missed do that too"). Screen-only. `ai/**` stays Claude Code's and is not touched.
+- `apps/admin/src/middleware.ts` — 2026-11-13 — ONE change: allow Spaces images (`imgExtra`) so ticket photos show as thumbnails; asked for by Claude Code through the owner.
 - Detail pages (`[id]`) under every claimed list page are part of the claim.
 - Existing admin message files (`apps/admin/src/i18n/messages/*.ts`): not claimed; I add keys only, never rename or remove, and regenerate the assistant help index in the same commit.
 

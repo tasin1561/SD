@@ -28,7 +28,8 @@ import {
   MkDl,
   WithdrawalChip,
 } from '../../seller-wallets/_components/money-parts';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { withdrawalStatusLabel } from '@skydrop/ui/status';
 import { InfoButton } from '@/components/easy/info-button';
 import { When } from '@/components/easy/when';
 import '@/components/easy/easy.css';
@@ -47,6 +48,7 @@ const PAGE_SIZE = 25;
  */
 export function WithdrawalsIndex(): ReactElement {
   const t = useT();
+  const locale = useLocale();
   const [status, setStatus] = useState<string>(WithdrawalRequestStatus.PENDING);
   const [sellerId, setSellerId] = useState('');
   const [page, setPage] = useState(1);
@@ -162,7 +164,7 @@ export function WithdrawalsIndex(): ReactElement {
           <option value="">{t('withdrawalsWithdrawalsIndex.allStatuses')}</option>
           {Object.values(WithdrawalRequestStatus).map((s) => (
             <option key={s} value={s}>
-              {humanise(s)}
+              {withdrawalStatusLabel(s, 'staff', locale)}
             </option>
           ))}
         </Select>
@@ -482,9 +484,4 @@ export function WithdrawalsIndex(): ReactElement {
       <ResolveWithdrawalModal request={selected} onClose={() => setSelected(null)} />
     </div>
   );
-}
-
-function humanise(value: string): string {
-  const lower = value.replaceAll('_', ' ').toLowerCase();
-  return lower.charAt(0).toUpperCase() + lower.slice(1);
 }

@@ -4,13 +4,16 @@ import { createCspMiddleware } from '../../../packages/config/csp-middleware.mjs
 /**
  * Per-request CSP nonce.
  *
- * Admin talks only to its own origin (FE-3), so nothing extra is allowed.
+ * Admin talks only to its own origin (FE-3), so no extra CONNECT source is
+ * allowed. Images are the one exception: photos attached to a ticket (and
+ * product pictures) are read through presigned Spaces URLs, the same
+ * allowance the seller, reseller and associate consoles already carry.
  *
  * The policy itself lives in packages/config/csp-middleware.mjs so the
  * apps cannot drift. See that file for why 'strict-dynamic' is required
  * and what the nonce actually buys over the previous 'unsafe-inline'.
  */
-const build = createCspMiddleware({});
+const build = createCspMiddleware({ imgExtra: ['https://*.digitaloceanspaces.com'] });
 
 export function middleware(request: NextRequest): NextResponse {
   const { requestHeaders, csp } = build(request) as {
