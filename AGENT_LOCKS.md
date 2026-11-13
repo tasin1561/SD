@@ -19,6 +19,3 @@ _(none yet)_
 - `packages/ui/src/app/assistant/**` — 2026-11-13 — same (chat window)
 - `packages/db/prisma/schema.prisma` — `Assistant*` models and enums ONLY — 2026-11-13 — same
 - `packages/db/prisma/migrations/*_assistant_*/` — 2026-11-13 — same
-- `apps/seller/src/app/(authed)/orders/_components/order-detail.tsx`, `apps/seller/src/app/(authed)/orders/_components/detail/**`, `apps/seller/src/i18n/messages/orderPage.ts`, `apps/seller/src/tests/address-needs-fix.test.ts` — 2026-11-13 — client order header tidy-up + item price (merging now; claim removed once green)
-- `apps/admin/src/app/(authed)/orders/_components/order-detail.tsx`, `apps/admin/src/app/(authed)/orders/_components/recipient-card.tsx` — 2026-11-13 — "address needs a fix" only below score 60 (merging now; claim removed once green)
-- `packages/ui/src/app/address-check/index.tsx` — 2026-11-13 — adds the `addressNeedsFix` / `ADDRESS_FIX_BELOW_SCORE` export only (merging now; claim removed once green)
