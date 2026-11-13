@@ -168,7 +168,8 @@ export class AssistantControlDto {
  * Roll the live knowledge back. `versionId` is the version to go back to, or
  * null for the committed base alone; `expectedLive` is the version the screen
  * showed as live (null = base), so a click made on a stale screen is refused.
- * Both keys must be present: a missing key is not the same as null.
+ * Both keys must be present: a missing key is not the same as null (`IsUUID`
+ * rejects undefined; `IsDefined` would reject the null that means the base).
  */
 export class AssistantRollbackDto {
   @ApiProperty({
@@ -176,7 +177,6 @@ export class AssistantRollbackDto {
     type: String,
     description: 'Version to restore, or null for the base.',
   })
-  @IsDefined()
   @ValidateIf((_o, v) => v !== null)
   @IsUUID('7')
   versionId!: string | null;
@@ -186,7 +186,6 @@ export class AssistantRollbackDto {
     type: String,
     description: 'The version the screen showed as live.',
   })
-  @IsDefined()
   @ValidateIf((_o, v) => v !== null)
   @IsUUID('7')
   expectedLive!: string | null;
