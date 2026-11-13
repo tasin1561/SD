@@ -32,7 +32,6 @@ Admin "easy pages" redesign (owner's list of 31 admin pages, 2026-11-13): light 
 - `apps/api/src/modules/assistant/**` — 2026-11-13 — assistant Phase D (privacy e2e, raise-a-ticket, 80% budget alert; branch `feat/assistant-phase-d`), then 2.5× billing, AI control panel, monitor
 - `apps/api/test/unit/assistant-*.spec.ts`, `apps/api/test/e2e/assistant-*.e2e-spec.ts`, `apps/api/test/helpers/assistant-fixtures.ts` — 2026-11-13 — same
 - `packages/ui/src/app/assistant/**` — 2026-11-13 — same (chat window)
-- `packages/ui/src/app/i18n/ui-messages.ts` — `ui.assistant.*` keys ONLY — 2026-11-13 — "Ask Skydrop AI" branding (merging now; claim removed once green)
 - `packages/db/prisma/schema.prisma` — `Assistant*` models and enums ONLY — 2026-11-13 — same
 - `packages/db/prisma/migrations/*_assistant_*/` — 2026-11-13 — same
 - `apps/admin/src/app/(authed)/ai/**`, `apps/admin/src/i18n/messages/ai.ts`, `apps/admin/src/app/dev/ai/**` — 2026-11-13 — NEW: AI control panel (billing, dashboard, conversations, controls)
