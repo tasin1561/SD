@@ -36,6 +36,8 @@ Admin "easy pages" redesign (owner's list of 31 admin pages, 2026-11-13): light 
 - `packages/db/prisma/schema.prisma` — `Assistant*` models and enums ONLY — 2026-11-13 — same
 - `packages/db/prisma/migrations/*_assistant_*/` — 2026-11-13 — same
 - `apps/api/scripts/assistant-eval.ts`, `apps/api/eval/**` — 2026-11-13 — NEW: saved 5-language assistant eval + knowledge-gap guides
+- `packages/ui/src/app/last-error/index.tsx`, `packages/ui/src/app/empty-state/index.tsx`, `packages/ui/src/app/toast/index.tsx` — additive "Ask AI why" button only — 2026-11-13 — assistant Batch A
+- `apps/seller/src/app/(authed)/tickets/[id]/**`, `apps/reseller/src/app/(authed)/tickets/[id]/**` — show a ticket's photos (additive) — 2026-11-13 — assistant Batch A
 - `apps/admin/src/app/(authed)/ai/**`, `apps/admin/src/i18n/messages/ai.ts`, `apps/admin/src/app/dev/ai/**` — 2026-11-13 — NEW: AI control panel (billing, dashboard, conversations, controls)
 - `apps/api/src/common/auth/permissions.ts`, `apps/api/src/common/auth/staff-role-presets.ts` — `assistant.*` permission keys ONLY (add, never rename) — 2026-11-13 — same
 - `apps/admin/src/app/(authed)/_components/authed-shell.tsx`, `apps/admin/src/lib/page-access.ts`, `apps/admin/src/i18n/catalog.ts` — ONE added nav entry / page rule / catalogue import for /ai — 2026-11-13 — same
