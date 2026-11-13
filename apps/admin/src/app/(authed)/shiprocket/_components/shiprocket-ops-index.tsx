@@ -2,6 +2,7 @@
 
 import { pageDateTag } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
+import { Code } from '@/components/easy/code-label';
 import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
@@ -399,7 +400,9 @@ export function ShiprocketOpsIndex(): ReactElement {
                         <span className="af-small">{b.carrierName ?? '—'}</span>
                       </Td>
                       <Td>
-                        <span className="af-small">{b.status}</span>
+                        <span className="af-small">
+                          <Code value={b.status} />
+                        </span>
                       </Td>
                       <Td>
                         <span className="af-faint sk-figure">{when(b.bookedAt)}</span>

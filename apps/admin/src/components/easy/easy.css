@@ -426,6 +426,11 @@ button.ez-guide__pick:hover {
   .ez-touch dd {
     overflow-wrap: anywhere;
   }
+  /* A long reference inside a facts list must wrap, not push the page sideways. */
+  .ez-touch dd .sk-ident {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }
 @media (pointer: coarse) {
   .ez-touch button.sk-btn,

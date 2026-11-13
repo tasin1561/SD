@@ -1,6 +1,7 @@
 'use client';
 
 import { InfoButton } from '@/components/easy/info-button';
+import { When } from '@/components/easy/when';
 import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import { SettingValueType } from '@skydrop/db';
@@ -125,6 +126,9 @@ function groupByGuide(
     .map(([title, groupItems]) => ({ title, items: groupItems }));
 }
 
+/** A setting whose whole value is a timestamp is shown as a date, not as raw ISO text. */
+const ISO_STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/;
+
 function SettingRow({
   setting,
   onEdit,
@@ -154,7 +158,9 @@ function SettingRow({
           )}
           {!setting.isEditableByAdmin && <AcFact>{t('settingsSettingsIndex.readOnly')}</AcFact>}
         </div>
-        <div className="ac-row__value">{shown}</div>
+        <div className="ac-row__value">
+          {!setting.isSensitive && ISO_STAMP.test(shown) ? <When iso={shown} time /> : shown}
+        </div>
         {setting.lastEditedAt && (
           <span className="ac-faint sk-figure">
             {t('settingsSettingsIndex.lastEdit', {

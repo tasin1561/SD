@@ -12,7 +12,9 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { AfCard, Meter } from '@/app/(authed)/system/_components/af-parts';
 import './capacity.css';
 import { useCapacityReport, type CapacityMetric, type CapacityStatus } from '@/lib/api-hooks';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { richMessage } from '@/i18n/client';
@@ -75,8 +77,17 @@ function Gauge({
   );
 }
 
+/** Timestamps inside a server sentence, rewritten as a date in the chosen language. */
+function readableStamps(text: string, locale: Locale): string {
+  return text.replace(
+    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})/g,
+    (stamp) => (Number.isNaN(Date.parse(stamp)) ? stamp : formatDateTime(stamp, locale)),
+  );
+}
+
 function MetricCard({ m }: { readonly m: CapacityMetric }): ReactElement {
   const t = useT();
+  const locale = useLocale();
   const tone = TONE(t)[m.status];
   const [open, setOpen] = useState(m.status === 'WARNING' || m.status === 'CRITICAL');
 
@@ -111,7 +122,7 @@ function MetricCard({ m }: { readonly m: CapacityMetric }): ReactElement {
           : m.ceilingSource === 'CONFIGURED'
             ? t('systemCapacityCapacityMonitor.ceilingFromSystemSettingsUpdate')
             : t('systemCapacityCapacityMonitor.ceilingUnknownRecordItIn')}
-        {m.detail && <span className="af-small"> {m.detail}</span>}
+        {m.detail && <span className="af-small"> {readableStamps(m.detail, locale)}</span>}
       </p>
 
       <button

@@ -27,6 +27,7 @@ import Link from 'next/link';
 import { useBinOverview } from '@/lib/bin-contents-hooks';
 import { WarehouseFormPanel } from '../../_components/warehouse-form-panel';
 import { BinContentsOverview } from './bin-contents-overview';
+import { binTypeLabelIn } from './bin-note';
 import { BinOpsPanel } from './bin-ops-panel';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
@@ -447,7 +448,7 @@ export function BinsIndex(): ReactElement {
                         )}
                       </Td>
                       <Td>{zone?.code ?? '—'}</Td>
-                      <Td>{b.type}</Td>
+                      <Td>{binTypeLabelIn(tr, b.type)}</Td>
                       <Td>
                         {NON_PICKABLE.has(b.type) ? (
                           <ToneText tone="bad">{tr('warehouseBinsBinsIndex.no')}</ToneText>
