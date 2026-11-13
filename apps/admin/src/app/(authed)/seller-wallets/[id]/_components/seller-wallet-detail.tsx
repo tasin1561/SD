@@ -24,6 +24,8 @@ import { usePermission } from '@/lib/use-permission';
 import { MoveSellerCashModal, type HoldingRef } from './move-seller-cash-modal';
 import { MkCard } from '../../_components/money-parts';
 import { useT } from '@/i18n/client';
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 import { richMessage } from '@/i18n/client';
 
 /**
@@ -55,7 +57,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
 
   if (detail.isLoading) {
     return (
-      <div className="mk-page">
+      <div className="mk-page ez-touch">
         <Skeleton height={56} rounded="md" />
         <div className="mk-kpis">
           {[0, 1, 2, 3].map((i) => (
@@ -81,7 +83,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
   const d = detail.data;
 
   return (
-    <div className="mk-page">
+    <div className="mk-page ez-touch">
       <PageHeader
         breadcrumb={
           <Link href="/seller-wallets" className="mk-link">
@@ -280,7 +282,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
                       (entries.data?.items ?? []).map((e: AdminWalletEntry) => (
                         <Tr key={e.id}>
                           <Td className="mk-when sk-figure">
-                            {new Date(e.createdAt).toLocaleString()}
+                            <When iso={e.createdAt} time />
                           </Td>
                           <Td>
                             {/* The raw enum was on screen: ORDER_CHARGES,

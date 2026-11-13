@@ -264,6 +264,10 @@ export const easy = defineMessages({
     'अनुरोध बिना भुगतान के बंद होता है। क्लाइंट को आपका कारण दिखता है, और रकम उनके वॉलेट में फिर से उपलब्ध हो जाती है।',
   ],
 
+  // ── Money screens ─────────────────────────────────────────────────────
+  'ezMoney.account': ['{n} account', '{n}টি অ্যাকাউন্ট', '{n} खाता'],
+  'ezMoney.accounts': ['{n} accounts', '{n}টি অ্যাকাউন্ট', '{n} खाते'],
+
   // ── Manual placement (/manual-placement) ──────────────────────────────
   'ezPlacement.whyInfo': [
     'Why no connected courier took this parcel. The courier’s own words, when there are any, are shown under the reason.',

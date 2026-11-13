@@ -14,6 +14,8 @@ import { useLiabilities, type LedgerLineView } from '@/lib/ops-hooks';
 import { MoSection, Notice } from '../../treasury/_components/money-parts';
 import './liabilities.css';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 
@@ -130,7 +132,7 @@ export function LiabilitiesIndex(): ReactElement {
 
   if (q.isLoading) {
     return (
-      <div className="mo-page">
+      <div className="mo-page ez-touch">
         <div className="mo-kpis">
           <Skeleton height={112} rounded="md" />
           <Skeleton height={112} rounded="md" />
@@ -142,10 +144,12 @@ export function LiabilitiesIndex(): ReactElement {
   }
   if (q.isError || q.data === undefined) {
     return (
-      <ErrorState
-        message={q.error?.message ?? t('liabilitiesLiabilitiesIndex.couldNotReadThePosition')}
-        retry={() => void q.refetch()}
-      />
+      <div className="ez-touch ez-wrap">
+        <ErrorState
+          message={q.error?.message ?? t('liabilitiesLiabilitiesIndex.couldNotReadThePosition')}
+          retry={() => void q.refetch()}
+        />
+      </div>
     );
   }
 
@@ -153,10 +157,17 @@ export function LiabilitiesIndex(): ReactElement {
   const uncovered = d.sellerDebts.filter((s) => !s.covered);
 
   return (
-    <div className="mo-page">
+    <div className="mo-page ez-touch">
       <PageHeader
-        title={t('liabilitiesLiabilitiesIndex.whatWeOwe')}
-        subtitle={t('liabilitiesLiabilitiesIndex.ourPositionRightNowAgainst')}
+        title={
+          <span className="ez-titled">
+            {t('liabilitiesLiabilitiesIndex.whatWeOwe')}
+            <InfoButton
+              title={t('liabilitiesLiabilitiesIndex.whatWeOwe')}
+              text={t('liabilitiesLiabilitiesIndex.ourPositionRightNowAgainst')}
+            />
+          </span>
+        }
       />
 
       <div className="mo-kpis">

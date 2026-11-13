@@ -15,6 +15,9 @@ import { FxHistoryDrawer } from './fx-history-drawer';
 import { usePermission } from '@/lib/use-permission';
 import { MkCard } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 
 export function FxRatesIndex(): ReactElement {
   const t = useT();
@@ -28,10 +31,17 @@ export function FxRatesIndex(): ReactElement {
   const toast = useToast();
 
   return (
-    <div className="mk-page">
+    <div className="mk-page ez-touch">
       <PageHeader
-        title={t('fxFxRatesIndex.fxRates')}
-        subtitle={t('fxFxRatesIndex.currentRatePerFromTo')}
+        title={
+          <span className="ez-titled">
+            {t('fxFxRatesIndex.fxRates')}
+            <InfoButton
+              title={t('fxFxRatesIndex.fxRates')}
+              text={t('fxFxRatesIndex.currentRatePerFromTo')}
+            />
+          </span>
+        }
       />
 
       {list.isLoading ? (
@@ -83,7 +93,9 @@ export function FxRatesIndex(): ReactElement {
                       <span className="mk-small">{t('fxFxRatesIndex.derivedExactInverse')}</span>
                     )}
                   </Td>
-                  <Td className="mk-when sk-figure">{new Date(r.fetchedAt).toLocaleString()}</Td>
+                  <Td className="mk-when sk-figure">
+                    <When iso={r.fetchedAt} time />
+                  </Td>
                   <Td align="right">
                     <div className="mk-actions">
                       <Button

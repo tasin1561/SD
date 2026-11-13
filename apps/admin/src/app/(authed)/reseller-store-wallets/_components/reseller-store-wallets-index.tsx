@@ -42,6 +42,8 @@ import {
   WithdrawalChip,
 } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 
 function when(iso: string | null): string {
   return iso === null
@@ -85,10 +87,17 @@ export function ResellerStoreWalletsIndex(): ReactElement {
   const storeId = raw !== null && UUID_RE.test(raw) ? raw : null;
   const scoped = useAdminStoreWallet(storeId ?? '', storeId !== null);
   return (
-    <div className="mk-page">
+    <div className="mk-page ez-touch">
       <PageHeader
-        title={tr('resellerStoreWalletsResellerStoreWalletsIndex.memberStoreWallets')}
-        subtitle={tr('resellerStoreWalletsResellerStoreWalletsIndex.topUpClaimsAndWithdrawal')}
+        title={
+          <span className="ez-titled">
+            {tr('resellerStoreWalletsResellerStoreWalletsIndex.memberStoreWallets')}
+            <InfoButton
+              title={tr('resellerStoreWalletsResellerStoreWalletsIndex.memberStoreWallets')}
+              text={tr('resellerStoreWalletsResellerStoreWalletsIndex.topUpClaimsAndWithdrawal')}
+            />
+          </span>
+        }
         action={
           <Link href="/reseller-stores" className="mk-link">
             {tr('resellerStoreWalletsResellerStoreWalletsIndex.memberStores')}{' '}

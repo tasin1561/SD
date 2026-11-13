@@ -28,6 +28,8 @@ import {
 import { LinkButton, MoSection, Notice } from '../treasury/_components/money-parts';
 import './bank-accounts.css';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 
 /**
  * Where sellers are told to send money.
@@ -180,10 +182,17 @@ export function BankAccountsPanel(): ReactElement | null {
   const busy = create.isPending || update.isPending;
 
   return (
-    <div className="mo-page">
+    <div className="mo-page ez-touch">
       <PageHeader
-        title={t('bankAccountsBankAccountsPanel.bankAccounts')}
-        subtitle={t('bankAccountsBankAccountsPanel.ourOwnBankAccountsWhere')}
+        title={
+          <span className="ez-titled">
+            {t('bankAccountsBankAccountsPanel.bankAccounts')}
+            <InfoButton
+              title={t('bankAccountsBankAccountsPanel.bankAccounts')}
+              text={t('bankAccountsBankAccountsPanel.ourOwnBankAccountsWhere')}
+            />
+          </span>
+        }
       />
       <MoSection
         title={t('bankAccountsBankAccountsPanel.accountsOfferedToClients')}

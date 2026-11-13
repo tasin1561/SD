@@ -25,6 +25,8 @@ import { useInstantPayAdvances, type InstantPayAdvanceRowView } from '@/lib/ops-
 import { AgeChip, LinkButton } from '../../../treasury/_components/money-parts';
 import '../../_components/liabilities.css';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 
 /**
  * Money we advanced to sellers under Instant Pay, still owed to us by
@@ -73,10 +75,17 @@ export function InstantPayAdvances({
   const filtered = sellerId !== '' || courierAccountId !== '';
 
   return (
-    <div className="mo-page">
+    <div className="mo-page ez-touch">
       <PageHeader
-        title={t('liabilitiesInstantPayInstantPayAdvances.instantPayAdvances')}
-        subtitle={t('liabilitiesInstantPayInstantPayAdvances.paidToClientsAtDelivery')}
+        title={
+          <span className="ez-titled">
+            {t('liabilitiesInstantPayInstantPayAdvances.instantPayAdvances')}
+            <InfoButton
+              title={t('liabilitiesInstantPayInstantPayAdvances.instantPayAdvances')}
+              text={t('liabilitiesInstantPayInstantPayAdvances.paidToClientsAtDelivery')}
+            />
+          </span>
+        }
         action={
           <LinkButton href="/liabilities" variant="ghost" size="sm" icon={<ArrowLeft size={14} />}>
             {t('liabilitiesInstantPayInstantPayAdvances.whatWeOwe')}

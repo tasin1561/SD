@@ -16,6 +16,9 @@ import { RemittanceFormModal } from './remittance-form-modal';
 import { usePermission } from '@/lib/use-permission';
 import { MkCard, MkSection } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 
 /**
  * Paginated list of recorded remittances. Each row links to the
@@ -54,10 +57,17 @@ export function RemittancesIndex(): ReactElement {
   const owedItems = owed.data?.items ?? [];
 
   return (
-    <div className="mk-page">
+    <div className="mk-page ez-touch">
       <PageHeader
-        title={t('remittancesRemittancesIndex.remittances')}
-        subtitle={t('remittancesRemittancesIndex.recordedWithdrawalsToClientsEach')}
+        title={
+          <span className="ez-titled">
+            {t('remittancesRemittancesIndex.remittances')}
+            <InfoButton
+              title={t('remittancesRemittancesIndex.remittances')}
+              text={t('remittancesRemittancesIndex.recordedWithdrawalsToClientsEach')}
+            />
+          </span>
+        }
         action={
           canWrite ? (
             <Button
@@ -211,7 +221,9 @@ export function RemittancesIndex(): ReactElement {
             <TBody>
               {list.data.items.map((r) => (
                 <Tr key={r.id}>
-                  <Td className="mk-when sk-figure">{new Date(r.paidAt).toLocaleString()}</Td>
+                  <Td className="mk-when sk-figure">
+                    <When iso={r.paidAt} time />
+                  </Td>
                   <Td>
                     <Link href={`/sellers/${r.sellerId}`} className="mk-name">
                       {r.sellerName ?? <Ident value={`${r.sellerId.slice(0, 8)}…`} />}

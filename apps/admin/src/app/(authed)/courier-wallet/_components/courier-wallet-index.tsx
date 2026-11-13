@@ -31,6 +31,9 @@ import {
 import { MoSection } from '../../treasury/_components/money-parts';
 import './courier-wallet.css';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 
@@ -93,7 +96,7 @@ export function CourierWalletIndex(): ReactElement {
 
   if (accounts.isLoading) {
     return (
-      <div className="mo-page">
+      <div className="mo-page ez-touch">
         <div className="mo-kpis">
           <Skeleton height={112} rounded="md" />
           <Skeleton height={112} rounded="md" />
@@ -105,12 +108,14 @@ export function CourierWalletIndex(): ReactElement {
   }
   if (accounts.isError || accounts.data === undefined) {
     return (
-      <ErrorState
-        message={
-          accounts.error?.message ?? tr('courierWalletCourierWalletIndex.couldNotReadTheCourier')
-        }
-        retry={() => void accounts.refetch()}
-      />
+      <div className="ez-touch ez-wrap">
+        <ErrorState
+          message={
+            accounts.error?.message ?? tr('courierWalletCourierWalletIndex.couldNotReadTheCourier')
+          }
+          retry={() => void accounts.refetch()}
+        />
+      </div>
     );
   }
 
@@ -119,10 +124,17 @@ export function CourierWalletIndex(): ReactElement {
   const neverArrived = unmatched.data?.payments ?? [];
 
   return (
-    <div className="mo-page">
+    <div className="mo-page ez-touch">
       <PageHeader
-        title={tr('courierWalletCourierWalletIndex.courierWallets')}
-        subtitle={tr('courierWalletCourierWalletIndex.theirPrepaidBalanceIsOur')}
+        title={
+          <span className="ez-titled">
+            {tr('courierWalletCourierWalletIndex.courierWallets')}
+            <InfoButton
+              title={tr('courierWalletCourierWalletIndex.courierWallets')}
+              text={tr('courierWalletCourierWalletIndex.theirPrepaidBalanceIsOur')}
+            />
+          </span>
+        }
         action={
           mayRecord ? (
             <Button
@@ -196,7 +208,9 @@ export function CourierWalletIndex(): ReactElement {
                   <Td>
                     <span className="sk-ident cw-ident">{p.reference ?? '—'}</span>
                   </Td>
-                  <Td>{new Date(p.occurredAt).toLocaleDateString('en-IN')}</Td>
+                  <Td>
+                    <When iso={p.occurredAt} />
+                  </Td>
                   <Td align="right">
                     <Money amount={p.amountInr} currency="INR" convert={false} />
                   </Td>
@@ -318,7 +332,9 @@ export function CourierWalletIndex(): ReactElement {
                       <Td>
                         <span className="sk-ident cw-ident">{r.bankTxnRef ?? '—'}</span>
                       </Td>
-                      <Td>{new Date(r.occurredAt).toLocaleDateString('en-IN')}</Td>
+                      <Td>
+                        <When iso={r.occurredAt} />
+                      </Td>
                       <Td align="right">
                         <Money amount={r.amountInr} currency="INR" convert={false} />
                         {r.bankAmountInr !== null && r.bankAmountInr !== r.amountInr ? (

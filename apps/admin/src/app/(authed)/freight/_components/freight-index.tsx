@@ -22,6 +22,9 @@ import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { FreightChip, MkCallout, MkCard } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 import { ClientFilter } from '@/components/client-filter';
 import { richMessage } from '@/i18n/client';
 
@@ -67,10 +70,17 @@ export function FreightIndex(): ReactElement {
     .reduce((sum, r) => sum + Number(r.totalInr), 0);
 
   return (
-    <div className="mk-page">
+    <div className="mk-page ez-touch">
       <PageHeader
-        title={tr('freightFreightIndex.inboundFreight')}
-        subtitle={tr('freightFreightIndex.oneBillPerBdIndia')}
+        title={
+          <span className="ez-titled">
+            {tr('freightFreightIndex.inboundFreight')}
+            <InfoButton
+              title={tr('freightFreightIndex.inboundFreight')}
+              text={tr('freightFreightIndex.oneBillPerBdIndia')}
+            />
+          </span>
+        }
         action={
           canWrite ? (
             <Button
@@ -218,7 +228,9 @@ function FreightRow({
           {row.sellerCompanyName !== null && (
             <div className="mk-small">{row.sellerCompanyName}</div>
           )}
-          <div className="mk-faint sk-figure">{new Date(row.createdAt).toLocaleDateString()}</div>
+          <div className="mk-faint sk-figure">
+            <When iso={row.createdAt} />
+          </div>
           {/* Said here rather than only in a badge: a withdrawn bill is
             only ever looked at to find out what was wrong with it. */}
           {row.voidedAt !== null && (
@@ -448,7 +460,7 @@ function CostBreakdown({
                 <div className="mk-cell">
                   <span className="mk-body">{p.accountLabel}</span>
                   <span className="mk-faint">
-                    {new Date(p.occurredAt).toLocaleDateString('en-IN')}
+                    <When iso={p.occurredAt} />
                     {p.reference !== null && <> · {p.reference}</>}
                     {p.recordedByName !== null && (
                       <> {tr('freightFreightIndex.by', { recordedByName: p.recordedByName })}</>

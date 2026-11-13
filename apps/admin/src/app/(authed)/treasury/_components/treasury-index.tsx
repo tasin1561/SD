@@ -23,6 +23,9 @@ import { ReconcileModal } from './reconcile-modal';
 import { TransferModal } from './transfer-modal';
 import './treasury.css';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 import { richMessage } from '@/i18n/client';
 
 /**
@@ -115,10 +118,17 @@ export function TreasuryIndex(): ReactElement {
   }
 
   return (
-    <div className="mo-page">
+    <div className="mo-page ez-touch">
       <PageHeader
-        title={t('treasuryTreasuryIndex.treasury')}
-        subtitle={t('treasuryTreasuryIndex.whichAccountHoldsWhatHow')}
+        title={
+          <span className="ez-titled">
+            {t('treasuryTreasuryIndex.treasury')}
+            <InfoButton
+              title={t('treasuryTreasuryIndex.treasury')}
+              text={t('treasuryTreasuryIndex.whichAccountHoldsWhatHow')}
+            />
+          </span>
+        }
         action={
           canManage ? (
             <Button
@@ -419,7 +429,7 @@ export function TreasuryIndex(): ReactElement {
                     (entries.data?.items ?? []).map((e) => (
                       <Tr key={e.id}>
                         <Td className="mo-muted mo-nowrap">
-                          {new Date(e.occurredAt).toLocaleString()}
+                          <When iso={e.occurredAt} time />
                         </Td>
                         <Td>{e.accountLabel}</Td>
                         <Td>
@@ -531,7 +541,9 @@ export function TreasuryIndex(): ReactElement {
               <dt>{t('treasuryTreasuryIndex.entry')}</dt>
               <dd>
                 <Money amount={marking.signedAmount} currency={marking.currency} convert={false} />
-                <span className="mo-sub">{new Date(marking.occurredAt).toLocaleString()}</span>
+                <span className="mo-sub">
+                  <When iso={marking.occurredAt} time />
+                </span>
               </dd>
             </dl>
             <TextArea

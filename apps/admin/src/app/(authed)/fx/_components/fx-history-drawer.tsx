@@ -7,6 +7,7 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useFxRateHistory } from '@/lib/api-hooks';
 import { useT } from '@/i18n/client';
+import { When } from '@/components/easy/when';
 
 export function FxHistoryDrawer({
   fromCurrency,
@@ -60,7 +61,9 @@ export function FxHistoryDrawer({
                 h.previousRate !== null ? Number(h.rate) - Number(h.previousRate) : null;
               return (
                 <Tr key={h.id}>
-                  <Td className="mk-when sk-figure">{new Date(h.recordedAt).toLocaleString()}</Td>
+                  <Td className="mk-when sk-figure">
+                    <When iso={h.recordedAt} time />
+                  </Td>
                   <Td align="right" className="mk-strong sk-figure">
                     {Number(h.rate).toFixed(6)}
                   </Td>

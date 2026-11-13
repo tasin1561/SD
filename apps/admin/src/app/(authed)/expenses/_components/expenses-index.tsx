@@ -33,6 +33,9 @@ import { InvestmentModal } from './investment-modal';
 import { InvestmentReturnModal } from './investment-return-modal';
 import './expenses.css';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 
 type Tab = 'spending' | 'investments';
 
@@ -75,10 +78,17 @@ export function ExpensesIndex(): ReactElement {
   const [returningTo, setReturningTo] = useState<string | null>(null);
 
   return (
-    <div className="mo-page">
+    <div className="mo-page ez-touch">
       <PageHeader
-        title={tr('expensesExpensesIndex.expensesInvestments')}
-        subtitle={tr('expensesExpensesIndex.whatItCostsToExist')}
+        title={
+          <span className="ez-titled">
+            {tr('expensesExpensesIndex.expensesInvestments')}
+            <InfoButton
+              title={tr('expensesExpensesIndex.expensesInvestments')}
+              text={tr('expensesExpensesIndex.whatItCostsToExist')}
+            />
+          </span>
+        }
         action={
           canWrite ? (
             // The two writes this page exists for, at the top and
@@ -275,7 +285,7 @@ function SpendingTab({
                 items.map((e) => (
                   <Tr key={e.id}>
                     <Td className="mo-nowrap sk-figure">
-                      {new Date(e.occurredAt).toLocaleDateString('en-IN')}
+                      <When iso={e.occurredAt} />
                       {e.note !== null && <span className="ex-note">{e.note}</span>}
                     </Td>
                     <Td>
@@ -307,7 +317,7 @@ function SpendingTab({
                           facts, and only one of them is a gap. */}
                       {e.recordedByName ?? tr('expensesExpensesIndex.system')}
                       <span className="mo-sub sk-figure">
-                        {new Date(e.recordedAt).toLocaleDateString('en-IN')}
+                        <When iso={e.recordedAt} />
                       </span>
                     </Td>
                     <Td align="right">
