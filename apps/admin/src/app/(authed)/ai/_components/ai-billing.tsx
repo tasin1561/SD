@@ -31,6 +31,7 @@ const PORTAL_COLOR: Record<PortalKey, string> = {
   associate: 'var(--saffron-fill)',
 };
 export const MONITOR_COLOR = 'var(--magenta-fill)';
+export const PUBLIC_COLOR = 'var(--green-fill)';
 
 /** `2026-11` -> `Nov 2026`; `2026-11-03` -> `3 Nov`. */
 function label(period: string): string {
@@ -47,6 +48,7 @@ function useSeries(): ChartSeries[] {
   return [
     ...PORTALS.map((p) => ({ key: p, label: t(`ai.portal.${p}`), color: PORTAL_COLOR[p] })),
     { key: 'monitor', label: t('ai.line.monitor'), color: MONITOR_COLOR },
+    { key: 'public', label: t('ai.line.public'), color: PUBLIC_COLOR },
   ];
 }
 
@@ -57,6 +59,7 @@ const columnsOf = (rows: readonly BillingRow[]) =>
     values: [
       ...PORTALS.map((p) => Number(r.assistant.portals[p].costUsd)),
       Number(r.monitor.costUsd),
+      Number(r.publicParcel.costUsd),
     ],
   }));
 
@@ -86,6 +89,7 @@ function BillingTable({
             </Th>
           ))}
           <Th align="right">{t('ai.line.monitor')}</Th>
+          <Th align="right">{t('ai.line.public')}</Th>
           <Th align="right">{t('ai.col.cost')}</Th>
           {action !== undefined && <Th>{''}</Th>}
         </Tr>
@@ -107,6 +111,7 @@ function BillingTable({
               </Td>
             ))}
             <Td align="right">{usd(r.monitor.costUsd)}</Td>
+            <Td align="right">{usd(r.publicParcel.costUsd)}</Td>
             <Td align="right">
               <strong>{usd(r.total.costUsd)}</strong>
             </Td>
@@ -151,6 +156,19 @@ function BudgetKpis({
           budget === null
             ? undefined
             : t('ai.kpi.monitorCap', { cap: usd(budget.monitorBudgetUsd) })
+        }
+      />
+      <KpiCard
+        label={t('ai.line.public')}
+        figure={usd(row?.publicParcel.costUsd ?? 0)}
+        tone={(budget?.publicUsedPct ?? 0) >= 80 ? 'debit' : 'neutral'}
+        secondary={
+          budget === null
+            ? undefined
+            : t('ai.kpi.publicCap', {
+                pct: pct100(budget.publicUsedPct),
+                cap: usd(budget.publicBudgetUsd),
+              })
         }
       />
       {budget?.projectedCostUsd != null && (

@@ -55,6 +55,8 @@ export function ticketPermissionFor(audience: CallerScope['audience']): string |
       return 'tickets.manage'; // store-issue.controller.ts `create`
     case 'STAFF':
       return null; // the admin console has no "raise a ticket" flow
+    case 'PUBLIC':
+      return null; // the tracking-page helper has no ticket flow either
   }
 }
 

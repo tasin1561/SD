@@ -25,6 +25,17 @@ export const MAX_OUTPUT_TOKENS = 6000;
 /** Tool rounds inside one answer. */
 export const MAX_TOOL_ROUNDS = 5;
 export const MAX_QUESTION_CHARS = 2000;
+/** The public helper's limits: short questions, short conversations. */
+export const PUBLIC_MAX_QUESTION_CHARS = 300;
+export const PUBLIC_MAX_TURNS = 6;
+
+/** Notices whose words point at "help links" a tracking page does not have. */
+const PUBLIC_UNAVAILABLE_CODES: ReadonlySet<NoticeCode> = new Set([
+  'DISABLED',
+  'NOT_CONFIGURED',
+  'RESTING_BUDGET',
+  'RESTING_DAILY',
+]);
 /**
  * What ONE question's files (plus its words) may cost in prompt tokens. The
  * whole request must stay under 100K (above that the prompt is billed at
@@ -83,7 +94,11 @@ export class AssistantChatService {
   ): Promise<void> {
     const conv = await this.requireOwned(scope, conversationId);
     const lang = detectReplyLanguage(text);
-    const notice = (code: NoticeCode): void => {
+    const notice = (requested: NoticeCode): void => {
+      const code: NoticeCode =
+        scope.audience === 'PUBLIC' && PUBLIC_UNAVAILABLE_CODES.has(requested)
+          ? 'PUBLIC_UNAVAILABLE'
+          : requested;
       // Counted for the control panel (code only, fire and forget).
       void this.store.recordNotice(conv.id, scope.audience, code);
       emit({
@@ -99,6 +114,14 @@ export class AssistantChatService {
     const verdict = await this.budget.check(scope);
     if (!verdict.ok) return notice(verdict.code);
     if (!this.gateway.isConfigured()) return notice('NOT_CONFIGURED');
+    // The public helper is a SHORT conversation: the cap is checked before the
+    // question is stored, so a seventh question never reaches the model.
+    if (
+      scope.audience === 'PUBLIC' &&
+      (await this.store.questionsIn(conv.id)) >= PUBLIC_MAX_TURNS
+    ) {
+      return notice('PUBLIC_TURN_LIMIT');
+    }
 
     // Where the person is and what just went wrong. Browser-supplied, so it
     // is UNTRUSTED text: it rides in the USER turn (after the cached prefix,
@@ -200,7 +223,9 @@ export class AssistantChatService {
 
     try {
       for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-        if (round > 0 && !(await this.budget.monthlyOk())) return notice('RESTING_BUDGET');
+        if (round > 0 && !(await this.budget.monthlyOk(new Date(), scope.audience))) {
+          return notice('RESTING_BUDGET');
+        }
 
         const req: AssistantModelRequest = {
           model: ASSISTANT_MODEL,

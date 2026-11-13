@@ -618,6 +618,30 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     what: 'The most the AI monitor may cost in a calendar month, in US dollars, separate from the assistant budget. The monitor does not exist yet, so nothing reads this today.',
     example: 'At 20, once the monitor has used $20 of real spend in a month it rests.',
   },
+  'assistant.public_enabled': {
+    name: 'AI parcel helper — tracking page',
+    group: 'AI assistant',
+    what: 'Switch for the "Ask about this parcel" helper on the public tracking page. It only knows what the tracking page already shows for that one parcel. Off until you turn it on.',
+    example:
+      'Leave it off until you have set its monthly budget and are ready for the public to use it.',
+    values: onOff(
+      [
+        'Visitors with a tracking link see an "Ask about this parcel" chat.',
+        'It answers only from the parcel tracking details already on the page.',
+      ],
+      [
+        'The tracking page shows no helper, and nothing is sent to the AI provider for visitors.',
+        'This is the default.',
+      ],
+    ),
+  },
+  'assistant.public_monthly_budget_usd': {
+    name: 'AI parcel helper — monthly budget',
+    group: 'AI assistant',
+    what: 'The most the public parcel helper may cost in a calendar month, in US dollars, separate from the assistant budget. Counted in real spend.',
+    example:
+      'At 10, once the helper has used $10 of real spend in a month it disappears from tracking pages until the month turns.',
+  },
   'wallet.inbound_freight_mode': {
     name: 'How Bangladesh → India freight is paid',
     group: 'Inbound freight',

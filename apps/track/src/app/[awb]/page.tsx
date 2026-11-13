@@ -13,6 +13,8 @@ import type { PublicShipmentDisplayStatus, PublicTrackingResponse } from '@/lib/
 import { getActiveLocale } from '@/lib/locale';
 import { type Locale, statusKey, t } from '@/lib/i18n';
 import { TopBar } from '../_components/top-bar';
+import { ParcelAssistant } from '../_components/parcel-assistant';
+import { parcelAssistantAvailable } from '@/lib/parcel-assistant-status';
 import { isTerminal, journeyProgress, journeySteps } from './_components/journey';
 
 /**
@@ -176,6 +178,9 @@ export default async function AwbPage({
   }
 
   const data = lookup.data;
+  // The helper only exists when the owner has switched it on and it is under
+  // its own budget; otherwise the page is exactly what it was.
+  const assistantOn = await parcelAssistantAvailable();
   const kind = publicTrackingStatusKind(data.currentStatus);
   const statusWords = humanizeStatus(data.currentStatus, locale);
   const bcp = localeBcp47(locale);
@@ -286,6 +291,27 @@ export default async function AwbPage({
           )}
         </section>
       </div>
+      {assistantOn && (
+        <ParcelAssistant
+          awb={data.awbNumber}
+          strings={{
+            button: t(locale, 'askButton'),
+            title: t(locale, 'askTitle'),
+            badge: t(locale, 'askAiBadge'),
+            intro: t(locale, 'askIntro'),
+            placeholder: t(locale, 'askPlaceholder'),
+            send: t(locale, 'askSend'),
+            close: t(locale, 'askClose'),
+            notice: t(locale, 'askNotice'),
+            typing: t(locale, 'askThinking'),
+            error: t(locale, 'askError'),
+            busy: t(locale, 'askBusy'),
+            you: t(locale, 'askYou'),
+            answerFrom: t(locale, 'askAnswerFrom'),
+            suggestions: [t(locale, 'askQ1'), t(locale, 'askQ2'), t(locale, 'askQ3')],
+          }}
+        />
+      )}
     </div>
   );
 }

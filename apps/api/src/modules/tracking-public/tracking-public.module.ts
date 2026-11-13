@@ -8,14 +8,15 @@ import { PublicTrackingController } from './controllers/public-tracking.controll
  * (no auth, AWB is the access token); customer-safe projection;
  * rate-limited.
  *
- * Cross-module surface: NONE. Leaf consumer module (mirrors the
- * warehouse-* + tracking-ingestion modules). The PUBLIC controller it
- * owns is its only external surface.
+ * Cross-module surface: `PublicTrackingReadService` ONLY, for the public
+ * parcel helper (assistant Batch C), which must answer from the SAME
+ * customer-safe projection the page renders and nothing else. The PUBLIC
+ * controller it owns is its other external surface.
  */
 @Module({
   imports: [PrismaModule],
   controllers: [PublicTrackingController],
   providers: [PublicTrackingReadService],
-  exports: [],
+  exports: [PublicTrackingReadService],
 })
 export class TrackingPublicModule {}

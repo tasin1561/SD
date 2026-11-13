@@ -12,6 +12,7 @@ export type BudgetVerdict =
 export const DEFAULT_MONTHLY_BUDGET_USD = 80;
 export const DEFAULT_DAILY_MESSAGES = 60;
 export const DEFAULT_MONITOR_BUDGET_USD = 20;
+export const DEFAULT_PUBLIC_BUDGET_USD = 10;
 
 /**
  * "Should this request call the model at all?" — read INSIDE the request,
@@ -37,6 +38,16 @@ export class AssistantBudgetService {
 
   async check(scope: CallerScope, now: Date = new Date()): Promise<BudgetVerdict> {
     if (!(await this.enabled())) return { ok: false, code: 'DISABLED' };
+    // The PUBLIC line: its own switch (OFF unless an admin turned it on) and
+    // its own monthly cap. No per-person daily count: a visitor has no
+    // identity, and the turn cap, the per-IP / per-AWB throttles and this cap
+    // bound what a tracking page can cost.
+    if (scope.audience === 'PUBLIC') {
+      if (!(await this.publicEnabled())) return { ok: false, code: 'DISABLED' };
+      return (await this.publicMonthlyOk(now))
+        ? { ok: true }
+        : { ok: false, code: 'RESTING_BUDGET' };
+    }
     if (!(await this.portalEnabled(scope.audience))) return { ok: false, code: 'DISABLED' };
 
     const dailyCap = await this.number('assistant.daily_messages_per_user', DEFAULT_DAILY_MESSAGES);
@@ -84,9 +95,47 @@ export class AssistantBudgetService {
     }
   }
 
-  /** Only the monthly cap, for a tool round inside one answer. */
-  async monthlyOk(now: Date = new Date()): Promise<boolean> {
+  /**
+   * Only the monthly cap, for a tool round inside one answer. `audience`
+   * picks the line: PUBLIC checks the public helper's own cap, everyone else
+   * the console cap.
+   */
+  async monthlyOk(now: Date = new Date(), audience?: AssistantAudience): Promise<boolean> {
+    if (audience === 'PUBLIC') return this.publicMonthlyOk(now);
     return (await this.monthlySpendUsd(now)).lessThan(await this.monthlyBudgetUsd());
+  }
+
+  // ── the public parcel helper's line ────────────────────────────────
+  // Same shape as the monitor's, with its own switch and cap. These are the
+  // ONLY readers of the PUBLIC line of `assistant_usage` for a cap decision.
+
+  /** `assistant.public_enabled`: OFF unless an admin turned it on. */
+  publicEnabled(): Promise<boolean> {
+    return this.flag('assistant.public_enabled', false);
+  }
+
+  /** The public helper's monthly cap in REAL USD (`assistant.public_monthly_budget_usd`, default $10). */
+  publicMonthlyBudgetUsd(): Promise<number> {
+    return this.number('assistant.public_monthly_budget_usd', DEFAULT_PUBLIC_BUDGET_USD);
+  }
+
+  /** What the public helper has spent this UTC month, in REAL USD (stored / 2.5). */
+  async publicMonthlySpendUsd(now: Date = new Date()): Promise<Prisma.Decimal> {
+    const billed = await this.store.publicCostSince(
+      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+    );
+    return realFromBilledUsd(billed);
+  }
+
+  async publicMonthlyOk(now: Date = new Date()): Promise<boolean> {
+    return (await this.publicMonthlySpendUsd(now)).lessThan(await this.publicMonthlyBudgetUsd());
+  }
+
+  /** Would a visitor's question be answered right now? (the page's "show the helper" question) */
+  async publicAvailable(now: Date = new Date()): Promise<boolean> {
+    return (
+      (await this.enabled()) && (await this.publicEnabled()) && (await this.publicMonthlyOk(now))
+    );
   }
 
   /**

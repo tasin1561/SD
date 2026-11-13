@@ -44,6 +44,9 @@ export function ownedBy(scope: CallerScope): Prisma.AssistantConversationWhereIn
     ownerUserId: scope.userId,
     impersonatedByStaffId: scope.impersonatingStaffId,
     deletedAt: null,
+    // A PUBLIC conversation is bound to the ONE AWB of the page it was opened
+    // on: the same visitor key on another parcel's page matches nothing.
+    ...(scope.publicAwb === undefined ? {} : { publicAwb: scope.publicAwb }),
   };
 }
 
@@ -153,6 +156,7 @@ export class AssistantStoreService {
         sellerId: scope.sellerId,
         storeId: scope.storeId,
         impersonatedByStaffId: scope.impersonatingStaffId,
+        ...(scope.publicAwb === undefined ? {} : { publicAwb: scope.publicAwb }),
         title,
       },
       select: { id: true, audience: true, title: true, createdAt: true, updatedAt: true },
@@ -648,13 +652,34 @@ export class AssistantStoreService {
     await this.prisma.client.assistantBudgetAlert.deleteMany({ where: { month, threshold } });
   }
 
-  /** Everything spent since `since` (start of the UTC month). */
+  /**
+   * Everything the CONSOLE audiences have spent since `since` (start of the
+   * UTC month). The public parcel helper has its own line and its own cap
+   * (`publicCostSince`), so a flood on a tracking page can never use up the
+   * staff's and clients' budget.
+   */
   async costSince(since: Date): Promise<Prisma.Decimal> {
     const agg = await this.prisma.client.assistantUsage.aggregate({
-      where: { createdAt: { gte: since } },
+      where: { createdAt: { gte: since }, audience: { not: 'PUBLIC' } },
       _sum: { costUsd: true },
     });
     return agg._sum.costUsd ?? new Prisma.Decimal(0);
+  }
+
+  /** Everything the public parcel helper has spent since `since` (billed figure). */
+  async publicCostSince(since: Date): Promise<Prisma.Decimal> {
+    const agg = await this.prisma.client.assistantUsage.aggregate({
+      where: { createdAt: { gte: since }, audience: 'PUBLIC' },
+      _sum: { costUsd: true },
+    });
+    return agg._sum.costUsd ?? new Prisma.Decimal(0);
+  }
+
+  /** Questions already asked in ONE conversation (the public helper's turn cap). */
+  questionsIn(conversationId: string): Promise<number> {
+    return this.prisma.client.assistantMessage.count({
+      where: { conversationId, isQuestion: true },
+    });
   }
 
   /** Everything the overnight monitor has spent since `since` (billed figure). */

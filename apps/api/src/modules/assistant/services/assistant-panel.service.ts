@@ -39,12 +39,15 @@ export const CONTROL_SETTINGS: Readonly<Record<string, SettingValueType>> = {
   'assistant.attachments_enabled': SettingValueType.BOOLEAN,
   'assistant.monitor_enabled': SettingValueType.BOOLEAN,
   'assistant.monitor_monthly_budget_usd': SettingValueType.DECIMAL,
+  'assistant.public_enabled': SettingValueType.BOOLEAN,
+  'assistant.public_monthly_budget_usd': SettingValueType.DECIMAL,
 };
 
 /** Budget caps are stored in REAL dollars; the panel shows and accepts the billed figure. */
 const BUDGET_KEYS = new Set([
   'assistant.monthly_budget_usd',
   'assistant.monitor_monthly_budget_usd',
+  'assistant.public_monthly_budget_usd',
 ]);
 const ERROR_CODES = ['FAILED', 'NOT_CONFIGURED', 'ATTACHMENT_UNAVAILABLE'];
 const LANGUAGE_SAMPLE = 5000;
@@ -258,8 +261,11 @@ export class AssistantPanelService {
     const errors = ERROR_CODES.reduce((a, k) => a + (noticeMap[k] ?? 0), 0);
     const langs: Record<ReplyLanguage, number> = { en: 0, bn: 0, hi: 0, bnLatn: 0, hiLatn: 0 };
     for (const m of sample) langs[detectReplyLanguage(visibleText(m.content))]++;
-    const portalMix = Object.fromEntries(PORTALS.map((p) => [p, 0])) as Record<PortalKey, number>;
-    for (const r of portals) portalMix[r.audience.toLowerCase() as PortalKey] = r.n;
+    const portalMix = Object.fromEntries([...PORTALS, 'public'].map((p) => [p, 0])) as Record<
+      PortalKey | 'public',
+      number
+    >;
+    for (const r of portals) portalMix[r.audience.toLowerCase() as PortalKey | 'public'] = r.n;
     const prop = Object.fromEntries(proposals.map((r) => [r.status, r._count._all]));
     const fb = Object.fromEntries(feedback.map((r) => [r.rating, r._count._all]));
     const month = await this.billing.monthly(1, now);
@@ -350,7 +356,12 @@ export class AssistantPanelService {
     const offset = Math.max(f.offset ?? 0, 0);
     const where: Prisma.AssistantConversationWhereInput = { deletedAt: null };
     if (f.portal !== undefined)
-      where.audience = f.portal.toUpperCase() as 'STAFF' | 'SELLER' | 'STORE' | 'ASSOCIATE';
+      where.audience = f.portal.toUpperCase() as
+        | 'STAFF'
+        | 'SELLER'
+        | 'STORE'
+        | 'ASSOCIATE'
+        | 'PUBLIC';
     if (f.sellerId !== undefined) where.sellerId = f.sellerId;
     if (f.storeId !== undefined) where.storeId = f.storeId;
     if (f.userId !== undefined) where.ownerUserId = f.userId;

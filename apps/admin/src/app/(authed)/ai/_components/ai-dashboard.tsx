@@ -165,7 +165,7 @@ export function AiDashboard(): ReactElement {
           <div className="ai-grid2">
             <AcSection title={t('ai.dash.portalMix')}>
               <Mix
-                rows={PORTALS.map((p) => ({
+                rows={[...PORTALS, 'public' as const].map((p) => ({
                   id: p,
                   label: t(`ai.portal.${p}`),
                   value: d.portals[p],

@@ -72,6 +72,10 @@ export const HELP_SOURCES: Readonly<
     settingGuide: false,
     internalDocs: false,
   },
+  // The tracking-page helper has NO help tool (its one tool is `get_parcel`),
+  // so nothing reads this row today. It is the narrowest source set, no
+  // staff text, should one ever be wired up by mistake.
+  PUBLIC: { console: 'seller', guideAudience: 'seller', settingGuide: false, internalDocs: false },
 };
 
 /** Trim limits per source. Guides carry the answer, so they get the most room. */

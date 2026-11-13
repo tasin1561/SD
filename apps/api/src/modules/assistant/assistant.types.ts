@@ -26,6 +26,12 @@ export interface CallerScope {
   readonly permissions: readonly string[];
   /** Set when a staff member is acting inside a support session. */
   readonly impersonatingStaffId: string | null;
+  /**
+   * PUBLIC audience only: the ONE AWB this visitor's conversation is about,
+   * taken from the tracking page's own route (never from the model, never
+   * from the message). Absent for every console audience.
+   */
+  readonly publicAwb?: string;
 }
 
 /** The JSON-Schema subset tool inputs may use (validated by hand, see assistant-input.ts). */
@@ -112,6 +118,8 @@ export type AssistantStreamEvent =
         | 'TRUNCATED'
         | 'ATTACHMENTS_TOO_LARGE'
         | 'ATTACHMENT_UNAVAILABLE'
+        | 'PUBLIC_UNAVAILABLE'
+        | 'PUBLIC_TURN_LIMIT'
         | 'FAILED';
       readonly text: string;
       readonly helpLinks: ReadonlyArray<{ readonly label: string; readonly path: string }>;

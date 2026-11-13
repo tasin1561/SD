@@ -26,6 +26,7 @@ import {
   type ReportsAssistantReadService,
 } from '../../admin-reports/services/reports-assistant-read.service';
 import { ToolError, type AssistantTool, type CallerScope } from '../assistant.types';
+import { toParcelFacts, type PublicParcelReader } from '../assistant-public-parcel';
 
 /**
  * THE READ-ONLY TOOLS (phase A).
@@ -76,6 +77,12 @@ export interface AssistantToolDeps {
   readonly ticketReads: Pick<TicketAssistantReadService, 'forSeller' | 'forStore'>;
   readonly addressChecks: Pick<AddressCheckAssistantReadService, 'forOrder'>;
   readonly metrics: Pick<ReportsAssistantReadService, 'run'>;
+  /**
+   * The PUBLIC helper's only data source: the tracking page's own read.
+   * Optional so every hand-built rig keeps compiling; absent means the
+   * `get_parcel` tool is simply not registered.
+   */
+  readonly parcels?: PublicParcelReader;
 }
 
 const NOT_YOURS = 'No order of yours matches that number.';
@@ -930,5 +937,35 @@ export function buildAssistantTools(deps: AssistantToolDeps): readonly Assistant
       },
     },
   ];
+
+  // ── PUBLIC audience: the tracking-page helper ──────────────────────────
+  // The one tool that audience has. Its input is EMPTY on purpose: the AWB is
+  // the conversation's (`scope.publicAwb`, from the page's route), so there
+  // is nothing for the model, or for the visitor's words, to point elsewhere.
+  if (deps.parcels !== undefined) {
+    const parcels = deps.parcels;
+    tools.push({
+      name: 'get_parcel',
+      description:
+        'Get the public tracking details of the parcel on this page: courier, current status and time, destination city, expected delivery time, and the list of tracking scans, plus the current time (asOf). It takes no input: it always reads the parcel this chat is about. Call it before answering any question about the parcel.',
+      audience: ['PUBLIC'],
+      permission: null,
+      mirrors: null,
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        required: [],
+        additionalProperties: false,
+      },
+      async run(scope) {
+        if (scope.publicAwb === undefined) {
+          throw new ToolError('FORBIDDEN', 'No parcel in this chat.');
+        }
+        // The SAME read the page makes; a miss is the page's own generic 404,
+        // which the registry turns into NOT_FOUND.
+        return toParcelFacts(await parcels.findByAwb(scope.publicAwb));
+      },
+    });
+  }
   return tools;
 }

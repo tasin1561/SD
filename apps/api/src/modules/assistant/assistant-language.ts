@@ -52,6 +52,8 @@ export type NoticeCode =
   | 'TRUNCATED'
   | 'ATTACHMENTS_TOO_LARGE'
   | 'ATTACHMENT_UNAVAILABLE'
+  | 'PUBLIC_UNAVAILABLE'
+  | 'PUBLIC_TURN_LIMIT'
   | 'FAILED';
 
 const TEXT: Record<NoticeCode, Record<ReplyLanguage, string>> = {
@@ -117,6 +119,25 @@ const TEXT: Record<NoticeCode, Record<ReplyLanguage, string>> = {
     hiLatn:
       'Abhi ek attach ki hui file nahi khul saki. Assistant ko kuch nahi bheja gaya. Thodi der mein phir koshish kariye.',
   },
+  // The public parcel helper (tracking page). No "help links below": the page
+  // has none, and its tracking details above stay correct without the helper.
+  PUBLIC_UNAVAILABLE: {
+    en: 'The parcel helper is not available right now. The tracking details on this page are still up to date.',
+    bn: 'পার্সেল সহায়ক এখন পাওয়া যাচ্ছে না। এই পেজের ট্র্যাকিং তথ্য ঠিকই আছে।',
+    hi: 'पार्सल हेल्पर अभी उपलब्ध नहीं है। इस पेज की ट्रैकिंग जानकारी अभी भी सही है।',
+    bnLatn: 'Parcel helper ekhon pawa jachhe na. Ei page er tracking tothyo thik-i ache.',
+    hiLatn:
+      'Parcel helper abhi available nahi hai. Is page ki tracking jaankari abhi bhi sahi hai.',
+  },
+  PUBLIC_TURN_LIMIT: {
+    en: 'This chat has reached its question limit. Please start a new chat, or ask the shop you ordered from.',
+    bn: 'এই চ্যাটে প্রশ্নের সীমা শেষ হয়েছে। নতুন চ্যাট শুরু করুন, অথবা যে দোকান থেকে অর্ডার করেছেন তাদের জিজ্ঞাসা করুন।',
+    hi: 'इस चैट में सवालों की सीमा पूरी हो गई। कृपया नई चैट शुरू करें, या जिस दुकान से ऑर्डर किया है उनसे पूछें।',
+    bnLatn:
+      'Ei chat e proshner shima shesh hoyeche. Notun chat shuru korun, othoba jei dokan theke order korechen tader jigges korun.',
+    hiLatn:
+      'Is chat mein sawaalon ki seema poori ho gayi. Kripya nayi chat shuru kijiye, ya jis dukaan se order kiya hai unse poochiye.',
+  },
   FAILED: {
     en: 'Something went wrong on my side. Please try again in a moment.',
     bn: 'আমার দিকে একটা সমস্যা হয়েছে। একটু পরে আবার চেষ্টা করুন।',
@@ -150,6 +171,8 @@ export function helpLinks(
   audience: AssistantAudience,
   lang: ReplyLanguage,
 ): ReadonlyArray<{ label: string; path: string }> {
+  // The public helper has no console to link into.
+  if (audience === 'PUBLIC') return [];
   if (audience === 'STAFF') {
     return [
       { label: LINK_LABEL[lang], path: '/tickets' },

@@ -511,6 +511,7 @@ export const ERROR_CODES: ReadonlyArray<readonly [string, string, string | null]
   ["PRODUCT_NOT_FOUND","catalog-product,catalog-variant","Product not found"],
   ["PROOF_NOT_FOUND","reseller-store-wallet,wallet-topup","This request has no uploaded proof"],
   ["PROOF_REQUIRED","reseller-store-wallet,wallet-topup","Give a transaction reference or upload proof of the transfer — one of the two. Without it there is nothing to match against our bank statement."],
+  ["PUBLIC_UNAVAILABLE","assistant",null],
   ["PUTAWAY_BIN_REQUIRED","inventory-receipt","Line {…} has {…} units but no putaway bin"],
   ["RANGE_TOO_LONG","assistant","Pick at most a year."],
   ["REASON_CODE_REQUIRED","inventory-shared","reasonCode is required for movement type {…}"],

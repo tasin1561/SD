@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { Logger } from '@nestjs/common';
 import { Prisma, type AssistantAudience } from '@skydrop/db';
 import type { AssistantToolDeps } from '../../src/modules/assistant/tools/assistant-tools';
+import type { PublicParcelReader } from '../../src/modules/assistant/assistant-public-parcel';
 import type { CallerScope } from '../../src/modules/assistant/assistant.types';
 import {
   AssistantModelGateway,
@@ -76,7 +77,10 @@ export interface FakeOrder {
   readonly orderNumber: string;
 }
 
-export function fakeDeps(orders: readonly FakeOrder[] = []): AssistantToolDeps {
+export function fakeDeps(
+  orders: readonly FakeOrder[] = [],
+  parcels?: PublicParcelReader,
+): AssistantToolDeps {
   const summary = (o: FakeOrder) => ({
     orderNumber: o.orderNumber,
     sellerOrderRef: null,
@@ -123,6 +127,7 @@ export function fakeDeps(orders: readonly FakeOrder[] = []): AssistantToolDeps {
       stats: async () => ({ byStatus: { PENDING: 3 }, openTotal: 3, assignedByAgent: [] }),
     },
     help: new AssistantHelpService(),
+    ...(parcels === undefined ? {} : { parcels }),
     ...fakeBatchB(orders),
     proposals: {
       createProposal: async (_scope: CallerScope, _conversationId: string, row) => ({
@@ -339,8 +344,11 @@ export function fakeBatchB(
   };
 }
 
-export function fakeRegistry(orders: readonly FakeOrder[] = []): AssistantToolRegistry {
-  return AssistantToolRegistry.fromDeps(fakeDeps(orders));
+export function fakeRegistry(
+  orders: readonly FakeOrder[] = [],
+  parcels?: PublicParcelReader,
+): AssistantToolRegistry {
+  return AssistantToolRegistry.fromDeps(fakeDeps(orders, parcels));
 }
 
 // ── an in-memory store, standing in for AssistantStoreService in chat tests ──
@@ -363,6 +371,18 @@ export class MemoryStore {
       updatedAt: new Date(),
     };
     this.conversations.push(c);
+    return c;
+  }
+  /** Batch C: a public conversation, owned by the visitor key, bound to one AWB. */
+  publicConversations: Array<ConversationRow & { ownerUserId: string; publicAwb: string | null }> =
+    [];
+  async createConversation(scope: CallerScope, title: string | null): Promise<ConversationRow> {
+    const c = { ...this.seedConversation(scope.audience), title };
+    this.publicConversations.push({
+      ...c,
+      ownerUserId: scope.userId,
+      publicAwb: scope.publicAwb ?? null,
+    });
     return c;
   }
   async findOwned(_s: CallerScope, id: string) {
@@ -498,6 +518,14 @@ export class MemoryStore {
   async costSince() {
     return this.monthCost;
   }
+  /** The public helper's own line (Batch C). */
+  publicMonthCost = new Prisma.Decimal(0);
+  async publicCostSince() {
+    return this.publicMonthCost;
+  }
+  async questionsIn(conversationId: string) {
+    return this.rows.filter((r) => r.conversationId === conversationId && r.isQuestion).length;
+  }
   async questionsSince() {
     return this.questions;
   }
@@ -590,6 +618,7 @@ export function chatRig(
     configured?: boolean;
     orders?: readonly FakeOrder[];
     store?: MemoryStore;
+    parcels?: PublicParcelReader;
   } = {},
 ): ChatRig {
   const store = opts.store ?? new MemoryStore();
@@ -606,7 +635,7 @@ export function chatRig(
   const chat = new AssistantChatService(
     store as unknown as AssistantStoreService,
     budget,
-    fakeRegistry(opts.orders ?? []),
+    fakeRegistry(opts.orders ?? [], opts.parcels),
     gateway,
     attachments,
   );

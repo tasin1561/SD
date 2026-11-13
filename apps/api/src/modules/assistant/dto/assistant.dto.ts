@@ -106,9 +106,9 @@ const bool = ({ value }: { value: unknown }): unknown =>
 
 /** Explorer filters (`assistant.conversations.read`). */
 export class AssistantExplorerQueryDto {
-  @ApiPropertyOptional({ enum: ['staff', 'seller', 'store', 'associate'] })
+  @ApiPropertyOptional({ enum: ['staff', 'seller', 'store', 'associate', 'public'] })
   @IsOptional()
-  @IsIn(['staff', 'seller', 'store', 'associate'])
+  @IsIn(['staff', 'seller', 'store', 'associate', 'public'])
   portal?: string;
 
   @ApiPropertyOptional() @IsOptional() @IsUUID() sellerId?: string;
