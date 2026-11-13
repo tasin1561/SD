@@ -122,6 +122,27 @@ export class OrderAssistantReadService {
     };
   }
 
+  /**
+   * The seller's own order that an identifier names, as `{ id, orderNumber }`
+   * — or null when none of THEIRS matches (a number that belongs to someone
+   * else is the same null as one that does not exist). For the assistant's
+   * ticket proposal, which must attach the order id itself, never the id the
+   * model typed.
+   */
+  async resolveForSeller(
+    sellerId: string,
+    identifier: string,
+  ): Promise<{ id: string; orderNumber: string } | null> {
+    const wanted = identifier.trim().toLowerCase();
+    const page = await this.orders.list(sellerId, {
+      page: 1,
+      pageSize: 10,
+      search: identifier.trim(),
+    });
+    const hit = page.items.find((o) => matches(o, wanted));
+    return hit === undefined ? null : { id: hit.id, orderNumber: hit.orderNumber };
+  }
+
   /** Staff: any order, by the same exact identifiers. */
   async findForStaff(identifier: string): Promise<AssistantOrderSummary | null> {
     const wanted = identifier.trim().toLowerCase();

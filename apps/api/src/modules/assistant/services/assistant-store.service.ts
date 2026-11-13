@@ -4,6 +4,7 @@ import {
   type AssistantAttachmentKind,
   type AssistantAudience,
   type AssistantMessageRole,
+  type AssistantTicketProposalStatus,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import type { CallerScope } from '../assistant.types';
@@ -86,6 +87,50 @@ export function attachmentOwnedBy(scope: CallerScope): Prisma.AssistantAttachmen
     conversation: ownedBy(scope),
   };
 }
+
+/** What the browser may know of a proposal. Never the owner columns. */
+export interface ProposalRow {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly subject: string;
+  readonly description: string;
+  readonly orderId: string | null;
+  readonly orderNumber: string | null;
+  readonly status: AssistantTicketProposalStatus;
+  readonly ticketId: string | null;
+  readonly ticketNumber: string | null;
+  readonly requestId: string | null;
+  readonly createdAt: Date;
+  readonly decidedAt: Date | null;
+}
+
+const PROPOSAL_SELECT = {
+  id: true,
+  conversationId: true,
+  subject: true,
+  description: true,
+  orderId: true,
+  orderNumber: true,
+  status: true,
+  ticketId: true,
+  ticketNumber: true,
+  requestId: true,
+  createdAt: true,
+  decidedAt: true,
+} as const;
+
+/** The same predicate for a proposal: the owner columns AND the conversation must be the caller's. */
+export function proposalOwnedBy(scope: CallerScope): Prisma.AssistantTicketProposalWhereInput {
+  return {
+    audience: scope.audience,
+    ownerUserId: scope.userId,
+    impersonatedByStaffId: scope.impersonatingStaffId,
+    conversation: ownedBy(scope),
+  };
+}
+
+/** Pending proposals one conversation may hold at once (a model cannot flood the screen). */
+export const MAX_PENDING_PROPOSALS = 3;
 
 const asJson = (v: unknown): Prisma.InputJsonValue => v as Prisma.InputJsonValue;
 
@@ -344,6 +389,144 @@ export class AssistantStoreService {
         costUsd: row.costUsd,
       },
     });
+  }
+
+  // ── ticket proposals ───────────────────────────────────────────────
+  // The model may only ever INSERT one of these (through `propose_ticket`).
+  // Every transition out of PENDING is a guarded `updateMany` that names the
+  // owner columns, so a click that is not the owner's, or not the first,
+  // matches nothing.
+
+  /**
+   * Store a proposal. The same words already waiting in this conversation
+   * are returned instead of stored twice (a model that repeats itself must
+   * not stack up cards), and a conversation holds at most
+   * `MAX_PENDING_PROPOSALS` waiting ones.
+   */
+  async createProposal(
+    scope: CallerScope,
+    conversationId: string,
+    row: {
+      subject: string;
+      description: string;
+      orderId: string | null;
+      orderNumber: string | null;
+    },
+  ): Promise<{ proposal: ProposalRow; created: boolean } | null> {
+    const waiting = await this.prisma.client.assistantTicketProposal.findMany({
+      where: { conversationId, status: 'PENDING', ...proposalOwnedBy(scope) },
+      select: PROPOSAL_SELECT,
+    });
+    const same = waiting.find(
+      (p) => p.subject === row.subject && p.description === row.description,
+    );
+    if (same !== undefined) return { proposal: same, created: false };
+    if (waiting.length >= MAX_PENDING_PROPOSALS) return null;
+    const proposal = await this.prisma.client.assistantTicketProposal.create({
+      data: {
+        conversationId,
+        audience: scope.audience,
+        ownerUserId: scope.userId,
+        sellerId: scope.sellerId,
+        storeId: scope.storeId,
+        impersonatedByStaffId: scope.impersonatingStaffId,
+        subject: row.subject,
+        description: row.description,
+        orderId: row.orderId,
+        orderNumber: row.orderNumber,
+      },
+      select: PROPOSAL_SELECT,
+    });
+    return { proposal, created: true };
+  }
+
+  /** A conversation's proposals, oldest first. The caller has already proved the conversation is theirs. */
+  proposals(conversationId: string): Promise<ProposalRow[]> {
+    return this.prisma.client.assistantTicketProposal.findMany({
+      where: { conversationId },
+      orderBy: { id: 'asc' },
+      select: PROPOSAL_SELECT,
+    });
+  }
+
+  findOwnedProposal(scope: CallerScope, id: string): Promise<ProposalRow | null> {
+    return this.prisma.client.assistantTicketProposal.findFirst({
+      where: { id, ...proposalOwnedBy(scope) },
+      select: PROPOSAL_SELECT,
+    });
+  }
+
+  /**
+   * THE exactly-once gate. PENDING → CONFIRMED for the owner, and only the
+   * one caller whose UPDATE matched the PENDING row gets `true`; a second
+   * click, a second tab or a replay matches nothing.
+   */
+  async claimProposal(scope: CallerScope, id: string): Promise<boolean> {
+    const claimed = await this.prisma.client.assistantTicketProposal.updateMany({
+      where: { id, status: 'PENDING', ...proposalOwnedBy(scope) },
+      data: { status: 'CONFIRMED', decidedAt: new Date() },
+    });
+    return claimed.count === 1;
+  }
+
+  /**
+   * Compensation: the ticket was NOT created, so the claim is given back.
+   * Guarded on "no outcome recorded", so it can never reopen a proposal
+   * that already produced a ticket or a held request.
+   */
+  async releaseProposal(scope: CallerScope, id: string): Promise<void> {
+    await this.prisma.client.assistantTicketProposal.updateMany({
+      where: {
+        id,
+        status: 'CONFIRMED',
+        ticketId: null,
+        requestId: null,
+        ...proposalOwnedBy(scope),
+      },
+      data: { status: 'PENDING', decidedAt: null },
+    });
+  }
+
+  /** What the claim produced. Written once, right after the ticket exists. */
+  async recordProposalOutcome(
+    id: string,
+    outcome: { ticketId: string | null; ticketNumber: string | null; requestId: string | null },
+  ): Promise<void> {
+    await this.prisma.client.assistantTicketProposal.updateMany({
+      where: { id, status: 'CONFIRMED', ticketId: null, requestId: null },
+      data: outcome,
+    });
+  }
+
+  async dismissProposal(scope: CallerScope, id: string): Promise<boolean> {
+    const dismissed = await this.prisma.client.assistantTicketProposal.updateMany({
+      where: { id, status: 'PENDING', ...proposalOwnedBy(scope) },
+      data: { status: 'DISMISSED', decidedAt: new Date() },
+    });
+    return dismissed.count === 1;
+  }
+
+  /**
+   * Own the alert for (month, threshold). `INSERT ... ON CONFLICT DO NOTHING`
+   * on the unique key: exactly one caller, across concurrent requests,
+   * replays and restarts, gets `true`.
+   */
+  async claimBudgetAlert(
+    month: string,
+    threshold: number,
+    spentUsd: Prisma.Decimal,
+    budgetUsd: number,
+  ): Promise<boolean> {
+    const r = await this.prisma.client.assistantBudgetAlert.createMany({
+      data: [{ month, threshold, spentUsd, budgetUsd: new Prisma.Decimal(budgetUsd) }],
+      skipDuplicates: true,
+    });
+    return r.count === 1;
+  }
+
+  /** Give a claim back when the alert could not be raised at all, so a later request tries again. */
+  async releaseBudgetAlert(month: string, threshold: number): Promise<void> {
+    await this.prisma.client.assistantBudgetAlert.deleteMany({ where: { month, threshold } });
   }
 
   /** Everything spent since `since` (start of the UTC month). */

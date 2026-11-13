@@ -1719,6 +1719,10 @@ Four tables, no FKs to people (a conversation outlives its account and support s
 
 **Attachments (2026-11-13):** `assistant_attachments` — a file attached to a question (kind IMAGE|PDF). Owner columns mirror `assistant_conversations`; FKs to the conversation and (once sent) the message, both RESTRICT. IMMUTABLE after insert except `message_id` set once (guarded `updateMany where message_id IS NULL`). `storage_key` (`assistant/<conversationId>/<uuid>`) points at the REBUILT bytes in the private bucket; `sha256`/`bytes` describe those bytes. The stored user turn holds `{type:'skydrop_attachment', id, mediaType, tokens}`, resolved to an image/document block at replay.
 
+**Ticket proposals (2026-11-13, phase D):** `assistant_ticket_proposals` — a support ticket the model PROPOSED through `propose_ticket`; the ticket is raised only when the owner presses the button (`POST .../ticket-proposals/:id/confirm`). Owner columns mirror `assistant_conversations`; the one FK is to the conversation (RESTRICT); `order_id`, `ticket_id` and `request_id` are soft references. `status` is `assistant_ticket_proposal_status` (`pending` → `confirmed` | `dismissed`); every transition is a guarded `updateMany` naming the owner columns, and `pending → confirmed` is the exactly-once claim (count 0 = someone else won). `order_id`/`order_number` are resolved server-side inside the CALLER's scope, never taken from the model. `request_id` is a member store's issue held for client approval (`ASK_SELLER`).
+
+**Budget alerts (2026-11-13, phase D):** `assistant_budget_alerts` — one row per (UTC month `YYYY-MM`, threshold 80|100) that admins were told about. `UNIQUE (month, threshold)` is the dedupe: the first request to `INSERT ... ON CONFLICT DO NOTHING` owns the alert and raises the system issue (`source = 'assistant-budget'`); every concurrent or later one gets count 0 and sends nothing.
+
 ---
 
 *Last updated: 2026-05-14*

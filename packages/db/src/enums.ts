@@ -181,3 +181,5 @@ export { StoreDisputeKind } from '@prisma/client';
 export { AssistantAudience, AssistantMessageRole } from '@prisma/client';
 // 2026-11-13 — what an assistant attachment is.
 export { AssistantAttachmentKind } from '@prisma/client';
+// 2026-11-13 — assistant phase D: where a proposed support ticket stands.
+export { AssistantTicketProposalStatus } from '@prisma/client';

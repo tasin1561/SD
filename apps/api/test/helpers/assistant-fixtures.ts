@@ -90,6 +90,10 @@ export function fakeDeps(orders: readonly FakeOrder[] = []): AssistantToolDeps {
       },
       listForSeller: async (sellerId: string) =>
         orders.filter((x) => x.sellerId === sellerId).map(summary),
+      resolveForSeller: async (sellerId: string, identifier: string) => {
+        const o = orders.find((x) => x.sellerId === sellerId && x.orderNumber === identifier);
+        return o ? { id: `order-${o.orderNumber}`, orderNumber: o.orderNumber } : null;
+      },
       findForStaff: async (identifier: string) => {
         const o = orders.find((x) => x.orderNumber === identifier);
         return o ? summary(o) : null;
@@ -106,6 +110,25 @@ export function fakeDeps(orders: readonly FakeOrder[] = []): AssistantToolDeps {
       stats: async () => ({ byStatus: { PENDING: 3 }, openTotal: 3, assignedByAgent: [] }),
     },
     help: new AssistantHelpService(),
+    proposals: {
+      createProposal: async (_scope: CallerScope, _conversationId: string, row) => ({
+        proposal: {
+          id: '0191a000-0000-7000-8000-0000000000f1',
+          conversationId: _conversationId,
+          subject: row.subject,
+          description: row.description,
+          orderId: row.orderId,
+          orderNumber: row.orderNumber,
+          status: 'PENDING' as const,
+          ticketId: null,
+          ticketNumber: null,
+          requestId: null,
+          createdAt: new Date(),
+          decidedAt: null,
+        },
+        created: true,
+      }),
+    },
   };
 }
 

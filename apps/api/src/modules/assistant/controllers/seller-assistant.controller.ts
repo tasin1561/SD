@@ -31,6 +31,7 @@ import {
 } from '../services/assistant-attachment.service';
 import { AssistantChatService } from '../services/assistant-chat.service';
 import { AssistantConversationService } from '../services/assistant-conversation.service';
+import { AssistantTicketService } from '../services/assistant-ticket.service';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -53,6 +54,7 @@ export class SellerAssistantController {
     private readonly conversations: AssistantConversationService,
     private readonly chat: AssistantChatService,
     private readonly attachments: AssistantAttachmentService,
+    private readonly ticketProposals: AssistantTicketService,
   ) {}
 
   @Post('conversations')
@@ -90,6 +92,29 @@ export class SellerAssistantController {
     await streamAnswer(res, (emit) =>
       this.chat.send(scope, id, body.text, emit, body.context ?? null, attachmentIds),
     );
+  }
+
+  /**
+   * The ONE thing that turns a proposal into a ticket: a person pressing the
+   * button. Owner-only (404 for anyone else's), permission re-checked here,
+   * exactly once however many clicks.
+   */
+  @Post('ticket-proposals/:id/confirm')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60 * 1000 } })
+  @ApiOperation({
+    summary: 'Raise the ticket the assistant proposed (the person pressed the button)',
+  })
+  confirmTicket(@CurrentSeller() seller: AuthenticatedSeller, @Param('id', uuid()) id: string) {
+    return this.ticketProposals.confirm(scopeFromSeller(seller), id);
+  }
+
+  @Post('ticket-proposals/:id/dismiss')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60 * 1000 } })
+  @ApiOperation({ summary: 'Decline a ticket the assistant proposed' })
+  dismissTicket(@CurrentSeller() seller: AuthenticatedSeller, @Param('id', uuid()) id: string) {
+    return this.ticketProposals.dismiss(scopeFromSeller(seller), id);
   }
 
   @Post('conversations/:id/attachments')

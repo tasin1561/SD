@@ -161,7 +161,7 @@ describe('SSE framing', () => {
   });
 });
 
-describe('the assistant is READ-ONLY (phase A)', () => {
+describe('the assistant is READ-ONLY (phase A; phase D adds ONE ticket the person confirms by button, pinned in assistant-ticket-confirmation.spec)', () => {
   const dir = join(__dirname, '../../src/modules/assistant');
   // `knowledge/generated/` is DATA (help text quoted from the docs), not code:
   // it legitimately contains words like transitionStatus in prose. It has no

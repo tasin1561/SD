@@ -72,7 +72,18 @@ export interface AssistantTool {
   readonly permission: string | null;
   readonly mirrors: RouteMirror | null;
   readonly inputSchema: ToolInputSchema;
-  run(scope: CallerScope, input: Record<string, unknown>): Promise<unknown>;
+  run(scope: CallerScope, input: Record<string, unknown>, ctx: ToolContext): Promise<unknown>;
+}
+
+/**
+ * What a tool may know about the turn it runs in: which conversation, and a
+ * way to tell the stream something (a proposal card). It deliberately
+ * carries no database handle and no service: a tool reaches the world only
+ * through the dependencies `buildAssistantTools` was given.
+ */
+export interface ToolContext {
+  readonly conversationId: string;
+  readonly emit: (event: AssistantStreamEvent) => void;
 }
 
 /** A refusal a tool wants the model to see, with a short stable code. */
@@ -104,5 +115,13 @@ export type AssistantStreamEvent =
         | 'FAILED';
       readonly text: string;
       readonly helpLinks: ReadonlyArray<{ readonly label: string; readonly path: string }>;
+    }
+  | {
+      /** A ticket the assistant PROPOSED. Nothing exists until the person presses the button. */
+      readonly type: 'ticket_proposal';
+      readonly id: string;
+      readonly subject: string;
+      readonly description: string;
+      readonly orderNumber: string | null;
     }
   | { readonly type: 'done'; readonly conversationId: string };

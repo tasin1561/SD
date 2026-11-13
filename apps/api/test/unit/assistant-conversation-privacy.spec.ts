@@ -65,6 +65,7 @@ function fakePrisma(
           rows.find((r) => matches(r, where)) ?? null,
       },
       assistantAttachment: { findMany: async () => [] },
+      assistantTicketProposal: { findMany: async () => [] },
       assistantMessage: {
         findMany: async ({ where }: { where: { conversationId: string } }) =>
           messages.filter((m) => m.conversationId === where.conversationId),

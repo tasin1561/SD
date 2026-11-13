@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { Prisma } from '@skydrop/db';
 import { SystemSettingsService } from '../../system-settings/services/system-settings.service';
 import type { CallerScope } from '../assistant.types';
 import { AssistantStoreService } from './assistant-store.service';
@@ -41,9 +42,8 @@ export class AssistantBudgetService {
       return { ok: false, code: 'RESTING_DAILY' };
     }
 
-    const budget = await this.number('assistant.monthly_budget_usd', DEFAULT_MONTHLY_BUDGET_USD);
-    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const spent = await this.store.costSince(monthStart);
+    const budget = await this.monthlyBudgetUsd();
+    const spent = await this.monthlySpendUsd(now);
     if (spent.greaterThanOrEqualTo(budget)) return { ok: false, code: 'RESTING_BUDGET' };
 
     return { ok: true };
@@ -61,9 +61,22 @@ export class AssistantBudgetService {
 
   /** Only the monthly cap, for a tool round inside one answer. */
   async monthlyOk(now: Date = new Date()): Promise<boolean> {
-    const budget = await this.number('assistant.monthly_budget_usd', DEFAULT_MONTHLY_BUDGET_USD);
-    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    return (await this.store.costSince(monthStart)).lessThan(budget);
+    return (await this.monthlySpendUsd(now)).lessThan(await this.monthlyBudgetUsd());
+  }
+
+  /**
+   * THE one definition of "what has the assistant spent this UTC month".
+   * The cap above and the 80% / 100% alert both read it, so the warning can
+   * never disagree with the cap about how much is spent. Nothing else sums
+   * `assistant_usage.cost_usd` for the month.
+   */
+  monthlySpendUsd(now: Date = new Date()): Promise<Prisma.Decimal> {
+    return this.store.costSince(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));
+  }
+
+  /** The monthly cap in USD (`assistant.monthly_budget_usd`, default $80). */
+  monthlyBudgetUsd(): Promise<number> {
+    return this.number('assistant.monthly_budget_usd', DEFAULT_MONTHLY_BUDGET_USD);
   }
 
   private async number(key: string, fallback: number): Promise<number> {

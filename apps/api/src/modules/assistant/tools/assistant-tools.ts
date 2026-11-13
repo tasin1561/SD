@@ -9,6 +9,7 @@ import type {
 } from '../../reseller-order/services/store-orders.service';
 import type { AdminCallQueueService } from '../../call-center/services/admin-call-queue.service';
 import type { AssistantHelpService } from '../services/assistant-help.service';
+import type { AssistantStoreService } from '../services/assistant-store.service';
 import { ToolError, type AssistantTool, type CallerScope } from '../assistant.types';
 
 /**
@@ -30,12 +31,17 @@ import { ToolError, type AssistantTool, type CallerScope } from '../assistant.ty
  *   4. Results are PROJECTIONS: no phone numbers, e-mails or street
  *      addresses; for a store or an associate, none of the store's costs.
  *
- * There is no tool that writes. Adding one is a different review.
+ * There is no tool that changes anything of the caller's. The one tool that
+ * stores a row, `propose_ticket`, stores a PROPOSAL in the assistant's own
+ * table and returns; the ticket is raised by the person pressing a button,
+ * through `AssistantTicketService`, which no tool can reach (the
+ * `assistant-ticket-confirmation.spec.ts` structural spec pins that).
+ * Adding any other write is a different review.
  */
 export interface AssistantToolDeps {
   readonly orders: Pick<
     OrderAssistantReadService,
-    'listForSeller' | 'findForSeller' | 'findForStaff'
+    'listForSeller' | 'findForSeller' | 'findForStaff' | 'resolveForSeller'
   >;
   readonly tracking: Pick<SellerTrackingService, 'list' | 'detail'>;
   readonly restrictions: Pick<SellerRestrictionService, 'assertAllowed'>;
@@ -43,9 +49,12 @@ export interface AssistantToolDeps {
   readonly storeOrders: Pick<StoreOrdersService, 'list' | 'detail'>;
   readonly callQueue: Pick<AdminCallQueueService, 'stats'>;
   readonly help: Pick<AssistantHelpService, 'search' | 'explainError' | 'findPage'>;
+  /** Where a ticket PROPOSAL is stored. Nothing here can raise a ticket. */
+  readonly proposals: Pick<AssistantStoreService, 'createProposal'>;
 }
 
 const NOT_YOURS = 'No order of yours matches that number.';
+const NOT_YOURS_STORE = 'No order of this store matches that number.';
 
 function sellerId(scope: CallerScope): string {
   if (scope.sellerId === null)
@@ -83,6 +92,97 @@ function limitOf(input: Record<string, unknown>): number {
 }
 
 export function buildAssistantTools(deps: AssistantToolDeps): readonly AssistantTool[] {
+  const PROPOSED =
+    'PROPOSED ONLY. Nothing has been raised and no ticket exists. A card with a "Raise this ticket" button is now shown to the person; the ticket exists only if they press it. Tell them to press the button, and never say or imply that the ticket was raised.';
+
+  /**
+   * `propose_ticket`: the model's whole part in raising a ticket. It stores a
+   * proposal (the words, plus the order IF one of the CALLER's matches the
+   * number) and shows a card. It cannot create a ticket: it holds no ticket
+   * service, and the confirm endpoint is a human HTTP route.
+   */
+  const proposeTicketTool = (opts: {
+    readonly audience: AssistantTool['audience'];
+    readonly permission: string;
+    readonly mirrors: NonNullable<AssistantTool['mirrors']>;
+    readonly resolveOrder: (
+      scope: CallerScope,
+      identifier: string,
+    ) => Promise<{ id: string; orderNumber: string } | null>;
+    readonly orderRequired: boolean;
+  }): AssistantTool => ({
+    name: 'propose_ticket',
+    description:
+      'Offer to raise a support ticket for the person. Use it ONLY when they want help from a person, or you looked and cannot solve it. It does NOT raise anything: it shows the person a card with a "Raise this ticket" button, and the ticket exists only if they press it. Write the subject and description in the person\'s own words and language. Never say a ticket was raised.',
+    audience: opts.audience,
+    permission: opts.permission,
+    mirrors: opts.mirrors,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        subject: {
+          type: 'string',
+          description: 'A short title for the ticket, at most 120 characters.',
+          minLength: 3,
+          maxLength: 120,
+        },
+        description: {
+          type: 'string',
+          description:
+            'What went wrong and what the person needs, in a few sentences, at most 2000 characters. No phone numbers or addresses.',
+          minLength: 10,
+          maxLength: 2000,
+        },
+        orderNumber: {
+          type: 'string',
+          description: opts.orderRequired
+            ? 'The order number this is about (for example SD-2026-000123). Required.'
+            : 'The order number this is about, if there is one (for example SD-2026-000123).',
+          minLength: 3,
+          maxLength: 64,
+        },
+      },
+      required: opts.orderRequired
+        ? ['subject', 'description', 'orderNumber']
+        : ['subject', 'description'],
+      additionalProperties: false,
+    },
+    async run(scope, input, ctx) {
+      const subject = String(input.subject);
+      const description = String(input.description);
+      const wanted = typeof input.orderNumber === 'string' ? input.orderNumber : null;
+      // Resolved INSIDE the caller's scope, here, never from the model's text:
+      // a number that is somebody else's matches nothing, exactly like one
+      // that does not exist, and the proposal then carries no order.
+      const order = wanted === null ? null : await opts.resolveOrder(scope, wanted);
+      if (opts.orderRequired && order === null) {
+        throw new ToolError('NOT_FOUND', NOT_YOURS_STORE);
+      }
+      const stored = await deps.proposals.createProposal(scope, ctx.conversationId, {
+        subject,
+        description,
+        orderId: order?.id ?? null,
+        orderNumber: order?.orderNumber ?? null,
+      });
+      if (stored === null) {
+        throw new ToolError(
+          'FAILED',
+          'Several tickets are already waiting for the person to confirm. Do not propose another.',
+        );
+      }
+      if (stored.created) {
+        ctx.emit({
+          type: 'ticket_proposal',
+          id: stored.proposal.id,
+          subject: stored.proposal.subject,
+          description: stored.proposal.description,
+          orderNumber: stored.proposal.orderNumber,
+        });
+      }
+      return { status: 'proposed', note: PROPOSED };
+    },
+  });
+
   const tools: AssistantTool[] = [
     // ── seller ───────────────────────────────────────────────────────
     {
@@ -346,6 +446,48 @@ export function buildAssistantTools(deps: AssistantToolDeps): readonly Assistant
         };
       },
     },
+
+    // ── raise a ticket: PROPOSE only (seller, store, associate) ───────
+    proposeTicketTool({
+      audience: ['SELLER'],
+      permission: 'tickets.create',
+      mirrors: { controller: 'ticket/controllers/seller-ticket.controller.ts', handler: 'create' },
+      async resolveOrder(scope, identifier) {
+        return deps.orders.resolveForSeller(sellerId(scope), identifier);
+      },
+      orderRequired: false,
+    }),
+    proposeTicketTool({
+      audience: ['STORE', 'ASSOCIATE'],
+      permission: 'tickets.manage',
+      mirrors: { controller: 'ticket/controllers/store-issue.controller.ts', handler: 'create' },
+      async resolveOrder(scope, identifier) {
+        const { storeId, viewer } = store(scope);
+        const wanted = identifier.toLowerCase();
+        // The same scoped search the order tool uses: an associate's list is
+        // already narrowed to the orders they placed.
+        const page = await deps.storeOrders.list(storeId, viewer, {
+          page: 1,
+          pageSize: 5,
+          search: identifier,
+        });
+        for (const row of page.items) {
+          const view = await deps.storeOrders.detail(storeId, viewer, row.id);
+          const awbs = view.shipments.map((s) => (s.awbNumber ?? '').toLowerCase());
+          if (
+            view.orderNumber.toLowerCase() === wanted ||
+            (view.sellerOrderRef ?? '').toLowerCase() === wanted ||
+            awbs.includes(wanted)
+          ) {
+            return { id: row.id, orderNumber: view.orderNumber };
+          }
+        }
+        return null;
+      },
+      // A member store raises an issue ABOUT one of its orders; the console's
+      // own form cannot be submitted without one.
+      orderRequired: true,
+    }),
 
     // ── every audience ───────────────────────────────────────────────
     {
