@@ -204,6 +204,28 @@ export const easy = defineMessages({
   // ── Warehouse hub (/warehouse) ────────────────────────────────────────
   'ezWh.returns': ['Returns (RTO)', 'রিটার্ন (RTO)', 'वापसी (RTO)'],
 
+  // ── Tickets (/tickets/[id]) ───────────────────────────────────────────
+  'ezTicket.helpRefund': [
+    'We agree with the client and pay them back. You type the amount, and it is added to the client’s wallet when you save the decision.',
+    'আমরা ক্লায়েন্টের সঙ্গে একমত এবং টাকা ফেরত দিই। আপনি পরিমাণ লিখবেন, এবং সিদ্ধান্ত সেভ করলে তা ক্লায়েন্টের ওয়ালেটে যোগ হবে।',
+    'हम क्लाइंट से सहमत हैं और पैसे लौटाते हैं। आप रकम लिखते हैं, और फ़ैसला सेव करने पर वह क्लाइंट के वॉलेट में जुड़ जाती है।',
+  ],
+  'ezTicket.helpReturned': [
+    'The goods were sent back to the client. No money is paid.',
+    'পণ্য ক্লায়েন্টের কাছে ফেরত পাঠানো হয়েছে। কোনো টাকা দেওয়া হয় না।',
+    'सामान क्लाइंट को वापस भेज दिया गया। कोई पैसा नहीं दिया जाता।',
+  ],
+  'ezTicket.helpWriteOff': [
+    'The client agreed to take the loss. No money is paid and nothing goes back.',
+    'ক্লায়েন্ট ক্ষতি মেনে নিয়েছেন। কোনো টাকা দেওয়া হয় না এবং কিছু ফেরত যায় না।',
+    'क्लाइंट ने नुकसान मान लिया। कोई पैसा नहीं दिया जाता और कुछ वापस नहीं जाता।',
+  ],
+  'ezTicket.helpRejected': [
+    'We do not agree with the claim. The ticket closes with no refund.',
+    'আমরা দাবিটির সঙ্গে একমত নই। টিকিটটি কোনো রিফান্ড ছাড়াই বন্ধ হয়।',
+    'हम दावे से सहमत नहीं हैं। टिकट बिना रिफ़ंड के बंद होता है।',
+  ],
+
   // ── Manual placement (/manual-placement) ──────────────────────────────
   'ezPlacement.whyInfo': [
     'Why no connected courier took this parcel. The courier’s own words, when there are any, are shown under the reason.',

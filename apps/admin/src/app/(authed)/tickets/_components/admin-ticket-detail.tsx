@@ -22,7 +22,10 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { AdminTicketConversation } from './admin-ticket-conversation';
 import { StoreDisputeSettle } from './store-dispute-settle';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { ChoiceGuide } from '@/components/easy/choice-guide';
+import '@/components/easy/easy.css';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { richMessage } from '@/i18n/client';
@@ -52,6 +55,21 @@ const STAGES = (
 ];
 
 /** How a ticket finished. Asked only once "Closed" is chosen. */
+function outcomeHelp(tr: Translate<MessageKey>, value: TicketStatus): string {
+  switch (value) {
+    case TicketStatus.RESOLVED_REFUND:
+      return tr('ezTicket.helpRefund');
+    case TicketStatus.RESOLVED_RETURNED:
+      return tr('ezTicket.helpReturned');
+    case TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED:
+      return tr('ezTicket.helpWriteOff');
+    case TicketStatus.REJECTED:
+      return tr('ezTicket.helpRejected');
+    default:
+      return '';
+  }
+}
+
 const OUTCOMES = (
   tr: Translate<MessageKey>,
 ): ReadonlyArray<{ value: TicketStatus; label: string }> => [
@@ -74,6 +92,7 @@ const OUTCOMES = (
  */
 export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): ReactElement {
   const tr = useT();
+  const locale = useLocale();
   const toast = useToast();
   const ticket = useAdminTicket(ticketId);
   const events = useTicketEvents(ticketId);
@@ -141,7 +160,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
         : tr('ticketsAdminTicketDetail.skydrop');
 
   return (
-    <div className="af-page">
+    <div className="af-page ez-touch">
       <Link href="/tickets" className="af-back">
         <ArrowLeft size={14} aria-hidden /> {tr('ticketsAdminTicketDetail.allTickets')}
       </Link>
@@ -155,7 +174,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
         }
         meta={<TicketStatusChip status={t.status} />}
         subtitle={tr('ticketsAdminTicketDetail.raisedBy', {
-          value: new Date(t.createdAt).toLocaleString(),
+          value: formatDateTime(t.createdAt, locale),
           openedBy,
         })}
       />
@@ -284,7 +303,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
               {(events.data ?? []).map((e) => (
                 <li key={e.id} className="tk-history__item">
                   <span className="tk-history__when sk-figure">
-                    {new Date(e.createdAt).toLocaleString()}
+                    {formatDateTime(e.createdAt, locale)}
                   </span>
                   <span className="tk-history__what">
                     {e.fromStatus === null
@@ -310,7 +329,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
           <AfCard>
             <p className="af-small">
               {richMessage(tr('ticketsAdminTicketDetail.asAtOrder'), {
-                value: new Date(t.disputedFigures.capturedAt).toLocaleString(),
+                value: formatDateTime(t.disputedFigures.capturedAt, locale),
                 span: <span className="sk-ident">{t.disputedFigures.orderNumber}</span>,
                 paymentMode: t.disputedFigures.paymentMode,
               })}
@@ -428,6 +447,19 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                     </option>
                   ))}
                 </Select>
+              ) : null}
+
+              {/* What each way of closing does — hidden until asked for. */}
+              {stage === 'CLOSED' ? (
+                <ChoiceGuide
+                  selected={to === '' ? undefined : to}
+                  onChoose={(v) => setTo(v)}
+                  choices={outcomes.map((o) => ({
+                    value: o.value,
+                    label: o.label,
+                    helper: outcomeHelp(tr, o.value),
+                  }))}
+                />
               ) : null}
 
               {to === TicketStatus.RESOLVED_REFUND ? (

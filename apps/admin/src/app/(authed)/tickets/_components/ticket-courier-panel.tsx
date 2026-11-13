@@ -19,7 +19,8 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
 
 /**
  * The courier conversation for this ticket, on the ticket — whichever
@@ -36,6 +37,7 @@ import { useT } from '@/i18n/client';
  */
 export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }): ReactElement {
   const t = useT();
+  const locale = useLocale();
 
   const toast = useToast();
   // FE-2: cosmetic. The server enforces this regardless.
@@ -201,7 +203,7 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
                   {fromCourier
                     ? t('ticketsTicketCourierPanel.courier')
                     : t('ticketsTicketCourierPanel.us')}{' '}
-                  · {new Date(m.occurredAt).toLocaleString('en-IN')}
+                  · {formatDateTime(m.occurredAt, locale)}
                 </p>
                 <p className="af-pre" data-dense="1" data-side={fromCourier ? 'in' : undefined}>
                   {m.body}

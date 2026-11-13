@@ -18,7 +18,10 @@ import { useTicketsList } from '@/lib/ops-hooks';
 import { AfCard } from '@/app/(authed)/system/_components/af-parts';
 import { TicketHandlingChip, TicketStatusChip } from './ticket-chips';
 import './tickets.css';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDate } from '@/i18n/format';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { ClientFilter } from '@/components/client-filter';
 
 const PAGE_SIZE = 25;
@@ -37,6 +40,7 @@ const PAGE_SIZE = 25;
  */
 export function TicketsIndex(): ReactElement {
   const tr = useT();
+  const locale = useLocale();
   // STAGE, not raw status. "Closed" is four different outcomes in the
   // database — refunded, goods back, write-off, not upheld — and a
   // filter listing all four made somebody choose which kind of finished
@@ -88,15 +92,22 @@ export function TicketsIndex(): ReactElement {
   }
 
   return (
-    <div className="af-page">
+    <div className="af-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: tr('ticketsTicketsIndex.operations') },
           { label: tr('ticketsTicketsIndex.tickets') },
         ]}
         Link={Link}
-        title={tr('ticketsTicketsIndex.tickets')}
-        subtitle={tr('ticketsTicketsIndex.scrapDamageRaisedByRto')}
+        title={
+          <span className="ez-titled">
+            {tr('ticketsTicketsIndex.tickets')}
+            <InfoButton
+              title={tr('ticketsTicketsIndex.tickets')}
+              text={tr('ticketsTicketsIndex.scrapDamageRaisedByRto')}
+            />
+          </span>
+        }
       />
 
       <div className="af-kpis">
@@ -294,9 +305,7 @@ export function TicketsIndex(): ReactElement {
                     )}
                   </Td>
                   <Td>
-                    <span className="af-small af-nowrap">
-                      {new Date(t.createdAt).toLocaleDateString()}
-                    </span>
+                    <span className="af-small af-nowrap">{formatDate(t.createdAt, locale)}</span>
                   </Td>
                 </Tr>
               ))}
