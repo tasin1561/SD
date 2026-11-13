@@ -15,6 +15,7 @@ import { SellerTrackingModule } from '../seller-tracking/seller-tracking.module'
 import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { SystemSettingsModule } from '../system-settings/system-settings.module';
 import { TicketModule } from '../ticket/ticket.module';
+import { TrackingPublicModule } from '../tracking-public/tracking-public.module';
 import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
 import { AdminAssistantPanelController } from './controllers/admin-assistant-panel.controller';
 import { AssistantMonitorWorker } from './queue/assistant-monitor.worker';
@@ -26,8 +27,11 @@ import { AssistantMonitorDigestService } from './services/assistant-monitor-dige
 import { AssistantMonitorPanelService } from './services/assistant-monitor-panel.service';
 import { AssistantMonitorService } from './services/assistant-monitor.service';
 import { AssistantPanelService } from './services/assistant-panel.service';
+import { AssistantPublicService } from './services/assistant-public.service';
 import { AssistantRetentionService } from './services/assistant-retention.service';
 import { AdminAssistantController } from './controllers/admin-assistant.controller';
+import { PublicParcelAssistantController } from './controllers/public-parcel-assistant.controller';
+import { PublicParcelAwbThrottleGuard } from './controllers/public-parcel-awb-throttle.guard';
 import { SellerAssistantController } from './controllers/seller-assistant.controller';
 import { StoreAssistantController } from './controllers/store-assistant.controller';
 import { AssistantAttachmentService } from './services/assistant-attachment.service';
@@ -81,12 +85,15 @@ import { AssistantToolRegistry } from './services/assistant-tool-registry.servic
     AdminReportsModule,
     // The monitor's weekly e-mail goes through the dispatcher the system-issue alerts use.
     NotificationAudienceModule,
+    // Batch C: the public parcel helper reads the tracking page's own projection.
+    TrackingPublicModule,
   ],
   controllers: [
     AdminAssistantController,
     AdminAssistantPanelController,
     SellerAssistantController,
     StoreAssistantController,
+    PublicParcelAssistantController,
   ],
   providers: [
     AssistantStoreService,
@@ -99,6 +106,8 @@ import { AssistantToolRegistry } from './services/assistant-tool-registry.servic
     AssistantTicketPhotosService,
     AssistantStatusService,
     AssistantChatService,
+    AssistantPublicService,
+    PublicParcelAwbThrottleGuard,
     AssistantConversationService,
     AssistantFeedbackService,
     AssistantBillingService,

@@ -2132,6 +2132,26 @@ const systemSettings: SystemSettingSeed[] = [
       'Hard cap on what the AI monitor may cost in a calendar month, separate from the assistant budget. Nothing reads it until the monitor exists.',
     sellerOverridable: false,
   },
+  {
+    key: 'assistant.public_enabled',
+    category: 'assistant',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'AI parcel helper on the public tracking page',
+    description:
+      'Switch for the "Ask about this parcel" helper on the public tracking page. Off by default: the page shows no helper and nothing is sent to the AI provider for visitors.',
+    sellerOverridable: false,
+  },
+  {
+    key: 'assistant.public_monthly_budget_usd',
+    category: 'assistant',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '10.00',
+    displayName: 'AI parcel helper monthly budget (USD)',
+    description:
+      'Hard cap on what the public parcel helper may cost in a calendar month (real spend), separate from the assistant budget. Once reached, the helper is hidden from visitors until the month turns or this is raised.',
+    sellerOverridable: false,
+  },
 ];
 
 async function seedSystemSettings() {

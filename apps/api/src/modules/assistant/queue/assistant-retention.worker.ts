@@ -54,6 +54,7 @@ export class AssistantRetentionWorker implements OnModuleInit, OnModuleDestroy {
       async (job: Job): Promise<void> => {
         if (job.name !== JOB_ASSISTANT_RETENTION) return;
         await this.retention.run();
+        await this.retention.purgePublic();
       },
       { connection: this.redis.createConnection(), concurrency: 1 },
     );

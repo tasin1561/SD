@@ -37,15 +37,23 @@ export interface BillingRow {
   };
   /** The overnight monitor's own line (`assistant_monitor_usage`), zero when it is off. */
   readonly monitor: UsageBucket;
+  /**
+   * The public parcel helper's own line (`assistant_usage` rows of the PUBLIC
+   * audience). Not a portal and not part of `assistant`: it has its own
+   * switch and its own cap, and `total` is assistant + monitor + this.
+   */
+  readonly publicParcel: UsageBucket;
 }
 
 export interface BillingBudget {
   /** Shown caps (the real cap converted the same way as every cost). */
   readonly assistantBudgetUsd: string;
   readonly monitorBudgetUsd: string;
+  readonly publicBudgetUsd: string;
   /** Share of the real cap used, 0-100+ (null when the cap is 0). */
   readonly assistantUsedPct: number | null;
   readonly monitorUsedPct: number | null;
+  readonly publicUsedPct: number | null;
   /** Current month only: where the month ends at the pace so far. */
   readonly projectedCostUsd: string | null;
   readonly projectedPct: number | null;
@@ -95,9 +103,14 @@ function bucketOf(r: RawRow): UsageBucket {
   };
 }
 
-function newRow(period: string): { period: string; portals: Record<PortalKey, UsageBucket> } {
+function newRow(period: string): {
+  period: string;
+  portals: Record<PortalKey, UsageBucket>;
+  publicParcel: UsageBucket;
+} {
   return {
     period,
+    publicParcel: emptyBucket(),
     portals: {
       staff: emptyBucket(),
       seller: emptyBucket(),
@@ -119,8 +132,13 @@ export function buildRows(
   const byPeriod = new Map(periods.map((p) => [p, newRow(p)]));
   for (const r of raw) {
     const row = byPeriod.get(r.period);
+    if (row === undefined) continue;
+    if (r.audience.toLowerCase() === 'public') {
+      row.publicParcel = addBuckets(row.publicParcel, bucketOf(r));
+      continue;
+    }
     const portal = r.audience.toLowerCase() as PortalKey;
-    if (row === undefined || !PORTALS.includes(portal)) continue;
+    if (!PORTALS.includes(portal)) continue;
     row.portals[portal] = addBuckets(row.portals[portal], bucketOf(r));
   }
   return periods.map((p) => {
@@ -131,9 +149,10 @@ export function buildRows(
       .reduce((acc, r) => addBuckets(acc, bucketOf({ ...r, audience: '' })), emptyBucket());
     return {
       period: p,
-      total: addBuckets(assistant, monitor),
+      total: addBuckets(addBuckets(assistant, monitor), row.publicParcel),
       assistant: { total: assistant, portals: row.portals },
       monitor,
+      publicParcel: row.publicParcel,
     };
   });
 }
@@ -208,6 +227,7 @@ export class AssistantBillingService {
   private async budgetFor(month: string, row: BillingRow, now: Date): Promise<BillingBudget> {
     const realCap = new Prisma.Decimal(await this.budget.monthlyBudgetUsd());
     const monitorCap = new Prisma.Decimal(await this.budget.monitorMonthlyBudgetUsd());
+    const publicCap = new Prisma.Decimal(await this.budget.publicMonthlyBudgetUsd());
     const current = monthKey(dhakaDate(now).y, dhakaDate(now).m) === month;
     const realSpend = current
       ? await this.budget.monthlySpendUsd(now)
@@ -215,6 +235,9 @@ export class AssistantBillingService {
     const monitorSpend = current
       ? await this.budget.monitorMonthlySpendUsd(now)
       : realFromBilledUsd(new Prisma.Decimal(row.monitor.costUsd));
+    const publicSpend = current
+      ? await this.budget.publicMonthlySpendUsd(now)
+      : realFromBilledUsd(new Prisma.Decimal(row.publicParcel.costUsd));
     let projected: Prisma.Decimal | null = null;
     if (current) {
       const start = monthStart(month).getTime();
@@ -226,8 +249,10 @@ export class AssistantBillingService {
     return {
       assistantBudgetUsd: billedFromRealUsd(realCap).toFixed(2),
       monitorBudgetUsd: billedFromRealUsd(monitorCap).toFixed(2),
+      publicBudgetUsd: billedFromRealUsd(publicCap).toFixed(2),
       assistantUsedPct: pct(realSpend, realCap),
       monitorUsedPct: pct(monitorSpend, monitorCap),
+      publicUsedPct: pct(publicSpend, publicCap),
       projectedCostUsd: projected === null ? null : projected.toFixed(2),
       projectedPct: projected === null ? null : pct(realFromBilledUsd(projected), realCap),
     };

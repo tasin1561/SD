@@ -73,7 +73,7 @@ export function AiConversations(): ReactElement {
             onChange={(e) => set('portal', e.target.value)}
           >
             {opt('', t('ai.any'))}
-            {(['staff', 'seller', 'store', 'associate'] as const).map((p) =>
+            {(['staff', 'seller', 'store', 'associate', 'public'] as const).map((p) =>
               opt(p, t(`ai.portal.${p}`)),
             )}
           </Select>

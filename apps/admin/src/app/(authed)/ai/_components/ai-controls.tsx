@@ -27,12 +27,14 @@ const SWITCHES = [
   'assistant.portal_associate_enabled',
   'assistant.attachments_enabled',
   'assistant.monitor_enabled',
+  'assistant.public_enabled',
 ] as const;
 
 const NUMBERS: ReadonlyArray<{ key: string; money: boolean }> = [
   { key: 'assistant.monthly_budget_usd', money: true },
   { key: 'assistant.daily_messages_per_user', money: false },
   { key: 'assistant.monitor_monthly_budget_usd', money: true },
+  { key: 'assistant.public_monthly_budget_usd', money: true },
 ];
 
 function NumberRow({

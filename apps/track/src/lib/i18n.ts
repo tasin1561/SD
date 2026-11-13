@@ -88,6 +88,24 @@ type Dict = {
   readonly switchToHi: string;
   readonly switchToBn: string;
   readonly languageLabel: string;
+
+  // "Ask about this parcel" helper (Skydrop AI)
+  readonly askButton: string;
+  readonly askTitle: string;
+  readonly askAiBadge: string;
+  readonly askIntro: string;
+  readonly askPlaceholder: string;
+  readonly askSend: string;
+  readonly askClose: string;
+  readonly askNotice: string;
+  readonly askThinking: string;
+  readonly askError: string;
+  readonly askBusy: string;
+  readonly askQ1: string;
+  readonly askQ2: string;
+  readonly askQ3: string;
+  readonly askYou: string;
+  readonly askAnswerFrom: string;
 };
 
 const EN: Dict = {
@@ -139,6 +157,23 @@ const EN: Dict = {
   switchToHi: 'हिन्दी',
   switchToBn: 'বাংলা',
   languageLabel: 'Language',
+  askButton: 'Ask about this parcel',
+  askTitle: 'Skydrop AI',
+  askAiBadge: 'AI',
+  askIntro:
+    'Hi! I can explain the tracking details of this parcel. I cannot see anything else about your order.',
+  askPlaceholder: 'Ask about this parcel',
+  askSend: 'Send',
+  askClose: 'Close',
+  askNotice: 'Chats may be reviewed to improve the assistant.',
+  askThinking: 'Skydrop AI is typing',
+  askError: 'Something went wrong. Please try again in a moment.',
+  askBusy: 'Too many questions right now. Please try again in a few minutes.',
+  askQ1: 'Where is my parcel?',
+  askQ2: 'When will it arrive?',
+  askQ3: 'What does this status mean?',
+  askYou: 'You',
+  askAnswerFrom: 'Answers use only the tracking details on this page.',
 };
 
 const HI: Dict = {
@@ -190,6 +225,23 @@ const HI: Dict = {
   switchToHi: 'हिन्दी',
   switchToBn: 'বাংলা',
   languageLabel: 'भाषा',
+  askButton: 'इस पार्सल के बारे में पूछें',
+  askTitle: 'Skydrop AI',
+  askAiBadge: 'AI',
+  askIntro:
+    'नमस्ते! मैं इस पार्सल की ट्रैकिंग जानकारी समझा सकता हूँ। आपके ऑर्डर की और कोई जानकारी मुझे नहीं दिखती।',
+  askPlaceholder: 'इस पार्सल के बारे में पूछें',
+  askSend: 'भेजें',
+  askClose: 'बंद करें',
+  askNotice: 'सहायक को बेहतर बनाने के लिए चैट की समीक्षा की जा सकती है।',
+  askThinking: 'Skydrop AI लिख रहा है',
+  askError: 'कुछ गड़बड़ हो गई। थोड़ी देर में फिर कोशिश करें।',
+  askBusy: 'अभी बहुत सवाल आ रहे हैं। कुछ मिनट बाद फिर कोशिश करें।',
+  askQ1: 'मेरा पार्सल कहाँ है?',
+  askQ2: 'यह कब पहुँचेगा?',
+  askQ3: 'इस स्टेटस का मतलब क्या है?',
+  askYou: 'आप',
+  askAnswerFrom: 'जवाब सिर्फ़ इस पेज की ट्रैकिंग जानकारी से दिए जाते हैं।',
 };
 
 const BN: Dict = {
@@ -242,6 +294,23 @@ const BN: Dict = {
   switchToHi: 'हिन्दी',
   switchToBn: 'বাংলা',
   languageLabel: 'ভাষা',
+  askButton: 'এই পার্সেল নিয়ে জিজ্ঞাসা করুন',
+  askTitle: 'Skydrop AI',
+  askAiBadge: 'AI',
+  askIntro:
+    'হ্যালো! আমি এই পার্সেলের ট্র্যাকিং তথ্য বুঝিয়ে দিতে পারি। আপনার অর্ডারের আর কিছু আমি দেখতে পাই না।',
+  askPlaceholder: 'এই পার্সেল নিয়ে জিজ্ঞাসা করুন',
+  askSend: 'পাঠান',
+  askClose: 'বন্ধ করুন',
+  askNotice: 'সহকারীকে আরও ভালো করতে চ্যাট পর্যালোচনা করা হতে পারে।',
+  askThinking: 'Skydrop AI লিখছে',
+  askError: 'কিছু একটা সমস্যা হয়েছে। একটু পরে আবার চেষ্টা করুন।',
+  askBusy: 'এখন অনেক প্রশ্ন আসছে। কয়েক মিনিট পরে আবার চেষ্টা করুন।',
+  askQ1: 'আমার পার্সেল কোথায়?',
+  askQ2: 'এটি কখন পৌঁছাবে?',
+  askQ3: 'এই স্ট্যাটাসের মানে কী?',
+  askYou: 'আপনি',
+  askAnswerFrom: 'উত্তর শুধু এই পেজের ট্র্যাকিং তথ্য থেকে দেওয়া হয়।',
 };
 
 const TABLE: Record<Locale, Dict> = { en: EN, hi: HI, bn: BN };

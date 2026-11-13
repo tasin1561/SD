@@ -10601,6 +10601,10 @@ enum AssistantAudience {
   SELLER    @map("seller")
   STORE     @map("store")
   ASSOCIATE @map("associate")
+  /// The anonymous visitor of one public tracking page (apps/track). Not a
+  /// person: `owner_user_id` is a random capability, and the conversation is
+  /// bound to ONE AWB (`public_awb`). Billed on its own line; kept 7 days.
+  PUBLIC    @map("public")
 
   @@map("assistant_audience")
 }
@@ -10637,6 +10641,9 @@ model AssistantConversation {
   /// Set by the 180-day retention job once the words, files and comments of
   /// this conversation have been replaced. Usage and cost rows are kept.
   anonymisedAt DateTime? @map("anonymised_at") @db.Timestamptz
+  /// PUBLIC audience only: the ONE AWB this conversation is about, taken from
+  /// the tracking page's own route. NULL for every console conversation.
+  publicAwb    String?   @map("public_awb")
 
   messages    AssistantMessage[]
   toolCalls   AssistantToolCall[]

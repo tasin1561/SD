@@ -14,6 +14,7 @@ import { OrderJourneyAssistantReadService } from '../../order-journey/services/o
 import { TicketAssistantReadService } from '../../ticket/services/ticket-assistant-read.service';
 import { AddressCheckAssistantReadService } from '../../address-check/services/address-check-assistant-read.service';
 import { ReportsAssistantReadService } from '../../admin-reports/services/reports-assistant-read.service';
+import { PublicTrackingReadService } from '../../tracking-public/services/public-tracking-read.service';
 import { validateToolInput } from '../assistant-input';
 import {
   ToolError,
@@ -68,6 +69,8 @@ export class AssistantToolRegistry {
     ticketReads: TicketAssistantReadService,
     addressChecks: AddressCheckAssistantReadService,
     metrics: ReportsAssistantReadService,
+    // The PUBLIC helper's only data source: the tracking page's own read.
+    parcels: PublicTrackingReadService,
   ) {
     this.tools = buildAssistantTools({
       orders,
@@ -86,6 +89,7 @@ export class AssistantToolRegistry {
       ticketReads,
       addressChecks,
       metrics,
+      parcels,
     });
   }
 

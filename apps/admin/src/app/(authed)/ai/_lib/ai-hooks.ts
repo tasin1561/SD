@@ -22,6 +22,8 @@ export interface UsageBucket {
 }
 export const PORTALS = ['staff', 'seller', 'store', 'associate'] as const;
 export type PortalKey = (typeof PORTALS)[number];
+/** The tracking-page helper is not a console, so it is not in PORTALS (billing keeps it on its own line). */
+export type ConversationPortal = PortalKey | 'public';
 
 export interface BillingRow {
   readonly period: string;
@@ -31,12 +33,16 @@ export interface BillingRow {
     readonly portals: Record<PortalKey, UsageBucket>;
   };
   readonly monitor: UsageBucket;
+  /** The public parcel helper's own line. */
+  readonly publicParcel: UsageBucket;
 }
 export interface BillingBudget {
   readonly assistantBudgetUsd: string;
   readonly monitorBudgetUsd: string;
+  readonly publicBudgetUsd: string;
   readonly assistantUsedPct: number | null;
   readonly monitorUsedPct: number | null;
+  readonly publicUsedPct: number | null;
   readonly projectedCostUsd: string | null;
   readonly projectedPct: number | null;
 }
@@ -92,7 +98,7 @@ export interface Dashboard {
   readonly refusalRate: number | null;
   readonly tools: ReadonlyArray<{ name: string; calls: number; failed: number }>;
   readonly languages: { counts: Record<string, number>; sampled: number };
-  readonly portals: Record<PortalKey, number>;
+  readonly portals: Record<ConversationPortal, number>;
   readonly attachments: number;
   readonly proposals: { raised: number; confirmed: number };
   readonly feedback: { up: number; down: number };
@@ -130,7 +136,7 @@ export interface MonitorScore {
 
 export interface ConversationListItem {
   readonly id: string;
-  readonly portal: PortalKey;
+  readonly portal: ConversationPortal;
   readonly title: string | null;
   readonly preview: string;
   readonly language: string | null;

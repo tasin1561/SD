@@ -40,6 +40,8 @@ export const BILLING_CSV_HEAD = [
   'assistant_associate_requests',
   'monitor_cost_usd',
   'monitor_requests',
+  'public_cost_usd',
+  'public_requests',
 ] as const;
 
 /** One CSV for month or day rows. Money is the stored 8-decimal string, never rounded. */
@@ -65,6 +67,8 @@ export function billingCsv(rows: readonly BillingRow[]): string {
       p.associate.requests,
       r.monitor.costUsd,
       r.monitor.requests,
+      r.publicParcel.costUsd,
+      r.publicParcel.requests,
     ]
       .map(cell)
       .join(',');

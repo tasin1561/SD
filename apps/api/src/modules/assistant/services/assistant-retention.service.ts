@@ -5,6 +5,8 @@ import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 /** Conversations are kept this long after their last activity, then anonymised. */
 export const RETENTION_DAYS = 180;
 export const REMOVED = '[removed]';
+/** A PUBLIC (tracking-page) conversation is DELETED this long after its last activity. */
+export const PUBLIC_RETENTION_DAYS = 7;
 const BATCH = 25;
 const MAX_BATCHES_PER_RUN = 40;
 
@@ -68,6 +70,62 @@ export class AssistantRetentionService {
     }
     this.log.log({ conversations, files, failed }, 'Assistant retention pass finished');
     return { conversations, files, failed };
+  }
+
+  /**
+   * The 7-day rule for the public parcel helper. Unlike the 180-day
+   * anonymisation, the WORDS are deleted outright: the messages and the tool
+   * rows are removed, the monitor's quotes are blanked, and the AWB link is
+   * cleared. What remains is an empty shell (id, dates, the visitor's random
+   * key) and the usage rows, because those carry the money the billing line
+   * is built from. Idempotent: a shell has `anonymised_at` set and is never
+   * selected again.
+   */
+  async purgePublic(now: Date = new Date(), days = PUBLIC_RETENTION_DAYS): Promise<number> {
+    const cutoff = new Date(now.getTime() - days * 86_400_000);
+    const c = this.prisma.client;
+    let purged = 0;
+    for (let i = 0; i < MAX_BATCHES_PER_RUN; i++) {
+      const batch = await c.assistantConversation.findMany({
+        where: { audience: 'PUBLIC', anonymisedAt: null, updatedAt: { lt: cutoff } },
+        orderBy: { updatedAt: 'asc' },
+        take: BATCH * 4,
+        select: { id: true, updatedAt: true },
+      });
+      if (batch.length === 0) break;
+      for (const conv of batch) {
+        const id = conv.id;
+        await c.$transaction(async (tx) => {
+          await tx.assistantFeedback.deleteMany({ where: { conversationId: id } });
+          await tx.assistantMessage.deleteMany({ where: { conversationId: id } });
+          await tx.assistantToolCall.deleteMany({ where: { conversationId: id } });
+          await tx.assistantMonitorResult.updateMany({
+            where: { conversationId: id },
+            data: {
+              correctReason: null,
+              hallucinationQuote: null,
+              safetyQuote: null,
+              knowledgeGap: null,
+              uiConfusion: null,
+              summary: REMOVED,
+            },
+          });
+          await tx.assistantConversation.update({
+            where: { id },
+            data: {
+              title: null,
+              publicAwb: null,
+              deletedAt: now,
+              anonymisedAt: now,
+              updatedAt: conv.updatedAt,
+            },
+          });
+        });
+        purged++;
+      }
+    }
+    if (purged > 0) this.log.log({ purged }, 'Assistant public-conversation purge finished');
+    return purged;
   }
 
   private async anonymise(id: string, updatedAt: Date, now: Date): Promise<number> {
