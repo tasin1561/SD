@@ -61,7 +61,7 @@ describe('handover bench — Enter dispatches', () => {
       { match: /\/handover-scan$/, method: 'POST', reply: scanned('SH-0001') },
     ]);
     await user.type(field(), '  AWB-1  {Enter}');
-    await screen.findByText('SH-0001');
+    await screen.findAllByText('SH-0001');
     expect(writesSeen(fetchImpl)).toEqual([
       { url: '/api/admin/courier/handover-scan', method: 'POST', body: { awbNumber: 'AWB-1' } },
     ]);
@@ -89,10 +89,12 @@ describe('handover bench — Enter dispatches', () => {
       },
     ]);
     await user.type(field(), 'AWB-1{Enter}');
-    await screen.findByText('SH-0001');
+    await screen.findAllByText('SH-0001');
     await user.type(field(), 'AWB-2{Enter}');
-    await screen.findByText('SH-0002');
-    const first = screen.getByText('SH-0002');
+    await screen.findAllByText('SH-0002');
+    // The newest scan also shows in the "last scan" card above the list;
+    // the list row is the later of the two in the document.
+    const first = screen.getAllByText('SH-0002').at(-1) as HTMLElement;
     const second = screen.getByText('SH-0001');
     // DOCUMENT_POSITION_FOLLOWING: SH-0001 comes after SH-0002.
     expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -111,7 +113,7 @@ describe('handover bench — focus and locking', () => {
     await act(async () => {
       gate.resolve(scanned('SH-0001'));
     });
-    await screen.findByText('SH-0001');
+    await screen.findAllByText('SH-0001');
     await waitFor(() => expect(field()).not.toBeDisabled());
     await waitFor(() => expect(document.activeElement).toBe(field()));
   });

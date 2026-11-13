@@ -1,0 +1,87 @@
+/* Handover bench — the tally. Tokens only.
+   Read from arm's length by somebody holding a parcel: one big number, and
+   the last parcel scanned with a tick (or a warning when it had already
+   gone). */
+.ho-tally {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-5);
+  min-width: 0;
+}
+.ho-tally__count {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+.ho-tally__num {
+  color: var(--fg-strong);
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.ho-tally__label {
+  color: var(--fg-muted);
+  font-size: var(--fs-md);
+}
+.ho-last {
+  display: flex;
+  flex: 1 1 16rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--green-line);
+  border-radius: var(--r-md);
+  background: var(--green-tint);
+  animation: ho-in var(--dur-fast) var(--ease-out);
+}
+.ho-last[data-repeat] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+}
+.ho-last__icon {
+  display: grid;
+  flex: none;
+  color: var(--green-on-tint);
+}
+.ho-last[data-repeat] .ho-last__icon {
+  color: var(--saffron-on-tint);
+}
+.ho-last__text {
+  display: grid;
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ho-last__kicker {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.ho-last__no {
+  color: var(--fg-strong);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+}
+@keyframes ho-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+/* A standalone link on a phone needs a finger-sized target; the global
+   coarse-pointer rule would hold it at 30px, so the selector is qualified. */
+@media (pointer: coarse) {
+  a.wh-link.ho-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ho-last {
+    animation: none;
+  }
+}
