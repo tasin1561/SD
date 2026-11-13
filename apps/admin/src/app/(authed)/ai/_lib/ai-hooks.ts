@@ -372,3 +372,178 @@ export function useMonitorRunNow(): UseMutationResult<{ queued: true }, Error, v
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['ai-monitor'] }),
   });
 }
+
+// ── recommendations (Haiku drafts, the owner approves) ───────────────
+const REC = '/api/admin/assistant-recommendations';
+
+export type RecStatus = 'NEW' | 'APPROVED' | 'REJECTED' | 'LIVE' | 'ROLLED_BACK';
+export type RecFilter = 'new' | 'approved' | 'rejected' | 'live' | 'rolled_back';
+export type GuideAudience = 'staff' | 'seller' | 'store' | 'associate';
+
+export type KnowledgeChange =
+  | {
+      readonly target: 'guide';
+      readonly audiences: readonly GuideAudience[];
+      readonly guideId: string | null;
+      readonly title: string;
+      readonly summary: string;
+      readonly sections: ReadonlyArray<{ heading: string; steps: readonly string[] }>;
+    }
+  | {
+      readonly target: 'glossary';
+      readonly audiences: readonly GuideAudience[];
+      readonly term: string;
+      readonly meaning: string;
+      readonly example: string;
+    }
+  | {
+      readonly target: 'prompt_addendum';
+      readonly audiences: readonly GuideAudience[];
+      readonly text: string;
+    };
+
+export interface GateSide {
+  readonly status: 'pass' | 'fail' | 'error';
+  readonly detail: string;
+  readonly answer: string;
+  readonly tools: readonly string[];
+  readonly retried: boolean;
+}
+export interface GateCase {
+  readonly id: string;
+  readonly audience: string;
+  readonly language: string;
+  readonly kind: string;
+  readonly question: string;
+  readonly live: GateSide;
+  readonly draft: GateSide;
+  readonly outcome: 'same_pass' | 'same_fail' | 'improved' | 'regressed';
+}
+export interface RecCheck {
+  readonly id: string;
+  readonly status: 'RUNNING' | 'DONE' | 'FAILED';
+  readonly passed: boolean | null;
+  readonly total: number;
+  readonly regressions: number;
+  readonly note: string | null;
+  readonly startedAt: string;
+  readonly finishedAt: string | null;
+  readonly stale: boolean;
+  readonly results?: readonly GateCase[];
+}
+export interface RecItem {
+  readonly id: string;
+  readonly kind: 'KNOWLEDGE' | 'SYSTEM';
+  readonly status: RecStatus;
+  readonly title: string;
+  readonly problem: string;
+  readonly theme: { kind: 'knowledge_gap' | 'ui_confusion'; label: string };
+  readonly evidence: readonly string[];
+  readonly knowledge: KnowledgeChange | null;
+  readonly diff: { before: string | null; after: string; isEdit: boolean } | null;
+  readonly system: { suggestedChange: string; acceptanceCheck: string } | null;
+  readonly task: string | null;
+  readonly githubIssueUrl: string | null;
+  readonly liveVersionId: string | null;
+  readonly createdAt: string;
+  readonly check: RecCheck | null;
+}
+export interface RecList {
+  readonly liveVersionId: string | null;
+  readonly githubAvailable: boolean;
+  readonly counts: Record<string, number>;
+  readonly items: readonly RecItem[];
+}
+export interface KnowledgeVersion {
+  readonly id: string;
+  readonly number: number;
+  readonly parentVersionId: string | null;
+  readonly recommendationId: string | null;
+  readonly createdAt: string;
+  readonly live: boolean;
+  readonly counts: { guides: number; glossary: number; addenda: number };
+  readonly wentLiveAt: string | null;
+}
+export interface VersionHistory {
+  readonly liveVersionId: string | null;
+  readonly versions: readonly KnowledgeVersion[];
+  readonly changes: ReadonlyArray<{
+    id: string;
+    action: 'GO_LIVE' | 'ROLLBACK';
+    fromVersionId: string | null;
+    toVersionId: string | null;
+    createdAt: string;
+  }>;
+}
+
+export function useRecommendations(filter: RecFilter | 'all'): UseQueryResult<RecList> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['ai-recs', filter],
+    queryFn: () => client.request<RecList>(`${REC}${filter === 'all' ? '' : `?status=${filter}`}`),
+    // While a check is running the table fills in by itself.
+    refetchInterval: (q) =>
+      q.state.data?.items.some((i) => i.check?.status === 'RUNNING') ? 4000 : false,
+  });
+}
+
+export function useRecommendation(id: string, enabled: boolean): UseQueryResult<RecItem> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['ai-rec', id],
+    enabled,
+    queryFn: () => client.request<RecItem>(`${REC}/${id}`),
+    refetchInterval: (q) => (q.state.data?.check?.status === 'RUNNING' ? 4000 : false),
+  });
+}
+
+export function useKnowledgeVersions(): UseQueryResult<VersionHistory> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['ai-versions'],
+    queryFn: () => client.request<VersionHistory>(`${REC}/versions`),
+  });
+}
+
+function useRecAction<TVars, TOut>(
+  path: (v: TVars) => string,
+  body?: (v: TVars) => unknown,
+): UseMutationResult<TOut, Error, TVars> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: TVars) =>
+      client.request<TOut>(path(v), {
+        method: 'POST',
+        ...(body === undefined ? {} : { body: body(v) }),
+      }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['ai-recs'] });
+      void qc.invalidateQueries({ queryKey: ['ai-rec'] });
+      void qc.invalidateQueries({ queryKey: ['ai-versions'] });
+    },
+  });
+}
+
+export const useDraftRecs = (): UseMutationResult<{ queued: true }, Error, void> =>
+  useRecAction<void, { queued: true }>(() => `${REC}/draft`);
+export const useCheckRec = (): UseMutationResult<{ runId: string }, Error, string> =>
+  useRecAction<string, { runId: string }>((id) => `${REC}/${id}/check`);
+export const useApproveRec = (): UseMutationResult<{ status: RecStatus }, Error, string> =>
+  useRecAction<string, { status: RecStatus }>((id) => `${REC}/${id}/approve`);
+export const useRejectRec = (): UseMutationResult<{ status: RecStatus }, Error, string> =>
+  useRecAction<string, { status: RecStatus }>((id) => `${REC}/${id}/reject`);
+export const useGithubIssue = (): UseMutationResult<{ url: string }, Error, string> =>
+  useRecAction<string, { url: string }>((id) => `${REC}/${id}/github-issue`);
+export const useRollbackKnowledge = (): UseMutationResult<
+  { liveVersionId: string | null },
+  Error,
+  { versionId: string | null; expectedLive: string | null }
+> =>
+  useRecAction<
+    { versionId: string | null; expectedLive: string | null },
+    { liveVersionId: string | null }
+  >(
+    () => `${REC}/rollback`,
+    (v) => v,
+  );

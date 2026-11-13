@@ -28,7 +28,7 @@ describe('the monitor cannot change the live assistant', () => {
 
   it('no monitor file imports anything that builds the live prompt, tools, knowledge or chat', () => {
     const forbidden =
-      /assistant-system-prompt|assistant-tool-registry|assistant-tools|assistant-chat\.service|assistant-history|assistant-help\.service|knowledge\/|assistant-conversation\.service|assistant-model-gateway/;
+      /assistant-system-prompt|assistant-tool-registry|assistant-tools|assistant-chat\.service|assistant-history|assistant-help\.service|knowledge\/|assistant-conversation\.service|assistant-model-gateway|assistant-knowledge|assistant-recommendation|assistant-eval-gate/;
     for (const f of MONITOR_FILES) {
       const imports = read(f)
         .split('\n')
@@ -72,6 +72,8 @@ describe('the monitor cannot change the live assistant', () => {
       [
         'services/assistant-billing.service.ts', // the cost line
         'services/assistant-budget.service.ts', // the cap function (comment only; reads via the store)
+        'services/assistant-eval-gate.service.ts', // writes its calls onto the monitor's budget line
+        'services/assistant-recommendation.service.ts', // drafts from the themes; same budget line
         'services/assistant-retention.service.ts', // 180-day scrub
         'services/assistant-store.service.ts', // the monitor's spend sum
       ].sort(),

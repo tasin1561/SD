@@ -18,6 +18,12 @@ import { TicketModule } from '../ticket/ticket.module';
 import { TrackingPublicModule } from '../tracking-public/tracking-public.module';
 import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
 import { AdminAssistantPanelController } from './controllers/admin-assistant-panel.controller';
+import { AdminAssistantRecommendationsController } from './controllers/admin-assistant-recommendations.controller';
+import { AssistantRecommendationWorker } from './queue/assistant-recommendation.worker';
+import { AssistantEvalGateService } from './services/assistant-eval-gate.service';
+import { AssistantGithubIssueService } from './services/assistant-github-issue.service';
+import { AssistantKnowledgeService } from './services/assistant-knowledge.service';
+import { AssistantRecommendationService } from './services/assistant-recommendation.service';
 import { AssistantMonitorWorker } from './queue/assistant-monitor.worker';
 import { AssistantRetentionWorker } from './queue/assistant-retention.worker';
 import { AssistantBillingService } from './services/assistant-billing.service';
@@ -91,12 +97,18 @@ import { AssistantToolRegistry } from './services/assistant-tool-registry.servic
   controllers: [
     AdminAssistantController,
     AdminAssistantPanelController,
+    AdminAssistantRecommendationsController,
     SellerAssistantController,
     StoreAssistantController,
     PublicParcelAssistantController,
   ],
   providers: [
     AssistantStoreService,
+    AssistantKnowledgeService,
+    AssistantEvalGateService,
+    AssistantRecommendationService,
+    AssistantGithubIssueService,
+    AssistantRecommendationWorker,
     AssistantAttachmentService,
     AssistantBudgetService,
     AssistantBudgetAlertService,

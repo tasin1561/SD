@@ -867,8 +867,13 @@ export function buildAssistantTools(deps: AssistantToolDeps): readonly Assistant
         required: ['query'],
         additionalProperties: false,
       },
-      async run(scope, input) {
-        const hits = deps.help.search(scope.audience, String(input.query));
+      async run(scope, input, ctx) {
+        const hits = deps.help.search(
+          scope.audience,
+          String(input.query),
+          undefined,
+          ctx.overlay ?? null,
+        );
         if (hits.length === 0) {
           return {
             results: [],

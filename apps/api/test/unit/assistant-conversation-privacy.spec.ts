@@ -43,6 +43,8 @@ function fakePrisma(
   let n = 0;
   return {
     client: {
+      // No overlay has ever gone live: new conversations pin the base.
+      assistantKnowledgeLive: { findUnique: async () => null },
       assistantConversation: {
         create: async ({ data }: { data: Partial<Row> }) => {
           const r: Row = {

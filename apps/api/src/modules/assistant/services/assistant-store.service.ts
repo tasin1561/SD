@@ -148,9 +148,24 @@ const asJson = (v: unknown): Prisma.InputJsonValue => v as Prisma.InputJsonValue
 export class AssistantStoreService {
   constructor(private readonly prisma: PrismaService) {}
 
-  createConversation(scope: CallerScope, title: string | null): Promise<ConversationRow> {
+  /**
+   * The knowledge version this conversation started with (null = the base
+   * alone). Written once, at creation, and never changed.
+   */
+  async knowledgeVersionOf(conversationId: string): Promise<string | null> {
+    const row = await this.prisma.client.assistantConversation.findUnique({
+      where: { id: conversationId },
+      select: { knowledgeVersionId: true },
+    });
+    return row?.knowledgeVersionId ?? null;
+  }
+
+  async createConversation(scope: CallerScope, title: string | null): Promise<ConversationRow> {
+    // PIN: whatever is live right now is the version this conversation keeps.
+    const live = await this.prisma.client.assistantKnowledgeLive.findUnique({ where: { id: 1 } });
     return this.prisma.client.assistantConversation.create({
       data: {
+        knowledgeVersionId: live?.versionId ?? null,
         audience: scope.audience,
         ownerUserId: scope.userId,
         sellerId: scope.sellerId,

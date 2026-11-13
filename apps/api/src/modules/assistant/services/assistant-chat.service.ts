@@ -15,6 +15,8 @@ import { ASSISTANT_MODEL, type AssistantStreamEvent, type CallerScope } from '..
 import { AssistantAttachmentService, AttachmentUnavailable } from './assistant-attachment.service';
 import { AssistantBudgetAlertService } from './assistant-budget-alert.service';
 import { AssistantBudgetService } from './assistant-budget.service';
+import { AssistantKnowledgeService } from './assistant-knowledge.service';
+import { addendaFor, type KnowledgeOverlay } from '../knowledge/knowledge-overlay';
 import { AssistantModelGateway, type AssistantModelRequest } from './assistant-model-gateway';
 import { AssistantStoreService, type ConversationRow } from './assistant-store.service';
 import { AssistantToolRegistry } from './assistant-tool-registry.service';
@@ -70,6 +72,9 @@ export class AssistantChatService {
     // Optional so the unit rigs that build this service by hand keep working;
     // the module always provides it.
     @Optional() private readonly alerts?: AssistantBudgetAlertService,
+    // Optional for the same reason: without it every conversation is answered
+    // from the committed base alone.
+    @Optional() private readonly knowledge?: AssistantKnowledgeService,
   ) {}
 
   /** 404 unless the conversation is the caller's (shared by every endpoint). */
@@ -211,10 +216,21 @@ export class AssistantChatService {
     }
     const messages = toApiMessages(rows, start, currentTurnStart, loaded);
 
+    // THE KNOWLEDGE VERSION IS PINNED TO THE CONVERSATION. It is read from the
+    // id stored when the conversation began, never from "what is live now":
+    // a system prompt or tool list that changes mid-conversation breaks the
+    // thinking blocks (a 400). Versions are immutable, so the same id gives
+    // the same prompt bytes on every turn. Only the approved overlay moves:
+    // the prompt additions below and the help lookup's results.
+    const versionId = await this.store.knowledgeVersionOf(conv.id);
+    const overlay: KnowledgeOverlay | null =
+      versionId === null || this.knowledge === undefined
+        ? null
+        : await this.knowledge.overlayFor(versionId);
     const system: Anthropic.TextBlockParam[] = [
       {
         type: 'text',
-        text: systemPromptFor(scope.audience),
+        text: systemPromptFor(scope.audience, addendaFor(overlay, scope.audience)),
         // Breakpoint on the stable prefix: tools render first, then this.
         cache_control: { type: 'ephemeral' },
       },
@@ -272,6 +288,7 @@ export class AssistantChatService {
               const run = await this.registry.execute(scope, use.name, use.input, {
                 conversationId: conv.id,
                 emit,
+                overlay,
               });
               await this.store.recordToolCall({
                 conversationId: conv.id,

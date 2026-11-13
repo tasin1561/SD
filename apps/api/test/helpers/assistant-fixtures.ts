@@ -25,6 +25,7 @@ import type {
 } from '../../src/modules/assistant/services/assistant-store.service';
 import { AssistantBudgetService } from '../../src/modules/assistant/services/assistant-budget.service';
 import { AssistantChatService } from '../../src/modules/assistant/services/assistant-chat.service';
+import type { AssistantKnowledgeService } from '../../src/modules/assistant/services/assistant-knowledge.service';
 import { AssistantHelpService } from '../../src/modules/assistant/services/assistant-help.service';
 import { AssistantToolRegistry } from '../../src/modules/assistant/services/assistant-tool-registry.service';
 
@@ -378,12 +379,20 @@ export class MemoryStore {
     [];
   async createConversation(scope: CallerScope, title: string | null): Promise<ConversationRow> {
     const c = { ...this.seedConversation(scope.audience), title };
+    this.knowledgeVersions.set(c.id, this.liveKnowledgeVersion);
     this.publicConversations.push({
       ...c,
       ownerUserId: scope.userId,
       publicAwb: scope.publicAwb ?? null,
     });
     return c;
+  }
+  /** The knowledge version a conversation was started with (test sets it; absent = the base). */
+  knowledgeVersions = new Map<string, string | null>();
+  /** What a NEW conversation gets pinned to (the live version when it starts). */
+  liveKnowledgeVersion: string | null = null;
+  async knowledgeVersionOf(conversationId: string) {
+    return this.knowledgeVersions.get(conversationId) ?? null;
   }
   async findOwned(_s: CallerScope, id: string) {
     return this.conversations.find((c) => c.id === id) ?? null;
@@ -619,6 +628,8 @@ export function chatRig(
     orders?: readonly FakeOrder[];
     store?: MemoryStore;
     parcels?: PublicParcelReader;
+    /** What resolves a conversation's pinned knowledge version (default: none, the base alone). */
+    knowledge?: AssistantKnowledgeService;
   } = {},
 ): ChatRig {
   const store = opts.store ?? new MemoryStore();
@@ -638,6 +649,8 @@ export function chatRig(
     fakeRegistry(opts.orders ?? [], opts.parcels),
     gateway,
     attachments,
+    undefined,
+    opts.knowledge,
   );
   return { chat, store, gateway, attachments, spaces };
 }
