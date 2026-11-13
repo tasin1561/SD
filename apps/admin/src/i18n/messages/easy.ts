@@ -134,6 +134,60 @@ export const easy = defineMessages({
   'ezHandover.scanned': ['Scanned', 'স্ক্যান হয়েছে', 'स्कैन हुआ'],
   'ezHandover.dispatched': ['Dispatched', 'ডিসপ্যাচ হয়েছে', 'रवाना हुआ'],
 
+  // ── Small shared labels ───────────────────────────────────────────────
+  'easy.hours': ['{n}h', '{n} ঘণ্টা', '{n} घंटे'],
+  'easy.cod': ['COD', 'সিওডি', 'सीओडी'],
+  'easy.waitingCount': ['{n} waiting', '{n}টি অপেক্ষায়', '{n} प्रतीक्षा में'],
+
+  // ── Manual placement (/manual-placement) ──────────────────────────────
+  'ezPlacement.whyInfo': [
+    'Why no connected courier took this parcel. The courier’s own words, when there are any, are shown under the reason.',
+    'কোনো সংযুক্ত কুরিয়ার কেন এই পার্সেল নেয়নি। কুরিয়ারের নিজের কথা থাকলে কারণের নিচে দেখানো হয়।',
+    'किसी जुड़े हुए कूरियर ने यह पार्सल क्यों नहीं लिया। कूरियर के अपने शब्द, अगर हों, कारण के नीचे दिखते हैं।',
+  ],
+  'ezPlacement.whyNotServed': [
+    'The courier does not deliver to this address or PIN code.',
+    'কুরিয়ার এই ঠিকানা বা পিন কোডে ডেলিভারি দেয় না।',
+    'कूरियर इस पते या पिन कोड पर डिलीवरी नहीं करता।',
+  ],
+  'ezPlacement.whyRefused': [
+    'The courier said no when the waybill was asked for. Read its message.',
+    'ওয়েবিল চাওয়ার সময় কুরিয়ার না বলেছে। তার বার্তাটি পড়ুন।',
+    'वेबिल माँगने पर कूरियर ने मना कर दिया। उसका संदेश पढ़ें।',
+  ],
+  'ezPlacement.whyUnreachable': [
+    'The courier’s system did not answer.',
+    'কুরিয়ারের সিস্টেম সাড়া দেয়নি।',
+    'कूरियर के सिस्टम ने जवाब नहीं दिया।',
+  ],
+  'ezPlacement.whyByHand': [
+    'A staff member took it off its courier so it can be placed again.',
+    'একজন কর্মী এটিকে তার কুরিয়ার থেকে সরিয়েছেন যাতে আবার দেওয়া যায়।',
+    'एक कर्मचारी ने इसे इसके कूरियर से हटाया ताकि इसे फिर से रखा जा सके।',
+  ],
+  'ezPlacement.afterNeedsPicking': [
+    'The products are not picked yet. After you add the waybill, the parcel still has to be picked and packed.',
+    'পণ্য এখনো পিক করা হয়নি। ওয়েবিল যোগ করার পরও পার্সেলটি পিক ও প্যাক করতে হবে।',
+    'सामान अभी उठाया नहीं गया है। वेबिल जोड़ने के बाद भी पार्सल को पिक और पैक करना होगा।',
+  ],
+  'ezPlacement.afterReady': [
+    'The parcel is already packed and waiting. After you add the waybill it can go out.',
+    'পার্সেলটি আগেই প্যাক করা আছে। ওয়েবিল যোগ করার পর এটি বের হতে পারে।',
+    'पार्सल पहले से पैक है। वेबिल जोड़ने के बाद यह निकल सकता है।',
+  ],
+
+  // ── Courier decisions (/courier-decisions) ────────────────────────────
+  'ezCourier.day': ['{n} day', '{n} দিন', '{n} दिन'],
+  'ezCourier.days': ['{n} days', '{n} দিন', '{n} दिन'],
+  'ezCourier.hours': ['{n}h', '{n} ঘণ্টা', '{n} घंटे'],
+  'ezCourier.cod': ['COD', 'সিওডি', 'सीओडी'],
+  'ezCourier.waitingCount': ['{n} waiting', '{n}টি অপেক্ষায়', '{n} प्रतीक्षा में'],
+  'ezCourier.pickInfo': [
+    'Press a carrier to book the parcel with it.\n\nIt is booked straight away. There is no second step, so check the row first.\n\nThe price is on the right. The delivery days are under the name. The cheapest and the fastest are marked.',
+    'পার্সেলটি বুক করতে একটি ক্যারিয়ারে চাপ দিন।\n\nসঙ্গে সঙ্গে বুক হয়ে যায়। দ্বিতীয় কোনো ধাপ নেই, তাই আগে সারিটি দেখে নিন।\n\nদাম ডান পাশে। ডেলিভারির দিন নামের নিচে। সবচেয়ে সস্তা ও সবচেয়ে দ্রুতটি চিহ্নিত আছে।',
+    'पार्सल बुक करने के लिए किसी कैरियर को दबाएँ।\n\nयह तुरंत बुक हो जाता है। कोई दूसरा चरण नहीं है, इसलिए पहले पंक्ति देख लें।\n\nकीमत दाईं ओर है। डिलीवरी के दिन नाम के नीचे हैं। सबसे सस्ता और सबसे तेज़ चिह्नित हैं।',
+  ],
+
   // ── Re-attempt requests (/reattempt-requests) ─────────────────────────
   'ezReattempt.reasonLabel': [
     'Why the client is asking',

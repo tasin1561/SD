@@ -53,3 +53,20 @@
   flex: none;
   font-size: var(--fs-sm);
 }
+/* On a phone the carrier button is the whole decision: finger-sized, and
+   a long carrier name wraps instead of being cut off. */
+@media (pointer: coarse) {
+  button.oq-option {
+    min-height: 48px;
+  }
+}
+@media (max-width: 639px) {
+  .oq-options {
+    width: 100%;
+    max-width: none;
+  }
+  .oq-option__name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
