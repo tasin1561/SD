@@ -32,10 +32,14 @@ export class PublicParcelAwbThrottleGuard implements CanActivate {
       key,
       PUBLIC_PARCEL_AWB_TTL_MS,
       PUBLIC_PARCEL_AWB_LIMIT,
-      0,
+      // The storage needs a real block window (a zero one is a bad expiry in
+      // Redis); the window is the same hour, so "blocked" and "over" coincide.
+      PUBLIC_PARCEL_AWB_TTL_MS,
       NAME,
     );
-    if (record.totalHits > PUBLIC_PARCEL_AWB_LIMIT) throw new ThrottlerException();
+    if (record.isBlocked || record.totalHits > PUBLIC_PARCEL_AWB_LIMIT) {
+      throw new ThrottlerException();
+    }
     return true;
   }
 }

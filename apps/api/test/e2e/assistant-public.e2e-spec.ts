@@ -115,7 +115,9 @@ describe('assistant public parcel helper (e2e)', () => {
     const bodies: unknown[] = [];
     for (const awb of ['0000000000000', 'not%20valid', 'x']) {
       const res = await ask(awb, { text: 'hi', visitorKey: visitor }).expect(404);
-      bodies.push(res.body);
+      // the envelope adds request-specific fields (path, id); the verdict is code + message
+      const { code, message } = res.body as { code?: unknown; message?: unknown };
+      bodies.push({ code, message });
     }
     expect(new Set(bodies.map((b) => JSON.stringify(b))).size).toBe(1);
     expect(await h.prisma.assistantConversation.count()).toBe(0);
