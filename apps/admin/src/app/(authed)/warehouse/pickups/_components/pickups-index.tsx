@@ -1,5 +1,6 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
 import { useState, type ReactElement } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Ident, Num } from '@skydrop/ui/components';
@@ -74,8 +75,15 @@ export function PickupsIndex(): ReactElement {
           { label: t('warehousePickupsPickupsIndex.warehouse'), href: '/warehouse' },
           { label: t('warehousePickupsPickupsIndex.pickups') },
         ]}
-        title={t('warehousePickupsPickupsIndex.pickups')}
-        subtitle={t('warehousePickupsPickupsIndex.oneRequestPerWarehousePer')}
+        title={
+          <span className="ez-titled">
+            {t('warehousePickupsPickupsIndex.pickups')}
+            <InfoButton
+              title={t('warehousePickupsPickupsIndex.pickups')}
+              text={t('warehousePickupsPickupsIndex.oneRequestPerWarehousePer')}
+            />
+          </span>
+        }
         action={
           <Button
             variant="primary"

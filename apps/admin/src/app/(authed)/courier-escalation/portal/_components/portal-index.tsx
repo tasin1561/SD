@@ -1,5 +1,8 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Lock } from 'lucide-react';
@@ -59,15 +62,22 @@ export function CourierPortalIndex(): ReactElement {
   const failures = rows.filter((r) => r.outcome === 'FAILED' || r.outcome === 'CHALLENGED').length;
 
   return (
-    <div className="af-page">
+    <div className="af-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: t('courierEscalationPortalPortalIndex.network') },
           { label: t('courierEscalationPortalPortalIndex.courierEscalation') },
         ]}
         Link={Link}
-        title={t('courierEscalationPortalPortalIndex.portalWorker')}
-        subtitle={t('courierEscalationPortalPortalIndex.theBrowserTierItRuns')}
+        title={
+          <span className="ez-titled">
+            {t('courierEscalationPortalPortalIndex.portalWorker')}
+            <InfoButton
+              title={t('courierEscalationPortalPortalIndex.portalWorker')}
+              text={t('courierEscalationPortalPortalIndex.theBrowserTierItRuns')}
+            />
+          </span>
+        }
       />
       <EscalationTabs />
 
@@ -143,7 +153,7 @@ export function CourierPortalIndex(): ReactElement {
                 <Tr key={r.id}>
                   <Td>
                     <span className="af-small af-nowrap">
-                      {new Date(r.startedAt).toLocaleString('en-IN')}
+                      <When iso={r.startedAt} time />
                     </span>
                   </Td>
                   <Td>
@@ -229,7 +239,7 @@ export function CourierPortalIndex(): ReactElement {
                   </Td>
                   <Td>
                     <span className="af-small af-nowrap">
-                      {new Date(c.lastSeenAt).toLocaleDateString('en-IN')}
+                      <When iso={c.lastSeenAt} />
                     </span>
                   </Td>
                 </Tr>

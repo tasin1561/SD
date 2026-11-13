@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Lock, Unlock } from 'lucide-react';
@@ -65,15 +67,22 @@ export function DelhiveryOpsIndex(): ReactElement {
   }
 
   return (
-    <div className="af-page">
+    <div className="af-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: t('delhiveryDelhiveryOpsIndex.network') },
           { label: t('delhiveryDelhiveryOpsIndex.delhivery') },
         ]}
         Link={Link}
-        title={t('delhiveryDelhiveryOpsIndex.delhivery')}
-        subtitle={t('delhiveryDelhiveryOpsIndex.waybillPoolDepthTheLive')}
+        title={
+          <span className="ez-titled">
+            {t('delhiveryDelhiveryOpsIndex.delhivery')}
+            <InfoButton
+              title={t('delhiveryDelhiveryOpsIndex.delhivery')}
+              text={t('delhiveryDelhiveryOpsIndex.waybillPoolDepthTheLive')}
+            />
+          </span>
+        }
         action={
           <Button
             variant="secondary"

@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Lock, Unlock } from 'lucide-react';
@@ -50,15 +52,22 @@ export function ShiprocketOpsIndex(): ReactElement {
   const stubbedButLive = d?.liveMode === false && d?.intakeEnabled === true;
 
   return (
-    <div className="af-page">
+    <div className="af-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: t('shiprocketShiprocketOpsIndex.network') },
           { label: t('shiprocketShiprocketOpsIndex.shiprocket') },
         ]}
         Link={Link}
-        title={t('shiprocketShiprocketOpsIndex.shiprocket')}
-        subtitle={t('shiprocketShiprocketOpsIndex.whetherThisCourierIsAnswering')}
+        title={
+          <span className="ez-titled">
+            {t('shiprocketShiprocketOpsIndex.shiprocket')}
+            <InfoButton
+              title={t('shiprocketShiprocketOpsIndex.shiprocket')}
+              text={t('shiprocketShiprocketOpsIndex.whetherThisCourierIsAnswering')}
+            />
+          </span>
+        }
       />
 
       {status.isError ? (

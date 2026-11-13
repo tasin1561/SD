@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Search } from 'lucide-react';
@@ -119,137 +121,148 @@ export function LeadsIndex(): ReactElement {
     // A dense table is the opposite — every extra pixel goes into the
     // columns, and the contact column in particular was truncating names
     // while a third of the screen sat unused.
-    <AcPage>
-      <AcHeader
-        title={tr('leadsLeadsIndex.inviteRequests')}
-        subtitle={tr('leadsLeadsIndex.peopleWhoAskedToBe')}
-      />
-
-      <div className="ac-toolbar">
-        <Tabs
-          label={tr('leadsLeadsIndex.inviteRequestStatus')}
-          size="sm"
-          value={String(tab)}
-          onChange={(id) => {
-            setTab(Number(id));
-            setPage(1);
-          }}
-          items={TABS(tr).map((t, i) => {
-            const count = t.status ? (q.data?.counts[t.status] ?? 0) : undefined;
-            return {
-              id: String(i),
-              label: t.label,
-              ...(count !== undefined && count > 0 ? { count } : {}),
-            };
-          })}
-        />
-        <TextField
-          icon={<Search size={15} />}
-          aria-label={tr('leadsLeadsIndex.searchRequests')}
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            if (page > 1) setPage(1);
-          }}
-          placeholder={tr('leadsLeadsIndex.companyNameEmailOrPhone')}
-        />
-      </div>
-
-      {q.isLoading ? (
-        <SkeletonRows rows={6} cols={6} label={tr('leadsLeadsIndex.loadingRequests')} />
-      ) : q.isError ? (
-        <ErrorState
-          message={q.error?.message ?? tr('leadsLeadsIndex.couldNotLoadRequests')}
-          retry={() => void q.refetch()}
-        />
-      ) : items.length === 0 ? (
-        <EmptyState
+    <div className="ez-touch ez-wrap">
+      <AcPage>
+        <AcHeader
           title={
-            search ? tr('leadsLeadsIndex.nothingMatchesThat') : tr('leadsLeadsIndex.noRequestsHere')
-          }
-          description={
-            search
-              ? tr('leadsLeadsIndex.tryAShorterSearchIt')
-              : tr('leadsLeadsIndex.newRequestsFromTheLanding')
+            <span className="ez-titled">
+              {tr('leadsLeadsIndex.inviteRequests')}
+              <InfoButton
+                title={tr('leadsLeadsIndex.inviteRequests')}
+                text={tr('leadsLeadsIndex.peopleWhoAskedToBe')}
+              />
+            </span>
           }
         />
-      ) : (
-        <AcCard flush>
-          <Table caption={tr('leadsLeadsIndex.inviteRequests')}>
-            <THead>
-              <Tr>
-                <Th>{tr('leadsLeadsIndex.company')}</Th>
-                <Th>{tr('leadsLeadsIndex.contact')}</Th>
-                <Th>{tr('leadsLeadsIndex.route')}</Th>
-                <Th>{tr('leadsLeadsIndex.volume')}</Th>
-                <Th>{tr('leadsLeadsIndex.status')}</Th>
-                <Th align="right">{tr('leadsLeadsIndex.waiting')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {items.map((lead) => {
-                const dir =
-                  lead.shippingDirection === null
-                    ? null
-                    : DIRECTION_SHORT(tr)[lead.shippingDirection];
-                return (
-                  <Tr key={lead.id} onActivate={() => setSelected(lead)}>
-                    <Td>
-                      <span className="ac-cell-main">{lead.companyName}</span>
-                      {lead.submissionCount > 1 && (
-                        <>
-                          {' '}
-                          <AcFact tone="warn">×{lead.submissionCount}</AcFact>
-                        </>
-                      )}
-                    </Td>
-                    <Td>
-                      <span className="ac-text">{lead.fullName}</span>
-                      <span className="ac-cell-sub">{lead.email}</span>
-                    </Td>
-                    <Td>
-                      {dir === undefined || dir === null ? (
-                        <span className="ac-faint">—</span>
-                      ) : dir.unserved ? (
-                        <AcFact tone="bad">{dir.text}</AcFact>
-                      ) : (
-                        <span>{dir.text}</span>
-                      )}
-                    </Td>
-                    <Td>
-                      <span className="ac-muted">{lead.monthlyOrders ?? '—'}</span>
-                    </Td>
-                    <Td>
-                      <StatusChip
-                        kind={inviteLeadStatusKind(lead.status as InviteLeadStatus)}
-                        label={lead.status.toLowerCase()}
-                        size="sm"
-                      />
-                    </Td>
-                    <Td align="right">
-                      <AcFact tone={waitTone(lead.createdAt)}>
-                        <span className="sk-figure">{waited(lead.createdAt)}</span>
-                      </AcFact>
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
-        </AcCard>
-      )}
 
-      {total > pageSize && (
-        <Pagination
-          page={page}
-          pageSize={pageSize}
-          total={total}
-          onPageChange={(next) => setPage(Math.min(Math.max(1, next), lastPage))}
-          label={tr('leadsLeadsIndex.inviteRequestPages')}
-        />
-      )}
+        <div className="ac-toolbar">
+          <Tabs
+            label={tr('leadsLeadsIndex.inviteRequestStatus')}
+            size="sm"
+            value={String(tab)}
+            onChange={(id) => {
+              setTab(Number(id));
+              setPage(1);
+            }}
+            items={TABS(tr).map((t, i) => {
+              const count = t.status ? (q.data?.counts[t.status] ?? 0) : undefined;
+              return {
+                id: String(i),
+                label: t.label,
+                ...(count !== undefined && count > 0 ? { count } : {}),
+              };
+            })}
+          />
+          <TextField
+            icon={<Search size={15} />}
+            aria-label={tr('leadsLeadsIndex.searchRequests')}
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              if (page > 1) setPage(1);
+            }}
+            placeholder={tr('leadsLeadsIndex.companyNameEmailOrPhone')}
+          />
+        </div>
 
-      <LeadDrawer lead={selected} onClose={() => setSelected(null)} />
-    </AcPage>
+        {q.isLoading ? (
+          <SkeletonRows rows={6} cols={6} label={tr('leadsLeadsIndex.loadingRequests')} />
+        ) : q.isError ? (
+          <ErrorState
+            message={q.error?.message ?? tr('leadsLeadsIndex.couldNotLoadRequests')}
+            retry={() => void q.refetch()}
+          />
+        ) : items.length === 0 ? (
+          <EmptyState
+            title={
+              search
+                ? tr('leadsLeadsIndex.nothingMatchesThat')
+                : tr('leadsLeadsIndex.noRequestsHere')
+            }
+            description={
+              search
+                ? tr('leadsLeadsIndex.tryAShorterSearchIt')
+                : tr('leadsLeadsIndex.newRequestsFromTheLanding')
+            }
+          />
+        ) : (
+          <AcCard flush>
+            <Table caption={tr('leadsLeadsIndex.inviteRequests')}>
+              <THead>
+                <Tr>
+                  <Th>{tr('leadsLeadsIndex.company')}</Th>
+                  <Th>{tr('leadsLeadsIndex.contact')}</Th>
+                  <Th>{tr('leadsLeadsIndex.route')}</Th>
+                  <Th>{tr('leadsLeadsIndex.volume')}</Th>
+                  <Th>{tr('leadsLeadsIndex.status')}</Th>
+                  <Th align="right">{tr('leadsLeadsIndex.waiting')}</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {items.map((lead) => {
+                  const dir =
+                    lead.shippingDirection === null
+                      ? null
+                      : DIRECTION_SHORT(tr)[lead.shippingDirection];
+                  return (
+                    <Tr key={lead.id} onActivate={() => setSelected(lead)}>
+                      <Td>
+                        <span className="ac-cell-main">{lead.companyName}</span>
+                        {lead.submissionCount > 1 && (
+                          <>
+                            {' '}
+                            <AcFact tone="warn">×{lead.submissionCount}</AcFact>
+                          </>
+                        )}
+                      </Td>
+                      <Td>
+                        <span className="ac-text">{lead.fullName}</span>
+                        <span className="ac-cell-sub">{lead.email}</span>
+                      </Td>
+                      <Td>
+                        {dir === undefined || dir === null ? (
+                          <span className="ac-faint">—</span>
+                        ) : dir.unserved ? (
+                          <AcFact tone="bad">{dir.text}</AcFact>
+                        ) : (
+                          <span>{dir.text}</span>
+                        )}
+                      </Td>
+                      <Td>
+                        <span className="ac-muted">{lead.monthlyOrders ?? '—'}</span>
+                      </Td>
+                      <Td>
+                        <StatusChip
+                          kind={inviteLeadStatusKind(lead.status as InviteLeadStatus)}
+                          label={lead.status.toLowerCase()}
+                          size="sm"
+                        />
+                      </Td>
+                      <Td align="right">
+                        <AcFact tone={waitTone(lead.createdAt)}>
+                          <span className="sk-figure">{waited(lead.createdAt)}</span>
+                        </AcFact>
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </TBody>
+            </Table>
+          </AcCard>
+        )}
+
+        {total > pageSize && (
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={(next) => setPage(Math.min(Math.max(1, next), lastPage))}
+            label={tr('leadsLeadsIndex.inviteRequestPages')}
+          />
+        )}
+
+        <LeadDrawer lead={selected} onClose={() => setSelected(null)} />
+      </AcPage>
+    </div>
   );
 }

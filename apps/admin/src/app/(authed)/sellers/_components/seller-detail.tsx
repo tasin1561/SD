@@ -1,5 +1,6 @@
 'use client';
 
+import '@/components/easy/easy.css';
 import Link from 'next/link';
 import { ArrowLeftRight, Eye, PackageSearch, PencilLine, ShieldAlert } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
@@ -59,198 +60,202 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
 
   if (detail.isLoading || detail.isError || !detail.data) {
     return (
-      <AcPage>
-        <AcHeader
-          crumbs={[...CRUMBS(t), { label: t('sellersSellerDetail.client') }]}
-          title={t('sellersSellerDetail.client')}
-        />
-        {detail.isLoading ? (
-          <SkeletonRows rows={6} cols={2} label={t('sellersSellerDetail.loadingClient')} />
-        ) : detail.isError ? (
-          <ErrorState
-            message={detail.error?.message ?? t('sellersSellerDetail.failedToLoadClient')}
-            retry={() => void detail.refetch()}
+      <div className="ez-touch ez-wrap">
+        <AcPage>
+          <AcHeader
+            crumbs={[...CRUMBS(t), { label: t('sellersSellerDetail.client') }]}
+            title={t('sellersSellerDetail.client')}
           />
-        ) : (
-          <ErrorState message={t('sellersSellerDetail.clientNotFound')} />
-        )}
-      </AcPage>
+          {detail.isLoading ? (
+            <SkeletonRows rows={6} cols={2} label={t('sellersSellerDetail.loadingClient')} />
+          ) : detail.isError ? (
+            <ErrorState
+              message={detail.error?.message ?? t('sellersSellerDetail.failedToLoadClient')}
+              retry={() => void detail.refetch()}
+            />
+          ) : (
+            <ErrorState message={t('sellersSellerDetail.clientNotFound')} />
+          )}
+        </AcPage>
+      </div>
     );
   }
 
   const d = detail.data;
 
   return (
-    <AcPage>
-      <AcHeader
-        crumbs={[...CRUMBS(t), { label: d.companyName }]}
-        title={d.companyName}
-        meta={
-          <div className="ac-meta">
-            <SellerStatusChip status={d.status} />
-            <span className="ac-muted">
-              <span>{d.email}</span>
-              <span aria-hidden> · </span>
-              <span>{d.contactPersonName}</span>
-            </span>
-          </div>
-        }
-        action={
-          <div className="ac-buttons">
-            <Link
-              href={`/orders?sellerId=${sellerId}`}
-              className={buttonClassName('secondary', 'md')}
-            >
-              <span className="sk-btn__icon" aria-hidden>
-                <PackageSearch size={15} />
+    <div className="ez-touch ez-wrap">
+      <AcPage>
+        <AcHeader
+          crumbs={[...CRUMBS(t), { label: d.companyName }]}
+          title={d.companyName}
+          meta={
+            <div className="ac-meta">
+              <SellerStatusChip status={d.status} />
+              <span className="ac-muted">
+                <span>{d.email}</span>
+                <span aria-hidden> · </span>
+                <span>{d.contactPersonName}</span>
               </span>
-              <span className="sk-btn__label">{t('sellersSellerDetail.thisClientSOrders')}</span>
-            </Link>
-            {canTransfer && (
+            </div>
+          }
+          action={
+            <div className="ac-buttons">
               <Link
-                href={`/wallet-transfers?sellerId=${sellerId}`}
+                href={`/orders?sellerId=${sellerId}`}
                 className={buttonClassName('secondary', 'md')}
               >
                 <span className="sk-btn__icon" aria-hidden>
-                  <ArrowLeftRight size={15} />
+                  <PackageSearch size={15} />
                 </span>
-                <span className="sk-btn__label">
-                  {t('sellersSellerDetail.debitOrCreditWallet')}
-                </span>
+                <span className="sk-btn__label">{t('sellersSellerDetail.thisClientSOrders')}</span>
               </Link>
-            )}
-            {canImpersonate && (
-              /* Destructive, because it is: for as long as the session
+              {canTransfer && (
+                <Link
+                  href={`/wallet-transfers?sellerId=${sellerId}`}
+                  className={buttonClassName('secondary', 'md')}
+                >
+                  <span className="sk-btn__icon" aria-hidden>
+                    <ArrowLeftRight size={15} />
+                  </span>
+                  <span className="sk-btn__label">
+                    {t('sellersSellerDetail.debitOrCreditWallet')}
+                  </span>
+                </Link>
+              )}
+              {canImpersonate && (
+                /* Destructive, because it is: for as long as the session
                  lasts, this console's operator is indistinguishable from
                  the seller in their own account's history. A secondary
                  button beside "their orders" would read as one more way
                  to look at them. */
-              <Button
-                variant="destructive"
-                size="md"
-                icon={<ShieldAlert size={15} />}
-                onClick={() => setImpersonating(true)}
-              >
-                {t('sellersSellerDetail.signInAs', { companyName: d.companyName })}
-              </Button>
-            )}
-          </div>
-        }
-      />
-
-      {impersonating && (
-        <StartImpersonationDialog
-          subjectKind="SELLER"
-          subjectId={d.id}
-          subjectName={d.companyName}
-          onClose={() => setImpersonating(false)}
+                <Button
+                  variant="destructive"
+                  size="md"
+                  icon={<ShieldAlert size={15} />}
+                  onClick={() => setImpersonating(true)}
+                >
+                  {t('sellersSellerDetail.signInAs', { companyName: d.companyName })}
+                </Button>
+              )}
+            </div>
+          }
         />
-      )}
 
-      <AcSection title={t('sellersSellerDetail.profile')}>
-        <AcDl
-          items={[
-            {
-              label: t('sellersSellerDetail.shortCode'),
-              value: <InitialsRow sellerId={d.id} current={d.initials} />,
-            },
-            { label: t('sellersSellerDetail.contactName'), value: d.contactPersonName },
-            {
-              label: t('sellersSellerDetail.phone'),
-              value: <span className="sk-figure">{d.phone}</span>,
-            },
-            {
-              label: t('sellersSellerDetail.whatsapp'),
-              value: <span className="sk-figure">{d.whatsapp ?? '—'}</span>,
-            },
-            { label: t('sellersSellerDetail.country'), value: d.countryCode },
-            { label: t('sellersSellerDetail.displayCurrency'), value: d.displayCurrency },
-            { label: t('sellersSellerDetail.displayLanguage'), value: d.displayLanguage },
-            {
-              label: t('sellersSellerDetail.emailVerified'),
-              value: d.emailVerifiedAt ? (
-                <span className="sk-figure">
-                  {new Date(d.emailVerifiedAt).toISOString().slice(0, 10)}
-                </span>
-              ) : (
-                <span className="ac-faint">{t('sellersSellerDetail.pending')}</span>
-              ),
-            },
-            {
-              label: t('sellersSellerDetail.approved'),
-              value: (
-                <span className="sk-figure">
-                  {d.approvedAt ? new Date(d.approvedAt).toISOString().slice(0, 10) : '—'}
-                </span>
-              ),
-            },
-            {
-              label: t('sellersSellerDetail.created'),
-              value: (
-                <span className="sk-figure">
-                  {new Date(d.createdAt).toISOString().slice(0, 16)}
-                </span>
-              ),
-            },
-          ]}
-        />
-      </AcSection>
+        {impersonating && (
+          <StartImpersonationDialog
+            subjectKind="SELLER"
+            subjectId={d.id}
+            subjectName={d.companyName}
+            onClose={() => setImpersonating(false)}
+          />
+        )}
 
-      {/* The approved identity, and the only way it moves. Sits
+        <AcSection title={t('sellersSellerDetail.profile')}>
+          <AcDl
+            items={[
+              {
+                label: t('sellersSellerDetail.shortCode'),
+                value: <InitialsRow sellerId={d.id} current={d.initials} />,
+              },
+              { label: t('sellersSellerDetail.contactName'), value: d.contactPersonName },
+              {
+                label: t('sellersSellerDetail.phone'),
+                value: <span className="sk-figure">{d.phone}</span>,
+              },
+              {
+                label: t('sellersSellerDetail.whatsapp'),
+                value: <span className="sk-figure">{d.whatsapp ?? '—'}</span>,
+              },
+              { label: t('sellersSellerDetail.country'), value: d.countryCode },
+              { label: t('sellersSellerDetail.displayCurrency'), value: d.displayCurrency },
+              { label: t('sellersSellerDetail.displayLanguage'), value: d.displayLanguage },
+              {
+                label: t('sellersSellerDetail.emailVerified'),
+                value: d.emailVerifiedAt ? (
+                  <span className="sk-figure">
+                    {new Date(d.emailVerifiedAt).toISOString().slice(0, 10)}
+                  </span>
+                ) : (
+                  <span className="ac-faint">{t('sellersSellerDetail.pending')}</span>
+                ),
+              },
+              {
+                label: t('sellersSellerDetail.approved'),
+                value: (
+                  <span className="sk-figure">
+                    {d.approvedAt ? new Date(d.approvedAt).toISOString().slice(0, 10) : '—'}
+                  </span>
+                ),
+              },
+              {
+                label: t('sellersSellerDetail.created'),
+                value: (
+                  <span className="sk-figure">
+                    {new Date(d.createdAt).toISOString().slice(0, 16)}
+                  </span>
+                ),
+              },
+            ]}
+          />
+        </AcSection>
+
+        {/* The approved identity, and the only way it moves. Sits
           directly under the profile because that is where an operator
           reads the wrong value and forms the intent to fix it. */}
-      <AcSection title={t('sellersSellerDetail.registeredIdentity')} bare>
-        <AcCard
-          title={t('sellersSellerDetail.companyNameAndPhone')}
-          note={t('sellersSellerDetail.whatThisAccountWasApproved')}
-        >
-          <IdentityCorrectionPanel
-            sellerId={d.id}
-            currentCompanyName={d.companyName}
-            currentPhone={d.phone}
-          />
-        </AcCard>
-      </AcSection>
+        <AcSection title={t('sellersSellerDetail.registeredIdentity')} bare>
+          <AcCard
+            title={t('sellersSellerDetail.companyNameAndPhone')}
+            note={t('sellersSellerDetail.whatThisAccountWasApproved')}
+          >
+            <IdentityCorrectionPanel
+              sellerId={d.id}
+              currentCompanyName={d.companyName}
+              currentPhone={d.phone}
+            />
+          </AcCard>
+        </AcSection>
 
-      <AcSection title={t('sellersSellerDetail.status')} bare>
-        <AcCard
-          title={t('sellersSellerDetail.accountStatus')}
-          note={t('sellersSellerDetail.suspendAClientToImmediately')}
-        >
-          <StatusActionPanel
-            sellerId={d.id}
-            sellerName={d.companyName}
-            currentStatus={d.status}
-            canChangeStatus={canChangeStatus}
-          />
-        </AcCard>
-      </AcSection>
+        <AcSection title={t('sellersSellerDetail.status')} bare>
+          <AcCard
+            title={t('sellersSellerDetail.accountStatus')}
+            note={t('sellersSellerDetail.suspendAClientToImmediately')}
+          >
+            <StatusActionPanel
+              sellerId={d.id}
+              sellerName={d.companyName}
+              currentStatus={d.status}
+              canChangeStatus={canChangeStatus}
+            />
+          </AcCard>
+        </AcSection>
 
-      <AcSection title={t('sellersSellerDetail.accountHold')} bare>
-        <RestrictionPanel sellerId={d.id} canManage={canChangeStatus} />
-        <BulkDequeuePanel sellerId={d.id} sellerName={d.companyName} />
-      </AcSection>
+        <AcSection title={t('sellersSellerDetail.accountHold')} bare>
+          <RestrictionPanel sellerId={d.id} canManage={canChangeStatus} />
+          <BulkDequeuePanel sellerId={d.id} sellerName={d.companyName} />
+        </AcSection>
 
-      <AcSection title={t('sellersSellerDetail.bankAccount')} bare>
-        <AcCard
-          title={t('sellersSellerDetail.revealBankAccountNumber')}
-          note={t('sellersSellerDetail.decryptsAuditsHighUseOnly')}
-          tone="warn"
-        >
-          <RevealBankAccountPanel sellerId={d.id} />
-        </AcCard>
-      </AcSection>
+        <AcSection title={t('sellersSellerDetail.bankAccount')} bare>
+          <AcCard
+            title={t('sellersSellerDetail.revealBankAccountNumber')}
+            note={t('sellersSellerDetail.decryptsAuditsHighUseOnly')}
+            tone="warn"
+          >
+            <RevealBankAccountPanel sellerId={d.id} />
+          </AcCard>
+        </AcSection>
 
-      {/* SET-1 per-seller overrides. Lives here rather than on its own
+        {/* SET-1 per-seller overrides. Lives here rather than on its own
           page because "what is this seller on" is a question you ask
           while looking at the seller. */}
-      <SellerSettingsSection sellerId={d.id} />
-      {/* CACC-1 weighted routing: which courier accounts carry this
+        <SellerSettingsSection sellerId={d.id} />
+        {/* CACC-1 weighted routing: which courier accounts carry this
           seller's parcels. Beside the settings because it is the same
           question — what has been agreed with this seller. */}
-      <SellerCourierLinksSection sellerId={d.id} />
-      <CreditAfterConfirmationPanel sellerId={d.id} />
-    </AcPage>
+        <SellerCourierLinksSection sellerId={d.id} />
+        <CreditAfterConfirmationPanel sellerId={d.id} />
+      </AcPage>
+    </div>
   );
 }
 

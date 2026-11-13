@@ -1,5 +1,6 @@
 'use client';
 
+import '@/components/easy/easy.css';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
@@ -211,208 +212,222 @@ export default function AdminResellerStorePage(): ReactElement {
   // fails, so a slow or refused read never leaves a blank page.
   if (store.isPending || store.isError) {
     return (
-      <AcPage>
-        <AcHeader
-          crumbs={[...crumbs, { label: tr('resellerStoresStoreIdPage.memberStore') }]}
-          title={tr('resellerStoresStoreIdPage.memberStore')}
-        />
-        {store.isPending ? (
-          <SkeletonRows rows={5} cols={2} label={tr('resellerStoresStoreIdPage.loadingTheStore')} />
-        ) : (
-          <ErrorState message={serverVerdict(store.error)} retry={() => void store.refetch()} />
-        )}
-      </AcPage>
+      <div className="ez-touch ez-wrap">
+        <AcPage>
+          <AcHeader
+            crumbs={[...crumbs, { label: tr('resellerStoresStoreIdPage.memberStore') }]}
+            title={tr('resellerStoresStoreIdPage.memberStore')}
+          />
+          {store.isPending ? (
+            <SkeletonRows
+              rows={5}
+              cols={2}
+              label={tr('resellerStoresStoreIdPage.loadingTheStore')}
+            />
+          ) : (
+            <ErrorState message={serverVerdict(store.error)} retry={() => void store.refetch()} />
+          )}
+        </AcPage>
+      </div>
     );
   }
   const s = store.data;
   const events = s.events;
 
   return (
-    <AcPage>
-      <AcHeader
-        crumbs={[...crumbs, { label: s.name }]}
-        title={s.name}
-        meta={
-          <div className="ac-meta">
-            <StatusChip
-              kind={resellerStoreStatusKind(s.status)}
-              label={resellerStoreStatusLabel(s.status)}
-            />
-          </div>
-        }
-        action={
-          <div className="ac-buttons">
-            {canImpersonate ? (
-              /* Destructive, because for as long as the session lasts
+    <div className="ez-touch ez-wrap">
+      <AcPage>
+        <AcHeader
+          crumbs={[...crumbs, { label: s.name }]}
+          title={s.name}
+          meta={
+            <div className="ac-meta">
+              <StatusChip
+                kind={resellerStoreStatusKind(s.status)}
+                label={resellerStoreStatusLabel(s.status)}
+              />
+            </div>
+          }
+          action={
+            <div className="ac-buttons">
+              {canImpersonate ? (
+                /* Destructive, because for as long as the session lasts
                  this console's operator is indistinguishable from the
                  shopkeeper in their own store's history. */
-              <Button
-                variant="destructive"
-                size="md"
-                icon={<ShieldAlert size={15} />}
-                onClick={() => setImpersonating(true)}
-              >
-                {tr('resellerStoresStoreIdPage.signInAs', { name: s.name })}
-              </Button>
-            ) : null}
-            {mayPause && s.status === 'ACTIVE' ? (
-              <Button
-                variant="destructive"
-                size="md"
-                icon={<PauseCircle size={15} />}
-                onClick={() => setPausing(true)}
-              >
-                {tr('resellerStoresStoreIdPage.pauseStore')}
-              </Button>
-            ) : null}
-          </div>
-        }
-      />
-      {pausing ? (
-        <PauseStoreModal storeId={s.id} storeName={s.name} onClose={() => setPausing(false)} />
-      ) : null}
-      {impersonating ? (
-        <StartImpersonationDialog
-          subjectKind="STORE"
-          subjectId={s.id}
-          subjectName={s.name}
-          onClose={() => setImpersonating(false)}
+                <Button
+                  variant="destructive"
+                  size="md"
+                  icon={<ShieldAlert size={15} />}
+                  onClick={() => setImpersonating(true)}
+                >
+                  {tr('resellerStoresStoreIdPage.signInAs', { name: s.name })}
+                </Button>
+              ) : null}
+              {mayPause && s.status === 'ACTIVE' ? (
+                <Button
+                  variant="destructive"
+                  size="md"
+                  icon={<PauseCircle size={15} />}
+                  onClick={() => setPausing(true)}
+                >
+                  {tr('resellerStoresStoreIdPage.pauseStore')}
+                </Button>
+              ) : null}
+            </div>
+          }
         />
-      ) : null}
-
-      <AcSection title={tr('resellerStoresStoreIdPage.details')}>
-        <AcDl
-          columns={2}
-          items={[
-            {
-              label: tr('resellerStoresStoreIdPage.client'),
-              value: (
-                <span className="ac-inline">
-                  <Link href={`/sellers/${s.sellerId}`} className="ac-link">
-                    {s.sellerCompanyName}
-                  </Link>
-                  <Link
-                    href={`/reseller-stores?sellerId=${s.sellerId}`}
-                    className="ac-link ac-faint"
-                  >
-                    {tr('resellerStoresStoreIdPage.theirOtherStores')}
-                  </Link>
-                </span>
-              ),
-            },
-            { label: tr('resellerStoresStoreIdPage.customersSee'), value: s.displayName ?? s.name },
-            {
-              label: tr('resellerStoresStoreIdPage.openedBy'),
-              value:
-                s.origin === 'ADMIN'
-                  ? tr('resellerStoresStoreIdPage.skydrop')
-                  : tr('resellerStoresStoreIdPage.theClient'),
-            },
-            {
-              label: tr('resellerStoresStoreIdPage.walletManagedBy'),
-              value:
-                s.walletManagedBy === 'SKYDROP'
-                  ? tr('resellerStoresStoreIdPage.skydrop')
-                  : tr('resellerStoresStoreIdPage.theClient'),
-            },
-            { label: tr('resellerStoresStoreIdPage.contactEmail'), value: s.contactEmail ?? '—' },
-            { label: tr('resellerStoresStoreIdPage.contactPhone'), value: s.contactPhone ?? '—' },
-            { label: tr('resellerStoresStoreIdPage.note'), value: s.note ?? '—' },
-            { label: tr('resellerStoresStoreIdPage.statusSince'), value: when(s.statusChangedAt) },
-          ]}
-        />
-      </AcSection>
-
-      <CatalogueTerms storeId={s.id} />
-      <TermsSection storeId={s.id} />
-      <StoreWalletPanel storeId={s.id} />
-
-      <AcSection
-        title={tr('resellerStoresStoreIdPage.statusHistory')}
-        note={tr('resellerStoresStoreIdPage.everyChangeToThisStore')}
-      >
-        {events.length === 0 ? (
-          <EmptyState bare title={tr('resellerStoresStoreIdPage.noHistory')} />
-        ) : (
-          <Timeline
-            label={tr('resellerStoresStoreIdPage.statusHistory')}
-            steps={events.map((e, i) => ({
-              id: e.id,
-              label: EVENT_WORDS(tr)[e.kind] ?? e.kind,
-              state: i === events.length - 1 ? ('current' as const) : ('done' as const),
-              time: when(e.createdAt),
-              description: (
-                <>
-                  {e.fromStatus === null && e.toStatus === null
-                    ? '—'
-                    : `${e.fromStatus?.toLowerCase().replace(/_/g, ' ') ?? 'new'} → ${
-                        e.toStatus?.toLowerCase().replace(/_/g, ' ') ?? '—'
-                      }`}
-                  {' · '}
-                  {ACTOR_WORDS(tr)[e.actorType] ?? e.actorType}
-                  {e.note === null ? null : (
-                    <>
-                      {' · '}
-                      {e.note}
-                    </>
-                  )}
-                </>
-              ),
-            }))}
+        {pausing ? (
+          <PauseStoreModal storeId={s.id} storeName={s.name} onClose={() => setPausing(false)} />
+        ) : null}
+        {impersonating ? (
+          <StartImpersonationDialog
+            subjectKind="STORE"
+            subjectId={s.id}
+            subjectName={s.name}
+            onClose={() => setImpersonating(false)}
           />
-        )}
-      </AcSection>
+        ) : null}
 
-      <AcSection
-        title={tr('resellerStoresStoreIdPage.team')}
-        note={tr('resellerStoresStoreIdPage.loginsOnTheMemberStore')}
-        flush
-      >
-        {s.team.members.length === 0 && s.team.invitations.length === 0 ? (
-          <EmptyState
-            bare
-            title={tr('resellerStoresStoreIdPage.nobodyOnTheTeamYet')}
-            description={tr('resellerStoresStoreIdPage.theClientInvitesTheStore')}
+        <AcSection title={tr('resellerStoresStoreIdPage.details')}>
+          <AcDl
+            columns={2}
+            items={[
+              {
+                label: tr('resellerStoresStoreIdPage.client'),
+                value: (
+                  <span className="ac-inline">
+                    <Link href={`/sellers/${s.sellerId}`} className="ac-link">
+                      {s.sellerCompanyName}
+                    </Link>
+                    <Link
+                      href={`/reseller-stores?sellerId=${s.sellerId}`}
+                      className="ac-link ac-faint"
+                    >
+                      {tr('resellerStoresStoreIdPage.theirOtherStores')}
+                    </Link>
+                  </span>
+                ),
+              },
+              {
+                label: tr('resellerStoresStoreIdPage.customersSee'),
+                value: s.displayName ?? s.name,
+              },
+              {
+                label: tr('resellerStoresStoreIdPage.openedBy'),
+                value:
+                  s.origin === 'ADMIN'
+                    ? tr('resellerStoresStoreIdPage.skydrop')
+                    : tr('resellerStoresStoreIdPage.theClient'),
+              },
+              {
+                label: tr('resellerStoresStoreIdPage.walletManagedBy'),
+                value:
+                  s.walletManagedBy === 'SKYDROP'
+                    ? tr('resellerStoresStoreIdPage.skydrop')
+                    : tr('resellerStoresStoreIdPage.theClient'),
+              },
+              { label: tr('resellerStoresStoreIdPage.contactEmail'), value: s.contactEmail ?? '—' },
+              { label: tr('resellerStoresStoreIdPage.contactPhone'), value: s.contactPhone ?? '—' },
+              { label: tr('resellerStoresStoreIdPage.note'), value: s.note ?? '—' },
+              {
+                label: tr('resellerStoresStoreIdPage.statusSince'),
+                value: when(s.statusChangedAt),
+              },
+            ]}
           />
-        ) : (
-          <Table caption={tr('resellerStoresStoreIdPage.storeTeam')}>
-            <THead>
-              <Tr>
-                <Th>{tr('resellerStoresStoreIdPage.name')}</Th>
-                <Th>{tr('resellerStoresStoreIdPage.email')}</Th>
-                <Th>{tr('resellerStoresStoreIdPage.role')}</Th>
-                <Th>{tr('resellerStoresStoreIdPage.state')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {s.team.members.map((m) => (
-                <Tr key={m.id}>
-                  <Td>
-                    <span className="ac-cell-main">{m.fullName}</span>
-                  </Td>
-                  <Td>{m.email}</Td>
-                  <Td>{m.roleName}</Td>
-                  <Td>
-                    {tr('resellerStoresStoreIdPage.lastSignedIn', { value: when(m.lastLoginAt) })}
-                  </Td>
+        </AcSection>
+
+        <CatalogueTerms storeId={s.id} />
+        <TermsSection storeId={s.id} />
+        <StoreWalletPanel storeId={s.id} />
+
+        <AcSection
+          title={tr('resellerStoresStoreIdPage.statusHistory')}
+          note={tr('resellerStoresStoreIdPage.everyChangeToThisStore')}
+        >
+          {events.length === 0 ? (
+            <EmptyState bare title={tr('resellerStoresStoreIdPage.noHistory')} />
+          ) : (
+            <Timeline
+              label={tr('resellerStoresStoreIdPage.statusHistory')}
+              steps={events.map((e, i) => ({
+                id: e.id,
+                label: EVENT_WORDS(tr)[e.kind] ?? e.kind,
+                state: i === events.length - 1 ? ('current' as const) : ('done' as const),
+                time: when(e.createdAt),
+                description: (
+                  <>
+                    {e.fromStatus === null && e.toStatus === null
+                      ? '—'
+                      : `${e.fromStatus?.toLowerCase().replace(/_/g, ' ') ?? 'new'} → ${
+                          e.toStatus?.toLowerCase().replace(/_/g, ' ') ?? '—'
+                        }`}
+                    {' · '}
+                    {ACTOR_WORDS(tr)[e.actorType] ?? e.actorType}
+                    {e.note === null ? null : (
+                      <>
+                        {' · '}
+                        {e.note}
+                      </>
+                    )}
+                  </>
+                ),
+              }))}
+            />
+          )}
+        </AcSection>
+
+        <AcSection
+          title={tr('resellerStoresStoreIdPage.team')}
+          note={tr('resellerStoresStoreIdPage.loginsOnTheMemberStore')}
+          flush
+        >
+          {s.team.members.length === 0 && s.team.invitations.length === 0 ? (
+            <EmptyState
+              bare
+              title={tr('resellerStoresStoreIdPage.nobodyOnTheTeamYet')}
+              description={tr('resellerStoresStoreIdPage.theClientInvitesTheStore')}
+            />
+          ) : (
+            <Table caption={tr('resellerStoresStoreIdPage.storeTeam')}>
+              <THead>
+                <Tr>
+                  <Th>{tr('resellerStoresStoreIdPage.name')}</Th>
+                  <Th>{tr('resellerStoresStoreIdPage.email')}</Th>
+                  <Th>{tr('resellerStoresStoreIdPage.role')}</Th>
+                  <Th>{tr('resellerStoresStoreIdPage.state')}</Th>
                 </Tr>
-              ))}
-              {s.team.invitations.map((i) => (
-                <Tr key={i.id}>
-                  <Td>
-                    <span className="ac-cell-main">{i.fullName}</span>
-                  </Td>
-                  <Td>{i.email}</Td>
-                  <Td>{i.roleName}</Td>
-                  <Td>
-                    {tr('resellerStoresStoreIdPage.invitedExpires', { value: when(i.expiresAt) })}
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
-        )}
-      </AcSection>
-    </AcPage>
+              </THead>
+              <TBody>
+                {s.team.members.map((m) => (
+                  <Tr key={m.id}>
+                    <Td>
+                      <span className="ac-cell-main">{m.fullName}</span>
+                    </Td>
+                    <Td>{m.email}</Td>
+                    <Td>{m.roleName}</Td>
+                    <Td>
+                      {tr('resellerStoresStoreIdPage.lastSignedIn', { value: when(m.lastLoginAt) })}
+                    </Td>
+                  </Tr>
+                ))}
+                {s.team.invitations.map((i) => (
+                  <Tr key={i.id}>
+                    <Td>
+                      <span className="ac-cell-main">{i.fullName}</span>
+                    </Td>
+                    <Td>{i.email}</Td>
+                    <Td>{i.roleName}</Td>
+                    <Td>
+                      {tr('resellerStoresStoreIdPage.invitedExpires', { value: when(i.expiresAt) })}
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </AcSection>
+      </AcPage>
+    </div>
   );
 }

@@ -1,5 +1,8 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
+import { When } from '@/components/easy/when';
 import { useState, type ReactElement } from 'react';
 import { Megaphone, Send, Users } from 'lucide-react';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
@@ -187,238 +190,247 @@ export function BroadcastsView(): ReactElement {
   }
 
   return (
-    <AcPage width="narrow">
-      <AcHeader
-        crumbs={[
-          {
-            label: t('notificationsBroadcastsBroadcastsView.notifications'),
-            href: '/notifications',
-          },
-          { label: t('notificationsBroadcastsBroadcastsView.broadcast') },
-        ]}
-        title={t('notificationsBroadcastsBroadcastsView.broadcast')}
-        subtitle={t('notificationsBroadcastsBroadcastsView.aMessageYouChooseTo')}
-      />
+    <div className="ez-touch ez-wrap">
+      <AcPage width="narrow">
+        <AcHeader
+          crumbs={[
+            {
+              label: t('notificationsBroadcastsBroadcastsView.notifications'),
+              href: '/notifications',
+            },
+            { label: t('notificationsBroadcastsBroadcastsView.broadcast') },
+          ]}
+          title={
+            <span className="ez-titled">
+              {t('notificationsBroadcastsBroadcastsView.broadcast')}
+              <InfoButton
+                title={t('notificationsBroadcastsBroadcastsView.broadcast')}
+                text={t('notificationsBroadcastsBroadcastsView.aMessageYouChooseTo')}
+              />
+            </span>
+          }
+        />
 
-      {error !== null && <AcAlert message={error} />}
+        {error !== null && <AcAlert message={error} />}
 
-      {sent !== null && (
-        <AcCallout tone="good" icon={<Send size={15} />} role="status">
-          {sent}
-        </AcCallout>
-      )}
+        {sent !== null && (
+          <AcCallout tone="good" icon={<Send size={15} />} role="status">
+            {sent}
+          </AcCallout>
+        )}
 
-      <AcCard>
-        <div className="ac-form">
-          <div className="ac-card__body">
-            <Select
-              label={t('notificationsBroadcastsBroadcastsView.whoItReaches')}
-              id="bc-audience"
-              hint={pick.hint}
-              value={audienceIdx}
-              onChange={(e) => {
-                setAudienceIdx(Number(e.target.value));
-                setAudienceValues([]);
-                preview.reset();
-              }}
-            >
-              {AUDIENCES(t).map((a, i) => (
-                <option key={a.label} value={i}>
-                  {a.label}
-                </option>
-              ))}
-            </Select>
-            {pick.fields.length > 0 && (
-              <div className="ac-form-grid" data-cols={pick.fields.length > 1 ? '2' : undefined}>
-                {pick.fields.map((field, i) => (
-                  <TextField
-                    key={field}
-                    aria-label={field}
-                    inputClassName="sk-ident"
-                    placeholder={field}
-                    value={audienceValues[i] ?? ''}
-                    onChange={(e) => {
-                      const next = [...audienceValues];
-                      next[i] = e.target.value;
-                      setAudienceValues(next);
-                      preview.reset();
-                    }}
+        <AcCard>
+          <div className="ac-form">
+            <div className="ac-card__body">
+              <Select
+                label={t('notificationsBroadcastsBroadcastsView.whoItReaches')}
+                id="bc-audience"
+                hint={pick.hint}
+                value={audienceIdx}
+                onChange={(e) => {
+                  setAudienceIdx(Number(e.target.value));
+                  setAudienceValues([]);
+                  preview.reset();
+                }}
+              >
+                {AUDIENCES(t).map((a, i) => (
+                  <option key={a.label} value={i}>
+                    {a.label}
+                  </option>
+                ))}
+              </Select>
+              {pick.fields.length > 0 && (
+                <div className="ac-form-grid" data-cols={pick.fields.length > 1 ? '2' : undefined}>
+                  {pick.fields.map((field, i) => (
+                    <TextField
+                      key={field}
+                      aria-label={field}
+                      inputClassName="sk-ident"
+                      placeholder={field}
+                      value={audienceValues[i] ?? ''}
+                      onChange={(e) => {
+                        const next = [...audienceValues];
+                        next[i] = e.target.value;
+                        setAudienceValues(next);
+                        preview.reset();
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <fieldset className="ac-fieldset">
+              <legend>{t('notificationsBroadcastsBroadcastsView.channels')}</legend>
+              <div className="ac-buttons" data-align="start">
+                {['IN_APP', 'EMAIL'].map((c) => (
+                  <Checkbox
+                    key={c}
+                    label={
+                      c === 'IN_APP'
+                        ? t('notificationsBroadcastsBroadcastsView.inApp')
+                        : t('notificationsBroadcastsBroadcastsView.email')
+                    }
+                    checked={channels.includes(c)}
+                    onChange={() => toggleChannel(c)}
                   />
                 ))}
               </div>
-            )}
-          </div>
+            </fieldset>
 
-          <fieldset className="ac-fieldset">
-            <legend>{t('notificationsBroadcastsBroadcastsView.channels')}</legend>
-            <div className="ac-buttons" data-align="start">
-              {['IN_APP', 'EMAIL'].map((c) => (
-                <Checkbox
-                  key={c}
-                  label={
-                    c === 'IN_APP'
-                      ? t('notificationsBroadcastsBroadcastsView.inApp')
-                      : t('notificationsBroadcastsBroadcastsView.email')
-                  }
-                  checked={channels.includes(c)}
-                  onChange={() => toggleChannel(c)}
-                />
-              ))}
-            </div>
-          </fieldset>
-
-          <TextField
-            label={t('notificationsBroadcastsBroadcastsView.title')}
-            id="bc-title"
-            requiredMark
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-
-          <TextArea
-            label={t('notificationsBroadcastsBroadcastsView.message')}
-            id="bc-body"
-            requiredMark
-            rows={5}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-          />
-
-          <div className="ac-buttons" data-align="start">
-            <AsyncButton
-              variant="secondary"
-              icon={<Users size={15} />}
-              state={preview.isPending ? 'busy' : 'idle'}
-              labels={{
-                idle: t('notificationsBroadcastsBroadcastsView.howManyIsThat'),
-                busy: t('notificationsBroadcastsBroadcastsView.counting'),
-              }}
-              disabled={preview.isPending || channels.length === 0 || !audienceComplete}
-              onClick={() => {
-                setError(null);
-                setSent(null);
-                preview.mutate(
-                  { audience, category: 'ANNOUNCEMENT', channels },
-                  { onError: (e) => setError(serverVerdict(e)) },
-                );
-              }}
+            <TextField
+              label={t('notificationsBroadcastsBroadcastsView.title')}
+              id="bc-title"
+              requiredMark
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
             />
 
+            <TextArea
+              label={t('notificationsBroadcastsBroadcastsView.message')}
+              id="bc-body"
+              requiredMark
+              rows={5}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+            />
+
+            <div className="ac-buttons" data-align="start">
+              <AsyncButton
+                variant="secondary"
+                icon={<Users size={15} />}
+                state={preview.isPending ? 'busy' : 'idle'}
+                labels={{
+                  idle: t('notificationsBroadcastsBroadcastsView.howManyIsThat'),
+                  busy: t('notificationsBroadcastsBroadcastsView.counting'),
+                }}
+                disabled={preview.isPending || channels.length === 0 || !audienceComplete}
+                onClick={() => {
+                  setError(null);
+                  setSent(null);
+                  preview.mutate(
+                    { audience, category: 'ANNOUNCEMENT', channels },
+                    { onError: (e) => setError(serverVerdict(e)) },
+                  );
+                }}
+              />
+
+              {previewed !== null && (
+                <span className="ac-text" role="status">
+                  <strong className="sk-figure">{people(previewed.recipientCount)}</strong>
+                  {previewed.sample.length > 0 && (
+                    <span className="ac-faint"> — {previewed.sample.join(', ')}…</span>
+                  )}
+                </span>
+              )}
+            </div>
+
             {previewed !== null && (
-              <span className="ac-text" role="status">
-                <strong className="sk-figure">{people(previewed.recipientCount)}</strong>
-                {previewed.sample.length > 0 && (
-                  <span className="ac-faint"> — {previewed.sample.join(', ')}…</span>
-                )}
-              </span>
+              <AcCallout tone="critical" icon={<Megaphone size={15} />}>
+                <div className="ac-buttons" data-align="start">
+                  <AsyncButton
+                    variant="destructive"
+                    icon={<Send size={15} />}
+                    state={send.isPending ? 'busy' : 'idle'}
+                    labels={{
+                      idle: t('notificationsBroadcastsBroadcastsView.sendTo', {
+                        value: people(previewed.recipientCount),
+                      }),
+                      busy: t('notificationsBroadcastsBroadcastsView.sending'),
+                    }}
+                    disabled={!ready}
+                    onClick={() => {
+                      setError(null);
+                      send.mutate(
+                        {
+                          audience,
+                          category: 'ANNOUNCEMENT',
+                          channels,
+                          title: title.trim(),
+                          body: body.trim(),
+                          expectedRecipientCount: previewed.recipientCount,
+                        },
+                        {
+                          onSuccess: (r) => {
+                            setSent(
+                              t('notificationsBroadcastsBroadcastsView.sentToDelivered', {
+                                value: people(r.recipientCount),
+                                delivered: r.delivered,
+                              }),
+                            );
+                            setTitle('');
+                            setBody('');
+                            preview.reset();
+                          },
+                          onError: (e) => setError(serverVerdict(e)),
+                        },
+                      );
+                    }}
+                  />
+                </div>
+                <p className="ac-muted">
+                  {t('notificationsBroadcastsBroadcastsView.thisCannotBeRecalledIf')}
+                </p>
+              </AcCallout>
             )}
           </div>
+        </AcCard>
 
-          {previewed !== null && (
-            <AcCallout tone="critical" icon={<Megaphone size={15} />}>
-              <div className="ac-buttons" data-align="start">
-                <AsyncButton
-                  variant="destructive"
-                  icon={<Send size={15} />}
-                  state={send.isPending ? 'busy' : 'idle'}
-                  labels={{
-                    idle: t('notificationsBroadcastsBroadcastsView.sendTo', {
-                      value: people(previewed.recipientCount),
-                    }),
-                    busy: t('notificationsBroadcastsBroadcastsView.sending'),
-                  }}
-                  disabled={!ready}
-                  onClick={() => {
-                    setError(null);
-                    send.mutate(
-                      {
-                        audience,
-                        category: 'ANNOUNCEMENT',
-                        channels,
-                        title: title.trim(),
-                        body: body.trim(),
-                        expectedRecipientCount: previewed.recipientCount,
-                      },
-                      {
-                        onSuccess: (r) => {
-                          setSent(
-                            t('notificationsBroadcastsBroadcastsView.sentToDelivered', {
-                              value: people(r.recipientCount),
-                              delivered: r.delivered,
-                            }),
-                          );
-                          setTitle('');
-                          setBody('');
-                          preview.reset();
-                        },
-                        onError: (e) => setError(serverVerdict(e)),
-                      },
-                    );
-                  }}
-                />
-              </div>
-              <p className="ac-muted">
-                {t('notificationsBroadcastsBroadcastsView.thisCannotBeRecalledIf')}
-              </p>
-            </AcCallout>
-          )}
-        </div>
-      </AcCard>
-
-      <AcSection title={t('notificationsBroadcastsBroadcastsView.whatHasBeenSent')} flush>
-        {(history.data ?? []).length === 0 ? (
-          <EmptyState bare title={t('notificationsBroadcastsBroadcastsView.nothingSentYet')} />
-        ) : (
-          <Table caption={t('notificationsBroadcastsBroadcastsView.broadcastsSent')}>
-            <THead>
-              <Tr>
-                <Th>{t('notificationsBroadcastsBroadcastsView.sent')}</Th>
-                <Th>{t('notificationsBroadcastsBroadcastsView.title')}</Th>
-                <Th align="right">{t('notificationsBroadcastsBroadcastsView.reached')}</Th>
-                <Th align="right">{t('notificationsBroadcastsBroadcastsView.delivered')}</Th>
-                <Th align="right">{t('notificationsBroadcastsBroadcastsView.failed')}</Th>
-                <Th>{t('notificationsBroadcastsBroadcastsView.status')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {(history.data ?? []).map((b) => (
-                <Tr key={b.id}>
-                  <Td>
-                    <span className="sk-figure ac-faint">
-                      {new Date(b.createdAt).toLocaleString()}
-                    </span>
-                  </Td>
-                  <Td>
-                    <span className="ac-cell-main">{b.title}</span>
-                  </Td>
-                  <Td align="right">
-                    <span className="sk-figure">{b.recipientCount}</span>
-                  </Td>
-                  <Td align="right">
-                    <span className="sk-figure">{b.sentCount}</span>
-                  </Td>
-                  <Td align="right">
-                    <span className="sk-figure">{b.failedCount}</span>
-                  </Td>
-                  <Td>
-                    <StatusChip
-                      kind={
-                        b.status === 'SENT'
-                          ? 'delivered'
-                          : b.status === 'FAILED'
-                            ? 'failed'
-                            : 'pending'
-                      }
-                      label={b.status.toLowerCase()}
-                      size="sm"
-                    />
-                  </Td>
+        <AcSection title={t('notificationsBroadcastsBroadcastsView.whatHasBeenSent')} flush>
+          {(history.data ?? []).length === 0 ? (
+            <EmptyState bare title={t('notificationsBroadcastsBroadcastsView.nothingSentYet')} />
+          ) : (
+            <Table caption={t('notificationsBroadcastsBroadcastsView.broadcastsSent')}>
+              <THead>
+                <Tr>
+                  <Th>{t('notificationsBroadcastsBroadcastsView.sent')}</Th>
+                  <Th>{t('notificationsBroadcastsBroadcastsView.title')}</Th>
+                  <Th align="right">{t('notificationsBroadcastsBroadcastsView.reached')}</Th>
+                  <Th align="right">{t('notificationsBroadcastsBroadcastsView.delivered')}</Th>
+                  <Th align="right">{t('notificationsBroadcastsBroadcastsView.failed')}</Th>
+                  <Th>{t('notificationsBroadcastsBroadcastsView.status')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
-        )}
-      </AcSection>
-    </AcPage>
+              </THead>
+              <TBody>
+                {(history.data ?? []).map((b) => (
+                  <Tr key={b.id}>
+                    <Td>
+                      <span className="sk-figure ac-faint">
+                        <When iso={b.createdAt} time />
+                      </span>
+                    </Td>
+                    <Td>
+                      <span className="ac-cell-main">{b.title}</span>
+                    </Td>
+                    <Td align="right">
+                      <span className="sk-figure">{b.recipientCount}</span>
+                    </Td>
+                    <Td align="right">
+                      <span className="sk-figure">{b.sentCount}</span>
+                    </Td>
+                    <Td align="right">
+                      <span className="sk-figure">{b.failedCount}</span>
+                    </Td>
+                    <Td>
+                      <StatusChip
+                        kind={
+                          b.status === 'SENT'
+                            ? 'delivered'
+                            : b.status === 'FAILED'
+                              ? 'failed'
+                              : 'pending'
+                        }
+                        label={b.status.toLowerCase()}
+                        size="sm"
+                      />
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </AcSection>
+      </AcPage>
+    </div>
   );
 }

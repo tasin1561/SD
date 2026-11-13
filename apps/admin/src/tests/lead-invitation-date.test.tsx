@@ -10,6 +10,7 @@
  * typecheck was reading a type that agreed with itself. Found by
  * filming it (O1, 2026-10-01).
  */
+import { formatDateTime } from '@/i18n/format';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '@skydrop/ui/app/toast';
@@ -74,9 +75,8 @@ describe('an invitation already sent', () => {
   it('reads the date off the field the API actually sends', () => {
     open();
     const line = screen.getByText(/expires/i);
-    // Whatever the runner's locale renders, it has to be THIS instant.
-    expect(line.textContent ?? '').toContain(
-      new Date(INVITATION.createdAt).toLocaleString(undefined, {}).split(',')[0],
-    );
+    // It has to be THIS instant, written in the chosen language (the date
+    // follows the console's language now, not the browser's).
+    expect(line.textContent ?? '').toContain(formatDateTime(INVITATION.createdAt, 'en'));
   });
 });

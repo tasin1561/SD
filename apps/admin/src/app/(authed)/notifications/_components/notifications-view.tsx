@@ -1,5 +1,8 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
+import { When } from '@/components/easy/when';
 import { useEffect, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { CheckCheck, Mail, MailOpen, Megaphone, Settings2, Trash2 } from 'lucide-react';
@@ -64,66 +67,74 @@ export function NotificationsView(): ReactElement {
   }, [items]);
 
   return (
-    <AcPage width="narrow">
-      <AcHeader
-        title={t('notificationsNotificationsView.notifications')}
-        subtitle={t('notificationsNotificationsView.everythingSentToYouAnd')}
-        action={
-          <div className="ac-buttons">
-            {canBroadcast && (
-              <Link className={buttonClassName('ghost', 'md')} href="/notifications/broadcasts">
-                <span className="sk-btn__icon" aria-hidden>
-                  <Megaphone size={15} />
-                </span>
-                <span className="sk-btn__label">
-                  {t('notificationsNotificationsView.sendABroadcast')}
-                </span>
-              </Link>
-            )}
-            {(feed.data?.unreadCount ?? 0) > 0 && (
-              <Button
-                variant="secondary"
-                icon={<CheckCheck size={15} />}
-                onClick={() => markAll.mutate()}
-              >
-                {t('notificationsNotificationsView.markAllRead')}
-              </Button>
-            )}
-            {items.length > 0 && (
-              <Button
-                variant="ghost"
-                icon={<Trash2 size={15} />}
-                onClick={() => setConfirmClear(true)}
-              >
-                {t('notificationsNotificationsView.clearAll')}
-              </Button>
-            )}
-          </div>
-        }
-      />
-
-      <AcCard flush>
-        {feed.isLoading ? (
-          <SkeletonRows rows={4} cols={2} />
-        ) : items.length === 0 ? (
-          <EmptyState
-            bare
-            tone="positive"
-            title={t('notificationsNotificationsView.nothingYet')}
-            description={t('notificationsNotificationsView.anythingNeedingYouWillAppear')}
-          />
-        ) : (
-          <ul className="ac-rows">
-            {items.map((n) => {
-              const open = expanded === n.id;
-              return (
-                <li
-                  key={n.id}
-                  id={n.id}
-                  className="ac-notif"
-                  data-unread={n.readAt === null ? '1' : undefined}
+    <div className="ez-touch ez-wrap">
+      <AcPage width="narrow">
+        <AcHeader
+          title={
+            <span className="ez-titled">
+              {t('notificationsNotificationsView.notifications')}
+              <InfoButton
+                title={t('notificationsNotificationsView.notifications')}
+                text={t('notificationsNotificationsView.everythingSentToYouAnd')}
+              />
+            </span>
+          }
+          action={
+            <div className="ac-buttons">
+              {canBroadcast && (
+                <Link className={buttonClassName('ghost', 'md')} href="/notifications/broadcasts">
+                  <span className="sk-btn__icon" aria-hidden>
+                    <Megaphone size={15} />
+                  </span>
+                  <span className="sk-btn__label">
+                    {t('notificationsNotificationsView.sendABroadcast')}
+                  </span>
+                </Link>
+              )}
+              {(feed.data?.unreadCount ?? 0) > 0 && (
+                <Button
+                  variant="secondary"
+                  icon={<CheckCheck size={15} />}
+                  onClick={() => markAll.mutate()}
                 >
-                  {/*
+                  {t('notificationsNotificationsView.markAllRead')}
+                </Button>
+              )}
+              {items.length > 0 && (
+                <Button
+                  variant="ghost"
+                  icon={<Trash2 size={15} />}
+                  onClick={() => setConfirmClear(true)}
+                >
+                  {t('notificationsNotificationsView.clearAll')}
+                </Button>
+              )}
+            </div>
+          }
+        />
+
+        <AcCard flush>
+          {feed.isLoading ? (
+            <SkeletonRows rows={4} cols={2} />
+          ) : items.length === 0 ? (
+            <EmptyState
+              bare
+              tone="positive"
+              title={t('notificationsNotificationsView.nothingYet')}
+              description={t('notificationsNotificationsView.anythingNeedingYouWillAppear')}
+            />
+          ) : (
+            <ul className="ac-rows">
+              {items.map((n) => {
+                const open = expanded === n.id;
+                return (
+                  <li
+                    key={n.id}
+                    id={n.id}
+                    className="ac-notif"
+                    data-unread={n.readAt === null ? '1' : undefined}
+                  >
+                    {/*
                     The whole row opens it. A notification is a
                     paragraph, not a document — it does not earn a
                     page of its own, and truncating it with no way
@@ -131,109 +142,112 @@ export function NotificationsView(): ReactElement {
                     Opening also marks it read, which is what
                     reading something means.
                   */}
-                  <button
-                    type="button"
-                    className="ac-notif__open"
-                    aria-expanded={open}
-                    onClick={() => {
-                      setExpanded(open ? null : n.id);
-                      if (!open && n.readAt === null) markRead.mutate(n.id);
-                    }}
-                  >
-                    {n.title !== null && (
-                      <span className="ac-notif__title">
-                        {n.readAt === null && <span aria-hidden className="ac-notif__dot" />}
-                        {n.title}
-                      </span>
-                    )}
-                    <span className="ac-notif__body" data-clamp={open ? undefined : '1'}>
-                      {n.body}
-                    </span>
-                    <span className="ac-notif__meta">
-                      <span className="sk-figure">{new Date(n.createdAt).toLocaleString()}</span> ·{' '}
-                      {n.topic}
-                      {!open && t('notificationsNotificationsView.clickToRead')}
-                    </span>
-                  </button>
-
-                  <div className="ac-notif__side">
-                    {n.readAt === null ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon={<MailOpen size={14} />}
-                        onClick={() => markRead.mutate(n.id)}
-                      >
-                        {t('notificationsNotificationsView.markRead')}
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon={<Mail size={14} />}
-                        onClick={() => markUnread.mutate(n.id)}
-                      >
-                        {t('notificationsNotificationsView.markUnread')}
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      icon={<Trash2 size={14} />}
-                      aria-label={t('notificationsNotificationsView.deleteThisNotification')}
-                      onClick={() => dismiss.mutate(n.id)}
+                    <button
+                      type="button"
+                      className="ac-notif__open"
+                      aria-expanded={open}
+                      onClick={() => {
+                        setExpanded(open ? null : n.id);
+                        if (!open && n.readAt === null) markRead.mutate(n.id);
+                      }}
                     >
-                      {t('notificationsNotificationsView.delete')}
-                    </Button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                      {n.title !== null && (
+                        <span className="ac-notif__title">
+                          {n.readAt === null && <span aria-hidden className="ac-notif__dot" />}
+                          {n.title}
+                        </span>
+                      )}
+                      <span className="ac-notif__body" data-clamp={open ? undefined : '1'}>
+                        {n.body}
+                      </span>
+                      <span className="ac-notif__meta">
+                        <span className="sk-figure">
+                          <When iso={n.createdAt} time />
+                        </span>{' '}
+                        · {n.topic}
+                        {!open && t('notificationsNotificationsView.clickToRead')}
+                      </span>
+                    </button>
 
-        {feed.data?.nextCursor != null && (
-          <div className="ac-pad">
-            <Button variant="ghost" onClick={() => setCursor(feed.data?.nextCursor ?? undefined)}>
-              {t('notificationsNotificationsView.older')}
-            </Button>
-          </div>
-        )}
-      </AcCard>
+                    <div className="ac-notif__side">
+                      {n.readAt === null ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<MailOpen size={14} />}
+                          onClick={() => markRead.mutate(n.id)}
+                        >
+                          {t('notificationsNotificationsView.markRead')}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<Mail size={14} />}
+                          onClick={() => markUnread.mutate(n.id)}
+                        >
+                          {t('notificationsNotificationsView.markUnread')}
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={<Trash2 size={14} />}
+                        aria-label={t('notificationsNotificationsView.deleteThisNotification')}
+                        onClick={() => dismiss.mutate(n.id)}
+                      >
+                        {t('notificationsNotificationsView.delete')}
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
-      {/*
+          {feed.data?.nextCursor != null && (
+            <div className="ac-pad">
+              <Button variant="ghost" onClick={() => setCursor(feed.data?.nextCursor ?? undefined)}>
+                {t('notificationsNotificationsView.older')}
+              </Button>
+            </div>
+          )}
+        </AcCard>
+
+        {/*
         The preferences moved to their own page. They are a standing
         decision — set once, changed rarely — and they were sitting
         under a list that is read several times a day, pushing it up the
         screen every time somebody came to check what had happened.
       */}
-      <p className="ac-text">
-        <Link className="ac-link ac-inline" href="/notifications/settings">
-          <Settings2 size={14} aria-hidden />
-          {t('notificationsNotificationsView.chooseWhatReachesYou')}
-        </Link>{' '}
-        {t('notificationsNotificationsView.switchOffAnythingYouWould')}
-      </p>
+        <p className="ac-text">
+          <Link className="ac-link ac-inline" href="/notifications/settings">
+            <Settings2 size={14} aria-hidden />
+            {t('notificationsNotificationsView.chooseWhatReachesYou')}
+          </Link>{' '}
+          {t('notificationsNotificationsView.switchOffAnythingYouWould')}
+        </p>
 
-      <ConfirmDialog
-        open={confirmClear}
-        onOpenChange={setConfirmClear}
-        title={t('notificationsNotificationsView.clearEveryNotification')}
-        entity={t('notificationsNotificationsView.yourInbox')}
-        consequence={t('notificationsNotificationsView.everyNotificationIsRemovedFrom')}
-        confirmLabel={t('notificationsNotificationsView.clearAll')}
-        destructive
-        error={clearError}
-        onConfirm={async () => {
-          setClearError(null);
-          try {
-            await dismissAll.mutateAsync();
-          } catch (err) {
-            setClearError(serverVerdict(err));
-            throw err;
-          }
-        }}
-      />
-    </AcPage>
+        <ConfirmDialog
+          open={confirmClear}
+          onOpenChange={setConfirmClear}
+          title={t('notificationsNotificationsView.clearEveryNotification')}
+          entity={t('notificationsNotificationsView.yourInbox')}
+          consequence={t('notificationsNotificationsView.everyNotificationIsRemovedFrom')}
+          confirmLabel={t('notificationsNotificationsView.clearAll')}
+          destructive
+          error={clearError}
+          onConfirm={async () => {
+            setClearError(null);
+            try {
+              await dismissAll.mutateAsync();
+            } catch (err) {
+              setClearError(serverVerdict(err));
+              throw err;
+            }
+          }}
+        />
+      </AcPage>
+    </div>
   );
 }

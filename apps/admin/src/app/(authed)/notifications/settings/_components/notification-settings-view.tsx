@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import { Switch } from '@skydrop/ui/app/switch';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
@@ -39,67 +41,76 @@ export function NotificationSettingsView(): ReactElement {
   }, {});
 
   return (
-    <AcPage width="narrow">
-      <AcHeader
-        crumbs={[
-          {
-            label: tr('notificationsSettingsNotificationSettingsView.notifications'),
-            href: '/notifications',
-          },
-          { label: tr('notificationsSettingsNotificationSettingsView.whatReachesYou') },
-        ]}
-        title={tr('notificationsSettingsNotificationSettingsView.whatReachesYou')}
-        subtitle={tr('notificationsSettingsNotificationSettingsView.switchOffAnythingYouWould')}
-      />
+    <div className="ez-touch ez-wrap">
+      <AcPage width="narrow">
+        <AcHeader
+          crumbs={[
+            {
+              label: tr('notificationsSettingsNotificationSettingsView.notifications'),
+              href: '/notifications',
+            },
+            { label: tr('notificationsSettingsNotificationSettingsView.whatReachesYou') },
+          ]}
+          title={
+            <span className="ez-titled">
+              {tr('notificationsSettingsNotificationSettingsView.whatReachesYou')}
+              <InfoButton
+                title={tr('notificationsSettingsNotificationSettingsView.whatReachesYou')}
+                text={tr('notificationsSettingsNotificationSettingsView.switchOffAnythingYouWould')}
+              />
+            </span>
+          }
+        />
 
-      {error !== null && <AcAlert message={error} />}
+        {error !== null && <AcAlert message={error} />}
 
-      <AcCard flush>
-        {topics.isLoading ? (
-          <SkeletonRows rows={4} cols={2} />
-        ) : (
-          Object.entries(grouped).map(([group, defs]) => (
-            <div key={group} className="ac-topic-group">
-              <h3 className="ac-topic-group__title">{group}</h3>
-              <ul className="ac-rows">
-                {defs.map((d) => {
-                  const on = !muted.has(d.topic);
-                  return (
-                    <li key={d.topic} className="ac-row">
-                      <div className="ac-row__main">
-                        <span className="ac-row__title">{d.label}</span>
-                        <span className="ac-muted">{d.description}</span>
-                      </div>
-                      <div className="ac-row__side">
-                        <Switch
-                          checked={on}
-                          aria-label={tr(
-                            'notificationsSettingsNotificationSettingsView.notifyMeAbout',
-                            { label: d.label },
-                          )}
-                          onCheckedChange={() => {
-                            setError(null);
-                            if (on) {
-                              setSub.mutate(
-                                { topic: d.topic, mode: 'MUTED' },
-                                { onError: (e) => setError(serverVerdict(e)) },
-                              );
-                            } else {
-                              clearSub.mutate(d.topic, {
-                                onError: (e) => setError(serverVerdict(e)),
-                              });
-                            }
-                          }}
-                        />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))
-        )}
-      </AcCard>
-    </AcPage>
+        <AcCard flush>
+          {topics.isLoading ? (
+            <SkeletonRows rows={4} cols={2} />
+          ) : (
+            Object.entries(grouped).map(([group, defs]) => (
+              <div key={group} className="ac-topic-group">
+                <h3 className="ac-topic-group__title">{group}</h3>
+                <ul className="ac-rows">
+                  {defs.map((d) => {
+                    const on = !muted.has(d.topic);
+                    return (
+                      <li key={d.topic} className="ac-row">
+                        <div className="ac-row__main">
+                          <span className="ac-row__title">{d.label}</span>
+                          <span className="ac-muted">{d.description}</span>
+                        </div>
+                        <div className="ac-row__side">
+                          <Switch
+                            checked={on}
+                            aria-label={tr(
+                              'notificationsSettingsNotificationSettingsView.notifyMeAbout',
+                              { label: d.label },
+                            )}
+                            onCheckedChange={() => {
+                              setError(null);
+                              if (on) {
+                                setSub.mutate(
+                                  { topic: d.topic, mode: 'MUTED' },
+                                  { onError: (e) => setError(serverVerdict(e)) },
+                                );
+                              } else {
+                                clearSub.mutate(d.topic, {
+                                  onError: (e) => setError(serverVerdict(e)),
+                                });
+                              }
+                            }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))
+          )}
+        </AcCard>
+      </AcPage>
+    </div>
   );
 }

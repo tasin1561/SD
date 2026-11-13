@@ -47,6 +47,9 @@ Shared pieces live in `apps/admin/src/components/easy/`; dev-only test pages in
 3. Administration (2026-11-13): `/settings`, `/system/capacity`, `/impersonation`, `/roles`,
    `/staff`, `/webhooks`, `/reports`, with every sub-page and detail page. Roles, staff and
    impersonation are screen-only: no permission, role or guard logic changes.
+4. Clients and couriers (2026-11-13): `/leads`, `/sellers`, `/stores`, `/reseller-stores` (and
+   `/analysis`), `/courier-accounts`, `/delhivery`, `/shiprocket`, `/cost-sync`,
+   `/courier-escalation`, with every sub-page and detail page. Screen-only.
 
 ## How the work ships
 

@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import type { ReactElement } from 'react';
 import { MailCheck } from 'lucide-react';
 import { useToast } from '@skydrop/ui/app/toast';
@@ -33,109 +35,118 @@ export function AccountSecurityView(): ReactElement {
   }
 
   return (
-    <AcPage width="narrow">
-      <AcHeader
-        title={t('accountAccountSecurityView.yourAccount')}
-        subtitle={t('accountAccountSecurityView.whoYouAreSignedIn')}
-      />
+    <div className="ez-touch ez-wrap">
+      <AcPage width="narrow">
+        <AcHeader
+          title={
+            <span className="ez-titled">
+              {t('accountAccountSecurityView.yourAccount')}
+              <InfoButton
+                title={t('accountAccountSecurityView.yourAccount')}
+                text={t('accountAccountSecurityView.whoYouAreSignedIn')}
+              />
+            </span>
+          }
+        />
 
-      <AcCard
-        title={t('accountAccountSecurityView.signedInAs')}
-        note={t('accountAccountSecurityView.readFromTheApiEach')}
-      >
-        {me.isLoading ? (
-          <SkeletonRows
-            rows={3}
-            cols={2}
-            label={t('accountAccountSecurityView.loadingYourAccount')}
-          />
-        ) : me.isError ? (
-          <ErrorState
-            message={serverVerdict(
-              me.error,
-              t('accountAccountSecurityView.couldNotLoadYourAccount'),
-            )}
-            retry={() => void me.refetch()}
-          />
-        ) : me.data === undefined ? (
-          // A 200 with nothing in it is not a state the API can
-          // produce; saying so beats rendering an empty grid that
-          // reads as "you have no email address".
-          <ErrorState
-            message={t('accountAccountSecurityView.theServerAnsweredWithoutAn')}
-            retry={() => void me.refetch()}
-          />
-        ) : (
-          <AcDl
-            columns={2}
-            items={[
-              { label: t('accountAccountSecurityView.email'), value: me.data.emailDisplay },
-              { label: t('accountAccountSecurityView.role'), value: me.data.roleName },
-              {
-                label: t('accountAccountSecurityView.emailVerified'),
-                value:
-                  me.data.emailVerifiedAt === null ? (
-                    // Showing the problem without offering the fix is
-                    // what this page did before: the request endpoint
-                    // existed and nothing called it.
-                    <span className="ac-inline">
-                      <StatusChip
-                        kind="pending"
-                        label={t('accountAccountSecurityView.notVerified')}
-                        size="sm"
-                      />
-                      <AsyncButton
-                        variant="ghost"
-                        size="sm"
-                        icon={<MailCheck size={14} />}
-                        state={verify.isPending ? 'busy' : 'idle'}
-                        labels={{
-                          idle: t('accountAccountSecurityView.sendANewLink'),
-                          busy: t('accountAccountSecurityView.sending'),
-                        }}
-                        onClick={() => void onVerify()}
-                      />
+        <AcCard
+          title={t('accountAccountSecurityView.signedInAs')}
+          note={t('accountAccountSecurityView.readFromTheApiEach')}
+        >
+          {me.isLoading ? (
+            <SkeletonRows
+              rows={3}
+              cols={2}
+              label={t('accountAccountSecurityView.loadingYourAccount')}
+            />
+          ) : me.isError ? (
+            <ErrorState
+              message={serverVerdict(
+                me.error,
+                t('accountAccountSecurityView.couldNotLoadYourAccount'),
+              )}
+              retry={() => void me.refetch()}
+            />
+          ) : me.data === undefined ? (
+            // A 200 with nothing in it is not a state the API can
+            // produce; saying so beats rendering an empty grid that
+            // reads as "you have no email address".
+            <ErrorState
+              message={t('accountAccountSecurityView.theServerAnsweredWithoutAn')}
+              retry={() => void me.refetch()}
+            />
+          ) : (
+            <AcDl
+              columns={2}
+              items={[
+                { label: t('accountAccountSecurityView.email'), value: me.data.emailDisplay },
+                { label: t('accountAccountSecurityView.role'), value: me.data.roleName },
+                {
+                  label: t('accountAccountSecurityView.emailVerified'),
+                  value:
+                    me.data.emailVerifiedAt === null ? (
+                      // Showing the problem without offering the fix is
+                      // what this page did before: the request endpoint
+                      // existed and nothing called it.
+                      <span className="ac-inline">
+                        <StatusChip
+                          kind="pending"
+                          label={t('accountAccountSecurityView.notVerified')}
+                          size="sm"
+                        />
+                        <AsyncButton
+                          variant="ghost"
+                          size="sm"
+                          icon={<MailCheck size={14} />}
+                          state={verify.isPending ? 'busy' : 'idle'}
+                          labels={{
+                            idle: t('accountAccountSecurityView.sendANewLink'),
+                            busy: t('accountAccountSecurityView.sending'),
+                          }}
+                          onClick={() => void onVerify()}
+                        />
+                      </span>
+                    ) : (
+                      <span className="sk-figure">{formatWhen(me.data.emailVerifiedAt)}</span>
+                    ),
+                },
+                {
+                  label: t('accountAccountSecurityView.permissionsHeld'),
+                  value: <span className="sk-figure">{`${me.data.permissions.length}`}</span>,
+                },
+                {
+                  // The single most useful line on the page: an
+                  // hour you do not recognise is the reason somebody
+                  // came looking for the button below.
+                  label: t('accountAccountSecurityView.lastSignIn'),
+                  value: (
+                    <span className="sk-figure">
+                      {me.data.lastLoginAt === null ? '—' : formatWhen(me.data.lastLoginAt)}
                     </span>
-                  ) : (
-                    <span className="sk-figure">{formatWhen(me.data.emailVerifiedAt)}</span>
                   ),
-              },
-              {
-                label: t('accountAccountSecurityView.permissionsHeld'),
-                value: <span className="sk-figure">{`${me.data.permissions.length}`}</span>,
-              },
-              {
-                // The single most useful line on the page: an
-                // hour you do not recognise is the reason somebody
-                // came looking for the button below.
-                label: t('accountAccountSecurityView.lastSignIn'),
-                value: (
-                  <span className="sk-figure">
-                    {me.data.lastLoginAt === null ? '—' : formatWhen(me.data.lastLoginAt)}
-                  </span>
-                ),
-              },
-              {
-                label: t('accountAccountSecurityView.accountCreated'),
-                value: <span className="sk-figure">{formatWhen(me.data.createdAt)}</span>,
-              },
-            ]}
-          />
-        )}
-      </AcCard>
+                },
+                {
+                  label: t('accountAccountSecurityView.accountCreated'),
+                  value: <span className="sk-figure">{formatWhen(me.data.createdAt)}</span>,
+                },
+              ]}
+            />
+          )}
+        </AcCard>
 
-      {/* The one per-PERSON preference: how the console moves in this
+        {/* The one per-PERSON preference: how the console moves in this
           browser. Stored here only (localStorage), so another device keeps
           its own choice. */}
-      <AcCard
-        title={t('accountAccountSecurityView.thisBrowser')}
-        note={t('accountAccountSecurityView.howTheConsoleMovesIn')}
-      >
-        <MotionSwitch />
-      </AcCard>
+        <AcCard
+          title={t('accountAccountSecurityView.thisBrowser')}
+          note={t('accountAccountSecurityView.howTheConsoleMovesIn')}
+        >
+          <MotionSwitch />
+        </AcCard>
 
-      <SessionRevocationCard />
-    </AcPage>
+        <SessionRevocationCard />
+      </AcPage>
+    </div>
   );
 }
 

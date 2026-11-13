@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, CheckCircle2, ChevronRight, PauseCircle, RefreshCw } from 'lucide-react';
@@ -433,15 +435,22 @@ export function CostSyncIndex(): ReactElement {
   const forwardGap = d === undefined ? 0 : d.cost.dispatched - d.cost.withForwardCost;
 
   return (
-    <div className="af-page">
+    <div className="af-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: t('costSyncCostSyncIndex.network') },
           { label: t('costSyncCostSyncIndex.courierCostSync') },
         ]}
         Link={Link}
-        title={t('costSyncCostSyncIndex.courierCostSync')}
-        subtitle={t('costSyncCostSyncIndex.everyNightWeSignIn')}
+        title={
+          <span className="ez-titled">
+            {t('costSyncCostSyncIndex.courierCostSync')}
+            <InfoButton
+              title={t('costSyncCostSyncIndex.courierCostSync')}
+              text={t('costSyncCostSyncIndex.everyNightWeSignIn')}
+            />
+          </span>
+        }
       />
 
       {panel.isLoading ? (

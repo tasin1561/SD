@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Plus, ShieldCheck } from 'lucide-react';
@@ -48,15 +50,22 @@ export function CourierAccountsIndex(): ReactElement {
   const list = useCourierAccounts();
 
   return (
-    <div className="af-page">
+    <div className="af-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: t('courierAccountsCourierAccountsIndex.network') },
           { label: t('courierAccountsCourierAccountsIndex.courierAccounts') },
         ]}
         Link={Link}
-        title={t('courierAccountsCourierAccountsIndex.courierAccounts')}
-        subtitle={t('courierAccountsCourierAccountsIndex.multipleAccountsPerCourierRoute')}
+        title={
+          <span className="ez-titled">
+            {t('courierAccountsCourierAccountsIndex.courierAccounts')}
+            <InfoButton
+              title={t('courierAccountsCourierAccountsIndex.courierAccounts')}
+              text={t('courierAccountsCourierAccountsIndex.multipleAccountsPerCourierRoute')}
+            />
+          </span>
+        }
         action={
           canWrite ? (
             <Button

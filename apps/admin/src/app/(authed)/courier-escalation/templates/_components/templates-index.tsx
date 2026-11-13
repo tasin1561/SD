@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, XCircle } from 'lucide-react';
@@ -62,15 +64,22 @@ export function CourierTemplatesIndex(): ReactElement {
   const reviewed = (candidates.data ?? []).filter((c) => c.status !== 'PENDING');
 
   return (
-    <div className="af-page">
+    <div className="af-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: tr('courierEscalationTemplatesTemplatesIndex.network') },
           { label: tr('courierEscalationTemplatesTemplatesIndex.courierEscalation') },
         ]}
         Link={Link}
-        title={tr('courierEscalationTemplatesTemplatesIndex.messagePatterns')}
-        subtitle={tr('courierEscalationTemplatesTemplatesIndex.courierMessagesTheLibraryCould')}
+        title={
+          <span className="ez-titled">
+            {tr('courierEscalationTemplatesTemplatesIndex.messagePatterns')}
+            <InfoButton
+              title={tr('courierEscalationTemplatesTemplatesIndex.messagePatterns')}
+              text={tr('courierEscalationTemplatesTemplatesIndex.courierMessagesTheLibraryCould')}
+            />
+          </span>
+        }
       />
       <EscalationTabs />
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { When } from '@/components/easy/when';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Check, Mail, Phone, Send, UserRound } from 'lucide-react';
 import { useToast } from '@skydrop/ui/app/toast';
@@ -328,9 +329,9 @@ export function LeadDrawer({
                     />
                   </span>
                   <span className="ac-muted">
-                    {new Date(existing.data.createdAt).toLocaleString()} ·{' '}
+                    <When iso={existing.data.createdAt} time /> ·{' '}
                     {existing.data.status === 'expired' ? 'expired' : 'expires'}{' '}
-                    {new Date(existing.data.expiresAt).toLocaleDateString()}
+                    <When iso={existing.data.expiresAt} />
                   </span>
                 </div>
                 <AsyncButton

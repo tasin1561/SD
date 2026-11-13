@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Copy, ExternalLink, Lock, PauseCircle, PlayCircle, RefreshCw } from 'lucide-react';
@@ -159,15 +161,22 @@ export function CourierEscalationIndex(): ReactElement {
   const rows = outbox.data ?? [];
 
   return (
-    <div className="af-page">
+    <div className="af-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: t('courierEscalationCourierEscalationIndex.network') },
           { label: t('courierEscalationCourierEscalationIndex.courierEscalation') },
         ]}
         Link={Link}
-        title={t('courierEscalationCourierEscalationIndex.courierEscalation')}
-        subtitle={t('courierEscalationCourierEscalationIndex.messagesWaitingToReachDelhivery')}
+        title={
+          <span className="ez-titled">
+            {t('courierEscalationCourierEscalationIndex.courierEscalation')}
+            <InfoButton
+              title={t('courierEscalationCourierEscalationIndex.courierEscalation')}
+              text={t('courierEscalationCourierEscalationIndex.messagesWaitingToReachDelhivery')}
+            />
+          </span>
+        }
       />
       <EscalationTabs />
 

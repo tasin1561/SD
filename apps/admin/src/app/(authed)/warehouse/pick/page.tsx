@@ -1,3 +1,5 @@
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
@@ -28,10 +30,17 @@ import { getT } from '@/i18n/server';
 export default async function PickPage(): Promise<ReactElement> {
   const { t } = await getT();
   return (
-    <div className="wh-page">
+    <div className="wh-page ez-touch">
       <PageHeader
-        title={t('warehousePickPage.pickStation')}
-        subtitle={t('warehousePickPage.oneParcelAtATime')}
+        title={
+          <span className="ez-titled">
+            {t('warehousePickPage.pickStation')}
+            <InfoButton
+              title={t('warehousePickPage.pickStation')}
+              text={t('warehousePickPage.oneParcelAtATime')}
+            />
+          </span>
+        }
       />
       <div className="wh-banner">
         <span>{t('warehousePickPage.pickingANormalBatch')} </span>

@@ -1,5 +1,8 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Send } from 'lucide-react';
@@ -56,15 +59,22 @@ export function CourierThreadsIndex(): ReactElement {
   const rows = list.data ?? [];
 
   return (
-    <div className="af-page">
+    <div className="af-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: t('courierEscalationThreadsThreadsIndex.network') },
           { label: t('courierEscalationThreadsThreadsIndex.courierEscalation') },
         ]}
         Link={Link}
-        title={t('courierEscalationThreadsThreadsIndex.courierConversations')}
-        subtitle={t('courierEscalationThreadsThreadsIndex.whatEachCourierHasTold')}
+        title={
+          <span className="ez-titled">
+            {t('courierEscalationThreadsThreadsIndex.courierConversations')}
+            <InfoButton
+              title={t('courierEscalationThreadsThreadsIndex.courierConversations')}
+              text={t('courierEscalationThreadsThreadsIndex.whatEachCourierHasTold')}
+            />
+          </span>
+        }
       />
       <EscalationTabs />
 
@@ -336,7 +346,9 @@ function Message({ message }: { readonly message: CourierThreadMessage }): React
             ? t('courierEscalationThreadsThreadsIndex.delhivery')
             : t('courierEscalationThreadsThreadsIndex.skydrop')}
         </span>
-        <span className="af-small">{new Date(message.occurredAt).toLocaleString('en-IN')}</span>
+        <span className="af-small">
+          <When iso={message.occurredAt} time />
+        </span>
         <span className="af-faint">{message.channel.toLowerCase()}</span>
         {message.state !== null ? (
           <StatusChip size="sm" kind={stateKind(message.state)} label={humanise(message.state)} />

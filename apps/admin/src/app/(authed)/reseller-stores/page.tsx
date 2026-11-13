@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, type FormEvent, type ReactElement } from 'react';
@@ -80,131 +82,140 @@ function ResellerStoresIndex(): ReactElement {
   const sellerKnown = sellerId === '' || sellerOptions.some((o) => o.id === sellerId);
 
   return (
-    <AcPage>
-      <AcHeader
-        title={t('resellerStoresPage.memberStores')}
-        subtitle={t('resellerStoresPage.businessesResellingOneClientS')}
-        action={
-          mayCreate ? (
-            <Button
-              variant="primary"
-              size="md"
-              icon={<Store size={15} />}
-              onClick={() => setCreating(true)}
-            >
-              {t('resellerStoresPage.openAStoreForA')}
-            </Button>
-          ) : undefined
-        }
-      />
-      <div className="ac-toolbar">
-        <Select
-          label={t('resellerStoresPage.status')}
-          id="rs-status"
-          value={status}
-          onChange={(e) => setFilter('status', e.target.value)}
-        >
-          {STATUSES(t).map(([v, label]) => (
-            <option key={v} value={v}>
-              {label}
-            </option>
-          ))}
-        </Select>
-        <Select
-          label={t('resellerStoresPage.client')}
-          id="rs-seller"
-          value={sellerId}
-          onChange={(e) => setFilter('sellerId', e.target.value)}
-        >
-          <option value="">{t('resellerStoresPage.everyClient')}</option>
-          {!sellerKnown ? (
-            <option value={sellerId}>{t('resellerStoresPage.theClientInTheLink')}</option>
-          ) : null}
-          {sellerOptions.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.companyName}
-            </option>
-          ))}
-        </Select>
-      </div>
-
-      {stores.isPending ? (
-        <SkeletonRows rows={5} cols={7} label={t('resellerStoresPage.loadingMemberStores')} />
-      ) : stores.isError ? (
-        <ErrorState message={serverVerdict(stores.error)} retry={() => void stores.refetch()} />
-      ) : stores.data.length === 0 ? (
-        <EmptyState
-          title={t('resellerStoresPage.noMemberStores')}
-          description={
-            status === '' && sellerId === ''
-              ? t('resellerStoresPage.clientsOpenTheirOwnFrom')
-              : t('resellerStoresPage.noneMatchTheseFiltersChoose')
+    <div className="ez-touch ez-wrap">
+      <AcPage>
+        <AcHeader
+          title={
+            <span className="ez-titled">
+              {t('resellerStoresPage.memberStores')}
+              <InfoButton
+                title={t('resellerStoresPage.memberStores')}
+                text={t('resellerStoresPage.businessesResellingOneClientS')}
+              />
+            </span>
+          }
+          action={
+            mayCreate ? (
+              <Button
+                variant="primary"
+                size="md"
+                icon={<Store size={15} />}
+                onClick={() => setCreating(true)}
+              >
+                {t('resellerStoresPage.openAStoreForA')}
+              </Button>
+            ) : undefined
           }
         />
-      ) : (
-        <AcCard flush>
-          <Table caption={t('resellerStoresPage.memberStores')}>
-            <THead>
-              <Tr>
-                <Th>{t('resellerStoresPage.store')}</Th>
-                <Th>{t('resellerStoresPage.client')}</Th>
-                <Th>{t('resellerStoresPage.status')}</Th>
-                <Th>{t('resellerStoresPage.openedBy')}</Th>
-                <Th>{t('resellerStoresPage.wallet')}</Th>
-                <Th>{t('resellerStoresPage.team')}</Th>
-                <Th>{t('resellerStoresPage.created')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {stores.data.map((s) => (
-                <Tr key={s.id}>
-                  <Td>
-                    <Link href={`/reseller-stores/${s.id}`} className="ac-link ac-cell-main">
-                      {s.name}
-                    </Link>
-                  </Td>
-                  <Td>
-                    <Link
-                      href={`/reseller-stores?sellerId=${s.sellerId}`}
-                      className="ac-link"
-                      title={t('resellerStoresPage.onlyThisClientSStores')}
-                    >
-                      {s.sellerCompanyName}
-                    </Link>
-                  </Td>
-                  <Td>
-                    <StatusChip
-                      kind={resellerStoreStatusKind(s.status)}
-                      label={resellerStoreStatusLabel(s.status)}
-                      size="sm"
-                    />
-                  </Td>
-                  <Td>
-                    {s.origin === 'ADMIN'
-                      ? t('resellerStoresPage.skydrop')
-                      : t('resellerStoresPage.client')}
-                  </Td>
-                  <Td>
-                    {s.walletManagedBy === 'SKYDROP'
-                      ? t('resellerStoresPage.skydrop')
-                      : t('resellerStoresPage.client')}
-                  </Td>
-                  <Td>
-                    <span className="sk-figure">{s.memberCount}</span>
-                  </Td>
-                  <Td>
-                    <span className="sk-figure ac-faint">
-                      {new Date(s.createdAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
-                    </span>
-                  </Td>
+        <div className="ac-toolbar">
+          <Select
+            label={t('resellerStoresPage.status')}
+            id="rs-status"
+            value={status}
+            onChange={(e) => setFilter('status', e.target.value)}
+          >
+            {STATUSES(t).map(([v, label]) => (
+              <option key={v} value={v}>
+                {label}
+              </option>
+            ))}
+          </Select>
+          <Select
+            label={t('resellerStoresPage.client')}
+            id="rs-seller"
+            value={sellerId}
+            onChange={(e) => setFilter('sellerId', e.target.value)}
+          >
+            <option value="">{t('resellerStoresPage.everyClient')}</option>
+            {!sellerKnown ? (
+              <option value={sellerId}>{t('resellerStoresPage.theClientInTheLink')}</option>
+            ) : null}
+            {sellerOptions.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.companyName}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        {stores.isPending ? (
+          <SkeletonRows rows={5} cols={7} label={t('resellerStoresPage.loadingMemberStores')} />
+        ) : stores.isError ? (
+          <ErrorState message={serverVerdict(stores.error)} retry={() => void stores.refetch()} />
+        ) : stores.data.length === 0 ? (
+          <EmptyState
+            title={t('resellerStoresPage.noMemberStores')}
+            description={
+              status === '' && sellerId === ''
+                ? t('resellerStoresPage.clientsOpenTheirOwnFrom')
+                : t('resellerStoresPage.noneMatchTheseFiltersChoose')
+            }
+          />
+        ) : (
+          <AcCard flush>
+            <Table caption={t('resellerStoresPage.memberStores')}>
+              <THead>
+                <Tr>
+                  <Th>{t('resellerStoresPage.store')}</Th>
+                  <Th>{t('resellerStoresPage.client')}</Th>
+                  <Th>{t('resellerStoresPage.status')}</Th>
+                  <Th>{t('resellerStoresPage.openedBy')}</Th>
+                  <Th>{t('resellerStoresPage.wallet')}</Th>
+                  <Th>{t('resellerStoresPage.team')}</Th>
+                  <Th>{t('resellerStoresPage.created')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
-        </AcCard>
-      )}
-      {mayCreate ? <CreateModal open={creating} onOpenChange={setCreating} /> : null}
-    </AcPage>
+              </THead>
+              <TBody>
+                {stores.data.map((s) => (
+                  <Tr key={s.id}>
+                    <Td>
+                      <Link href={`/reseller-stores/${s.id}`} className="ac-link ac-cell-main">
+                        {s.name}
+                      </Link>
+                    </Td>
+                    <Td>
+                      <Link
+                        href={`/reseller-stores?sellerId=${s.sellerId}`}
+                        className="ac-link"
+                        title={t('resellerStoresPage.onlyThisClientSStores')}
+                      >
+                        {s.sellerCompanyName}
+                      </Link>
+                    </Td>
+                    <Td>
+                      <StatusChip
+                        kind={resellerStoreStatusKind(s.status)}
+                        label={resellerStoreStatusLabel(s.status)}
+                        size="sm"
+                      />
+                    </Td>
+                    <Td>
+                      {s.origin === 'ADMIN'
+                        ? t('resellerStoresPage.skydrop')
+                        : t('resellerStoresPage.client')}
+                    </Td>
+                    <Td>
+                      {s.walletManagedBy === 'SKYDROP'
+                        ? t('resellerStoresPage.skydrop')
+                        : t('resellerStoresPage.client')}
+                    </Td>
+                    <Td>
+                      <span className="sk-figure">{s.memberCount}</span>
+                    </Td>
+                    <Td>
+                      <span className="sk-figure ac-faint">
+                        {new Date(s.createdAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
+                      </span>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </AcCard>
+        )}
+        {mayCreate ? <CreateModal open={creating} onOpenChange={setCreating} /> : null}
+      </AcPage>
+    </div>
   );
 }
 

@@ -1,3 +1,4 @@
+import { InfoButton } from '@/components/easy/info-button';
 import type { ReactElement } from 'react';
 import { AreaPage, StockPageHeader } from '../../inventory/_components/stock-kit';
 import { ManifestsIndex } from './_components/manifests-index';
@@ -12,8 +13,15 @@ export default async function ManifestsPage(): Promise<ReactElement> {
           { label: t('warehouseManifestsPage.warehouse'), href: '/warehouse' },
           { label: t('warehouseManifestsPage.manifests') },
         ]}
-        title={t('warehouseManifestsPage.manifests')}
-        subtitle={t('warehouseManifestsPage.aRecordOfWhichParcels')}
+        title={
+          <span className="ez-titled">
+            {t('warehouseManifestsPage.manifests')}
+            <InfoButton
+              title={t('warehouseManifestsPage.manifests')}
+              text={t('warehouseManifestsPage.aRecordOfWhichParcels')}
+            />
+          </span>
+        }
       />
       <ManifestsIndex />
     </AreaPage>
