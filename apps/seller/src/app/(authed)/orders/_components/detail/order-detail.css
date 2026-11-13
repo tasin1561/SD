@@ -1595,3 +1595,30 @@ button.cod-call__head:hover {
 .cod-price .cod-faint {
   font-size: 0.8125rem;
 }
+
+/* ── Fixes found on a tablet and a phone (2026-11-13) ──────────────────── */
+
+/* 640px and up: the bar held one row at any cost, and with a long
+   reference or a member-store line the payment pill ran off the right
+   edge and the page scrolled sideways. It wraps when it has to, and is
+   one row whenever there is room, exactly as before. */
+@media (min-width: 640px) {
+  .cod-bar {
+    flex-wrap: wrap;
+    max-height: none;
+  }
+}
+
+/* Touch: the app-wide floor `button:not(.skydrop-hit) { min-height: 32px }`
+   outranks a bare class, so this page's own buttons (tabs, show/hide,
+   copy, "See all steps", the call rows) were 32–38px on a phone. */
+@media (pointer: coarse) {
+  button[class^='cod-'][class],
+  a.cod-link {
+    min-height: 44px;
+  }
+  a.cod-link {
+    display: inline-flex;
+    align-items: center;
+  }
+}

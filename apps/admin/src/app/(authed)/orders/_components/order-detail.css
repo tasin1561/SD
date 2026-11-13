@@ -1027,3 +1027,46 @@
 .od-thumb-cell {
   width: 56px;
 }
+
+/* ── Fixes found on a tablet and a phone (2026-11-13) ──────────────────── */
+
+/* 640–1023px: the grid becomes a column, but `align-items: start` from the
+   two-column rule made every card shrink to its own content — a 295px
+   Shipment card beside nothing, a 220px Payment card under it. Cards fill
+   the width. */
+@media (max-width: 1023.98px) {
+  .od-grid {
+    align-items: stretch;
+  }
+}
+
+/* 640px and up: when the facts do not fit one row the header WRAPS. It
+   used to hold one row at any cost, and on a tablet the cost was the
+   primary action and the More menu pushed off the right edge where nobody
+   could reach them. One row whenever there is room, exactly as before. */
+@media (min-width: 640px) {
+  .od-header {
+    flex-wrap: wrap;
+    max-height: none;
+    row-gap: 2px;
+    padding-block: var(--sp-1);
+  }
+}
+
+/* Touch: the app-wide floor `button:not(.skydrop-hit) { min-height: 32px }`
+   outranks a bare class, so these were 32px on a phone. `button.` restores
+   a finger-sized target for the controls a thumb actually presses. */
+@media (pointer: coarse) {
+  button.od-seg__tab,
+  button.od-card__toggle,
+  button.od-disc__btn {
+    min-height: 44px;
+  }
+  .os-track,
+  .od-card a[href^='tel:'],
+  .od-card a[target='_blank'] {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
