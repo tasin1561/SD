@@ -109,6 +109,25 @@ export function useAiDashboard(from: string, to: string): UseQueryResult<Dashboa
   });
 }
 
+/** The overnight monitor's score for the latest turn it reviewed. */
+export interface MonitorScore {
+  readonly conversationId: string;
+  readonly answered: 'yes' | 'partly' | 'no';
+  readonly correct: 'yes' | 'unsure' | 'no';
+  readonly correctReason: string | null;
+  readonly link: 'yes' | 'no' | 'not_needed';
+  readonly languageMatch: boolean;
+  readonly frustration: number;
+  readonly hallucination: boolean;
+  readonly hallucinationQuote: string | null;
+  readonly knowledgeGap: string | null;
+  readonly uiConfusion: string | null;
+  readonly safety: 'none' | 'data_leak' | 'prompt_injection' | 'abuse';
+  readonly safetyQuote: string | null;
+  readonly summary: string;
+  readonly at: string;
+}
+
 export interface ConversationListItem {
   readonly id: string;
   readonly portal: PortalKey;
@@ -123,6 +142,7 @@ export interface ConversationListItem {
   readonly up: number;
   readonly down: number;
   readonly anonymised: boolean;
+  readonly monitor: MonitorScore | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -152,6 +172,7 @@ export type ReviewBlock =
   | { type: 'file'; kind: string };
 
 export interface ConversationReview {
+  readonly monitor: MonitorScore | null;
   readonly conversation: {
     readonly id: string;
     readonly portal: PortalKey;
@@ -249,5 +270,99 @@ export function useSetControl(): UseMutationResult<
     mutationFn: ({ key, value }) =>
       client.request(`${BASE}/controls/${key}`, { method: 'PUT', body: { value } }),
     onSuccess: (data) => qc.setQueryData(['ai-controls'], data),
+  });
+}
+
+// ── overnight monitor ────────────────────────────────────────────────
+export interface MonitorTheme {
+  readonly label: string;
+  readonly count: number;
+  readonly conversationIds: readonly string[];
+}
+export interface MonitorRun {
+  readonly id: string;
+  readonly trigger: string;
+  readonly status:
+    | 'collecting'
+    | 'submitted'
+    | 'done'
+    | 'skipped_budget'
+    | 'nothing_to_do'
+    | 'failed';
+  readonly requested: number;
+  readonly scored: number;
+  readonly errored: number;
+  readonly skippedBudget: number;
+  readonly note: string | null;
+  readonly summary: {
+    readonly scored?: number;
+    readonly answered?: { yes: number; partly: number; no: number };
+    readonly incorrect?: number;
+    readonly hallucinations?: number;
+    readonly frustrated?: number;
+    readonly languageMismatch?: number;
+    readonly safetyFlags?: number;
+    readonly knowledgeGaps?: number;
+    readonly uiConfusions?: number;
+    readonly costUsd?: string;
+  } | null;
+  readonly startedAt: string;
+  readonly finishedAt: string | null;
+}
+export interface MonitorOverview {
+  readonly enabled: boolean;
+  readonly configured: boolean;
+  readonly budget: {
+    readonly capUsd: string;
+    readonly spentUsd: string;
+    readonly usedPct: number | null;
+  };
+  readonly runs: readonly MonitorRun[];
+  readonly night: {
+    readonly runId: string | null;
+    readonly themes: ReadonlyArray<MonitorTheme & { kind: 'knowledge_gap' | 'ui_confusion' }>;
+  };
+  readonly week: {
+    readonly knowledgeGaps: readonly MonitorTheme[];
+    readonly uiConfusions: readonly MonitorTheme[];
+  };
+  readonly safetyFlags: number;
+}
+export interface MonitorFlag extends MonitorScore {
+  readonly portal: PortalKey;
+}
+
+export function useMonitorOverview(): UseQueryResult<MonitorOverview> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['ai-monitor'],
+    queryFn: () => client.request<MonitorOverview>(`${BASE}/monitor`),
+    refetchInterval: 60_000,
+  });
+}
+
+/** Audited server-side on every fetch, so it is not refetched in the background. */
+export function useMonitorFlags(
+  enabled: boolean,
+): UseQueryResult<{ items: readonly MonitorFlag[] }> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['ai-monitor-flags'],
+    enabled,
+    queryFn: () => client.request<{ items: readonly MonitorFlag[] }>(`${BASE}/monitor/flags`),
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: false,
+  });
+}
+
+export function useMonitorRunNow(): UseMutationResult<{ queued: true }, Error, void> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => client.request(`${BASE}/monitor/run-now`, { method: 'POST' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['ai-monitor'] }),
   });
 }

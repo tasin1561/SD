@@ -12,6 +12,7 @@ import { useT } from '@/i18n/client';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { AcAlert, AcCard, AcSection } from '../../settings/_components/ac-parts';
+import { MonitorCard } from './ai-monitor-parts';
 import {
   useAttachmentDownload,
   useOpenConversation,
@@ -71,6 +72,8 @@ export function AiConversationDetail({ id }: { readonly id: string }): ReactElem
           )}
         </div>
       </AcCard>
+
+      {c.monitor !== null && <MonitorCard m={c.monitor} />}
 
       <AcSection title={t('ai.conv.transcript')}>
         <ol className="ai-thread">

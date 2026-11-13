@@ -13,6 +13,7 @@ describe('AI control panel: surface', () => {
     for (const f of [
       'services/assistant-billing.service.ts',
       'services/assistant-panel.service.ts',
+      'services/assistant-monitor-panel.service.ts',
     ]) {
       const src = read(f);
       expect(src).not.toMatch(/\.(create|createMany|update|updateMany|delete|deleteMany|upsert)\(/);
@@ -25,9 +26,10 @@ describe('AI control panel: surface', () => {
     expect(src).toMatch(/@RequirePermissions\('assistant\.admin'\)\s*\n@Controller/);
     const handlers = src.match(/@(Get|Post|Put)\(/g) ?? [];
     const readers = src.match(/@RequirePermissions\('assistant\.conversations\.read'\)/g) ?? [];
-    // conversations list, open, reveal, download
-    expect(readers).toHaveLength(4);
-    expect(handlers.length).toBe(9);
+    // conversations list, open, reveal, download, monitor flags
+    expect(readers).toHaveLength(5);
+    // + monitor overview, flags, run-now
+    expect(handlers.length).toBe(12);
   });
 
   it('opening, revealing and downloading all audit BEFORE returning data, and refuse without a row', () => {

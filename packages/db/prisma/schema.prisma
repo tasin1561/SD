@@ -10895,3 +10895,159 @@ model AssistantNotice {
   @@index([conversationId])
   @@map("assistant_notices")
 }
+
+// ── AI monitor (overnight reviewer) ─────────────────────────────────────
+// A reader of conversations, never a writer of anything the live assistant
+// uses: these four tables are written ONLY by the monitor and read only by
+// the control panel and the weekly report. All conversation / message ids
+// are soft references (like the other assistant tables).
+
+enum AssistantMonitorRunStatus {
+  /// Chosen what to review; the batch is not yet created.
+  COLLECTING     @map("collecting")
+  /// The Anthropic batch exists (its id is stored) and is being polled.
+  SUBMITTED      @map("submitted")
+  DONE           @map("done")
+  /// Every candidate was left out because the monthly cap is reached.
+  SKIPPED_BUDGET @map("skipped_budget")
+  NOTHING_TO_DO  @map("nothing_to_do")
+  FAILED         @map("failed")
+
+  @@map("assistant_monitor_run_status")
+}
+
+enum AssistantMonitorAnswered {
+  YES    @map("yes")
+  PARTLY @map("partly")
+  NO     @map("no")
+
+  @@map("assistant_monitor_answered")
+}
+
+enum AssistantMonitorCorrect {
+  YES    @map("yes")
+  UNSURE @map("unsure")
+  NO     @map("no")
+
+  @@map("assistant_monitor_correct")
+}
+
+enum AssistantMonitorLink {
+  YES        @map("yes")
+  NO         @map("no")
+  NOT_NEEDED @map("not_needed")
+
+  @@map("assistant_monitor_link")
+}
+
+enum AssistantMonitorSafety {
+  NONE             @map("none")
+  DATA_LEAK        @map("data_leak")
+  PROMPT_INJECTION @map("prompt_injection")
+  ABUSE            @map("abuse")
+
+  @@map("assistant_monitor_safety")
+}
+
+enum AssistantMonitorThemeKind {
+  KNOWLEDGE_GAP @map("knowledge_gap")
+  UI_CONFUSION  @map("ui_confusion")
+
+  @@map("assistant_monitor_theme_kind")
+}
+
+/// One overnight (or "run now") pass. `batch_id` is stored the moment the
+/// batch exists, so a restart resumes polling instead of paying twice.
+model AssistantMonitorRun {
+  id            String                    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// SCHEDULED or MANUAL.
+  trigger       String
+  status        AssistantMonitorRunStatus
+  batchId       String?                   @map("batch_id")
+  /// Conversations put in the batch.
+  requested     Int                       @default(0)
+  /// Results stored.
+  scored        Int                       @default(0)
+  /// Batch items that errored, expired, or came back unreadable.
+  errored       Int                       @default(0)
+  /// Conversations left out because the monthly cap was reached.
+  skippedBudget Int                       @default(0) @map("skipped_budget")
+  note          String?
+  /// Night summary (counts, never conversation text).
+  summary       Json?
+  startedAt     DateTime                  @default(now()) @map("started_at") @db.Timestamptz
+  finishedAt    DateTime?                 @map("finished_at") @db.Timestamptz
+  updatedAt     DateTime                  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([status])
+  @@index([startedAt])
+  @@map("assistant_monitor_runs")
+}
+
+/// One score per (conversation, last message): UNIQUE, so a replayed batch
+/// stores nothing twice. The quote / reason / summary columns hold words
+/// from a conversation, so the 180-day retention pass clears them.
+model AssistantMonitorResult {
+  id                     String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  runId                  String                   @map("run_id") @db.Uuid
+  conversationId         String                   @map("conversation_id") @db.Uuid
+  lastMessageId          String                   @map("last_message_id") @db.Uuid
+  audience               AssistantAudience
+  model                  String
+  answered               AssistantMonitorAnswered
+  correctForSkydrop      AssistantMonitorCorrect  @map("correct_for_skydrop")
+  correctReason          String?                  @map("correct_reason")
+  linkGivenAndRight      AssistantMonitorLink     @map("link_given_and_right")
+  languageMatch          Boolean                  @map("language_match")
+  userFrustration        Int                      @map("user_frustration")
+  hallucinationSuspected Boolean                  @map("hallucination_suspected")
+  hallucinationQuote     String?                  @map("hallucination_quote")
+  knowledgeGap           String?                  @map("knowledge_gap")
+  uiConfusion            String?                  @map("ui_confusion")
+  safetyIssue            AssistantMonitorSafety   @map("safety_issue")
+  safetyQuote            String?                  @map("safety_quote")
+  summary                String
+  createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([conversationId, lastMessageId])
+  @@index([runId])
+  @@index([createdAt])
+  @@index([safetyIssue, createdAt])
+  @@map("assistant_monitor_results")
+}
+
+/// The monitor's own spend line. `cost_usd` is the BILLED figure (2.5x the
+/// real, batch-discounted price), like `assistant_usage.cost_usd`. UNIQUE on
+/// (run, custom id): re-reading a finished batch never counts it twice.
+model AssistantMonitorUsage {
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  runId            String   @map("run_id") @db.Uuid
+  customId         String   @map("custom_id")
+  model            String
+  inputTokens      Int      @map("input_tokens")
+  outputTokens     Int      @map("output_tokens")
+  cacheReadTokens  Int      @map("cache_read_tokens")
+  cacheWriteTokens Int      @map("cache_write_tokens")
+  costUsd          Decimal  @map("cost_usd") @db.Decimal(14, 8)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([runId, customId])
+  @@index([createdAt])
+  @@map("assistant_monitor_usage")
+}
+
+/// A night's clusters of knowledge gaps / confusing pages with counts.
+/// Grouped deterministically (no model call); holds ids and labels only.
+model AssistantMonitorTheme {
+  id              String                    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  runId           String                    @map("run_id") @db.Uuid
+  kind            AssistantMonitorThemeKind
+  label           String
+  count           Int
+  conversationIds Json                      @map("conversation_ids")
+  createdAt       DateTime                  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([runId])
+  @@index([createdAt])
+  @@map("assistant_monitor_themes")
+}

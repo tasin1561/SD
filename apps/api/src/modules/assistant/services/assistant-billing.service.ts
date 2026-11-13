@@ -13,7 +13,6 @@ import {
   nextMonthStart,
 } from '../assistant-panel-time';
 import { AssistantBudgetService } from './assistant-budget.service';
-import { SystemSettingsService } from '../../system-settings/services/system-settings.service';
 
 export const PORTALS = ['staff', 'seller', 'store', 'associate'] as const;
 export type PortalKey = (typeof PORTALS)[number];
@@ -36,7 +35,7 @@ export interface BillingRow {
     readonly total: UsageBucket;
     readonly portals: Record<PortalKey, UsageBucket>;
   };
-  /** The AI monitor line: zero until the monitor (step 2) records its own usage. */
+  /** The overnight monitor's own line (`assistant_monitor_usage`), zero when it is off. */
   readonly monitor: UsageBucket;
 }
 
@@ -108,8 +107,15 @@ function newRow(period: string): { period: string; portals: Record<PortalKey, Us
   };
 }
 
-/** Fold per-(period, portal) buckets into rows, adding the monitor line (zero today) and totals. */
-export function buildRows(periods: readonly string[], raw: RawRow[]): BillingRow[] {
+/** A monitor row has no audience: it is one line, not four portals. */
+export type MonitorRawRow = Omit<RawRow, 'audience'>;
+
+/** Fold per-(period, portal) buckets into rows, adding the monitor line and totals. */
+export function buildRows(
+  periods: readonly string[],
+  raw: RawRow[],
+  monitorRaw: readonly MonitorRawRow[] = [],
+): BillingRow[] {
   const byPeriod = new Map(periods.map((p) => [p, newRow(p)]));
   for (const r of raw) {
     const row = byPeriod.get(r.period);
@@ -120,7 +126,9 @@ export function buildRows(periods: readonly string[], raw: RawRow[]): BillingRow
   return periods.map((p) => {
     const row = byPeriod.get(p) ?? newRow(p);
     const assistant = PORTALS.reduce((acc, k) => addBuckets(acc, row.portals[k]), emptyBucket());
-    const monitor = emptyBucket();
+    const monitor = monitorRaw
+      .filter((r) => r.period === p)
+      .reduce((acc, r) => addBuckets(acc, bucketOf({ ...r, audience: '' })), emptyBucket());
     return {
       period: p,
       total: addBuckets(assistant, monitor),
@@ -146,7 +154,6 @@ export class AssistantBillingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly budget: AssistantBudgetService,
-    private readonly settings: SystemSettingsService,
   ) {}
 
   private async grouped(from: Date, to: Date, fmt: 'YYYY-MM' | 'YYYY-MM-DD'): Promise<RawRow[]> {
@@ -165,24 +172,49 @@ export class AssistantBillingService {
     `);
   }
 
-  private async monitorBudgetReal(): Promise<number> {
-    try {
-      const n = Number(
-        (await this.settings.getByKey('assistant.monitor_monthly_budget_usd')).value,
-      );
-      return Number.isFinite(n) && n >= 0 ? n : 20;
-    } catch {
-      return 20;
-    }
+  private async groupedMonitor(
+    from: Date,
+    to: Date,
+    fmt: 'YYYY-MM' | 'YYYY-MM-DD',
+  ): Promise<MonitorRawRow[]> {
+    return this.prisma.client.$queryRaw<MonitorRawRow[]>(Prisma.sql`
+      SELECT to_char(created_at AT TIME ZONE ${BILLING_TIMEZONE}, ${fmt}) AS period,
+             count(*)::int AS requests,
+             sum(input_tokens)::bigint AS input_tokens,
+             sum(output_tokens)::bigint AS output_tokens,
+             sum(cache_read_tokens)::bigint AS cache_read_tokens,
+             sum(cache_write_tokens)::bigint AS cache_write_tokens,
+             sum(cost_usd) AS cost_usd
+        FROM assistant_monitor_usage
+       WHERE created_at >= ${from} AND created_at < ${to}
+       GROUP BY 1
+    `);
+  }
+
+  /** Assistant + monitor over any span, as stored figures (the weekly report). */
+  async rangeTotal(from: Date, to: Date): Promise<UsageBucket> {
+    const [raw, monitorRaw] = await Promise.all([
+      this.grouped(from, to, 'YYYY-MM'),
+      this.groupedMonitor(from, to, 'YYYY-MM'),
+    ]);
+    const all = buildRows(
+      [...new Set([...raw.map((r) => r.period), ...monitorRaw.map((r) => r.period)])],
+      raw,
+      monitorRaw,
+    );
+    return all.reduce((acc, r) => addBuckets(acc, r.total), emptyBucket());
   }
 
   private async budgetFor(month: string, row: BillingRow, now: Date): Promise<BillingBudget> {
     const realCap = new Prisma.Decimal(await this.budget.monthlyBudgetUsd());
-    const monitorCap = new Prisma.Decimal(await this.monitorBudgetReal());
+    const monitorCap = new Prisma.Decimal(await this.budget.monitorMonthlyBudgetUsd());
     const current = monthKey(dhakaDate(now).y, dhakaDate(now).m) === month;
     const realSpend = current
       ? await this.budget.monthlySpendUsd(now)
       : realFromBilledUsd(new Prisma.Decimal(row.assistant.total.costUsd));
+    const monitorSpend = current
+      ? await this.budget.monitorMonthlySpendUsd(now)
+      : realFromBilledUsd(new Prisma.Decimal(row.monitor.costUsd));
     let projected: Prisma.Decimal | null = null;
     if (current) {
       const start = monthStart(month).getTime();
@@ -195,7 +227,7 @@ export class AssistantBillingService {
       assistantBudgetUsd: billedFromRealUsd(realCap).toFixed(2),
       monitorBudgetUsd: billedFromRealUsd(monitorCap).toFixed(2),
       assistantUsedPct: pct(realSpend, realCap),
-      monitorUsedPct: pct(ZERO, monitorCap),
+      monitorUsedPct: pct(monitorSpend, monitorCap),
       projectedCostUsd: projected === null ? null : projected.toFixed(2),
       projectedPct: projected === null ? null : pct(realFromBilledUsd(projected), realCap),
     };
@@ -206,12 +238,12 @@ export class AssistantBillingService {
     const n = Math.min(Math.max(Math.trunc(monthsBack) || 12, 1), 36);
     const periods = lastMonths(now, n);
     const oldest = periods[periods.length - 1] ?? periods[0] ?? monthKey(1970, 1);
-    const raw = await this.grouped(
-      monthStart(oldest),
-      nextMonthStart(periods[0] ?? oldest),
-      'YYYY-MM',
-    );
-    const rows = buildRows(periods, raw);
+    const [from, to] = [monthStart(oldest), nextMonthStart(periods[0] ?? oldest)];
+    const [raw, monitorRaw] = await Promise.all([
+      this.grouped(from, to, 'YYYY-MM'),
+      this.groupedMonitor(from, to, 'YYYY-MM'),
+    ]);
+    const rows = buildRows(periods, raw, monitorRaw);
     const current = rows[0];
     return {
       timezone: BILLING_TIMEZONE,
@@ -230,11 +262,16 @@ export class AssistantBillingService {
       });
     }
     const days = daysOfMonth(month);
-    const raw = await this.grouped(monthStart(month), nextMonthStart(month), 'YYYY-MM-DD');
-    const rows = buildRows(days, raw);
+    const [from, to] = [monthStart(month), nextMonthStart(month)];
+    const [raw, monitorRaw] = await Promise.all([
+      this.grouped(from, to, 'YYYY-MM-DD'),
+      this.groupedMonitor(from, to, 'YYYY-MM-DD'),
+    ]);
+    const rows = buildRows(days, raw, monitorRaw);
     const monthRows = buildRows(
       [month],
       raw.map((r) => ({ ...r, period: month })),
+      monitorRaw.map((r) => ({ ...r, period: month })),
     );
     const total = monthRows[0];
     return {

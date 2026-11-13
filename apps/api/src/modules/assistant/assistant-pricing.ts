@@ -63,3 +63,19 @@ export function realFromBilledUsd(billed: Prisma.Decimal): Prisma.Decimal {
 export function billedFromRealUsd(real: Prisma.Decimal | number): Prisma.Decimal {
   return new Prisma.Decimal(real).mul(ASSISTANT_BILLING_MULTIPLIER);
 }
+
+/**
+ * The Message Batches API charges 50% of the normal price for both input
+ * and output. The overnight monitor is the only batch user.
+ */
+export const BATCH_DISCOUNT = D('0.5');
+
+/** REAL USD for one batched response: the normal price, halved. */
+export function assistantBatchCostUsd(u: AssistantUsageTokens): Prisma.Decimal {
+  return assistantCostUsd(u).mul(BATCH_DISCOUNT);
+}
+
+/** What the monitor stores and shows for one batched response (real x 2.5). */
+export function assistantBatchBilledUsd(u: AssistantUsageTokens): Prisma.Decimal {
+  return assistantBatchCostUsd(u).mul(ASSISTANT_BILLING_MULTIPLIER);
+}

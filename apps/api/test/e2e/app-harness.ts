@@ -458,6 +458,11 @@ export async function resetAssistantState(prisma: PrismaClient): Promise<void> {
     'TRUNCATE TABLE ' +
       [
         'assistant_ticket_proposals',
+        // The overnight monitor's four tables (soft references, no FK).
+        'assistant_monitor_runs',
+        'assistant_monitor_results',
+        'assistant_monitor_usage',
+        'assistant_monitor_themes',
         'assistant_feedback',
         'assistant_notices',
         'assistant_budget_alerts',

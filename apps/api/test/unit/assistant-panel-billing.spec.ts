@@ -59,6 +59,27 @@ describe('assistant panel: billing rows', () => {
     expect(rows[0]!.total).toEqual(emptyBucket());
   });
 
+  it('puts the monitor on its own line and adds it to the total', () => {
+    const m = (period: string, cost: string) => ({
+      period,
+      requests: 2,
+      input_tokens: 10,
+      output_tokens: 5,
+      cache_read_tokens: 0,
+      cache_write_tokens: 0,
+      cost_usd: new Prisma.Decimal(cost),
+    });
+    const rows = buildRows(
+      ['2026-11-01'],
+      [raw('2026-11-01', 'STAFF', '1.00000000')],
+      [m('2026-11-01', '0.50000000'), m('2026-11-02', '9.00000000')],
+    );
+    expect(rows[0]!.monitor.costUsd).toBe('0.50000000');
+    expect(rows[0]!.monitor.requests).toBe(2);
+    expect(rows[0]!.assistant.total.costUsd).toBe('1.00000000');
+    expect(rows[0]!.total.costUsd).toBe('1.50000000');
+  });
+
   it('adds buckets without losing precision', () => {
     const a = { ...emptyBucket(), costUsd: '0.1' };
     expect(addBuckets(a, { ...emptyBucket(), costUsd: '0.2' }).costUsd).toBe('0.30000000');

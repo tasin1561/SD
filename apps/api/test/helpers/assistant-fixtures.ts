@@ -8,6 +8,13 @@ import {
   type AssistantModelRequest,
 } from '../../src/modules/assistant/services/assistant-model-gateway';
 import { NotFoundException } from '@nestjs/common';
+import type { AssistantUsageTokens } from '../../src/modules/assistant/assistant-pricing';
+import {
+  AssistantBatchGateway,
+  type MonitorBatchItem,
+  type MonitorBatchRequest,
+  type MonitorBatchStatus,
+} from '../../src/modules/assistant/services/assistant-batch-gateway';
 import { AssistantAttachmentService } from '../../src/modules/assistant/services/assistant-attachment.service';
 import type {
   AssistantStoreService,
@@ -404,4 +411,75 @@ export function chatRig(
     attachments,
   );
   return { chat, store, gateway, attachments, spaces };
+}
+
+/** The rubric a well-behaved monitor model returns, for the batch fakes. */
+export function rubricJson(over: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    answered: 'yes',
+    correct_for_skydrop: 'yes',
+    correct_reason: null,
+    link_given_and_right: 'not_needed',
+    language_match: true,
+    user_frustration: 0,
+    hallucination_suspected: false,
+    hallucination_quote: null,
+    knowledge_gap: null,
+    ui_confusion: null,
+    safety_issue: 'none',
+    safety_quote: null,
+    summary: 'Asked where an order is; answered.',
+    ...over,
+  });
+}
+
+/**
+ * A Message Batches gateway that never leaves the process. Records every
+ * batch it was asked to create, ends only when told to, and answers each
+ * request with `respond` (default: a clean rubric at fixed token counts).
+ */
+export class FakeBatchGateway extends AssistantBatchGateway {
+  created: Array<readonly MonitorBatchRequest[]> = [];
+  retrieved: string[] = [];
+  ended = false;
+  failCreate = false;
+  usage: AssistantUsageTokens = {
+    inputTokens: 2000,
+    outputTokens: 150,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+  };
+  /** Extra copies of every item, to prove a replay stores nothing twice. */
+  duplicateItems = false;
+  respond: (r: MonitorBatchRequest) => MonitorBatchItem = (r) => ({
+    customId: r.customId,
+    kind: 'succeeded',
+    text: rubricJson(),
+    model: 'claude-haiku-5-5',
+    usage: this.usage,
+  });
+
+  isConfigured(): boolean {
+    return true;
+  }
+  async createBatch(requests: readonly MonitorBatchRequest[]): Promise<{ id: string }> {
+    if (this.failCreate) throw new Error('batch create refused');
+    this.created.push(requests);
+    return { id: `msgbatch_fake_${this.created.length}` };
+  }
+  async retrieveBatch(batchId: string): Promise<MonitorBatchStatus> {
+    this.retrieved.push(batchId);
+    return {
+      id: batchId,
+      ended: this.ended,
+      counts: { processing: this.ended ? 0 : 1, succeeded: 0, errored: 0, canceled: 0, expired: 0 },
+    };
+  }
+  async results(batchId: string): Promise<MonitorBatchItem[]> {
+    const n = Number(batchId.split('_').pop());
+    const reqs = this.created[n - 1] ?? [];
+    // Deliberately reversed: results arrive in ANY order.
+    const items = [...reqs].reverse().map((r) => this.respond(r));
+    return this.duplicateItems ? [...items, ...items] : items;
+  }
 }

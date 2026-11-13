@@ -9,6 +9,7 @@ export const PAGES_ADMIN: ReadonlyArray<PageRow> = [
   ["/ai/controls","AI assistant · Controls","assistant.admin"],
   ["/ai/conversations","AI assistant · Conversations","assistant.admin"],
   ["/ai/conversations/[id]","Conversations (detail)","assistant.admin"],
+  ["/ai/monitor","AI assistant · Monitor","assistant.admin"],
   ["/bank-accounts","Bank accounts","money.view"],
   ["/bank-accounts/history","Bank accounts · History","money.view"],
   ["/bank-changes","Bank changes","sellers.bank_change.approve"],

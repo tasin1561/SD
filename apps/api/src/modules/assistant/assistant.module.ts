@@ -9,10 +9,16 @@ import { SellerTrackingModule } from '../seller-tracking/seller-tracking.module'
 import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { SystemSettingsModule } from '../system-settings/system-settings.module';
 import { TicketModule } from '../ticket/ticket.module';
+import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
 import { AdminAssistantPanelController } from './controllers/admin-assistant-panel.controller';
+import { AssistantMonitorWorker } from './queue/assistant-monitor.worker';
 import { AssistantRetentionWorker } from './queue/assistant-retention.worker';
 import { AssistantBillingService } from './services/assistant-billing.service';
 import { AssistantFeedbackService } from './services/assistant-feedback.service';
+import { AnthropicBatchGateway, AssistantBatchGateway } from './services/assistant-batch-gateway';
+import { AssistantMonitorDigestService } from './services/assistant-monitor-digest.service';
+import { AssistantMonitorPanelService } from './services/assistant-monitor-panel.service';
+import { AssistantMonitorService } from './services/assistant-monitor.service';
 import { AssistantPanelService } from './services/assistant-panel.service';
 import { AssistantRetentionService } from './services/assistant-retention.service';
 import { AdminAssistantController } from './controllers/admin-assistant.controller';
@@ -56,6 +62,8 @@ import { AssistantToolRegistry } from './services/assistant-tool-registry.servic
     // Phase D: the confirm button raises a ticket through the console's own service.
     TicketModule,
     CourierEscalationModule,
+    // The monitor's weekly e-mail goes through the dispatcher the system-issue alerts use.
+    NotificationAudienceModule,
   ],
   controllers: [
     AdminAssistantController,
@@ -78,6 +86,11 @@ import { AssistantToolRegistry } from './services/assistant-tool-registry.servic
     AssistantPanelService,
     AssistantRetentionService,
     AssistantRetentionWorker,
+    AssistantMonitorService,
+    AssistantMonitorPanelService,
+    AssistantMonitorDigestService,
+    AssistantMonitorWorker,
+    { provide: AssistantBatchGateway, useClass: AnthropicBatchGateway },
     { provide: AssistantModelGateway, useClass: AnthropicModelGateway },
   ],
 })

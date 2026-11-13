@@ -21,6 +21,10 @@ import {
 import { billedFromRealUsd, realFromBilledUsd } from '../assistant-pricing';
 import { AssistantAttachmentService } from './assistant-attachment.service';
 import { AssistantBillingService, PORTALS, type PortalKey } from './assistant-billing.service';
+import {
+  AssistantMonitorPanelService,
+  type MonitorScoreView,
+} from './assistant-monitor-panel.service';
 import { visibleText } from './assistant-conversation.service';
 
 /** The settings the Controls tab may change, and the type each is written as. */
@@ -46,6 +50,8 @@ const ERROR_CODES = ['FAILED', 'NOT_CONFIGURED', 'ATTACHMENT_UNAVAILABLE'];
 const LANGUAGE_SAMPLE = 5000;
 
 export interface ConversationReview {
+  /** The overnight monitor's score, if the conversation has been reviewed. */
+  readonly monitor: MonitorScoreView | null;
   readonly conversation: {
     readonly id: string;
     readonly portal: string;
@@ -96,6 +102,8 @@ export interface ExplorerFilters {
   readonly hasAttachment?: boolean | undefined;
   readonly rating?: 'up' | 'down' | undefined;
   readonly hadNotice?: 'any' | 'error' | undefined;
+  /** `flagged`: only conversations the overnight monitor flagged for safety. */
+  readonly monitor?: 'flagged' | undefined;
   readonly limit?: number | undefined;
   readonly offset?: number | undefined;
 }
@@ -157,6 +165,7 @@ export class AssistantPanelService {
     private readonly settings: SystemSettingsService,
     private readonly billing: AssistantBillingService,
     private readonly attachments: AssistantAttachmentService,
+    private readonly monitor: AssistantMonitorPanelService,
   ) {}
 
   // ── dashboard ──────────────────────────────────────────────────────
@@ -358,6 +367,10 @@ export class AssistantPanelService {
     if (f.hadNotice === 'error')
       where.notices = { some: { code: { in: ERROR_CODES.concat('REFUSED') } } };
     if (f.language !== undefined) where.id = { in: await this.languageIds(f.language) };
+    if (f.monitor === 'flagged') {
+      const flagged = await this.monitor.flaggedConversationIds();
+      where.AND = [{ id: { in: flagged } }];
+    }
 
     const [total, rows] = await Promise.all([
       this.prisma.client.assistantConversation.count({ where }),
@@ -381,7 +394,7 @@ export class AssistantPanelService {
       }),
     ]);
     const ids = rows.map((r) => r.id);
-    const [qs, fb, firsts, names] = await Promise.all([
+    const [qs, fb, firsts, names, scores] = await Promise.all([
       this.prisma.client.assistantMessage.groupBy({
         by: ['conversationId'],
         where: { conversationId: { in: ids }, isQuestion: true },
@@ -399,6 +412,7 @@ export class AssistantPanelService {
         select: { conversationId: true, content: true },
       }),
       this.nameLookup(rows),
+      this.monitor.scoresFor(ids),
     ]);
     const qMap = new Map(qs.map((r) => [r.conversationId, r._count._all]));
     const firstQ = new Map<string, string>();
@@ -428,6 +442,8 @@ export class AssistantPanelService {
           up: fb.find((x) => x.conversationId === r.id && x.rating === 'UP')?._count._all ?? 0,
           down: fb.find((x) => x.conversationId === r.id && x.rating === 'DOWN')?._count._all ?? 0,
           anonymised: r.anonymisedAt !== null,
+          /** The overnight monitor's score for the latest turn it reviewed, if any. */
+          monitor: scores.get(r.id) ?? null,
           createdAt: r.createdAt.toISOString(),
           updatedAt: r.updatedAt.toISOString(),
         };
@@ -562,7 +578,9 @@ export class AssistantPanelService {
       }),
       this.nameLookup([conv]),
     ]);
+    const monitor: MonitorScoreView | null = (await this.monitor.scoresFor([id])).get(id) ?? null;
     return {
+      monitor,
       conversation: {
         id,
         portal: conv.audience.toLowerCase(),
