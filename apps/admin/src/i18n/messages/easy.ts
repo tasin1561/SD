@@ -134,6 +134,18 @@ export const easy = defineMessages({
   'ezHandover.scanned': ['Scanned', 'স্ক্যান হয়েছে', 'स्कैन हुआ'],
   'ezHandover.dispatched': ['Dispatched', 'ডিসপ্যাচ হয়েছে', 'रवाना हुआ'],
 
+  // ── Courier decisions (/courier-decisions) ────────────────────────────
+  'ezCourier.day': ['{n} day', '{n} দিন', '{n} दिन'],
+  'ezCourier.days': ['{n} days', '{n} দিন', '{n} दिन'],
+  'ezCourier.hours': ['{n}h', '{n} ঘণ্টা', '{n} घंटे'],
+  'ezCourier.cod': ['COD', 'সিওডি', 'सीओडी'],
+  'ezCourier.waitingCount': ['{n} waiting', '{n}টি অপেক্ষায়', '{n} प्रतीक्षा में'],
+  'ezCourier.pickInfo': [
+    'Press a carrier to book the parcel with it.\n\nIt is booked straight away. There is no second step, so check the row first.\n\nThe price is on the right. The delivery days are under the name. The cheapest and the fastest are marked.',
+    'পার্সেলটি বুক করতে একটি ক্যারিয়ারে চাপ দিন।\n\nসঙ্গে সঙ্গে বুক হয়ে যায়। দ্বিতীয় কোনো ধাপ নেই, তাই আগে সারিটি দেখে নিন।\n\nদাম ডান পাশে। ডেলিভারির দিন নামের নিচে। সবচেয়ে সস্তা ও সবচেয়ে দ্রুতটি চিহ্নিত আছে।',
+    'पार्सल बुक करने के लिए किसी कैरियर को दबाएँ।\n\nयह तुरंत बुक हो जाता है। कोई दूसरा चरण नहीं है, इसलिए पहले पंक्ति देख लें।\n\nकीमत दाईं ओर है। डिलीवरी के दिन नाम के नीचे हैं। सबसे सस्ता और सबसे तेज़ चिह्नित हैं।',
+  ],
+
   // ── Re-attempt requests (/reattempt-requests) ─────────────────────────
   'ezReattempt.reasonLabel': [
     'Why the client is asking',

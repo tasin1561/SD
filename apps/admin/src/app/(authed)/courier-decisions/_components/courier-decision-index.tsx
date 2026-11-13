@@ -9,6 +9,8 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { AgeChip, OoSection, type AgeTone } from '../../orders/_components/order-ops-parts';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import './courier-decisions.css';
 import {
   useChooseCourier,
@@ -71,7 +73,9 @@ function OptionButton({
         <span className="oo-faint">
           {option.estimatedDays === null
             ? t('courierDecisionsCourierDecisionIndex.noEstimateGiven')
-            : `${option.estimatedDays} day${option.estimatedDays === 1 ? '' : 's'}`}
+            : t(option.estimatedDays === 1 ? 'ezCourier.day' : 'ezCourier.days', {
+                n: option.estimatedDays,
+              })}
           {best && t('courierDecisionsCourierDecisionIndex.cheapest')}
           {fastest && t('courierDecisionsCourierDecisionIndex.fastest')}
         </span>
@@ -123,13 +127,15 @@ function Row({ row }: { row: WaitingCourierChoice }): ReactElement {
         </span>
         {row.codAmountInr !== null && (
           <span className="oo-sub">
-            COD <Money amount={row.codAmountInr} />
+            {t('ezCourier.cod')} <Money amount={row.codAmountInr} />
           </span>
         )}
       </Td>
       <Td>
         <AgeChip tone={waitTone(waited)}>
-          {waited < 1 ? t('courierDecisionsCourierDecisionIndex.justNow') : `${waited}h`}
+          {waited < 1
+            ? t('courierDecisionsCourierDecisionIndex.justNow')
+            : t('ezCourier.hours', { n: waited })}
         </AgeChip>
       </Td>
       <Td>
@@ -178,15 +184,24 @@ export function CourierDecisionIndex(): ReactElement {
   const rows = queue.data ?? [];
 
   return (
-    <div className="oo-page">
+    <div className="oo-page ez-touch">
       <PageHeader
-        title={t('courierDecisionsCourierDecisionIndex.courierDecisions')}
-        subtitle={t('courierDecisionsCourierDecisionIndex.confirmedParcelsWaitingForSomebody')}
+        title={
+          <span className="ez-titled">
+            {t('courierDecisionsCourierDecisionIndex.courierDecisions')}
+            <InfoButton
+              title={t('courierDecisionsCourierDecisionIndex.courierDecisions')}
+              text={t('courierDecisionsCourierDecisionIndex.confirmedParcelsWaitingForSomebody')}
+            />
+          </span>
+        }
       />
 
       <OoSection
         title={t('courierDecisionsCourierDecisionIndex.waitingForACarrier')}
-        note={queue.data === undefined ? undefined : `${rows.length} waiting`}
+        note={
+          queue.data === undefined ? undefined : t('ezCourier.waitingCount', { n: rows.length })
+        }
         flush
       >
         {queue.isLoading ? (
@@ -223,7 +238,15 @@ export function CourierDecisionIndex(): ReactElement {
                 <Th>{t('courierDecisionsCourierDecisionIndex.destination')}</Th>
                 <Th>{t('courierDecisionsCourierDecisionIndex.parcel')}</Th>
                 <Th>{t('courierDecisionsCourierDecisionIndex.waiting')}</Th>
-                <Th>{t('courierDecisionsCourierDecisionIndex.pickACarrier')}</Th>
+                <Th>
+                  <span className="ez-titled">
+                    {t('courierDecisionsCourierDecisionIndex.pickACarrier')}
+                    <InfoButton
+                      title={t('courierDecisionsCourierDecisionIndex.pickACarrier')}
+                      text={t('ezCourier.pickInfo')}
+                    />
+                  </span>
+                </Th>
               </Tr>
             </THead>
             <TBody>
