@@ -243,6 +243,8 @@ export const PORTAL_TEXT_ADMIN: ReadonlyArray<TextRow> = [
   ["shiprocketShiprocketOpsIndex.oneServiceabilityLookupOnA","One serviceability lookup on a lane. It creates nothing, and it is the only way to prove the stored credential still works without booking a parcel."],
   ["shiprocketShiprocketOpsIndex.answeredWithoutReachingThemStub","Answered WITHOUT reaching them (stub mode) — this proves nothing about the credential."],
   ["shiprocketShiprocketOpsIndex.theTwentyMostRecentShiprocket","The twenty most recent Shiprocket shipments. A row with no waybill never got one — the AWB-less sweep chases those."],
+  ["ezIssues.countsText","Open: problems that are still there.\nNobody on it: no one has pressed “I’m on it” yet.\nUrgent: high or critical problems. Do these first.\n\nPress a number to see only those."],
+  ["ezIssues.onItText","Tells the team you are looking at this, so two people do not chase the same problem.\n\nIt does not close the problem. Some problems close by themselves when the job works again."],
   ["callCenterCustomerRiskStrip.returnRate","{pct} of this customer's parcels came back"],
   ["warehouseRtoRtoItemRow.mismatchMissingRestock","A missing unit cannot go back on the shelf — you probably mean Write off."],
   ["warehouseRtoRtoItemRow.mismatchDamagedRestock","A damaged unit put back in stock will be sold to the next customer. Is it really sellable?"],

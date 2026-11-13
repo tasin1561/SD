@@ -1,0 +1,194 @@
+/* Easy pages — the small shared pieces of the light, plain-words admin
+   screens: the "i" info button, its bubble and the Listen button.
+   Tokens only (FE-6). Motion is transform/opacity; the global
+   reduced-motion rule in brand/app.css switches it off. */
+
+/* ── The "i" button ───────────────────────────────────────────────────── */
+.ez-info {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  vertical-align: middle;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+/* A 44px touch target without growing the line it sits on. */
+.ez-info::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+.ez-info:hover,
+.ez-info[aria-expanded='true'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.ez-info:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── The bubble ───────────────────────────────────────────────────────── */
+.ez-bubble {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  gap: var(--sp-2);
+  width: min(20rem, calc(100vw - 16px));
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--elev-3);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  line-height: 1.55;
+  text-align: start;
+  white-space: normal;
+  animation: ez-rise var(--dur-fast) var(--ease-out);
+}
+.ez-bubble__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.ez-bubble__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.ez-bubble__text {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.ez-bubble__facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--sp-1) var(--sp-3);
+  margin: 0;
+}
+.ez-bubble__facts dt {
+  color: var(--fg-muted);
+}
+.ez-bubble__facts dd {
+  margin: 0;
+  color: var(--fg-strong);
+  overflow-wrap: anywhere;
+}
+.ez-bubble__close {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin: -4px -6px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.ez-bubble__close:hover {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+}
+.ez-bubble__close:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+/* On a phone the bubble is a sheet along the bottom edge: nothing to aim
+   at, nothing cut off by the side of the screen. */
+@media (max-width: 639px) {
+  .ez-bubble {
+    inset: auto 8px calc(8px + env(safe-area-inset-bottom, 0px)) 8px !important;
+    width: auto;
+    padding: var(--sp-4);
+    font-size: var(--fs-md);
+    animation-name: ez-sheet;
+  }
+  .ez-bubble__close {
+    width: 44px;
+    height: 44px;
+    margin: -10px -10px 0 0;
+  }
+}
+@keyframes ez-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@keyframes ez-sheet {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+/* ── Listen ───────────────────────────────────────────────────────────── */
+.ez-listen {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-body);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  justify-self: start;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.ez-listen:hover {
+  border-color: var(--blue-line);
+  color: var(--blue-on-tint);
+}
+.ez-listen[aria-pressed='true'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.ez-listen:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .ez-listen {
+    min-height: 44px;
+    padding: 0 var(--sp-4);
+  }
+}
+
+/* ── A title with its "i" beside it ───────────────────────────────────── */
+.ez-titled {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}

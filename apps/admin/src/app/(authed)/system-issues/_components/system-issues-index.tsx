@@ -2,12 +2,11 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Clock } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, CheckCircle2, Clock, Info, Repeat } from 'lucide-react';
 import { PageHeader } from '@skydrop/ui/app/page-header';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
-import { KpiCard } from '@skydrop/ui/app/kpi-card';
 import { TextArea } from '@skydrop/ui/app/text-field';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
@@ -22,6 +21,8 @@ import {
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { AfCard, MetaFact, Notice } from '@/app/(authed)/system/_components/af-parts';
+import { InfoButton } from '@/components/easy/info-button';
+import { ListenButton } from '@/components/easy/listen-button';
 import './system-issues.css';
 import { useT } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
@@ -44,6 +45,21 @@ function severityOf(sev: SystemIssueView['severity']): 'critical' | 'high' | 'me
   if (sev === 'HIGH') return 'high';
   if (sev === 'MEDIUM') return 'medium';
   return 'low';
+}
+
+/** The severity as a word in the reader's language. Colour is never the only signal. */
+const SEVERITY_WORD: Readonly<Record<ReturnType<typeof severityOf>, MessageKey>> = {
+  critical: 'ezIssues.sevCritical',
+  high: 'ezIssues.sevHigh',
+  medium: 'ezIssues.sevMedium',
+  low: 'ezIssues.sevLow',
+};
+
+/** Which open issues the list is narrowed to. `all` also shows closed ones when asked for. */
+type IssueFilter = 'all' | 'unclaimed' | 'urgent';
+
+function isUrgent(r: SystemIssueView): boolean {
+  return r.severity === 'HIGH' || r.severity === 'CRITICAL';
 }
 
 /** How long it has been going on, said the way a person would. */
@@ -96,11 +112,44 @@ export function SystemIssuesIndex(): ReactElement {
   // Announcing tells people about issues they were never told of, so it
   // asks first. It sends the same request; a second press sends nothing.
   const [confirmAnnounce, setConfirmAnnounce] = useState(false);
+  // Pressing a count narrows the list to those issues; pressing it again shows everything.
+  const [filter, setFilter] = useState<IssueFilter>('all');
 
   const rows = list.data ?? [];
   const open = rows.filter((r) => r.resolvedAt === null);
-  const urgent = open.filter((r) => r.severity === 'HIGH' || r.severity === 'CRITICAL').length;
+  const urgent = open.filter(isUrgent).length;
   const unclaimed = open.filter((r) => r.acknowledgedAt === null).length;
+  const shown =
+    filter === 'urgent'
+      ? open.filter(isUrgent)
+      : filter === 'unclaimed'
+        ? open.filter((r) => r.acknowledgedAt === null)
+        : rows;
+  const counts: ReadonlyArray<{
+    readonly key: IssueFilter;
+    readonly label: string;
+    readonly value: number;
+    readonly tone: 'info' | 'warn' | 'bad' | undefined;
+  }> = [
+    {
+      key: 'all',
+      label: t('systemIssuesSystemIssuesIndex.open'),
+      value: open.length,
+      tone: 'info',
+    },
+    {
+      key: 'unclaimed',
+      label: t('systemIssuesSystemIssuesIndex.nobodyOnIt'),
+      value: unclaimed,
+      tone: unclaimed > 0 ? 'warn' : undefined,
+    },
+    {
+      key: 'urgent',
+      label: t('systemIssuesSystemIssuesIndex.urgent'),
+      value: urgent,
+      tone: urgent > 0 ? 'bad' : undefined,
+    },
+  ];
 
   async function submitResolve(): Promise<void> {
     if (resolving === null) return;
@@ -123,20 +172,33 @@ export function SystemIssuesIndex(): ReactElement {
           { label: t('systemIssuesSystemIssuesIndex.needsAPerson') },
         ]}
         Link={Link}
-        title={t('systemIssuesSystemIssuesIndex.needsAPerson')}
-        subtitle={t('systemIssuesSystemIssuesIndex.everythingTheSystemCouldNot')}
+        title={
+          <span className="ez-titled">
+            {t('systemIssuesSystemIssuesIndex.needsAPerson')}
+            <InfoButton
+              title={t('systemIssuesSystemIssuesIndex.needsAPerson')}
+              text={t('systemIssuesSystemIssuesIndex.everythingTheSystemCouldNot')}
+            />
+          </span>
+        }
         action={
           <div className="af-row">
             {mayResolve && (
-              <Button
-                variant="secondary"
-                size="md"
-                loading={announce.isPending}
-                onClick={() => setConfirmAnnounce(true)}
-                title={t('systemIssuesSystemIssuesIndex.onlyAnIssueNobodyHas')}
-              >
-                {t('systemIssuesSystemIssuesIndex.notifyUnannounced')}
-              </Button>
+              <span className="ez-titled">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  loading={announce.isPending}
+                  onClick={() => setConfirmAnnounce(true)}
+                  title={t('systemIssuesSystemIssuesIndex.onlyAnIssueNobodyHas')}
+                >
+                  {t('systemIssuesSystemIssuesIndex.notifyUnannounced')}
+                </Button>
+                <InfoButton
+                  title={t('systemIssuesSystemIssuesIndex.notifyUnannounced')}
+                  text={t('systemIssuesSystemIssuesIndex.onlyAnIssueNobodyHas')}
+                />
+              </span>
             )}
             <Button variant="ghost" size="md" onClick={() => setIncludeResolved((v) => !v)}>
               {includeResolved
@@ -170,22 +232,21 @@ export function SystemIssuesIndex(): ReactElement {
       )}
 
       {open.length > 0 && (
-        <div className="af-kpis">
-          <KpiCard
-            label={t('systemIssuesSystemIssuesIndex.open')}
-            value={open.length}
-            tone="info"
-          />
-          <KpiCard
-            label={t('systemIssuesSystemIssuesIndex.nobodyOnIt')}
-            value={unclaimed}
-            tone={unclaimed > 0 ? 'pending' : 'neutral'}
-          />
-          <KpiCard
-            label={t('systemIssuesSystemIssuesIndex.urgent')}
-            value={urgent}
-            tone={urgent > 0 ? 'debit' : 'neutral'}
-          />
+        <div className="si-counts" role="group" aria-label={t('ezIssues.show')}>
+          {counts.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              className="si-count"
+              data-tone={c.tone}
+              aria-pressed={filter === c.key}
+              onClick={() => setFilter((f) => (f === c.key ? 'all' : c.key))}
+            >
+              <span className="si-count__num">{c.value}</span>
+              <span className="si-count__label">{c.label}</span>
+            </button>
+          ))}
+          <InfoButton title={t('ezIssues.countsTitle')} text={t('ezIssues.countsText')} />
         </div>
       )}
 
@@ -205,85 +266,117 @@ export function SystemIssuesIndex(): ReactElement {
           title={t('systemIssuesSystemIssuesIndex.nothingNeedsYou')}
           description={t('systemIssuesSystemIssuesIndex.noIntegrationIsStuckAnd')}
         />
+      ) : shown.length === 0 ? (
+        // A count was pressed and nothing matches it any more (somebody
+        // took the last one). Say so and offer the way back.
+        <div className="si-none">
+          <p>{t('ezIssues.noneInFilter')}</p>
+          <Button variant="secondary" size="md" onClick={() => setFilter('all')}>
+            {t('ezIssues.showAllOpen')}
+          </Button>
+        </div>
       ) : (
-        <ul className="af-queue">
-          {rows.map((r) => {
+        <ul className="si-list">
+          {shown.map((r) => {
             const severity = severityOf(r.severity);
+            const closed = r.resolvedAt !== null;
+            const SevIcon = closed
+              ? CheckCircle2
+              : severity === 'critical'
+                ? AlertOctagon
+                : severity === 'low'
+                  ? Info
+                  : AlertTriangle;
+            const orderId = orderIdOf(r.metadata);
             return (
-              <li
-                key={r.id}
-                className="af-qcard"
-                data-severity={r.resolvedAt === null ? severity : undefined}
-              >
-                <div className="af-qcard__grid">
-                  <div className="af-stack af-stack--tight">
-                    <div className="si-head">
-                      <span className="si-sev" data-sev={severity}>
-                        <AlertTriangle size={12} aria-hidden />
-                        {r.severity.charAt(0) + r.severity.slice(1).toLowerCase()}
-                      </span>
-                      <span className="si-title">{r.title}</span>
-                    </div>
-                    {/* The detail is the point of the card: it says what
-                        to DO, written where the failure happened. */}
-                    <p className="si-detail">{r.detail}</p>
-                    {/* An issue about an order says which one; the link
-                        saves copying the number into the search box. */}
-                    {orderIdOf(r.metadata) !== null && (
-                      <Link
-                        href={`/orders/${orderIdOf(r.metadata) ?? ''}`}
-                        className="af-link af-small af-inline-link"
-                      >
-                        {t('systemIssuesSystemIssuesIndex.openTheOrder')}
-                      </Link>
-                    )}
-                    {/* A box that asked for no van (CUR-10 amendment #3).
-                        A failed day is not retried by itself — the pickups
-                        screen is where it is released and raised again. */}
-                    {r.source === AUTO_PICKUP_SOURCE && canManagePickups && (
-                      <Link href="/warehouse/pickups" className="af-link af-small af-inline-link">
-                        {t('systemIssuesSystemIssuesIndex.openPickups')}
-                      </Link>
-                    )}
-                    <div className="si-meta">
-                      <span className="af-faint sk-ident">{r.source}</span>
-                      <MetaFact>
-                        <Clock size={11} aria-hidden />{' '}
-                        {t('systemIssuesSystemIssuesIndex.firstSeen', {
-                          value: since(t, r.firstSeenAt),
+              <li key={r.id} className="si-row" data-severity={closed ? 'closed' : severity}>
+                <span className="si-row__icon" aria-hidden>
+                  <SevIcon size={20} />
+                </span>
+
+                <div className="si-row__main">
+                  <div className="si-head">
+                    <span className="si-title">{r.title}</span>
+                    <span className="si-sev" data-sev={closed ? 'closed' : severity}>
+                      {closed ? t('ezIssues.closedLabel') : t(SEVERITY_WORD[severity])}
+                    </span>
+                  </div>
+                  {/* The detail is the point of the row: it says what
+                      to DO, written where the failure happened. */}
+                  <p className="si-detail">{r.detail}</p>
+                  <div className="si-meta">
+                    <MetaFact>
+                      <Clock size={13} aria-hidden />{' '}
+                      {t('systemIssuesSystemIssuesIndex.firstSeen', {
+                        value: since(t, r.firstSeenAt),
+                      })}
+                    </MetaFact>
+                    {/* Seen many times is a different problem from seen
+                        once: it means it is not a blip. */}
+                    {r.occurrenceCount > 1 && (
+                      <MetaFact tone="warn">
+                        <Repeat size={13} aria-hidden />{' '}
+                        {t('systemIssuesSystemIssuesIndex.times', {
+                          occurrenceCount: r.occurrenceCount,
                         })}
                       </MetaFact>
-                      <span className="af-faint">
-                        {t('systemIssuesSystemIssuesIndex.last', {
-                          value: since(t, r.lastSeenAt),
-                        })}
-                      </span>
-                      {/* Seen many times is a different problem from seen
-                          once: it means it is not a blip. */}
-                      {r.occurrenceCount > 1 && (
-                        <MetaFact tone="warn">
-                          {t('systemIssuesSystemIssuesIndex.times', {
+                    )}
+                    {/* The technical source and the last sighting are
+                        still here — one press away, off the page. */}
+                    <InfoButton
+                      title={t('ezIssues.details')}
+                      facts={[
+                        { label: t('ezIssues.cameFrom'), value: r.source },
+                        { label: t('ezIssues.firstSeenLabel'), value: since(t, r.firstSeenAt) },
+                        { label: t('ezIssues.lastSeenLabel'), value: since(t, r.lastSeenAt) },
+                        {
+                          label: t('ezIssues.timesLabel'),
+                          value: t('systemIssuesSystemIssuesIndex.times', {
                             occurrenceCount: r.occurrenceCount,
-                          })}
-                        </MetaFact>
+                          }),
+                        },
+                      ]}
+                    />
+                    {/* The issue is written by the server, in English,
+                        whatever language the console is in. */}
+                    <ListenButton text={`${r.title}. ${r.detail}`} lang="en" />
+                  </div>
+                  {/* An issue about an order says which one; the link
+                      saves copying the number into the search box. */}
+                  {(orderId !== null || (r.source === AUTO_PICKUP_SOURCE && canManagePickups)) && (
+                    <div className="si-links">
+                      {orderId !== null && (
+                        <Link href={`/orders/${orderId}`} className="af-link si-link">
+                          {t('systemIssuesSystemIssuesIndex.openTheOrder')}
+                        </Link>
+                      )}
+                      {/* A box that asked for no van (CUR-10 amendment #3).
+                          A failed day is not retried by itself — the pickups
+                          screen is where it is released and raised again. */}
+                      {r.source === AUTO_PICKUP_SOURCE && canManagePickups && (
+                        <Link href="/warehouse/pickups" className="af-link si-link">
+                          {t('systemIssuesSystemIssuesIndex.openPickups')}
+                        </Link>
                       )}
                     </div>
-                  </div>
+                  )}
+                </div>
 
-                  <div className="af-qcard__actions si-actions">
-                    {r.resolvedAt !== null ? (
-                      <span className="af-faint">
-                        {t('systemIssuesSystemIssuesIndex.closedAgo', {
-                          ago: since(t, r.resolvedAt),
-                        })}
-                        {r.resolutionNote !== null && ` · ${r.resolutionNote}`}
-                      </span>
-                    ) : (
-                      <>
-                        {r.acknowledgedAt === null ? (
+                <div className="si-row__actions">
+                  {closed ? (
+                    <span className="af-faint">
+                      {t('systemIssuesSystemIssuesIndex.closedAgo', {
+                        ago: since(t, r.resolvedAt ?? r.lastSeenAt),
+                      })}
+                      {r.resolutionNote !== null && ` · ${r.resolutionNote}`}
+                    </span>
+                  ) : (
+                    <>
+                      {r.acknowledgedAt === null ? (
+                        <span className="ez-titled">
                           <AsyncButton
                             variant="secondary"
-                            size="sm"
+                            size="md"
                             labels={{
                               idle: t('systemIssuesSystemIssuesIndex.iMOnIt'),
                               busy: t('systemIssuesSystemIssuesIndex.noting'),
@@ -302,29 +395,33 @@ export function SystemIssuesIndex(): ReactElement {
                               }
                             }}
                           />
-                        ) : (
-                          <MetaFact tone="accent" dot>
-                            {t('systemIssuesSystemIssuesIndex.beingLookedAt', {
-                              value: since(t, r.acknowledgedAt),
-                            })}
-                          </MetaFact>
-                        )}
-                        {mayResolve && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setResolving(r);
-                              setNote('');
-                              setError(null);
-                            }}
-                          >
-                            {t('systemIssuesSystemIssuesIndex.close')}
-                          </Button>
-                        )}
-                      </>
-                    )}
-                  </div>
+                          <InfoButton
+                            title={t('ezIssues.onItTitle')}
+                            text={t('ezIssues.onItText')}
+                          />
+                        </span>
+                      ) : (
+                        <MetaFact tone="accent" dot>
+                          {t('systemIssuesSystemIssuesIndex.beingLookedAt', {
+                            value: since(t, r.acknowledgedAt),
+                          })}
+                        </MetaFact>
+                      )}
+                      {mayResolve && (
+                        <Button
+                          variant="ghost"
+                          size="md"
+                          onClick={() => {
+                            setResolving(r);
+                            setNote('');
+                            setError(null);
+                          }}
+                        >
+                          {t('systemIssuesSystemIssuesIndex.close')}
+                        </Button>
+                      )}
+                    </>
+                  )}
                 </div>
               </li>
             );
