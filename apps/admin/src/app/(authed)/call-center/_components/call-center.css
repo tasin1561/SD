@@ -427,3 +427,25 @@
     display: none;
   }
 }
+
+/* On a touch screen the links an agent presses mid-call are finger-sized:
+   the number to dial, its copy button, and "Open" on a client's issue. */
+@media (pointer: coarse) {
+  .cc-recipient a,
+  .cc-recipient button,
+  .cc-purpose a {
+    min-height: 44px;
+  }
+  .cc-recipient a,
+  .cc-purpose a {
+    display: inline-flex;
+    align-items: center;
+  }
+  /* The outcome dropdown and the notes box, the two things typed into
+     with a thumb at the end of every call. */
+  .cc-form select,
+  .cc-bench .cc-form input.sk-field__input {
+    height: auto;
+    min-height: 44px;
+  }
+}

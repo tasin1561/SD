@@ -154,7 +154,10 @@
   min-width: 0;
 }
 
-/* ── Filter pills ─────────────────────────────────────────────────────── */
+/* ── Filter pills ───────────────────────────────────────────────────────
+   `button.` on purpose: the app-wide touch floor is
+   `button:not(.skydrop-hit) { min-height: 32px }`, which outranks a bare
+   class and would shrink these to 32px on exactly the screens that need 44. */
 .ez-pills {
   display: flex;
   flex-wrap: wrap;
@@ -162,7 +165,7 @@
   gap: var(--sp-2);
   min-width: 0;
 }
-.ez-pill {
+button.ez-pill {
   display: inline-flex;
   align-items: baseline;
   gap: var(--sp-2);
@@ -215,7 +218,7 @@
   color: var(--green-text);
 }
 @media (pointer: coarse) {
-  .ez-pill {
+  button.ez-pill {
     min-height: 44px;
   }
 }
@@ -270,6 +273,15 @@
 .ez-note__label {
   color: var(--fg-muted);
 }
+/* A row's own link (an order number) is the way into the record, so on a
+   touch screen it is finger-sized. */
+@media (pointer: coarse) {
+  .ez-row-head a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
 @media (max-width: 639px) {
   .ez-list > li {
     padding: var(--sp-4) 0;
@@ -293,7 +305,7 @@
   gap: var(--sp-2);
   min-width: 0;
 }
-.ez-guide__trigger {
+button.ez-guide__trigger {
   display: inline-flex;
   align-items: center;
   justify-self: start;
@@ -391,7 +403,7 @@ button.ez-guide__pick:hover {
   overflow-wrap: anywhere;
 }
 @media (pointer: coarse) {
-  .ez-guide__trigger {
+  button.ez-guide__trigger {
     min-height: 44px;
     padding: 0 var(--sp-4);
   }
