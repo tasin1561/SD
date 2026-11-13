@@ -199,7 +199,7 @@ export function buildAssistantTools(deps: AssistantToolDeps): readonly Assistant
         additionalProperties: false,
       },
       async run(scope, input) {
-        const found = await deps.orders.findForStaff(String(input.identifier));
+        const found = await deps.orders.findForSeller(sellerId(scope), String(input.identifier));
         if (found === null) throw new ToolError('NOT_FOUND', NOT_YOURS);
         return found;
       },
