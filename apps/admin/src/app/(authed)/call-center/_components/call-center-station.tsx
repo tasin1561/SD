@@ -35,6 +35,8 @@ import { MessageCircleWarning, PhoneCall, TriangleAlert } from 'lucide-react';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { Facts, Notice, OoCard } from '../../orders/_components/order-ops-parts';
+import { ChoiceGuide } from '@/components/easy/choice-guide';
+import { outcomeGuide } from './outcome-guide';
 import './call-center.css';
 import { useT } from '@/i18n/client';
 import type { MessageKey } from '@/i18n/catalog';
@@ -685,6 +687,17 @@ export function CallCenterStation(): ReactElement {
                 </option>
               ))}
             </Select>
+
+            {/* Every outcome with what it does, side by side, BEFORE one is
+                picked — the dropdown above only names them. Pressing one
+                here picks it there. Held with the dropdown while edits
+                are unsaved (reading still works). */}
+            <ChoiceGuide
+              choices={outcomeGuide(tr, orderedOutcomes)}
+              selected={outcome}
+              onChoose={(v) => setOutcome(v)}
+              disabled={unsavedEdits}
+            />
 
             {/*
               The nine outcomes are the CONFIRMATION vocabulary, and

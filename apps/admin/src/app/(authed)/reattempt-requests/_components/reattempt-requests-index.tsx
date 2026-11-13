@@ -8,7 +8,6 @@ import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
-import { FilterBar, FilterField } from '@skydrop/ui/app/filter-bar';
 import { Select } from '@skydrop/ui/app/select';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
@@ -20,8 +19,13 @@ import {
   type AdminReattemptRequest,
 } from '@/lib/callcenter-hooks';
 import { AgeChip } from '../../orders/_components/order-ops-parts';
-import { useT } from '@/i18n/client';
-import { richMessage } from '@/i18n/client';
+import { richMessage, useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { InfoButton } from '@/components/easy/info-button';
+import { FilterPills } from '@/components/easy/filter-pills';
+import '@/components/easy/easy.css';
+
+type StatusFilter = 'PENDING' | 'APPROVED' | 'REJECTED' | '';
 
 /**
  * Sellers asking to ring a customer who declined.
@@ -32,8 +36,9 @@ import { richMessage } from '@/i18n/client';
  */
 export function ReattemptRequestsIndex(): ReactElement {
   const t = useT();
+  const locale = useLocale();
 
-  const [status, setStatus] = useState('PENDING');
+  const [status, setStatus] = useState<StatusFilter>('PENDING');
   const list = useReattemptRequests(status === '' ? undefined : status);
   const [deciding, setDeciding] = useState<{
     row: AdminReattemptRequest;
@@ -43,31 +48,32 @@ export function ReattemptRequestsIndex(): ReactElement {
   return (
     <div className="oo-page">
       <PageHeader
-        title={t('reattemptRequestsReattemptRequestsIndex.reAttemptRequests')}
-        subtitle={t('reattemptRequestsReattemptRequestsIndex.clientsAskingUsToCall')}
+        title={
+          <span className="ez-titled">
+            {t('reattemptRequestsReattemptRequestsIndex.reAttemptRequests')}
+            <InfoButton
+              title={t('reattemptRequestsReattemptRequestsIndex.reAttemptRequests')}
+              text={t('reattemptRequestsReattemptRequestsIndex.clientsAskingUsToCall')}
+            />
+          </span>
+        }
       />
 
-      <FilterBar activeCount={status === 'PENDING' ? 0 : 1}>
-        <FilterField>
-          <Select
-            id="ra-status"
-            label={t('reattemptRequestsReattemptRequestsIndex.status')}
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="PENDING">
-              {t('reattemptRequestsReattemptRequestsIndex.waitingForADecision')}
-            </option>
-            <option value="APPROVED">
-              {t('reattemptRequestsReattemptRequestsIndex.approved')}
-            </option>
-            <option value="REJECTED">
-              {t('reattemptRequestsReattemptRequestsIndex.declined')}
-            </option>
-            <option value="">{t('reattemptRequestsReattemptRequestsIndex.all')}</option>
-          </Select>
-        </FilterField>
-      </FilterBar>
+      {/* Four choices, all on the screen — no dropdown to open and read. */}
+      <FilterPills<StatusFilter>
+        label={t('reattemptRequestsReattemptRequestsIndex.status')}
+        value={status}
+        onChange={setStatus}
+        options={[
+          {
+            key: 'PENDING',
+            label: t('reattemptRequestsReattemptRequestsIndex.waitingForADecision'),
+          },
+          { key: 'APPROVED', label: t('reattemptRequestsReattemptRequestsIndex.approved') },
+          { key: 'REJECTED', label: t('reattemptRequestsReattemptRequestsIndex.declined') },
+          { key: '', label: t('reattemptRequestsReattemptRequestsIndex.all') },
+        ]}
+      />
 
       {list.isLoading ? (
         <SkeletonRows
@@ -86,52 +92,55 @@ export function ReattemptRequestsIndex(): ReactElement {
         />
       ) : (
         <ul
-          className="oo-queue"
+          className="ez-list"
           aria-label={t('reattemptRequestsReattemptRequestsIndex.reAttemptRequests')}
         >
           {(list.data ?? []).map((r) => (
-            <li
-              key={r.id}
-              className="oo-qcard"
-              data-severity={r.status === 'PENDING' ? 'medium' : undefined}
-            >
-              <div className="oo-qcard__head">
-                <div className="oo-qcard__title">
-                  {r.orderNumber !== null && (
-                    <Link href={`/orders/${r.orderId}`} className="oo-link sk-ident">
-                      {r.orderNumber}
-                    </Link>
-                  )}
-                </div>
-                <div className="oo-qcard__chips">
-                  <StatusChip
-                    size="sm"
-                    kind={
-                      r.status === 'PENDING'
-                        ? 'pending'
-                        : r.status === 'APPROVED'
-                          ? 'confirmed'
-                          : 'failed'
-                    }
-                    label={r.status.toLowerCase()}
-                  />
-                  <AgeChip title={t('reattemptRequestsReattemptRequestsIndex.whenTheClientAsked')}>
-                    {t('reattemptRequestsReattemptRequestsIndex.asked', {
-                      value: new Date(r.createdAt).toLocaleString('en-IN'),
-                    })}
-                  </AgeChip>
-                </div>
+            <li key={r.id}>
+              <div className="ez-row-head">
+                {r.orderNumber !== null && (
+                  <Link href={`/orders/${r.orderId}`} className="oo-link sk-ident">
+                    {r.orderNumber}
+                  </Link>
+                )}
+                <StatusChip
+                  size="sm"
+                  kind={
+                    r.status === 'PENDING'
+                      ? 'pending'
+                      : r.status === 'APPROVED'
+                        ? 'confirmed'
+                        : 'failed'
+                  }
+                  // The word, in the reader's language — it was the raw
+                  // status in lower case in every language.
+                  label={
+                    r.status === 'PENDING'
+                      ? t('reattemptRequestsReattemptRequestsIndex.waitingForADecision')
+                      : r.status === 'APPROVED'
+                        ? t('reattemptRequestsReattemptRequestsIndex.approved')
+                        : t('reattemptRequestsReattemptRequestsIndex.declined')
+                  }
+                />
+                <AgeChip title={t('reattemptRequestsReattemptRequestsIndex.whenTheClientAsked')}>
+                  {t('reattemptRequestsReattemptRequestsIndex.asked', {
+                    value: formatDateTime(r.createdAt, locale),
+                  })}
+                </AgeChip>
               </div>
 
               {/* The reason IS the decision. Rendered at full size,
                   not truncated into a column. */}
-              <p className="oo-body">{r.reason}</p>
+              <div>
+                <p className="ez-note ez-note__label">{t('ezReattempt.reasonLabel')}</p>
+                <p className="ez-lead">{r.reason}</p>
+              </div>
 
               {r.status === 'APPROVED' && r.extraAttempts > 0 && (
-                <p className="oo-p">
+                <p className="ez-note">
                   {richMessage(t('reattemptRequestsReattemptRequestsIndex.extra'), {
                     span: (
-                      <span className="oo-faint">
+                      <span className="ez-note__label">
                         {t('reattemptRequestsReattemptRequestsIndex.granted')}
                       </span>
                     ),
@@ -145,8 +154,8 @@ export function ReattemptRequestsIndex(): ReactElement {
               )}
 
               {r.decisionNote !== null && r.decisionNote !== '' && (
-                <p className="oo-p">
-                  <span className="oo-faint">
+                <p className="ez-note">
+                  <span className="ez-note__label">
                     {t('reattemptRequestsReattemptRequestsIndex.decisionNote')}
                   </span>{' '}
                   {r.decisionNote}
@@ -154,21 +163,33 @@ export function ReattemptRequestsIndex(): ReactElement {
               )}
 
               {r.status === 'PENDING' && (
-                <div className="oo-row">
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onClick={() => setDeciding({ row: r, approve: true })}
-                  >
-                    {t('reattemptRequestsReattemptRequestsIndex.approveCallAgain')}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDeciding({ row: r, approve: false })}
-                  >
-                    {t('reattemptRequestsReattemptRequestsIndex.decline')}
-                  </Button>
+                <div className="ez-row-actions">
+                  <span className="ez-titled">
+                    <Button
+                      size="md"
+                      variant="primary"
+                      onClick={() => setDeciding({ row: r, approve: true })}
+                    >
+                      {t('reattemptRequestsReattemptRequestsIndex.approveCallAgain')}
+                    </Button>
+                    <InfoButton
+                      title={t('reattemptRequestsReattemptRequestsIndex.approveCallAgain')}
+                      text={t('ezReattempt.approveInfo')}
+                    />
+                  </span>
+                  <span className="ez-titled">
+                    <Button
+                      variant="ghost"
+                      size="md"
+                      onClick={() => setDeciding({ row: r, approve: false })}
+                    >
+                      {t('reattemptRequestsReattemptRequestsIndex.decline')}
+                    </Button>
+                    <InfoButton
+                      title={t('reattemptRequestsReattemptRequestsIndex.decline')}
+                      text={t('reattemptRequestsReattemptRequestsIndex.theOrderStaysRejectedThe')}
+                    />
+                  </span>
                 </div>
               )}
             </li>

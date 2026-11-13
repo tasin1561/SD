@@ -1,5 +1,7 @@
 'use client';
 
+import { ChoiceGuide } from '@/components/easy/choice-guide';
+import { outcomeGuide } from '../../_components/outcome-guide';
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
@@ -202,10 +204,14 @@ export function ForceOutcomePanel({
             ))}
           </Select>
 
+          <ChoiceGuide
+            choices={outcomeGuide(t, OUTCOME_OPTIONS(t))}
+            selected={outcome}
+            onChoose={(v) => setOutcome(v)}
+          />
+
           {outcome !== '' && (
-            <p className="oo-faint">
-              {OUTCOME_OPTIONS(t).find((o) => o.value === outcome)?.helper}
-            </p>
+            <p className="oo-body">{OUTCOME_OPTIONS(t).find((o) => o.value === outcome)?.helper}</p>
           )}
 
           <DateField
