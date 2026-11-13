@@ -5,6 +5,7 @@ import { useEffect, useRef, type ReactElement } from 'react';
 import type { OrderView } from '@skydrop/api-client';
 import {
   AddressCheckPanel,
+  addressNeedsFix,
   AddressParsedFields,
   addressParsedCount,
   type AddressCheckResult,
@@ -58,7 +59,7 @@ export function RecipientCard({
   const t = useT();
   const editBtn = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(false);
-  const attention = check !== null && check.issues.length > 0;
+  const attention = addressNeedsFix(check);
   const parsed = check === null ? 0 : addressParsedCount(check);
   const isEditing = editing && editAvailable && consignee !== undefined;
 

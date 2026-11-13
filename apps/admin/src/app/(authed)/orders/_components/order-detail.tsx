@@ -29,6 +29,7 @@ import { RecipientCard } from './recipient-card';
 import { ResellerMoneyPanel } from './reseller-money-panel';
 import { ResellerOrderPanel } from './reseller-order-panel';
 import { StuckOrderRecovery } from './stuck-order-recovery';
+import { addressNeedsFix } from '@skydrop/ui/app/address-check';
 import './order-core.css';
 import './order-detail.css';
 
@@ -157,7 +158,7 @@ function OrderDetailBody({ order }: { readonly order: OrderView }): ReactElement
   // rule — it reads what the cards below already know.
   const liveCourier = [...rows].reverse().find(courierActionsAvailable) ?? null;
   const primary: HeaderPrimary | null =
-    check !== null && check.issues.length > 0 && editAvailable
+    addressNeedsFix(check) && editAvailable
       ? {
           label: t('orderDetail.action.fixAddress'),
           icon: <TriangleAlert size={14} />,

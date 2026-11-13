@@ -28,6 +28,27 @@ UI word ≠ code word on purpose: "Client" is `seller*` in code, "Member store" 
 
 ---
 
+## Two agents on this repo (owner, 2026-11-13)
+
+A second agent (Claude, cloud session) also works here and pushes to `main`. To never collide:
+
+1. **Claim file.** `AGENT_LOCKS.md` at the repo root has "Claimed by cloud Claude" and "Claimed by
+   Claude Code"; one line per path/glob with a date.
+2. **The rule.** Before every edit and after every `git pull`, re-read `AGENT_LOCKS.md` from
+   `origin/main`. Never create, edit, move or delete anything under a path the other agent claimed,
+   and never start a sub-agent that would. If a task needs such a file, stop and tell the owner.
+   Claim your own paths before starting new work, in a small commit pushed to `main` first. Remove
+   a claim when the work is merged.
+3. **Shared code** (`packages/ui`, shared i18n message files, global CSS/tokens, root config):
+   claim the specific files, keep changes small, add new files or new exports instead of rewriting
+   existing ones, never rename or remove an export the other agent's claimed pages use.
+4. **Git hygiene.** Always `git pull --rebase` before pushing. Never force-push, reset or rewrite
+   `main`. Never revert a commit made by the cloud session (trailer `Claude-Session`) without asking
+   the owner. If a rebase conflicts in a path the other agent claimed, keep their version and tell
+   the owner.
+5. **Deploys.** Do not push to `main` while a CI + Deploy run started by the other agent is still
+   running; wait for it to finish, then pull and push.
+
 ## Hard rules (every turn)
 
 - **Never remove existing features or code**; only enhance or fix.
