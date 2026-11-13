@@ -49,6 +49,8 @@ const CODES: Readonly<Record<string, Row>> = {
   ACTIVE: ['Active', 'সক্রিয়', 'सक्रिय'],
   INACTIVE: ['Not active', 'নিষ্ক্রিয়', 'निष्क्रिय'],
   SUSPENDED: ['Suspended', 'স্থগিত', 'निलंबित'],
+  ARRIVING: ['Being counted', 'গণনা চলছে', 'गिनती जारी है'],
+  DISCREPANCY: ['Counts do not match', 'গণনা মেলেনি', 'गिनती मेल नहीं खाती'],
   // ── stock units ──
   IN_STOCK: ['In stock', 'স্টকে আছে', 'स्टॉक में'],
   PICKED: ['Picked', 'পিক করা হয়েছে', 'पिक हुआ'],
