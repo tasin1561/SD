@@ -35,3 +35,6 @@ Admin "easy pages" redesign (owner's list of 31 admin pages, 2026-11-13): light 
 - `packages/ui/src/app/i18n/ui-messages.ts` — `ui.assistant.*` keys ONLY — 2026-11-13 — "Ask Skydrop AI" branding (merging now; claim removed once green)
 - `packages/db/prisma/schema.prisma` — `Assistant*` models and enums ONLY — 2026-11-13 — same
 - `packages/db/prisma/migrations/*_assistant_*/` — 2026-11-13 — same
+- `apps/admin/src/app/(authed)/ai/**`, `apps/admin/src/i18n/messages/ai.ts`, `apps/admin/src/app/dev/ai/**` — 2026-11-13 — NEW: AI control panel (billing, dashboard, conversations, controls)
+- `apps/api/src/common/auth/permissions.ts`, `apps/api/src/common/auth/staff-role-presets.ts` — `assistant.*` permission keys ONLY (add, never rename) — 2026-11-13 — same
+- `apps/admin/src/app/(authed)/_components/authed-shell.tsx`, `apps/admin/src/lib/page-access.ts`, `apps/admin/src/i18n/catalog.ts` — ONE added nav entry / page rule / catalogue import for /ai — 2026-11-13 — same
