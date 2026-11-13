@@ -10634,16 +10634,23 @@ model AssistantConversation {
   /// ever shown back to that staff member, never to the real owner.
   impersonatedByStaffId String? @map("impersonated_by_staff_id") @db.Uuid
 
-  title        String?
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  title              String?
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz
   /// Set by the 180-day retention job once the words, files and comments of
   /// this conversation have been replaced. Usage and cost rows are kept.
-  anonymisedAt DateTime? @map("anonymised_at") @db.Timestamptz
+  anonymisedAt       DateTime? @map("anonymised_at") @db.Timestamptz
   /// PUBLIC audience only: the ONE AWB this conversation is about, taken from
   /// the tracking page's own route. NULL for every console conversation.
-  publicAwb    String?   @map("public_awb")
+  publicAwb          String?   @map("public_awb")
+  /// The knowledge version (`assistant_knowledge_versions.id`) that was LIVE
+  /// when this conversation started, or NULL for "the committed base only".
+  /// Set once at creation and never changed: every request in the
+  /// conversation is built from it, because changing the system prompt
+  /// mid-conversation would be a 400 on the preserved thinking blocks. A
+  /// soft reference, like the other assistant ids.
+  knowledgeVersionId String?   @map("knowledge_version_id") @db.Uuid
 
   messages    AssistantMessage[]
   toolCalls   AssistantToolCall[]
@@ -11079,4 +11086,145 @@ model AssistantMonitorTheme {
   @@index([runId])
   @@index([createdAt])
   @@map("assistant_monitor_themes")
+}
+
+// ── Recommendations loop (Haiku drafts, the owner approves) ─────────
+
+enum AssistantRecommendationKind {
+  KNOWLEDGE @map("knowledge")
+  SYSTEM    @map("system")
+
+  @@map("assistant_recommendation_kind")
+}
+
+enum AssistantRecommendationStatus {
+  NEW         @map("new")
+  APPROVED    @map("approved")
+  REJECTED    @map("rejected")
+  LIVE        @map("live")
+  ROLLED_BACK @map("rolled_back")
+
+  @@map("assistant_recommendation_status")
+}
+
+enum AssistantEvalRunStatus {
+  RUNNING @map("running")
+  DONE    @map("done")
+  FAILED  @map("failed")
+
+  @@map("assistant_eval_run_status")
+}
+
+enum AssistantKnowledgeChangeAction {
+  GO_LIVE  @map("go_live")
+  ROLLBACK @map("rollback")
+
+  @@map("assistant_knowledge_change_action")
+}
+
+/// IMMUTABLE once inserted (never UPDATEd or DELETEd): the overlay a
+/// conversation was started with must read back identically for as long as
+/// the conversation can be continued. `content` is the WHOLE overlay at that
+/// version (guide entries, glossary terms, prompt addenda) laid over the
+/// committed base; it is a full snapshot, so rolling back is just pointing
+/// the live row at an older version. `parent_version_id` is the live version
+/// this one was built on top of.
+model AssistantKnowledgeVersion {
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  number           Int      @unique @default(autoincrement())
+  parentVersionId  String?  @map("parent_version_id") @db.Uuid
+  recommendationId String?  @map("recommendation_id") @db.Uuid
+  content          Json
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([recommendationId])
+  @@map("assistant_knowledge_versions")
+}
+
+/// The ONE row (id = 1, enforced by a CHECK) that says which version is
+/// live. NULL = the committed base alone. Moved only by a guarded
+/// `updateMany` on `version_id` inside an advisory-locked transaction.
+model AssistantKnowledgeLive {
+  id        Int      @id @default(1)
+  versionId String?  @map("version_id") @db.Uuid
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@map("assistant_knowledge_live")
+}
+
+/// APPEND-ONLY audit of every approval and rollback (who, when, from which
+/// version to which, on the strength of which check). Also mirrored into
+/// `audit_logs`; this table is the one the version history reads.
+model AssistantKnowledgeChange {
+  id               String                         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  action           AssistantKnowledgeChangeAction
+  fromVersionId    String?                        @map("from_version_id") @db.Uuid
+  toVersionId      String?                        @map("to_version_id") @db.Uuid
+  recommendationId String?                        @map("recommendation_id") @db.Uuid
+  evalRunId        String?                        @map("eval_run_id") @db.Uuid
+  staffId          String                         @map("staff_id") @db.Uuid
+  createdAt        DateTime                       @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([createdAt])
+  @@map("assistant_knowledge_changes")
+}
+
+/// What Haiku drafted from a monitor theme. `draft` is the strict-schema
+/// output, parsed and clamped, shown to the owner VERBATIM. Nothing here is
+/// live: a KNOWLEDGE one only becomes live through `AssistantRecommendationService.approve`.
+model AssistantRecommendation {
+  id               String                        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  kind             AssistantRecommendationKind
+  status           AssistantRecommendationStatus @default(NEW)
+  /// `<theme kind>:<label>` — one draft per topic, ever.
+  sourceKey        String                        @unique @map("source_key")
+  themeKind        String                        @map("theme_kind")
+  themeLabel       String                        @map("theme_label")
+  title            String
+  problem          String
+  /// Conversation ids the theme was built from (ids only, no words).
+  evidence         Json
+  /// The parsed draft (see `assistant-recommendation-draft.ts`).
+  draft            Json
+  /// The version this went live as (KNOWLEDGE, once approved).
+  liveVersionId    String?                       @map("live_version_id") @db.Uuid
+  lastEvalRunId    String?                       @map("last_eval_run_id") @db.Uuid
+  githubIssueUrl   String?                       @map("github_issue_url")
+  draftModel       String                        @map("draft_model")
+  /// BILLED figure of the drafting call (2.5x), like every assistant cost.
+  draftCostUsd     Decimal                       @map("draft_cost_usd") @db.Decimal(14, 8)
+  decidedByStaffId String?                       @map("decided_by_staff_id") @db.Uuid
+  decidedAt        DateTime?                     @map("decided_at") @db.Timestamptz
+  createdAt        DateTime                      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime                      @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([status, createdAt])
+  @@map("assistant_recommendations")
+}
+
+/// One run of the language eval for a draft: every case asked of the LIVE
+/// version and of the DRAFT version, through the real chat service. The
+/// gate: `passed` is true only when no case that passed on live fails on
+/// the draft. `results` is per case (verdict flags and short reasons, no
+/// answer text).
+model AssistantEvalRun {
+  id                String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  recommendationId  String                 @map("recommendation_id") @db.Uuid
+  draftVersionId    String                 @map("draft_version_id") @db.Uuid
+  /// The live version it was compared with (NULL = base only).
+  baselineVersionId String?                @map("baseline_version_id") @db.Uuid
+  status            AssistantEvalRunStatus @default(RUNNING)
+  passed            Boolean?
+  total             Int                    @default(0)
+  regressions       Int                    @default(0)
+  results           Json?
+  note              String?
+  /// BILLED figure (2.5x) of every call this run made.
+  costUsd           Decimal                @default(0) @map("cost_usd") @db.Decimal(14, 8)
+  startedByStaffId  String                 @map("started_by_staff_id") @db.Uuid
+  startedAt         DateTime               @default(now()) @map("started_at") @db.Timestamptz
+  finishedAt        DateTime?              @map("finished_at") @db.Timestamptz
+
+  @@index([recommendationId, startedAt])
+  @@map("assistant_eval_runs")
 }

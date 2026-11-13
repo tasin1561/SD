@@ -1,4 +1,5 @@
 import type { AssistantAudience } from '@skydrop/db';
+import type { KnowledgeOverlay } from './knowledge/knowledge-overlay';
 
 export type { AssistantAudience };
 
@@ -90,6 +91,12 @@ export interface AssistantTool {
 export interface ToolContext {
   readonly conversationId: string;
   readonly emit: (event: AssistantStreamEvent) => void;
+  /**
+   * The approved knowledge laid over the committed base, for the knowledge
+   * version this conversation started with (null/absent = the base alone).
+   * Only the help lookup reads it.
+   */
+  readonly overlay?: KnowledgeOverlay | null;
 }
 
 /** A refusal a tool wants the model to see, with a short stable code. */

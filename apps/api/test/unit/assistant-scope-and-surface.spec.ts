@@ -203,6 +203,15 @@ describe('the assistant is READ-ONLY (phase A; phase D adds ONE ticket the perso
       'assistant-monitor.service.ts',
       'assistant-monitor-panel.service.ts',
       'assistant-monitor-digest.service.ts',
+      // The recommendations loop (owner decisions; staff-only controller): the
+      // knowledge versions and the live pointer, the drafts, the eval gate's
+      // run rows, and the GitHub issue link. Nothing here reads another
+      // owner's conversation text; `assistant-recommendation-approval.spec.ts`
+      // pins that approval needs a passing gate.
+      'assistant-knowledge.service.ts',
+      'assistant-recommendation.service.ts',
+      'assistant-eval-gate.service.ts',
+      'assistant-github-issue.service.ts',
     ];
     const offenders = sources(dir)
       .filter((f) => !f.endsWith('assistant-store.service.ts'))

@@ -3,7 +3,8 @@ import type { AssistantAudience } from '@skydrop/db';
 import { domainLabel, domainVisibleTo, firstVisibleDomain } from '../knowledge/domains';
 import { tokenize } from '../knowledge/generator/parse';
 import { defaultKnowledge, type ConsoleKey, type KnowledgeBase } from '../knowledge/knowledge-base';
-import type { GuideAudience } from '../knowledge/knowledge.types';
+import type { GlossaryTerm, Guide, GuideAudience } from '../knowledge/knowledge.types';
+import type { KnowledgeOverlay } from '../knowledge/knowledge-overlay';
 
 // The pure parsers moved to `knowledge/generator/parse.ts` (no filesystem).
 // Re-exported so existing imports keep working.
@@ -111,7 +112,16 @@ function trim(text: string, max: number): string {
 @Injectable()
 export class AssistantHelpService {
   private kb: KnowledgeBase = defaultKnowledge();
-  private readonly cache = new Map<AssistantAudience, readonly Entry[]>();
+  private readonly cache = new Map<string, readonly Entry[]>();
+  /**
+   * Overlay indexes by overlay object. A version's overlay is immutable and
+   * `AssistantKnowledgeService` hands out the same object for the same
+   * version, so a WeakMap keeps one index per version and forgets it with it.
+   */
+  private readonly overlayCache = new WeakMap<
+    KnowledgeOverlay,
+    Map<AssistantAudience, readonly Entry[]>
+  >();
 
   /** Use a different knowledge base (tests). Drops anything cached. */
   useKnowledge(kb: KnowledgeBase): this {
@@ -120,11 +130,20 @@ export class AssistantHelpService {
     return this;
   }
 
-  search(audience: AssistantAudience, query: string, limit = MAX_HITS): HelpHit[] {
+  /**
+   * `overlay` is the approved knowledge laid over the committed base for the
+   * conversation's pinned version (null = the base alone).
+   */
+  search(
+    audience: AssistantAudience,
+    query: string,
+    limit = MAX_HITS,
+    overlay: KnowledgeOverlay | null = null,
+  ): HelpHit[] {
     const tokens = tokenize(query);
     if (tokens.length === 0) return [];
     const scored: Array<{ e: Entry; score: number }> = [];
-    for (const e of this.indexFor(audience)) {
+    for (const e of this.indexFor(audience, overlay)) {
       let score = 0;
       let all = true;
       for (const t of tokens) {
@@ -220,9 +239,33 @@ export class AssistantHelpService {
     return audience === 'STAFF' || guideAudience.includes(HELP_SOURCES[audience].guideAudience);
   }
 
-  private indexFor(audience: AssistantAudience): readonly Entry[] {
+  private indexFor(
+    audience: AssistantAudience,
+    overlay: KnowledgeOverlay | null = null,
+  ): readonly Entry[] {
+    if (overlay !== null) {
+      let byAudience = this.overlayCache.get(overlay);
+      if (byAudience === undefined) {
+        byAudience = new Map();
+        this.overlayCache.set(overlay, byAudience);
+      }
+      const hit = byAudience.get(audience);
+      if (hit !== undefined) return hit;
+      const built = this.buildIndex(audience, overlay);
+      byAudience.set(audience, built);
+      return built;
+    }
     const cached = this.cache.get(audience);
     if (cached !== undefined) return cached;
+    const built = this.buildIndex(audience, null);
+    this.cache.set(audience, built);
+    return built;
+  }
+
+  private buildIndex(
+    audience: AssistantAudience,
+    overlay: KnowledgeOverlay | null,
+  ): readonly Entry[] {
     const spec = HELP_SOURCES[audience];
     const entries: Entry[] = [];
     const add = (
@@ -241,14 +284,14 @@ export class AssistantHelpService {
         boost,
       });
 
-    for (const g of this.kb.guides) {
+    for (const g of mergeGuides(this.kb.guides, overlay)) {
       if (!this.guideVisible(g.audience, audience)) continue;
       const extra = (g.keywords ?? []).join(' ');
       for (const s of g.sections) {
         add(`${g.title} — ${s.heading}`, s.steps.join(' '), 'guide', 3, `${g.summary} ${extra}`);
       }
     }
-    for (const t of this.kb.glossary) {
+    for (const t of mergeGlossary(this.kb.glossary, overlay)) {
       if (t.audience !== undefined && audience !== 'STAFF') {
         if (!t.audience.includes(spec.guideAudience)) continue;
       }
@@ -261,7 +304,22 @@ export class AssistantHelpService {
       for (const [key, text] of this.kb.settings) add(key, text, 'setting-guide', 0);
     if (spec.internalDocs)
       for (const [key, text] of this.kb.internalDocs) add(key, text, 'internal-docs', 0);
-    this.cache.set(audience, entries);
     return entries;
   }
+}
+
+/** Base guides with the overlay's laid over them: the same id REPLACES, a new id is added. */
+function mergeGuides(base: readonly Guide[], overlay: KnowledgeOverlay | null): readonly Guide[] {
+  if (overlay === null || overlay.guides.length === 0) return base;
+  const replaced = new Set(overlay.guides.map((g) => g.id));
+  return [...base.filter((g) => !replaced.has(g.id)), ...overlay.guides];
+}
+
+function mergeGlossary(
+  base: readonly GlossaryTerm[],
+  overlay: KnowledgeOverlay | null,
+): readonly GlossaryTerm[] {
+  if (overlay === null || overlay.glossary.length === 0) return base;
+  const replaced = new Set(overlay.glossary.map((t) => t.term.toLowerCase()));
+  return [...base.filter((t) => !replaced.has(t.term.toLowerCase())), ...overlay.glossary];
 }

@@ -472,9 +472,16 @@ export async function resetAssistantState(prisma: PrismaClient): Promise<void> {
         'assistant_tool_calls',
         'assistant_messages',
         'assistant_conversations',
+        // The recommendations loop (soft references, no FK). The one-row
+        // `assistant_knowledge_live` is NOT truncated: it is reset below.
+        'assistant_knowledge_versions',
+        'assistant_knowledge_changes',
+        'assistant_recommendations',
+        'assistant_eval_runs',
       ].join(', ') +
       ' RESTART IDENTITY CASCADE',
   );
+  await prisma.$executeRaw`UPDATE assistant_knowledge_live SET version_id = NULL WHERE id = 1`;
 }
 
 export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {

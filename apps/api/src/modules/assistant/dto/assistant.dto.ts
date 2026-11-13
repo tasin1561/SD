@@ -16,6 +16,7 @@ import {
   IsUUID,
   MaxLength,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { MAX_QUESTION_CHARS } from '../services/assistant-chat.service';
@@ -161,4 +162,32 @@ export class AssistantControlDto {
   @ApiProperty({ description: 'The new value: a boolean, an integer or a decimal number.' })
   @IsDefined()
   value!: boolean | number | string;
+}
+
+/**
+ * Roll the live knowledge back. `versionId` is the version to go back to, or
+ * null for the committed base alone; `expectedLive` is the version the screen
+ * showed as live (null = base), so a click made on a stale screen is refused.
+ * Both keys must be present: a missing key is not the same as null.
+ */
+export class AssistantRollbackDto {
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description: 'Version to restore, or null for the base.',
+  })
+  @IsDefined()
+  @ValidateIf((_o, v) => v !== null)
+  @IsUUID('7')
+  versionId!: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description: 'The version the screen showed as live.',
+  })
+  @IsDefined()
+  @ValidateIf((_o, v) => v !== null)
+  @IsUUID('7')
+  expectedLive!: string | null;
 }

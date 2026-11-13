@@ -3,7 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactElement, ReactNode } from 'react';
-import { BarChart3, Eye, MessagesSquare, ReceiptText, SlidersHorizontal } from 'lucide-react';
+import {
+  BarChart3,
+  Eye,
+  Lightbulb,
+  MessagesSquare,
+  ReceiptText,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { Tabs } from '@skydrop/ui/app/tabs';
 import { useT } from '@/i18n/client';
 import { usePermission } from '@/lib/use-permission';
@@ -21,9 +28,11 @@ export function AiShell({ children }: { readonly children: ReactNode }): ReactEl
       ? 'conversations'
       : path.startsWith('/ai/monitor')
         ? 'monitor'
-        : path.startsWith('/ai/controls')
-          ? 'controls'
-          : 'dashboard';
+        : path.startsWith('/ai/recommendations')
+          ? 'recommendations'
+          : path.startsWith('/ai/controls')
+            ? 'controls'
+            : 'dashboard';
   return (
     <AcPage>
       <AcHeader title={t('ai.title')} subtitle={t('ai.subtitle')} />
@@ -60,6 +69,12 @@ export function AiShell({ children }: { readonly children: ReactNode }): ReactEl
             label: t('ai.tab.monitor'),
             href: '/ai/monitor',
             icon: <Eye size={14} />,
+          },
+          {
+            id: 'recommendations',
+            label: t('ai.tab.recommendations'),
+            href: '/ai/recommendations',
+            icon: <Lightbulb size={14} />,
           },
           {
             id: 'controls',

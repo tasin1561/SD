@@ -184,6 +184,12 @@ export { AssistantAttachmentKind } from '@prisma/client';
 // 2026-11-13 — assistant phase D: where a proposed support ticket stands.
 export { AssistantTicketProposalStatus } from '@prisma/client';
 export {
+  AssistantRecommendationKind,
+  AssistantRecommendationStatus,
+  AssistantEvalRunStatus,
+  AssistantKnowledgeChangeAction,
+} from '@prisma/client';
+export {
   AssistantMonitorRunStatus,
   AssistantMonitorAnswered,
   AssistantMonitorCorrect,
