@@ -23,6 +23,8 @@ Admin "easy pages" redesign (owner's list of 31 admin pages, 2026-11-13): light 
 - `apps/admin/src/app/(authed)/{delivery-actions,courier-decisions,manual-placement,nsa}/**` — 2026-11-13 — batch 5
 - `apps/admin/src/app/(authed)/{dashboard,tickets,holds}/**`, `apps/admin/src/app/(authed)/orders/page.tsx`, `apps/admin/src/app/(authed)/orders/_components/orders-index.tsx` — 2026-11-13 — batch 6 (order DETAIL files are not claimed)
 - `apps/admin/src/app/(authed)/inventory/**`, `apps/admin/src/app/(authed)/inventory-units/**` — 2026-11-13 — batch 7
+- `apps/admin/src/app/(authed)/{seller-wallets,settlements,withdrawals,wallet-transfers,topups,reseller-store-wallets,treasury,courier-wallet,pnl,expenses,liabilities,bank-accounts,remittances,bank-changes,freight,margin,pricing,fx}/**` — 2026-11-13 — NEXT PHASE (owner's second list, the money screens, detail pages included). Screen-only; shown to the owner before each push (money rule). Not started: if Claude Code has money work in flight under these paths, say so and the claim is narrowed.
+- Detail pages (`[id]`) under every claimed list page are part of the claim.
 - Existing admin message files (`apps/admin/src/i18n/messages/*.ts`): not claimed; I add keys only, never rename or remove, and regenerate the assistant help index in the same commit.
 
 ## Claimed by Claude Code
