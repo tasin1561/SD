@@ -24,7 +24,8 @@ import {
   type BankDetailsView,
 } from '@/lib/ops-hooks';
 import { MkAlert, MkCard } from '../../seller-wallets/_components/money-parts';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDate } from '@/i18n/format';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import type { MessageKey } from '@/i18n/catalog';
@@ -86,6 +87,7 @@ type Intent = 'APPROVE' | 'REJECT';
 
 export function BankChangesIndex(): ReactElement {
   const t = useT();
+  const locale = useLocale();
   const toast = useToast();
   const mayReview = usePermission('sellers.bank_change.approve');
   // The empty state's way out is the seller records — but reviewing
@@ -209,7 +211,7 @@ export function BankChangesIndex(): ReactElement {
                 icon={<Landmark size={18} />}
                 title={req.companyName}
                 subtitle={t('bankChangesBankChangesIndex.submitted', {
-                  value: new Date(req.submittedAt).toISOString().slice(0, 10),
+                  value: formatDate(req.submittedAt, locale),
                   value2:
                     changed.size === 0
                       ? t('bankChangesBankChangesIndex.nothingVisiblyDifferentReadThe')

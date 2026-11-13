@@ -27,7 +27,8 @@ import {
 } from '../../../inventory/_components/stock-kit';
 import { BinNote, binTypeLabelIn } from './bin-note';
 import './bins.css';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDate } from '@/i18n/format';
 
 /**
  * Every bin, and what is in it — the answer to "where can I see what
@@ -309,13 +310,14 @@ export function ProductCell({ line }: { readonly line: BinStockLine }): ReactEle
 
 export function BatchCell({ line }: { readonly line: BinStockLine }): ReactElement {
   const tr = useT();
+  const locale = useLocale();
   return (
     <span>
       <Code>{line.batchCode}</Code>
       {line.batchExpiresAt !== null && (
         <span className="stk-sub">
           {tr('warehouseBinsBinContentsOverview.expires', {
-            value: new Date(line.batchExpiresAt).toLocaleDateString('en-IN'),
+            value: formatDate(line.batchExpiresAt, locale),
           })}
         </span>
       )}
