@@ -237,6 +237,13 @@ function Page(): ReactElement {
           ) : (
             <span className="aw-bar__hint">{t('awaiting.pickFirst')}</span>
           )}
+          {/* On a phone the list is cards and the table's "all" tick box is
+              not drawn, so every order had to be ticked one by one. */}
+          {rows.length > 0 && selection.count < rows.length && (
+            <Button variant="ghost" size="sm" onClick={() => selection.toggleAll(true)}>
+              {t('easy.selectAll', { n: rows.length })}
+            </Button>
+          )}
         </div>
         <div className="aw-bar__actions">
           {/* Second, deliberately quieter action: a skipped COD call is not

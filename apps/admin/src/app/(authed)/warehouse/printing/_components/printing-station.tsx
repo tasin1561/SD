@@ -249,8 +249,15 @@ function LabelTab(): ReactElement {
                 length: rows.length,
                 value: rows.length === 1 ? '' : t('common.pluralS'),
               })
-            : `${selected.size} selected`}
+            : t('easy.selectedCount', { n: selected.size })}
         </div>
+        {/* On a phone the list is cards and the table's own "all" tick box
+            is not drawn, so choosing every parcel took one press each. */}
+        <Button variant="ghost" size="sm" onClick={toggleAll} disabled={rows.length === 0}>
+          {rows.length > 0 && selected.size === rows.length
+            ? t('easy.clearSelection')
+            : t('easy.selectAll', { n: rows.length })}
+        </Button>
         <Button
           onClick={() => void onBuild()}
           disabled={selected.size === 0 || build.isPending}
@@ -442,8 +449,15 @@ function PickingTab(): ReactElement {
                 length: rows.length,
                 value: rows.length === 1 ? '' : t('common.pluralS'),
               })
-            : `${selected.size} selected`}
+            : t('easy.selectedCount', { n: selected.size })}
         </div>
+        {/* On a phone the list is cards and the table's own "all" tick box
+            is not drawn, so choosing every parcel took one press each. */}
+        <Button variant="ghost" size="sm" onClick={toggleAll} disabled={rows.length === 0}>
+          {rows.length > 0 && selected.size === rows.length
+            ? t('easy.clearSelection')
+            : t('easy.selectAll', { n: rows.length })}
+        </Button>
         <Button
           onClick={() => void onBuild()}
           disabled={selected.size === 0 || busy}

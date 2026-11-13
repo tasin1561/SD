@@ -143,6 +143,9 @@ export const easy = defineMessages({
   'easy.yes': ['Yes', 'হ্যাঁ', 'हाँ'],
   'easy.no': ['No', 'না', 'नहीं'],
   'ezReceive.details': ['Receipt details', 'রিসিটের বিবরণ', 'रसीद का विवरण'],
+  'easy.selectedCount': ['{n} selected', '{n}টি নির্বাচিত', '{n} चुने गए'],
+  'easy.selectAll': ['Select all {n}', 'সব {n}টি নির্বাচন করুন', 'सभी {n} चुनें'],
+  'easy.clearSelection': ['Clear selection', 'নির্বাচন মুছুন', 'चयन हटाएँ'],
   'easy.awb': ['AWB', 'এডব্লিউবি', 'एडब्ल्यूबी'],
 
   // ── Needs attention (/nsa) ────────────────────────────────────────────
