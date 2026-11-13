@@ -442,7 +442,8 @@ button.ez-guide__pick:hover {
     min-height: 44px;
   }
   /* The shared text field has a fixed height, so it is set, not floored. */
-  .ez-touch input.sk-field__input {
+  .ez-touch input.sk-field__input,
+  .ez-touch input.sk-toolbar__search-input {
     height: 44px;
     min-height: 44px;
   }

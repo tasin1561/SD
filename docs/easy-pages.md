@@ -61,24 +61,36 @@ Shared pieces live in `apps/admin/src/components/easy/`; dev-only test pages in
 - `AGENT_LOCKS.md` and the two-agent protocol in `CLAUDE.md` apply. Check the LAST CI result on
   `main`, and that nothing is running, before every push.
 
-## Progress (updated 2026-11-13)
+## Progress (updated 2026-11-14)
 
-Done and live: system issues, call centre (station, queue, awaiting, agents), re-attempt requests,
-handover, pack / printing / receive / returns (phone rule and "i"; only pack and handover have a
-full bench audit), courier decisions, manual placement, failed deliveries, needs attention, held
-stock, who-has-what, dashboard, warehouse hub, orders list, tickets (list and detail), the five
-stock screens, bins, consignments, and list 3 (settings, capacity, impersonation, roles, staff,
-webhooks, reports).
+Every admin page and sub-page on the owner's four lists, plus the pages on no list (account,
+notifications, pick, manifests, pickups), carries the shared treatment: explanations behind "i",
+dates in the chosen language, plain-word status labels, finger-sized controls on a phone. `ai/**`
+is the other agent's and is untouched.
 
-Shared pieces in `apps/admin/src/components/easy/`: `InfoButton`, `ChoiceGuide`, `FilterPills`,
-`When` (a date in the chosen language), and the `ez-touch` page rule in `easy.css`.
+Reworked around the person doing the job, with a test page and real-looking rows: system issues,
+call centre station, call queue, re-attempt requests, handover, returns bench, receive (counting),
+printing, courier decisions, manual placement, failed deliveries, needs attention, tickets.
+
+Shared pieces in `apps/admin/src/components/easy/`:
+
+- `InfoButton`, `ChoiceGuide`, `FilterPills` — the "i", the hidden guide, the filter pills.
+- `When`, `pageDateTag()` — a date in the chosen language (component, and for plain helpers).
+- `Code`, `useCodeLabel()`, `codeLabel()` — status codes as plain words in en/bn/hi, one table.
+- `easy.css` — `ez-touch` (put it on a page root) and `ez-wrap` (around a shared page helper).
+
+Test pages live under `apps/admin/src/app/dev/easy/**` (run with `APPS_DEV_ROUTES=1`). They mock
+`fetch`; every write on a money page is refused. Before a push run ALL FOUR console unit suites:
+a seller-side spec reads admin source, and running only the admin suite let a red build through
+once (2026-11-13).
 
 Still open:
 
-- Money screens (list 2): not started. Each is shown to the owner before a push.
-- Detail pages with dates still fixed to English: receive detail, consignment detail, bin contents
-  summary, printing history line.
-- Phone audits with real rows for the stock, warehouse and administration screens (their test
-  pages use empty lists), and for the receive detail and returns inspection screens.
-- Screens that ask for raw ids (stock transfer, new adjustment) and lists that show only ids
-  (held stock) need API changes to be made friendly; reported, not changed.
+- Layout rework, beyond the shared treatment, of the money, client and courier screens.
+- Phone audits with real rows: member-store detail and analysis, manifest detail, and the money
+  screens other than withdrawals, top-ups, treasury, settlements and client wallets.
+- Bangla and Hindi wording (labels in `code-label.tsx`, strings in `i18n/messages/easy.ts`) has
+  not been read by a native speaker.
+- Needs an API change, so reported and not changed: stock transfer and new adjustment ask for
+  raw ids; held stock lists show truncated ids.
+- The expiry date printed on a product label sheet is deliberately a plain ISO date.
