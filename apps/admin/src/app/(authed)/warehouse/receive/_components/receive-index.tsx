@@ -84,7 +84,7 @@ export function ReceiveIndex(): ReactElement {
           <option value="">{t('warehouseReceiveReceiveIndex.allStatuses')}</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {code(s)}
             </option>
           ))}
         </Select>

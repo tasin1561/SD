@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { useState, type ReactElement } from 'react';
 import { ArrowLeftRight, CircleCheck, Search, Send, Wallet } from 'lucide-react';
 import { Money } from '@skydrop/ui/components';
@@ -152,6 +153,7 @@ function TransferForm({
   readonly onChangeSeller: () => void;
 }): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const context = useWalletTransferContext(sellerId);
   const preview = usePreviewWalletTransfer();
   const post = usePostWalletTransfer();
@@ -253,7 +255,7 @@ function TransferForm({
       <MkCard
         icon={<Wallet size={18} />}
         title={ctx.seller.companyName}
-        subtitle={ctx.seller.status.toLowerCase()}
+        subtitle={code(ctx.seller.status)}
         aside={
           <Button variant="ghost" size="sm" onClick={onChangeSeller}>
             {t('walletTransfersWalletTransfersIndex.changeClient')}

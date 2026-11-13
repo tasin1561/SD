@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import Link from 'next/link';
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { CircleAlert, Copy, TriangleAlert } from 'lucide-react';
@@ -261,6 +262,7 @@ export function SellerStatusChip({
 }: {
   readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
 }): ReactElement {
+  const code = useCodeLabel();
   const kind: StatusChipKind =
     status === 'APPROVED'
       ? 'delivered'
@@ -269,7 +271,7 @@ export function SellerStatusChip({
         : status === 'SUSPENDED'
           ? 'rto'
           : 'failed';
-  return <StatusChip kind={kind} label={status.toLowerCase()} size="sm" />;
+  return <StatusChip kind={kind} label={code(status)} size="sm" />;
 }
 
 /**

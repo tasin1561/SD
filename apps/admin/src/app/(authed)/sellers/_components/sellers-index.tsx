@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { When } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
@@ -27,6 +28,7 @@ const STATUSES: readonly SellerStatusValue[] = ['PENDING', 'APPROVED', 'REJECTED
 
 export function SellersIndex(): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const router = useRouter();
   const canWrite = usePermission('sellers.invite');
   const [status, setStatus] = useState<SellerStatusValue | ''>('');
@@ -92,7 +94,7 @@ export function SellersIndex(): ReactElement {
             <option value="">{t('sellersSellersIndex.allStatuses')}</option>
             {STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {code(s)}
               </option>
             ))}
           </Select>

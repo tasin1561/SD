@@ -1,5 +1,6 @@
 'use client';
 
+import { codeLabel } from '@/components/easy/code-label';
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { ArrowLeft } from 'lucide-react';
@@ -371,7 +372,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                           taxShareInr: p.taxShareInr,
                           codFeeShareInr: p.codFeeShareInr,
                           instantFeeShareInr: p.instantFeeShareInr,
-                          value: p.status.toLowerCase(),
+                          value: codeLabel(p.status, locale),
                         })}
                       </span>
                     ),
