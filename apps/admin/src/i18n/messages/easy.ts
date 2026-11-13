@@ -52,6 +52,7 @@ export const easy = defineMessages({
   // ── Call outcomes: what each one does, for the choice guide ──────────
   // Mirrors CallOutcomeMappingService (CC-2). If a rule changes there,
   // change the sentence here.
+  'ezCall.jump': ['Go to outcome', 'ফলাফলে যান', 'नतीजे पर जाएँ'],
   'ezCall.guideConfirmed': [
     'Pick this when the customer says yes, they want the order.\nThe order is confirmed and goes to the warehouse to be packed.',
     'গ্রাহক হ্যাঁ বললে, অর্ডারটি চাইলে এটি বাছুন।\nঅর্ডার কনফার্ম হয় এবং প্যাক করার জন্য ওয়্যারহাউসে যায়।',

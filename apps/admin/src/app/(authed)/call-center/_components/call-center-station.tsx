@@ -31,7 +31,7 @@ import { MyCallHistory } from './my-call-history';
 import { useServiceabilityCheck } from '@/lib/ops-hooks';
 import { useTransitionTicket } from '@/lib/ops-hooks';
 import Link from 'next/link';
-import { MessageCircleWarning, PhoneCall, TriangleAlert } from 'lucide-react';
+import { ArrowDown, MessageCircleWarning, PhoneCall, TriangleAlert } from 'lucide-react';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { Facts, Notice, OoCard } from '../../orders/_components/order-ops-parts';
@@ -627,7 +627,16 @@ export function CallCenterStation(): ReactElement {
             </span>
           </div>
 
-          {/* FIRST thing on the card, above the customer's history and
+          {/* TWO COLUMNS on a desk screen (owner, 2026-11-13): everything
+              the agent READS on the left, the outcome they RECORD on the
+              right, and the right one stays in view while the left
+              scrolls. The form used to sit under all of it — two screens
+              down on a laptop — so every call ended with a scroll. On a
+              narrow screen the order is unchanged and a "Go to outcome"
+              button jumps to the form. */}
+          <div className="cc-bench">
+            <div className="cc-bench__info">
+              {/* FIRST thing on the card, above the customer's history and
               the parcel itself. The agent's opening sentence depends
               on this and nothing else on the page says it: the queue
               entry carries an order id, so "confirm your order" and
@@ -635,71 +644,76 @@ export function CallCenterStation(): ReactElement {
               until now. Opening with the wrong one tells a customer
               whose parcel is already out for delivery that we have
               lost track of it. */}
-          <CallPurposeBanner purpose={assignment.callPurpose} tickets={assignment.openTickets} />
-          {/* Above the customer's details, not below them: an agent
+              <CallPurposeBanner
+                purpose={assignment.callPurpose}
+                tickets={assignment.openTickets}
+              />
+              {/* Above the customer's details, not below them: an agent
               reads top-down with the phone already ringing, and a
               warning under the address is a warning read after the
               call has started. Renders nothing for a first-time
               customer. */}
-          <CustomerRiskStrip orderId={assignment.orderId} />
-          <RecipientPanel
-            orderId={assignment.orderId}
-            order={assignment.order}
-            seller={assignment.seller}
-            customerBrand={assignment.customerBrand ?? null}
-            itemDisplay={assignment.itemDisplay}
-            assignmentId={assignment.assignmentId}
-            canCorrect={isConfirmationCall}
-            onDirtyChange={onDirtyChange}
-            onSaved={onSaved}
-          />
-          {/* Above the outcome form on purpose: the agent needs the
+              <CustomerRiskStrip orderId={assignment.orderId} />
+              <RecipientPanel
+                orderId={assignment.orderId}
+                order={assignment.order}
+                seller={assignment.seller}
+                customerBrand={assignment.customerBrand ?? null}
+                itemDisplay={assignment.itemDisplay}
+                assignmentId={assignment.assignmentId}
+                canCorrect={isConfirmationCall}
+                onDirtyChange={onDirtyChange}
+                onSaved={onSaved}
+              />
+              {/* Above the outcome form on purpose: the agent needs the
               last conversation BEFORE they dial, not after they have
               opened with the wrong sentence. */}
-          <PriorAttempts attempts={assignment.priorAttempts} />
+              <PriorAttempts attempts={assignment.priorAttempts} />
+            </div>
 
-          <div className="cc-form">
-            {unsavedEdits ? (
-              <div className="cc-outcome-hold" data-testid="outcome-hold">
-                <Notice tone="warn" role="status" icon={<TriangleAlert size={16} />}>
-                  <p className="oo-p">{tr('callCenterRecipientCorrection.unsavedHold')}</p>
-                </Notice>
-              </div>
-            ) : null}
-            <Select
-              label={tr('callCenterCallCenterStation.outcome')}
-              requiredMark
-              value={outcome}
-              disabled={unsavedEdits}
-              onChange={(e) => setOutcome(e.target.value as CallOutcome | '')}
-            >
-              <option value="">{tr('callCenterCallCenterStation.selectAnOutcome')}</option>
-              {/*
+            <div className="cc-bench__act" id="cc-outcome">
+              <div className="cc-form">
+                {unsavedEdits ? (
+                  <div className="cc-outcome-hold" data-testid="outcome-hold">
+                    <Notice tone="warn" role="status" icon={<TriangleAlert size={16} />}>
+                      <p className="oo-p">{tr('callCenterRecipientCorrection.unsavedHold')}</p>
+                    </Notice>
+                  </div>
+                ) : null}
+                <Select
+                  label={tr('callCenterCallCenterStation.outcome')}
+                  requiredMark
+                  value={outcome}
+                  disabled={unsavedEdits}
+                  onChange={(e) => setOutcome(e.target.value as CallOutcome | '')}
+                >
+                  <option value="">{tr('callCenterCallCenterStation.selectAnOutcome')}</option>
+                  {/*
                 On a follow-up the confirmation pair sinks to the
                 bottom: they are the only two that move an order, and
                 on a shipped parcel neither can. Ordering, not
                 hiding — an agent who needs one can still reach it
                 (FE-2: the UI does not pre-empt the server).
               */}
-              {orderedOutcomes.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
+                  {orderedOutcomes.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
 
-            {/* Every outcome with what it does, side by side, BEFORE one is
+                {/* Every outcome with what it does, side by side, BEFORE one is
                 picked — the dropdown above only names them. Pressing one
                 here picks it there. Held with the dropdown while edits
                 are unsaved (reading still works). */}
-            <ChoiceGuide
-              choices={outcomeGuide(tr, orderedOutcomes)}
-              selected={outcome}
-              onChoose={(v) => setOutcome(v)}
-              disabled={unsavedEdits}
-            />
+                <ChoiceGuide
+                  choices={outcomeGuide(tr, orderedOutcomes)}
+                  selected={outcome}
+                  onChoose={(v) => setOutcome(v)}
+                  disabled={unsavedEdits}
+                />
 
-            {/*
+                {/*
               The nine outcomes are the CONFIRMATION vocabulary, and
               two of them move the order. On a parcel that has already
               shipped those two do nothing — the state machine has no
@@ -709,81 +723,87 @@ export function CallCenterStation(): ReactElement {
               better than letting an agent pick one and assume it
               worked.
             */}
-            {outcome && (
-              <p className="cc-form__helper">
-                {orderedOutcomes.find((o) => o.value === outcome)?.helper}
-              </p>
-            )}
+                {outcome && (
+                  <p className="cc-form__helper">
+                    {orderedOutcomes.find((o) => o.value === outcome)?.helper}
+                  </p>
+                )}
 
-            {outcome === 'CALLBACK_REQUESTED' && (
-              <DateField
-                label={tr('callCenterCallCenterStation.callbackScheduledFor')}
-                requiredMark
-                type="datetime-local"
-                value={callbackTime}
-                onChange={(e) => setCallbackTime(e.target.value)}
-              />
-            )}
+                {outcome === 'CALLBACK_REQUESTED' && (
+                  <DateField
+                    label={tr('callCenterCallCenterStation.callbackScheduledFor')}
+                    requiredMark
+                    type="datetime-local"
+                    value={callbackTime}
+                    onChange={(e) => setCallbackTime(e.target.value)}
+                  />
+                )}
 
-            {/*
+                {/*
               This field is the ANSWER to whatever the seller asked.
               It was labelled "Notes / free-form (audited)", which told
               an agent it was a private scratchpad — so the one thing
               the seller is waiting for was the thing least likely to
               get written.
             */}
-            <TextField
-              label={
-                hasOpenIssues
-                  ? tr('callCenterCallCenterStation.whatTheCustomerToldYou')
-                  : tr('callCenterCallCenterStation.notes')
-              }
-              hint={
-                hasOpenIssues
-                  ? tr('callCenterCallCenterStation.writtenOntoTheClientS')
-                  : tr('callCenterCallCenterStation.freeFormAudited')
-              }
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder={
-                hasOpenIssues
-                  ? tr('callCenterCallCenterStation.eGCustomerWillBe')
-                  : tr('callCenterCallCenterStation.freeFormNotesAudited')
-              }
-            />
+                <TextField
+                  label={
+                    hasOpenIssues
+                      ? tr('callCenterCallCenterStation.whatTheCustomerToldYou')
+                      : tr('callCenterCallCenterStation.notes')
+                  }
+                  hint={
+                    hasOpenIssues
+                      ? tr('callCenterCallCenterStation.writtenOntoTheClientS')
+                      : tr('callCenterCallCenterStation.freeFormAudited')
+                  }
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder={
+                    hasOpenIssues
+                      ? tr('callCenterCallCenterStation.eGCustomerWillBe')
+                      : tr('callCenterCallCenterStation.freeFormNotesAudited')
+                  }
+                />
 
-            {hasOpenIssues && canResolveTickets ? (
-              <Checkbox
-                checked={closeIssues}
-                onChange={(e) => setCloseIssues(e.target.checked)}
-                label={
-                  <>
-                    {tr('callCenterCallCenterStation.closeTheClientSAfter', {
-                      value:
-                        assignment.openTickets.length === 1
-                          ? tr('callCenterCallCenterStation.issue')
-                          : tr('callCenterCallCenterStation.issues'),
-                    })}
-                  </>
-                }
-                description={tr('callCenterCallCenterStation.untickItIfYouStill')}
-              />
-            ) : null}
+                {hasOpenIssues && canResolveTickets ? (
+                  <Checkbox
+                    checked={closeIssues}
+                    onChange={(e) => setCloseIssues(e.target.checked)}
+                    label={
+                      <>
+                        {tr('callCenterCallCenterStation.closeTheClientSAfter', {
+                          value:
+                            assignment.openTickets.length === 1
+                              ? tr('callCenterCallCenterStation.issue')
+                              : tr('callCenterCallCenterStation.issues'),
+                        })}
+                      </>
+                    }
+                    description={tr('callCenterCallCenterStation.untickItIfYouStill')}
+                  />
+                ) : null}
 
-            <div className="cc-form__submit">
-              <AsyncButton
-                variant="primary"
-                size="md"
-                state={record.isPending ? 'busy' : 'idle'}
-                labels={{
-                  idle: tr('callCenterCallCenterStation.recordOutcome'),
-                  busy: tr('callCenterCallCenterStation.recording'),
-                }}
-                disabled={record.isPending || !outcome || unsavedEdits}
-                onClick={() => void onRecord()}
-              />
+                <div className="cc-form__submit">
+                  <AsyncButton
+                    variant="primary"
+                    size="md"
+                    state={record.isPending ? 'busy' : 'idle'}
+                    labels={{
+                      idle: tr('callCenterCallCenterStation.recordOutcome'),
+                      busy: tr('callCenterCallCenterStation.recording'),
+                    }}
+                    disabled={record.isPending || !outcome || unsavedEdits}
+                    onClick={() => void onRecord()}
+                  />
+                </div>
+              </div>
             </div>
           </div>
+          <a className="cc-jump" href="#cc-outcome">
+            <ArrowDown size={16} aria-hidden />
+            {tr('ezCall.jump')}
+          </a>
         </OoCard>
       )}
 
