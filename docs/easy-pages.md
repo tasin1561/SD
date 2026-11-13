@@ -40,6 +40,14 @@ Shared pieces live in `apps/admin/src/components/easy/`; dev-only test pages in
 13. **Fix frontend bugs met on the way** (untranslated words, a date ignoring the language, a
     hover-only hint, an overlap). Backend problems are reported, not changed.
 
+## The owner's page lists, in order
+
+1. Operations and warehouse (31 pages, 2026-11-13) — in progress.
+2. Money screens (seller wallets … FX) — after list 1; each shown to the owner before a push.
+3. Administration (2026-11-13): `/settings`, `/system/capacity`, `/impersonation`, `/roles`,
+   `/staff`, `/webhooks`, `/reports`, with every sub-page and detail page. Roles, staff and
+   impersonation are screen-only: no permission, role or guard logic changes.
+
 ## How the work ships
 
 - Screen-only: no changes to data fetching, endpoints, permissions or status logic.
