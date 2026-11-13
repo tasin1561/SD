@@ -4,6 +4,7 @@ import {
   AssistantModelGateway,
   type AssistantModelRequest,
 } from '../../src/modules/assistant/services/assistant-model-gateway';
+import { billedFromRealUsd } from '../../src/modules/assistant/assistant-pricing';
 import { AssistantBudgetAlertService } from '../../src/modules/assistant/services/assistant-budget-alert.service';
 import { FakeGateway, message } from '../helpers/assistant-fixtures';
 import {
@@ -72,7 +73,9 @@ describe('assistant budget alert (e2e)', () => {
         outputTokens: 1,
         cacheReadTokens: 0,
         cacheWriteTokens: 0,
-        costUsd: new Prisma.Decimal(usd),
+        // `usd` is REAL spend; the row stores the billed figure (2.5x, owner
+        // 2026-11-13), exactly as the chat service writes it.
+        costUsd: billedFromRealUsd(new Prisma.Decimal(usd)),
       },
     });
   }
