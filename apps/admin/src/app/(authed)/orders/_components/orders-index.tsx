@@ -21,6 +21,9 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { MetaFact, OoCard } from './order-ops-parts';
 import './order-core.css';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
+import { formatDateTime } from '@/i18n/format';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -136,15 +139,19 @@ export function OrdersIndex(): ReactElement {
   ].filter((v) => v !== '').length;
 
   return (
-    <div className="oo-page">
+    <div className="oo-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: t('ordersList.crumb.operations') },
           { label: t('ordersList.crumb.orders') },
         ]}
         Link={Link}
-        title={t('ordersList.title')}
-        subtitle={t('ordersList.subtitle')}
+        title={
+          <span className="ez-titled">
+            {t('ordersList.title')}
+            <InfoButton title={t('ordersList.title')} text={t('ordersList.subtitle')} />
+          </span>
+        }
         meta={
           list.data === undefined ? undefined : (
             <span className="oo-meta">
@@ -333,9 +340,7 @@ export function OrdersIndex(): ReactElement {
                     <span className="sk-figure">{o.codAmountInr ?? '—'}</span>
                   </Td>
                   <Td className="oo-muted oo-nowrap">
-                    <span className="sk-figure">
-                      {new Date(o.placedAt).toISOString().slice(0, 16).replace('T', ' ')}
-                    </span>
+                    <span className="sk-figure">{formatDateTime(o.placedAt, locale)}</span>
                   </Td>
                 </Tr>
               ))}
