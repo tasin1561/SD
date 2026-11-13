@@ -1,12 +1,10 @@
 import { defineMessages } from '../define';
 
 /**
- * The "easy pages" pieces: the "i" info button, Listen, and the plain-words
+ * The "easy pages" pieces: the "i" info button and the plain-words
  * explanations that moved off the page into a bubble. `[en, bn, hi]`.
  */
 export const easy = defineMessages({
-  'easy.listen': ['Listen', 'শুনুন', 'सुनें'],
-  'easy.stop': ['Stop', 'থামান', 'रोकें'],
   'easy.close': ['Close', 'বন্ধ করুন', 'बंद करें'],
   'easy.about': ['About: {title}', '{title} সম্পর্কে', '{title} के बारे में'],
 

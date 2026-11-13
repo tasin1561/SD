@@ -22,7 +22,6 @@ import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { AfCard, MetaFact, Notice } from '@/app/(authed)/system/_components/af-parts';
 import { InfoButton } from '@/components/easy/info-button';
-import { ListenButton } from '@/components/easy/listen-button';
 import './system-issues.css';
 import { useT } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
@@ -337,9 +336,6 @@ export function SystemIssuesIndex(): ReactElement {
                         },
                       ]}
                     />
-                    {/* The issue is written by the server, in English,
-                        whatever language the console is in. */}
-                    <ListenButton text={`${r.title}. ${r.detail}`} lang="en" />
                   </div>
                   {/* An issue about an order says which one; the link
                       saves copying the number into the search box. */}

@@ -1,5 +1,5 @@
 /* Easy pages — the small shared pieces of the light, plain-words admin
-   screens: the "i" info button, its bubble and the Listen button.
+   screens: the "i" info button and its bubble.
    Tokens only (FE-6). Motion is transform/opacity; the global
    reduced-motion rule in brand/app.css switches it off. */
 
@@ -47,6 +47,8 @@
   display: grid;
   gap: var(--sp-2);
   width: min(20rem, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
   padding: var(--sp-3) var(--sp-4);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
@@ -141,47 +143,6 @@
   from {
     opacity: 0;
     transform: translateY(16px);
-  }
-}
-
-/* ── Listen ───────────────────────────────────────────────────────────── */
-.ez-listen {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 0 var(--sp-3);
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill);
-  background: transparent;
-  color: var(--fg-body);
-  font: inherit;
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-medium);
-  cursor: pointer;
-  justify-self: start;
-  transition:
-    color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    background-color var(--dur-fast) var(--ease-out);
-}
-.ez-listen:hover {
-  border-color: var(--blue-line);
-  color: var(--blue-on-tint);
-}
-.ez-listen[aria-pressed='true'] {
-  border-color: var(--blue-line);
-  background: var(--blue-tint);
-  color: var(--blue-on-tint);
-}
-.ez-listen:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-@media (pointer: coarse) {
-  .ez-listen {
-    min-height: 44px;
-    padding: 0 var(--sp-4);
   }
 }
 

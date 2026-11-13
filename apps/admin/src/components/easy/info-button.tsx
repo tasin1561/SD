@@ -12,9 +12,7 @@ import {
   type ReactElement,
 } from 'react';
 import { createPortal } from 'react-dom';
-import type { Locale } from '@skydrop/ui/app/i18n';
 import { useT } from '@/i18n/client';
-import { ListenButton } from './listen-button';
 import './easy.css';
 
 export interface InfoFact {
@@ -29,8 +27,7 @@ export interface InfoFact {
  *
  * It opens on a PRESS — mouse, finger, Enter or Space — and stays until it
  * is closed (the X, Escape, a press anywhere else). Not on hover: a bubble
- * that vanishes when the pointer slips cannot be read slowly, and the
- * Listen button inside it could never be reached.
+ * that vanishes when the pointer slips cannot be read slowly.
  *
  * On a phone it is a sheet along the bottom of the screen.
  *
@@ -41,17 +38,14 @@ export function InfoButton({
   title,
   text,
   facts,
-  speechLang,
   className,
 }: {
   /** What the bubble is about — also names the button for a screen reader. */
   readonly title: string;
-  /** The explanation, as plain text (it is also what Listen reads). */
+  /** The explanation, as plain text. */
   readonly text?: string | undefined;
   /** Small label / value pairs, for details moved off the page. */
   readonly facts?: readonly InfoFact[] | undefined;
-  /** Language Listen reads in, when the text is not in the console language. */
-  readonly speechLang?: Locale | undefined;
   readonly className?: string | undefined;
 }): ReactElement {
   const t = useT();
@@ -72,16 +66,25 @@ export function InfoButton({
     const b = trigger.current?.getBoundingClientRect();
     const el = bubble.current;
     if (b === undefined || el === null) return;
-    const vw = document.documentElement.clientWidth;
-    const vh = document.documentElement.clientHeight;
-    const w = el.offsetWidth;
-    const h = el.offsetHeight;
-    const left = Math.min(Math.max(b.left + b.width / 2 - w / 2, 8), Math.max(8, vw - 8 - w));
-    const below = b.bottom + 8 + h <= vh - 8 || b.top - 8 - h < 8;
-    setPos({
-      left: Math.round(left),
-      top: Math.round(below ? Math.min(b.bottom + 8, Math.max(8, vh - 8 - h)) : b.top - 8 - h),
-    });
+    const place = (): void => {
+      const vw = document.documentElement.clientWidth;
+      const vh = document.documentElement.clientHeight;
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const left = Math.min(Math.max(b.left + b.width / 2 - w / 2, 8), Math.max(8, vw - 8 - w));
+      const below = b.bottom + 8 + h <= vh - 8 || b.top - 8 - h < 8;
+      setPos({
+        left: Math.round(left),
+        top: Math.round(below ? Math.min(b.bottom + 8, Math.max(8, vh - 8 - h)) : b.top - 8 - h),
+      });
+    };
+    place();
+    // Placed again whenever its size changes (late fonts, a longer
+    // translation), so it can never run off the bottom of a short window.
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(place);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [open]);
 
   useEffect(() => {
@@ -114,10 +117,6 @@ export function InfoButton({
       window.removeEventListener('resize', onMove);
     };
   }, [open, close]);
-
-  const spoken = [title, text ?? '', ...(facts ?? []).map((f) => `${f.label}: ${f.value}`)]
-    .filter((s) => s.trim() !== '')
-    .join('. ');
 
   return (
     <>
@@ -168,7 +167,6 @@ export function InfoButton({
                   ))}
                 </dl>
               )}
-              <ListenButton text={spoken} lang={speechLang} />
             </div>,
             document.body,
           )
