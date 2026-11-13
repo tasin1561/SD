@@ -1,5 +1,6 @@
 'use client';
 
+import { Code } from '@/components/easy/code-label';
 import { useState, type ReactElement } from 'react';
 import { Money } from '@skydrop/ui/components';
 import { Button } from '@skydrop/ui/app/button';
@@ -183,7 +184,9 @@ export function ChargesBackfillCard(): ReactElement | null {
               {report.orders.map((o) => (
                 <li key={o.orderNumber}>
                   <span className="sk-ident">{o.orderNumber}</span>
-                  <span className="mo-faint">{o.status}</span>
+                  <span className="mo-faint">
+                    <Code value={o.status} />
+                  </span>
                   <span className="pr-orders__outcome">{o.outcome}</span>
                 </li>
               ))}
@@ -351,7 +354,9 @@ export function BillUnbilledCard(): ReactElement | null {
               {report.orders.map((o) => (
                 <li key={o.orderNumber}>
                   <span className="sk-ident">{o.orderNumber}</span>
-                  <span className="mo-faint">{o.status}</span>
+                  <span className="mo-faint">
+                    <Code value={o.status} />
+                  </span>
                   <span className="pr-orders__outcome">{o.outcome}</span>
                 </li>
               ))}

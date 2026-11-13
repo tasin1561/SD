@@ -350,7 +350,10 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
         title={<span className="sk-ident">{r.receiptNumber}</span>}
         meta={
           <span className="wh-row">
-            <StatusChip kind={isCompleted ? 'delivered' : 'neutral'} label={r.status} />
+            <StatusChip
+              kind={isCompleted ? 'delivered' : 'neutral'}
+              label={codeLabel(r.status, locale)}
+            />
           </span>
         }
         subtitle={

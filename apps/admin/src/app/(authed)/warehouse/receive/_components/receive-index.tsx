@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { When } from '@/components/easy/when';
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
@@ -38,6 +39,7 @@ const OPEN_STATUSES: ReadonlyArray<GoodsReceiptStatus> = [
 
 export function ReceiveIndex(): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const router = useRouter();
   const [status, setStatus] = useState<GoodsReceiptStatus | typeof OPEN_WORK | ''>(OPEN_WORK);
   const [sellerId, setSellerId] = useState('');
@@ -185,7 +187,7 @@ export function ReceiveIndex(): ReactElement {
                   </Td>
                   <Td>{r.seller.companyName}</Td>
                   <Td>
-                    <StatusChip kind="neutral" label={r.status} size="sm" />
+                    <StatusChip kind="neutral" label={code(r.status)} size="sm" />
                   </Td>
                   <Td align="right" className="sk-figure">
                     {r.lines.length}

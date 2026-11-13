@@ -23,6 +23,12 @@ type Row = readonly [en: string, bn: string, hi: string];
 const CODES: Readonly<Record<string, Row>> = {
   // ── shared states ──
   NEW: ['New', 'নতুন', 'नया'],
+  // ── leads ──
+  CONTACTED: ['Contacted', 'যোগাযোগ হয়েছে', 'संपर्क किया गया'],
+  QUALIFIED: ['Qualified', 'যোগ্য', 'योग्य'],
+  CONVERTED: ['Converted', 'রূপান্তরিত', 'परिवर्तित'],
+  DECLINED: ['Declined', 'প্রত্যাখ্যাত', 'अस्वीकृत'],
+  SPAM: ['Spam', 'স্প্যাম', 'स्पैम'],
   OPEN: ['Open', 'খোলা', 'खुला'],
   DRAFT: ['Draft', 'খসড়া', 'ड्राफ़्ट'],
   PENDING: ['Waiting', 'অপেক্ষায়', 'प्रतीक्षा में'],
@@ -39,6 +45,13 @@ const CODES: Readonly<Record<string, Row>> = {
   CLOSED: ['Closed', 'বন্ধ', 'बंद'],
   CANCELLED: ['Cancelled', 'বাতিল', 'रद्द'],
   EXPIRED: ['Timed out', 'সময় শেষ', 'समय निकल गया'],
+  USED: ['Used', 'ব্যবহৃত', 'इस्तेमाल हुआ'],
+  PAUSED: ['Paused', 'থামানো', 'रोका गया'],
+  PENDING_SELLER_APPROVAL: [
+    'Waiting for the client',
+    'ক্লায়েন্টের অপেক্ষায়',
+    'क्लाइंट की प्रतीक्षा में',
+  ],
   FAILED: ['Failed', 'ব্যর্থ', 'विफल'],
   ABANDONED: ['Given up', 'ছেড়ে দেওয়া হয়েছে', 'छोड़ दिया गया'],
   ENDPOINT_DISABLED: ['Address switched off', 'ঠিকানা বন্ধ করা', 'पता बंद है'],

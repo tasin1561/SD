@@ -1,5 +1,6 @@
 'use client';
 
+import { codeLabel } from '@/components/easy/code-label';
 import { useState, type ReactElement } from 'react';
 import { ChevronRight, RotateCw, Trash2 } from 'lucide-react';
 import { useInvitationsList, useResendInvitation, useDeleteInvitation } from '@/lib/api-hooks';
@@ -80,7 +81,7 @@ export function InvitationsPanel(): ReactElement {
                               ? 'delivered'
                               : 'cancelled'
                         }
-                        label={inv.status}
+                        label={codeLabel(inv.status, locale)}
                         size="sm"
                       />
                       <span className="sk-figure">

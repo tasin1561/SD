@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { pageDateTag } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
@@ -204,6 +205,7 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
 /** One reseller store: its details, its status history and its team — read-only. */
 export default function AdminResellerStorePage(): ReactElement {
   const tr = useT();
+  const code = useCodeLabel();
   const { storeId } = useParams<{ storeId: string }>();
   const store = useAdminResellerStore(storeId);
   const mayPause = usePermission('reseller.stores.pause');
@@ -368,18 +370,16 @@ export default function AdminResellerStorePage(): ReactElement {
               label={tr('resellerStoresStoreIdPage.statusHistory')}
               steps={events.map((e, i) => ({
                 id: e.id,
-                label: EVENT_WORDS(tr)[e.kind] ?? e.kind,
+                label: EVENT_WORDS(tr)[e.kind] ?? code(e.kind),
                 state: i === events.length - 1 ? ('current' as const) : ('done' as const),
                 time: when(e.createdAt),
                 description: (
                   <>
                     {e.fromStatus === null && e.toStatus === null
                       ? '—'
-                      : `${e.fromStatus?.toLowerCase().replace(/_/g, ' ') ?? 'new'} → ${
-                          e.toStatus?.toLowerCase().replace(/_/g, ' ') ?? '—'
-                        }`}
+                      : `${code(e.fromStatus ?? 'NEW')} → ${code(e.toStatus)}`}
                     {' · '}
-                    {ACTOR_WORDS(tr)[e.actorType] ?? e.actorType}
+                    {ACTOR_WORDS(tr)[e.actorType] ?? code(e.actorType)}
                     {e.note === null ? null : (
                       <>
                         {' · '}

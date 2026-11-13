@@ -326,7 +326,7 @@ export function LeadDrawer({
                     {t('leadsLeadDrawer.invitationSent')}
                     <StatusChip
                       kind={existing.data.status === 'expired' ? 'failed' : 'pending'}
-                      label={existing.data.status}
+                      label={code(existing.data.status)}
                       size="sm"
                     />
                   </span>

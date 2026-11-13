@@ -1,5 +1,6 @@
 'use client';
 
+import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import { When } from '@/components/easy/when';
@@ -51,6 +52,7 @@ import { useT } from '@/i18n/client';
  */
 export function StaffManagementIndex(): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
   const canWrite = usePermission('staff.manage');
   const canReadRoles = usePermission('rbac.manage');
   const users = useStaffUsersList();
@@ -326,7 +328,7 @@ export function StaffManagementIndex(): ReactElement {
                       <Td>
                         <StatusChip
                           kind={isUsed ? 'delivered' : isExpired ? 'cancelled' : 'pending'}
-                          label={status}
+                          label={code(status)}
                           size="sm"
                         />
                       </Td>
