@@ -37,7 +37,9 @@ import {
   mutationPhase,
 } from '../../_components/stock-kit';
 import { NewAdjustmentPanel } from './new-adjustment-panel';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { formatDateTime } from '@/i18n/format';
 import { ClientFilter } from '@/components/client-filter';
 
 const PAGE_SIZE = 25;
@@ -90,8 +92,15 @@ export function AdjustmentsIndex({
           { label: t('inventoryAdjustmentsAdjustmentsIndex.inventory') },
           { label: t('inventoryAdjustmentsAdjustmentsIndex.adjustments') },
         ]}
-        title={t('inventoryAdjustmentsAdjustmentsIndex.stockAdjustments')}
-        subtitle={t('inventoryAdjustmentsAdjustmentsIndex.correctionsToCountedStockAnything')}
+        title={
+          <span className="ez-titled">
+            {t('inventoryAdjustmentsAdjustmentsIndex.stockAdjustments')}
+            <InfoButton
+              title={t('inventoryAdjustmentsAdjustmentsIndex.stockAdjustments')}
+              text={t('inventoryAdjustmentsAdjustmentsIndex.correctionsToCountedStockAnything')}
+            />
+          </span>
+        }
         action={<NewAdjustmentPanel prefill={prefill} />}
       />
 
@@ -265,6 +274,7 @@ function AdjustmentReview({
   onClose: () => void;
 }): ReactElement {
   const t = useT();
+  const locale = useLocale();
   const [reason, setReason] = useState('');
   const [rejecting, setRejecting] = useState(false);
   const approve = useApproveAdjustment();
@@ -299,7 +309,7 @@ function AdjustmentReview({
             />
             <span className="stk-faint">
               {t('inventoryAdjustmentsAdjustmentsIndex.raised2', {
-                value: new Date(adjustment.initiatedAt).toLocaleString(),
+                value: formatDateTime(adjustment.initiatedAt, locale),
               })}
             </span>
           </span>

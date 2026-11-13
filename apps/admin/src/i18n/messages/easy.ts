@@ -226,6 +226,29 @@ export const easy = defineMessages({
     'हम दावे से सहमत नहीं हैं। टिकट बिना रिफ़ंड के बंद होता है।',
   ],
 
+  // ── Stock adjustments (/inventory/adjustments) ────────────────────────
+  'ezAdjust.reason.COUNTING_ERROR': ['Counting error', 'গণনার ভুল', 'गिनती की गलती'],
+  'ezAdjust.reason.DAMAGED_IN_WAREHOUSE': [
+    'Damaged in the warehouse',
+    'ওয়্যারহাউসে নষ্ট হয়েছে',
+    'वेयरहाउस में खराब हुआ',
+  ],
+  'ezAdjust.reason.DAMAGED_ON_ARRIVAL': [
+    'Damaged on arrival',
+    'পৌঁছানোর সময় নষ্ট ছিল',
+    'पहुँचने पर खराब था',
+  ],
+  'ezAdjust.reason.LOST': ['Lost', 'হারিয়ে গেছে', 'खो गया'],
+  'ezAdjust.reason.FOUND_EXTRA': ['Found extra', 'বাড়তি পাওয়া গেছে', 'अतिरिक्त मिला'],
+  'ezAdjust.reason.EXPIRED': ['Expired', 'মেয়াদ শেষ', 'समय-सीमा समाप्त'],
+  'ezAdjust.reason.RECALLED': ['Recalled', 'ফেরত ডাকা হয়েছে', 'वापस बुलाया गया'],
+  'ezAdjust.reason.RETURNED_TO_SELLER': [
+    'Returned to the client',
+    'ক্লায়েন্টকে ফেরত দেওয়া হয়েছে',
+    'क्लाइंट को लौटाया गया',
+  ],
+  'ezAdjust.reason.OTHER': ['Other', 'অন্যান্য', 'अन्य'],
+
   // ── Manual placement (/manual-placement) ──────────────────────────────
   'ezPlacement.whyInfo': [
     'Why no connected courier took this parcel. The courier’s own words, when there are any, are shown under the reason.',

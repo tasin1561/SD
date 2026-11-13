@@ -39,7 +39,9 @@ import {
   Toolbar,
   mutationPhase,
 } from '../../_components/stock-kit';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { formatDateTime } from '@/i18n/format';
 
 const PAGE_SIZE = 25;
 const COUNT_TYPES = ['FULL', 'ZONE', 'SAMPLE', 'SKU_TARGETED', 'ABC_CLASSIFICATION'] as const;
@@ -77,8 +79,15 @@ export function CycleCountsIndex(): ReactElement {
           { label: tr('inventoryCycleCountsCycleCountsIndex.inventory') },
           { label: tr('inventoryCycleCountsCycleCountsIndex.cycleCounts') },
         ]}
-        title={tr('inventoryCycleCountsCycleCountsIndex.cycleCounts')}
-        subtitle={tr('inventoryCycleCountsCycleCountsIndex.physicalVerificationAgainstWhatThe')}
+        title={
+          <span className="ez-titled">
+            {tr('inventoryCycleCountsCycleCountsIndex.cycleCounts')}
+            <InfoButton
+              title={tr('inventoryCycleCountsCycleCountsIndex.cycleCounts')}
+              text={tr('inventoryCycleCountsCycleCountsIndex.physicalVerificationAgainstWhatThe')}
+            />
+          </span>
+        }
         action={
           <Button icon={<CalendarPlus size={16} />} onClick={() => setCreating(true)}>
             {tr('inventoryCycleCountsCycleCountsIndex.scheduleACount')}
@@ -318,6 +327,7 @@ function CountDetail({
   onClose: () => void;
 }): ReactElement {
   const tr = useT();
+  const locale = useLocale();
   const start = useStartCycleCount();
   const record = useRecordCycleCountItems();
   const complete = useCompleteCycleCount();
@@ -427,12 +437,11 @@ function CountDetail({
               },
               {
                 label: tr('inventoryCycleCountsCycleCountsIndex.started'),
-                value: count.startedAt === null ? '—' : new Date(count.startedAt).toLocaleString(),
+                value: count.startedAt === null ? '—' : formatDateTime(count.startedAt, locale),
               },
               {
                 label: tr('inventoryCycleCountsCycleCountsIndex.completed'),
-                value:
-                  count.completedAt === null ? '—' : new Date(count.completedAt).toLocaleString(),
+                value: count.completedAt === null ? '—' : formatDateTime(count.completedAt, locale),
               },
             ]}
           />

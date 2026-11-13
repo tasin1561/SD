@@ -21,6 +21,7 @@ import {
   mutationPhase,
 } from '../../_components/stock-kit';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
 
 /**
  * Move stock between warehouses.
@@ -112,8 +113,15 @@ export function TransfersIndex(): ReactElement {
           { label: t('inventoryTransfersTransfersIndex.inventory') },
           { label: t('inventoryTransfersTransfersIndex.transfers') },
         ]}
-        title={t('inventoryTransfersTransfersIndex.interWarehouseTransfer')}
-        subtitle={t('inventoryTransfersTransfersIndex.movesUnitsOutOfOne')}
+        title={
+          <span className="ez-titled">
+            {t('inventoryTransfersTransfersIndex.interWarehouseTransfer')}
+            <InfoButton
+              title={t('inventoryTransfersTransfersIndex.interWarehouseTransfer')}
+              text={t('inventoryTransfersTransfersIndex.movesUnitsOutOfOne')}
+            />
+          </span>
+        }
       />
 
       <Panel title={t('inventoryTransfersTransfersIndex.whatIsMoving')}>

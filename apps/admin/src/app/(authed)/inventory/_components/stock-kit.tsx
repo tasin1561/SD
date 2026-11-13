@@ -1,5 +1,6 @@
 'use client';
 
+import '@/components/easy/easy.css';
 import Link from 'next/link';
 import { OctagonX } from 'lucide-react';
 import type { ComponentProps, ReactElement, ReactNode } from 'react';
@@ -21,7 +22,7 @@ import { useT } from '@/i18n/client';
 
 /** The page column: header, then sections, evenly spaced. */
 export function AreaPage({ children }: { readonly children: ReactNode }): ReactElement {
-  return <div className="stk-page">{children}</div>;
+  return <div className="stk-page ez-touch">{children}</div>;
 }
 
 /** The app page header with Next's `Link` wired, usable from a server page. */

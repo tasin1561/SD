@@ -13,6 +13,7 @@ import { useUnitTrace, useUnitTriage } from '@/lib/ops-hooks';
 import { InlineError, Note, Panel, Stack } from '../../inventory/_components/stock-kit';
 import './units.css';
 import { useT, useLocale } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
 import { richMessage } from '@/i18n/client';
 
 /**
@@ -141,7 +142,7 @@ export function UnitTracePanel(): ReactElement {
             <TBody>
               {events.map((e, i) => (
                 <Tr key={`${e.at}-${i}`}>
-                  <Td className="sk-figure stk-nowrap">{new Date(e.at).toLocaleString()}</Td>
+                  <Td className="sk-figure stk-nowrap">{formatDateTime(e.at, locale)}</Td>
                   <Td>
                     {/* The transition, not just where it ended up — a
                         unit that went PICKED → IN_STOCK came back off a

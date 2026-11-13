@@ -22,7 +22,9 @@ import {
   ToneText,
   Toolbar,
 } from '../../_components/stock-kit';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { formatDateTime } from '@/i18n/format';
 
 const PAGE_SIZE = 50;
 
@@ -48,6 +50,7 @@ export function MovementsIndex({
   readonly initialBinId?: string;
 }): ReactElement {
   const tr = useT();
+  const locale = useLocale();
   const warehouses = useWarehouseOptions();
   const [variantId, setVariantId] = useState('');
   const [warehouseId, setWarehouseId] = useState(initialWarehouseId);
@@ -90,8 +93,15 @@ export function MovementsIndex({
           { label: tr('inventoryMovementsMovementsIndex.inventory') },
           { label: tr('inventoryMovementsMovementsIndex.movements') },
         ]}
-        title={tr('inventoryMovementsMovementsIndex.stockMovements')}
-        subtitle={tr('inventoryMovementsMovementsIndex.appendOnlyEveryChangeTo')}
+        title={
+          <span className="ez-titled">
+            {tr('inventoryMovementsMovementsIndex.stockMovements')}
+            <InfoButton
+              title={tr('inventoryMovementsMovementsIndex.stockMovements')}
+              text={tr('inventoryMovementsMovementsIndex.appendOnlyEveryChangeTo')}
+            />
+          </span>
+        }
       />
 
       <Stack>
@@ -185,9 +195,7 @@ export function MovementsIndex({
               <TBody>
                 {items.map((m) => (
                   <Tr key={m.id}>
-                    <Td className="sk-figure stk-nowrap">
-                      {new Date(m.createdAt).toLocaleString('en-IN')}
-                    </Td>
+                    <Td className="sk-figure stk-nowrap">{formatDateTime(m.createdAt, locale)}</Td>
                     <Td>{m.type.replace(/_/g, ' ').toLowerCase()}</Td>
                     <Td>
                       <Ident value={m.variantId} />

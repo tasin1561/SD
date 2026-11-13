@@ -236,7 +236,7 @@ export function NewAdjustmentPanel({
           >
             {REASON_CODES.map((c) => (
               <option key={c} value={c}>
-                {c.replace(/_/g, ' ').toLowerCase()}
+                {t(`ezAdjust.reason.${c}`)}
               </option>
             ))}
           </Select>

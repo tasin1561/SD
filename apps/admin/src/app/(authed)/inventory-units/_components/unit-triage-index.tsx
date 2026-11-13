@@ -26,6 +26,9 @@ import {
 import { UnitTracePanel } from './unit-trace-panel';
 import './units.css';
 import { useT, useLocale } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { formatDateTime } from '@/i18n/format';
+import '@/components/easy/easy.css';
 import { richMessage } from '@/i18n/client';
 
 /**
@@ -59,8 +62,15 @@ export function UnitTriageIndex(): ReactElement {
           { label: t('inventoryUnitsUnitTriageIndex.inventory') },
           { label: t('inventoryUnitsUnitTriageIndex.serialUnits') },
         ]}
-        title={t('inventoryUnitsUnitTriageIndex.unitDiscrepancies')}
-        subtitle={t('inventoryUnitsUnitTriageIndex.forSkusTrackedPerUnit')}
+        title={
+          <span className="ez-titled">
+            {t('inventoryUnitsUnitTriageIndex.unitDiscrepancies')}
+            <InfoButton
+              title={t('inventoryUnitsUnitTriageIndex.unitDiscrepancies')}
+              text={t('inventoryUnitsUnitTriageIndex.forSkusTrackedPerUnit')}
+            />
+          </span>
+        }
       />
 
       {triage.isError ? (
@@ -332,7 +342,7 @@ function UnitTable({
                       label={t('inventoryUnitsUnitTriageIndex.neverScanned')}
                     />
                   ) : (
-                    new Date(u.lastScanAt).toLocaleString()
+                    formatDateTime(u.lastScanAt, locale)
                   )}
                 </Td>
               </Tr>
