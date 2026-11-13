@@ -249,6 +249,9 @@ export const easy = defineMessages({
   ],
   'ezAdjust.reason.OTHER': ['Other', 'অন্যান্য', 'अन्य'],
 
+  // ── Capacity (/system/capacity) ───────────────────────────────────────
+  'ezCapacity.of': ['of {n} {unit}', '{n} {unit}-এর মধ্যে', '{n} {unit} में से'],
+
   // ── Manual placement (/manual-placement) ──────────────────────────────
   'ezPlacement.whyInfo': [
     'Why no connected courier took this parcel. The courier’s own words, when there are any, are shown under the reason.',

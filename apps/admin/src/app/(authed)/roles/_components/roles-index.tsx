@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import { Lock, PencilLine, Plus, Trash2, Users } from 'lucide-react';
 import { useToast } from '@skydrop/ui/app/toast';
@@ -141,100 +143,109 @@ export function RolesIndex(): ReactElement {
   }
 
   return (
-    <AcPage>
-      <AcHeader
-        title={t('rolesRolesIndex.roles')}
-        subtitle={t('rolesRolesIndex.aRoleIsASet')}
-        meta={
-          <div className="ac-meta">
-            <AcFact>
-              {richMessage(t('rolesRolesIndex.roleCountRich'), {
-                span: <span className="sk-figure">{all.length}</span>,
-                value: all.length === 1 ? '' : t('common.pluralS'),
-              })}
-            </AcFact>
-            <AcFact>{t('rolesRolesIndex.somebodyMayHoldSeveralWhat')}</AcFact>
-          </div>
-        }
-        action={
-          <Button
-            variant="primary"
-            size="md"
-            icon={<Plus size={15} />}
-            disabled={catalogue.data === undefined}
-            onClick={() => {
-              setEditing(null);
-              setOpen(true);
+    <div className="ez-touch ez-wrap">
+      <AcPage>
+        <AcHeader
+          title={
+            <span className="ez-titled">
+              {t('rolesRolesIndex.roles')}
+              <InfoButton
+                title={t('rolesRolesIndex.roles')}
+                text={t('rolesRolesIndex.aRoleIsASet')}
+              />
+            </span>
+          }
+          meta={
+            <div className="ac-meta">
+              <AcFact>
+                {richMessage(t('rolesRolesIndex.roleCountRich'), {
+                  span: <span className="sk-figure">{all.length}</span>,
+                  value: all.length === 1 ? '' : t('common.pluralS'),
+                })}
+              </AcFact>
+              <AcFact>{t('rolesRolesIndex.somebodyMayHoldSeveralWhat')}</AcFact>
+            </div>
+          }
+          action={
+            <Button
+              variant="primary"
+              size="md"
+              icon={<Plus size={15} />}
+              disabled={catalogue.data === undefined}
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+            >
+              {t('rolesRolesIndex.newRole')}
+            </Button>
+          }
+        />
+
+        {roles.isLoading || catalogue.isLoading ? (
+          <SkeletonRows rows={5} cols={4} label={t('rolesRolesIndex.loadingRoles')} />
+        ) : roles.isError || catalogue.isError ? (
+          <ErrorState
+            message={serverVerdict(
+              roles.error ?? catalogue.error,
+              t('rolesRolesIndex.couldNotLoadRoles'),
+            )}
+            retry={() => {
+              void roles.refetch();
+              void catalogue.refetch();
             }}
-          >
-            {t('rolesRolesIndex.newRole')}
-          </Button>
-        }
-      />
+          />
+        ) : (
+          ROLE_AXIS_GROUPS.map((g) => {
+            const group = rolesInGroup(all, g.axes);
+            // A seeded group is never empty in practice; saying nothing
+            // beats an empty card nobody can act on. "Roles you created"
+            // IS legitimately empty and gets a next step instead.
+            if (group.length === 0 && g.id !== 'custom') return null;
+            return (
+              <AcSection key={g.id} title={g.title} note={g.note} flush={group.length > 0}>
+                {group.length === 0 ? (
+                  <EmptyState
+                    bare
+                    title={t('rolesRolesIndex.noneYet')}
+                    description={t('rolesRolesIndex.createOneWhenAJob')}
+                  />
+                ) : (
+                  rolesTable(group, t('rolesRolesIndex.roles2', { title: g.title }))
+                )}
+              </AcSection>
+            );
+          })
+        )}
 
-      {roles.isLoading || catalogue.isLoading ? (
-        <SkeletonRows rows={5} cols={4} label={t('rolesRolesIndex.loadingRoles')} />
-      ) : roles.isError || catalogue.isError ? (
-        <ErrorState
-          message={serverVerdict(
-            roles.error ?? catalogue.error,
-            t('rolesRolesIndex.couldNotLoadRoles'),
-          )}
-          retry={() => {
-            void roles.refetch();
-            void catalogue.refetch();
+        {all.length > 0 && (
+          <p className="ac-faint ac-text">{t('rolesRolesIndex.aPersonCountedUnderPeople')}</p>
+        )}
+
+        <ConfirmDialog
+          open={pendingDelete !== null}
+          onOpenChange={(o) => {
+            if (!o) setPendingDelete(null);
           }}
+          title={t('rolesRolesIndex.delete2', {
+            value: pendingDelete?.name ?? t('rolesRolesIndex.thisRole2'),
+          })}
+          entity={pendingDelete?.name ?? t('rolesRolesIndex.thisRole')}
+          consequence={t('rolesRolesIndex.thisCannotBeUndoneNobody')}
+          confirmLabel={t('rolesRolesIndex.deleteRole')}
+          destructive
+          onConfirm={confirmDelete}
         />
-      ) : (
-        ROLE_AXIS_GROUPS.map((g) => {
-          const group = rolesInGroup(all, g.axes);
-          // A seeded group is never empty in practice; saying nothing
-          // beats an empty card nobody can act on. "Roles you created"
-          // IS legitimately empty and gets a next step instead.
-          if (group.length === 0 && g.id !== 'custom') return null;
-          return (
-            <AcSection key={g.id} title={g.title} note={g.note} flush={group.length > 0}>
-              {group.length === 0 ? (
-                <EmptyState
-                  bare
-                  title={t('rolesRolesIndex.noneYet')}
-                  description={t('rolesRolesIndex.createOneWhenAJob')}
-                />
-              ) : (
-                rolesTable(group, t('rolesRolesIndex.roles2', { title: g.title }))
-              )}
-            </AcSection>
-          );
-        })
-      )}
 
-      {all.length > 0 && (
-        <p className="ac-faint ac-text">{t('rolesRolesIndex.aPersonCountedUnderPeople')}</p>
-      )}
-
-      <ConfirmDialog
-        open={pendingDelete !== null}
-        onOpenChange={(o) => {
-          if (!o) setPendingDelete(null);
-        }}
-        title={t('rolesRolesIndex.delete2', {
-          value: pendingDelete?.name ?? t('rolesRolesIndex.thisRole2'),
-        })}
-        entity={pendingDelete?.name ?? t('rolesRolesIndex.thisRole')}
-        consequence={t('rolesRolesIndex.thisCannotBeUndoneNobody')}
-        confirmLabel={t('rolesRolesIndex.deleteRole')}
-        destructive
-        onConfirm={confirmDelete}
-      />
-
-      {catalogue.data !== undefined && (
-        <RoleEditor
-          role={editing}
-          catalogue={catalogue.data}
-          open={open}
-          onClose={() => setOpen(false)}
-        />
-      )}
-    </AcPage>
+        {catalogue.data !== undefined && (
+          <RoleEditor
+            role={editing}
+            catalogue={catalogue.data}
+            open={open}
+            onClose={() => setOpen(false)}
+          />
+        )}
+      </AcPage>
+    </div>
   );
 }

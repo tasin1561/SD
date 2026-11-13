@@ -1,5 +1,8 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
+import { When } from '@/components/easy/when';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Eye, PenLine, ShieldOff, TriangleAlert } from 'lucide-react';
@@ -116,220 +119,235 @@ export function ImpersonationReview(): ReactElement {
   }
 
   return (
-    <AcPage>
-      <AcHeader
-        title={tr('impersonationImpersonationReview.supportSessions')}
-        subtitle={tr('impersonationImpersonationReview.everyTimeAStaffMember')}
-      />
-
-      {!canReview && (
-        <AcAlert
-          tone="warn"
-          message={tr('impersonationImpersonationReview.readingOtherPeopleSSupport')}
+    <div className="ez-touch ez-wrap">
+      <AcPage>
+        <AcHeader
+          title={
+            <span className="ez-titled">
+              {tr('impersonationImpersonationReview.supportSessions')}
+              <InfoButton
+                title={tr('impersonationImpersonationReview.supportSessions')}
+                text={tr('impersonationImpersonationReview.everyTimeAStaffMember')}
+              />
+            </span>
+          }
         />
-      )}
 
-      {error !== null && <AcAlert message={error} />}
+        {!canReview && (
+          <AcAlert
+            tone="warn"
+            message={tr('impersonationImpersonationReview.readingOtherPeopleSSupport')}
+          />
+        )}
 
-      <Tabs
-        label={tr('impersonationImpersonationReview.whichSessions')}
-        size="sm"
-        value={filter}
-        onChange={(id) => setFilter(id === 'LIVE' ? 'LIVE' : id === 'ENDED' ? 'ENDED' : 'ALL')}
-        items={[
-          { id: 'ALL', label: tr('impersonationImpersonationReview.all') },
-          {
-            id: 'LIVE',
-            label: tr('impersonationImpersonationReview.inThereNow'),
-            ...(liveCount > 0 ? { count: liveCount } : {}),
-          },
-          { id: 'ENDED', label: tr('impersonationImpersonationReview.finished') },
-        ]}
-      />
+        {error !== null && <AcAlert message={error} />}
 
-      <AcSection
-        title={tr('impersonationImpersonationReview.sessions')}
-        {...(all.length === LIMIT
-          ? {
-              note: tr('impersonationImpersonationReview.theNewestSessionsTheServer', {
-                limit: LIMIT,
-              }),
-            }
-          : {})}
-        flush
-      >
-        {sessions.isLoading ? (
-          <SkeletonRows
-            rows={5}
-            cols={6}
-            label={tr('impersonationImpersonationReview.loadingSupportSessions')}
-          />
-        ) : sessions.isError ? (
-          <ErrorState
-            message={serverVerdict(
-              sessions.error,
-              tr('impersonationImpersonationReview.theSessionListDidNot'),
-            )}
-            retry={() => void sessions.refetch()}
-          />
-        ) : rows.length === 0 ? (
-          <EmptyState
-            bare
-            title={tr('impersonationImpersonationReview.noSupportSessions')}
-            description={
-              filter === 'LIVE'
-                ? tr('impersonationImpersonationReview.nobodyIsInsideAClient')
-                : tr('impersonationImpersonationReview.nobodyHasOpenedOneYet')
-            }
-          />
-        ) : (
-          <Table
-            caption={tr('impersonationImpersonationReview.supportImpersonationSessionsNewestFirst')}
-          >
-            <THead>
-              <Tr>
-                <Th>{tr('impersonationImpersonationReview.who')}</Th>
-                <Th>{tr('impersonationImpersonationReview.insideWhoseAccount')}</Th>
-                <Th>{tr('impersonationImpersonationReview.why')}</Th>
-                <Th>{tr('impersonationImpersonationReview.whenAndForHowLong')}</Th>
-                <Th align="right">{tr('impersonationImpersonationReview.requests')}</Th>
-                <Th align="right">{tr('impersonationImpersonationReview.actions')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.map((s) => {
-                const live = isLive(s, now);
-                return (
-                  <Tr key={s.id} className={live ? undefined : 'ac-row-off'}>
-                    <Td>
-                      <span className="ac-cell-main">{s.staffEmail}</span>
-                      {live && (
-                        <span className="ac-cell-sub ac-danger-text">
-                          <TriangleAlert size={12} aria-hidden />{' '}
-                          {tr('impersonationImpersonationReview.inThereNow')}
+        <Tabs
+          label={tr('impersonationImpersonationReview.whichSessions')}
+          size="sm"
+          value={filter}
+          onChange={(id) => setFilter(id === 'LIVE' ? 'LIVE' : id === 'ENDED' ? 'ENDED' : 'ALL')}
+          items={[
+            { id: 'ALL', label: tr('impersonationImpersonationReview.all') },
+            {
+              id: 'LIVE',
+              label: tr('impersonationImpersonationReview.inThereNow'),
+              ...(liveCount > 0 ? { count: liveCount } : {}),
+            },
+            { id: 'ENDED', label: tr('impersonationImpersonationReview.finished') },
+          ]}
+        />
+
+        <AcSection
+          title={tr('impersonationImpersonationReview.sessions')}
+          {...(all.length === LIMIT
+            ? {
+                note: tr('impersonationImpersonationReview.theNewestSessionsTheServer', {
+                  limit: LIMIT,
+                }),
+              }
+            : {})}
+          flush
+        >
+          {sessions.isLoading ? (
+            <SkeletonRows
+              rows={5}
+              cols={6}
+              label={tr('impersonationImpersonationReview.loadingSupportSessions')}
+            />
+          ) : sessions.isError ? (
+            <ErrorState
+              message={serverVerdict(
+                sessions.error,
+                tr('impersonationImpersonationReview.theSessionListDidNot'),
+              )}
+              retry={() => void sessions.refetch()}
+            />
+          ) : rows.length === 0 ? (
+            <EmptyState
+              bare
+              title={tr('impersonationImpersonationReview.noSupportSessions')}
+              description={
+                filter === 'LIVE'
+                  ? tr('impersonationImpersonationReview.nobodyIsInsideAClient')
+                  : tr('impersonationImpersonationReview.nobodyHasOpenedOneYet')
+              }
+            />
+          ) : (
+            <Table
+              caption={tr(
+                'impersonationImpersonationReview.supportImpersonationSessionsNewestFirst',
+              )}
+            >
+              <THead>
+                <Tr>
+                  <Th>{tr('impersonationImpersonationReview.who')}</Th>
+                  <Th>{tr('impersonationImpersonationReview.insideWhoseAccount')}</Th>
+                  <Th>{tr('impersonationImpersonationReview.why')}</Th>
+                  <Th>{tr('impersonationImpersonationReview.whenAndForHowLong')}</Th>
+                  <Th align="right">{tr('impersonationImpersonationReview.requests')}</Th>
+                  <Th align="right">{tr('impersonationImpersonationReview.actions')}</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {rows.map((s) => {
+                  const live = isLive(s, now);
+                  return (
+                    <Tr key={s.id} className={live ? undefined : 'ac-row-off'}>
+                      <Td>
+                        <span className="ac-cell-main">{s.staffEmail}</span>
+                        {live && (
+                          <span className="ac-cell-sub ac-danger-text">
+                            <TriangleAlert size={12} aria-hidden />{' '}
+                            {tr('impersonationImpersonationReview.inThereNow')}
+                          </span>
+                        )}
+                        {s.otpVerifiedAt === null && (
+                          // Opened, code never answered — including the
+                          // session five wrong codes closed. It did
+                          // nothing, but a reviewer asking "who tried"
+                          // wants to see it, so it is not hidden.
+                          <span className="ac-cell-sub">
+                            {tr('impersonationImpersonationReview.neverEnteredNoCodeWas')}
+                          </span>
+                        )}
+                        {s.ipAddress !== null && (
+                          <span className="ac-cell-sub sk-figure">
+                            {tr('impersonationImpersonationReview.from', {
+                              ipAddress: s.ipAddress,
+                            })}
+                          </span>
+                        )}
+                      </Td>
+                      <Td>
+                        <span className="ac-inline">
+                          <Link
+                            href={
+                              s.subject.kind === 'SELLER'
+                                ? `/sellers/${s.subject.id}`
+                                : `/reseller-stores/${s.subject.id}`
+                            }
+                            className="ac-link ac-cell-main"
+                          >
+                            {s.subjectLabel}
+                          </Link>
+                          <StatusChip
+                            kind="neutral"
+                            size="sm"
+                            label={s.subject.kind === 'SELLER' ? 'client' : 'store'}
+                          />
                         </span>
-                      )}
-                      {s.otpVerifiedAt === null && (
-                        // Opened, code never answered — including the
-                        // session five wrong codes closed. It did
-                        // nothing, but a reviewer asking "who tried"
-                        // wants to see it, so it is not hidden.
-                        <span className="ac-cell-sub">
-                          {tr('impersonationImpersonationReview.neverEnteredNoCodeWas')}
-                        </span>
-                      )}
-                      {s.ipAddress !== null && (
-                        <span className="ac-cell-sub sk-figure">
-                          {tr('impersonationImpersonationReview.from', { ipAddress: s.ipAddress })}
-                        </span>
-                      )}
-                    </Td>
-                    <Td>
-                      <span className="ac-inline">
-                        <Link
-                          href={
-                            s.subject.kind === 'SELLER'
-                              ? `/sellers/${s.subject.id}`
-                              : `/reseller-stores/${s.subject.id}`
-                          }
-                          className="ac-link ac-cell-main"
-                        >
-                          {s.subjectLabel}
-                        </Link>
-                        <StatusChip
-                          kind="neutral"
-                          size="sm"
-                          label={s.subject.kind === 'SELLER' ? 'client' : 'store'}
-                        />
-                      </span>
-                    </Td>
-                    <Td>
-                      {/* VERBATIM, and never clipped. A truncated reason
+                      </Td>
+                      <Td>
+                        {/* VERBATIM, and never clipped. A truncated reason
                           is the one thing that would make this screen
                           worthless. */}
-                      <p className="ac-quote">{s.reason}</p>
-                      <span className="ac-cell-sub">
-                        {s.mayWrite ? (
-                          <span className="ac-danger-text">
-                            <PenLine size={12} aria-hidden />{' '}
-                            {tr('impersonationImpersonationReview.actingAsThem')}
-                          </span>
-                        ) : (
-                          <>
-                            <Eye size={12} aria-hidden />{' '}
-                            {tr('impersonationImpersonationReview.readOnly')}
-                          </>
-                        )}
-                      </span>
-                      {s.endedReason !== null && (
+                        <p className="ac-quote">{s.reason}</p>
                         <span className="ac-cell-sub">
-                          {tr('impersonationImpersonationReview.onClosing', {
-                            endedReason: s.endedReason,
-                          })}
+                          {s.mayWrite ? (
+                            <span className="ac-danger-text">
+                              <PenLine size={12} aria-hidden />{' '}
+                              {tr('impersonationImpersonationReview.actingAsThem')}
+                            </span>
+                          ) : (
+                            <>
+                              <Eye size={12} aria-hidden />{' '}
+                              {tr('impersonationImpersonationReview.readOnly')}
+                            </>
+                          )}
                         </span>
-                      )}
-                    </Td>
-                    <Td>
-                      <span className="sk-figure ac-faint">
-                        {new Date(s.createdAt).toLocaleString()}
-                      </span>
-                      <span className="ac-cell-sub">{describeWindow(tr, s, now)}</span>
-                    </Td>
-                    <Td align="right">
-                      <span className="sk-figure">{s.requestCount}</span>
-                      <span className="ac-cell-sub">
-                        {s.writeCount === 0 ? (
-                          tr('impersonationImpersonationReview.nothingChanged')
-                        ) : (
-                          <span className="ac-danger-text">
-                            {s.writeCount} {s.writeCount === 1 ? 'write' : 'writes'}
+                        {s.endedReason !== null && (
+                          <span className="ac-cell-sub">
+                            {tr('impersonationImpersonationReview.onClosing', {
+                              endedReason: s.endedReason,
+                            })}
                           </span>
                         )}
-                      </span>
-                    </Td>
-                    <Td align="right">
-                      {live && canEnd ? (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          icon={<ShieldOff size={14} />}
-                          onClick={() => {
-                            setError(null);
-                            setPendingEnd(s);
-                          }}
-                        >
-                          {tr('impersonationImpersonationReview.endNow')}
-                        </Button>
-                      ) : (
-                        <span className="ac-faint">—</span>
-                      )}
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
-        )}
-      </AcSection>
+                      </Td>
+                      <Td>
+                        <span className="sk-figure ac-faint">
+                          <When iso={s.createdAt} time />
+                        </span>
+                        <span className="ac-cell-sub">{describeWindow(tr, s, now)}</span>
+                      </Td>
+                      <Td align="right">
+                        <span className="sk-figure">{s.requestCount}</span>
+                        <span className="ac-cell-sub">
+                          {s.writeCount === 0 ? (
+                            tr('impersonationImpersonationReview.nothingChanged')
+                          ) : (
+                            <span className="ac-danger-text">
+                              {s.writeCount} {s.writeCount === 1 ? 'write' : 'writes'}
+                            </span>
+                          )}
+                        </span>
+                      </Td>
+                      <Td align="right">
+                        {live && canEnd ? (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            icon={<ShieldOff size={14} />}
+                            onClick={() => {
+                              setError(null);
+                              setPendingEnd(s);
+                            }}
+                          >
+                            {tr('impersonationImpersonationReview.endNow')}
+                          </Button>
+                        ) : (
+                          <span className="ac-faint">—</span>
+                        )}
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </TBody>
+            </Table>
+          )}
+        </AcSection>
 
-      <ConfirmDialog
-        open={pendingEnd !== null}
-        onOpenChange={(o) => {
-          if (!o) setPendingEnd(null);
-        }}
-        title={tr('impersonationImpersonationReview.endThisSupportSessionNow')}
-        entity={pendingEnd === null ? '' : `${pendingEnd.staffEmail} in ${pendingEnd.subjectLabel}`}
-        consequence={tr('impersonationImpersonationReview.itStopsOnTheirVery')}
-        confirmLabel={tr('impersonationImpersonationReview.endTheSession')}
-        destructive
-        error={error}
-        onConfirm={async () => {
-          if (pendingEnd === null) return;
-          const ok = await onEnd(pendingEnd);
-          if (!ok) throw new Error('not ended');
-        }}
-      />
-    </AcPage>
+        <ConfirmDialog
+          open={pendingEnd !== null}
+          onOpenChange={(o) => {
+            if (!o) setPendingEnd(null);
+          }}
+          title={tr('impersonationImpersonationReview.endThisSupportSessionNow')}
+          entity={
+            pendingEnd === null ? '' : `${pendingEnd.staffEmail} in ${pendingEnd.subjectLabel}`
+          }
+          consequence={tr('impersonationImpersonationReview.itStopsOnTheirVery')}
+          confirmLabel={tr('impersonationImpersonationReview.endTheSession')}
+          destructive
+          error={error}
+          onConfirm={async () => {
+            if (pendingEnd === null) return;
+            const ok = await onEnd(pendingEnd);
+            if (!ok) throw new Error('not ended');
+          }}
+        />
+      </AcPage>
+    </div>
   );
 }
 

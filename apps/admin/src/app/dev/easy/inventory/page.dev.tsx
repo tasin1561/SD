@@ -22,7 +22,16 @@ type F = (typeof FIXTURES)[number];
 
 const respond: Respond<F> = (_fixture, req) => {
   if (req.method !== 'GET') return undefined;
-  if (/warehouses|bins|triage|units/.test(req.path)) return json([]);
+  if (req.path === '/api/admin/stock-units/triage') {
+    return json({
+      generatedAt: new Date().toISOString(),
+      sellers: [],
+      totalNeedsAttention: 0,
+      truncated: false,
+      examined: 0,
+    });
+  }
+  if (/warehouses|bins|units/.test(req.path)) return json([]);
   return json({ items: [], total: 0, page: 1, pageSize: 20 });
 };
 

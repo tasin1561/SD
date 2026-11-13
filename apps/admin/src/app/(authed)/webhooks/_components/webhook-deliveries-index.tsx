@@ -1,5 +1,8 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
+import { When } from '@/components/easy/when';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import type { StatusKind } from '@skydrop/ui/status';
@@ -68,15 +71,22 @@ export function WebhookDeliveriesIndex(): ReactElement {
   }
 
   return (
-    <div className="af-page">
+    <div className="af-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: t('webhooksWebhookDeliveriesIndex.system') },
           { label: t('webhooksWebhookDeliveriesIndex.webhookDeliveries') },
         ]}
         Link={Link}
-        title={t('webhooksWebhookDeliveriesIndex.webhookDeliveries')}
-        subtitle={t('webhooksWebhookDeliveriesIndex.outboundHmacSignedPostsTo')}
+        title={
+          <span className="ez-titled">
+            {t('webhooksWebhookDeliveriesIndex.webhookDeliveries')}
+            <InfoButton
+              title={t('webhooksWebhookDeliveriesIndex.webhookDeliveries')}
+              text={t('webhooksWebhookDeliveriesIndex.outboundHmacSignedPostsTo')}
+            />
+          </span>
+        }
       />
 
       <AfCard>
@@ -135,7 +145,7 @@ export function WebhookDeliveriesIndex(): ReactElement {
               <Tr key={d.id}>
                 <Td>
                   <span className="af-small sk-figure af-nowrap">
-                    {new Date(d.createdAt).toLocaleString()}
+                    <When iso={d.createdAt} time />
                   </span>
                 </Td>
                 <Td>

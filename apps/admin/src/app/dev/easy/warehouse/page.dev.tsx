@@ -24,7 +24,8 @@ type F = (typeof FIXTURES)[number];
 const respond: Respond<F> = (_fixture, req) => {
   if (req.method !== 'GET') return undefined;
   if (req.path.endsWith('/scan-block')) return json(null);
-  if (/warehouses|bins$|couriers|awaiting|open-returns|worklist/.test(req.path)) return json([]);
+  if (/warehouses|bins$|couriers|awaiting|open-returns|worklist|printing/.test(req.path))
+    return json([]);
   return json({
     items: [],
     total: 0,

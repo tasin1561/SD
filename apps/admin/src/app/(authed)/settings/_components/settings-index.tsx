@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import { SettingValueType } from '@skydrop/db';
 import type { SystemSettingView } from '@skydrop/api-client';
@@ -41,48 +43,57 @@ export function SettingsIndex(): ReactElement {
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
   return (
-    <AcPage>
-      <AcHeader
-        title={t('settingsSettingsIndex.systemSettings')}
-        subtitle={t('settingsSettingsIndex.howTheWholeSystemBehaves')}
-      />
-
-      {list.isLoading ? (
-        <SkeletonRows rows={8} cols={3} label={t('settingsSettingsIndex.loadingSettings')} />
-      ) : list.isError ? (
-        <ErrorState
-          message={list.error?.message ?? t('settingsSettingsIndex.failedToLoadSettings')}
-          retry={() => void list.refetch()}
+    <div className="ez-touch ez-wrap">
+      <AcPage>
+        <AcHeader
+          title={
+            <span className="ez-titled">
+              {t('settingsSettingsIndex.systemSettings')}
+              <InfoButton
+                title={t('settingsSettingsIndex.systemSettings')}
+                text={t('settingsSettingsIndex.howTheWholeSystemBehaves')}
+              />
+            </span>
+          }
         />
-      ) : !list.data || list.data.length === 0 ? (
-        <EmptyState
-          title={t('settingsSettingsIndex.noSettings')}
-          description={t('settingsSettingsIndex.theSeedShouldProvisionThese')}
-        />
-      ) : (
-        groupByGuide(
-          t,
-          list.data.flatMap((g) => g.items),
-        ).map((group) => (
-          <AcSection
-            key={group.title}
-            title={group.title}
-            note={`${group.items.length} ${group.items.length === 1 ? 'setting' : 'settings'}`}
-            flush
-          >
-            <ol className="ac-rows">
-              {group.items.map((s) => (
-                <SettingRow key={s.id} setting={s} onEdit={() => setEditingKey(s.key)} />
-              ))}
-            </ol>
-          </AcSection>
-        ))
-      )}
 
-      {editingKey && (
-        <EditSettingDialog settingKey={editingKey} onClose={() => setEditingKey(null)} />
-      )}
-    </AcPage>
+        {list.isLoading ? (
+          <SkeletonRows rows={8} cols={3} label={t('settingsSettingsIndex.loadingSettings')} />
+        ) : list.isError ? (
+          <ErrorState
+            message={list.error?.message ?? t('settingsSettingsIndex.failedToLoadSettings')}
+            retry={() => void list.refetch()}
+          />
+        ) : !list.data || list.data.length === 0 ? (
+          <EmptyState
+            title={t('settingsSettingsIndex.noSettings')}
+            description={t('settingsSettingsIndex.theSeedShouldProvisionThese')}
+          />
+        ) : (
+          groupByGuide(
+            t,
+            list.data.flatMap((g) => g.items),
+          ).map((group) => (
+            <AcSection
+              key={group.title}
+              title={group.title}
+              note={`${group.items.length} ${group.items.length === 1 ? 'setting' : 'settings'}`}
+              flush
+            >
+              <ol className="ac-rows">
+                {group.items.map((s) => (
+                  <SettingRow key={s.id} setting={s} onEdit={() => setEditingKey(s.key)} />
+                ))}
+              </ol>
+            </AcSection>
+          ))
+        )}
+
+        {editingKey && (
+          <EditSettingDialog settingKey={editingKey} onClose={() => setEditingKey(null)} />
+        )}
+      </AcPage>
+    </div>
   );
 }
 

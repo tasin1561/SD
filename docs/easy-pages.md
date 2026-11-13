@@ -57,3 +57,25 @@ Shared pieces live in `apps/admin/src/components/easy/`; dev-only test pages in
 - On live data, look only. No action is confirmed on a real customer's order.
 - `AGENT_LOCKS.md` and the two-agent protocol in `CLAUDE.md` apply. Check the LAST CI result on
   `main`, and that nothing is running, before every push.
+
+## Progress (updated 2026-11-13)
+
+Done and live: system issues, call centre (station, queue, awaiting, agents), re-attempt requests,
+handover, pack / printing / receive / returns (phone rule and "i"; only pack and handover have a
+full bench audit), courier decisions, manual placement, failed deliveries, needs attention, held
+stock, who-has-what, dashboard, warehouse hub, orders list, tickets (list and detail), the five
+stock screens, bins, consignments, and list 3 (settings, capacity, impersonation, roles, staff,
+webhooks, reports).
+
+Shared pieces in `apps/admin/src/components/easy/`: `InfoButton`, `ChoiceGuide`, `FilterPills`,
+`When` (a date in the chosen language), and the `ez-touch` page rule in `easy.css`.
+
+Still open:
+
+- Money screens (list 2): not started. Each is shown to the owner before a push.
+- Detail pages with dates still fixed to English: receive detail, consignment detail, bin contents
+  summary, printing history line.
+- Phone audits with real rows for the stock, warehouse and administration screens (their test
+  pages use empty lists), and for the receive detail and returns inspection screens.
+- Screens that ask for raw ids (stock transfer, new adjustment) and lists that show only ids
+  (held stock) need API changes to be made friendly; reported, not changed.

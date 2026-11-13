@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useEffect, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
@@ -94,7 +96,9 @@ function MetricCard({ m }: { readonly m: CapacityMetric }): ReactElement {
           {m.current.toLocaleString('en-IN')}
         </span>
         <span className="af-muted">
-          {m.ceiling === null ? m.unit : `of ${m.ceiling.toLocaleString('en-IN')} ${m.unit}`}
+          {m.ceiling === null
+            ? m.unit
+            : t('ezCapacity.of', { n: m.ceiling.toLocaleString('en-IN'), unit: m.unit })}
         </span>
         {m.percent !== null && <span className="af-faint sk-figure cap-pct">{m.percent}%</span>}
       </div>
@@ -152,7 +156,7 @@ export function CapacityMonitor(): ReactElement {
 
   if (q.isLoading) {
     return (
-      <div className="af-page">
+      <div className="af-page ez-touch">
         <PageHeader title={t('systemCapacityCapacityMonitor.systemLimits')} />
         <SkeletonRows
           rows={4}
@@ -175,15 +179,22 @@ export function CapacityMonitor(): ReactElement {
   const tone = TONE(t)[worstStatus];
 
   return (
-    <div className="af-page">
+    <div className="af-page ez-touch">
       <PageHeader
         breadcrumbs={[
           { label: t('systemCapacityCapacityMonitor.system') },
           { label: t('systemCapacityCapacityMonitor.systemLimits') },
         ]}
         Link={Link}
-        title={t('systemCapacityCapacityMonitor.systemLimits')}
-        subtitle={t('systemCapacityCapacityMonitor.whatThePlatformCanCurrently')}
+        title={
+          <span className="ez-titled">
+            {t('systemCapacityCapacityMonitor.systemLimits')}
+            <InfoButton
+              title={t('systemCapacityCapacityMonitor.systemLimits')}
+              text={t('systemCapacityCapacityMonitor.whatThePlatformCanCurrently')}
+            />
+          </span>
+        }
       />
 
       <AfCard>

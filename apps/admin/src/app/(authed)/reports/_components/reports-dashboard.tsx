@@ -1,5 +1,7 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
 import { Money } from '@skydrop/ui/components';
 import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
@@ -32,10 +34,17 @@ export function ReportsDashboard(): ReactElement {
   });
 
   return (
-    <div className="mo-page">
+    <div className="mo-page ez-touch">
       <PageHeader
-        title={t('reportsReportsDashboard.reports')}
-        subtitle={t('reportsReportsDashboard.operationalMetricsAcrossTheDate')}
+        title={
+          <span className="ez-titled">
+            {t('reportsReportsDashboard.reports')}
+            <InfoButton
+              title={t('reportsReportsDashboard.reports')}
+              text={t('reportsReportsDashboard.operationalMetricsAcrossTheDate')}
+            />
+          </span>
+        }
       />
 
       <MoCard>

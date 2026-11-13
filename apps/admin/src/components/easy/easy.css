@@ -416,6 +416,11 @@ button.ez-guide__pick:hover {
    card instead of pushing the page sideways. The selectors are qualified
    with the tag because the global coarse-pointer rule in legacy.css
    (`button:not(.skydrop-hit)`) outranks a bare class. */
+/* `ez-wrap` puts the rule around a page whose root element is owned by a
+   shared helper, without adding a box of its own. */
+.ez-wrap {
+  display: contents;
+}
 @media (max-width: 767px) {
   .ez-touch td,
   .ez-touch dd {
@@ -428,6 +433,8 @@ button.ez-guide__pick:hover {
   .ez-touch button.sk-filter__reset,
   .ez-touch button.oo-search-btn,
   .ez-touch button.sk-tabs__tab,
+  .ez-touch button.af-disclose,
+  .ez-touch button.wh-seg__btn,
   .ez-touch select.sk-select__native {
     min-height: 44px;
   }
@@ -444,10 +451,12 @@ button.ez-guide__pick:hover {
     min-height: 44px;
   }
   /* The tick box keeps its drawn size; its touch area grows around it. */
-  .ez-touch input.sk-check__input {
+  .ez-touch input.sk-check__input,
+  .ez-touch input.wh-check {
     position: relative;
   }
-  .ez-touch input.sk-check__input::after {
+  .ez-touch input.sk-check__input::after,
+  .ez-touch input.wh-check::after {
     content: '';
     position: absolute;
     inset: -12px;
