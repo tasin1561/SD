@@ -434,7 +434,7 @@ function RawList({
           return (
             <Tr key={r.id ?? String(i)}>
               <Td className="mk-when sk-figure">
-                {r.createdAt === undefined ? '—' : new Date(r.createdAt).toLocaleString()}
+                {r.createdAt === undefined ? '—' : <When iso={r.createdAt} time />}
               </Td>
               <Td align="right">
                 <Money

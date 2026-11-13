@@ -266,7 +266,7 @@ export function CourierWalletIndex(): ReactElement {
                   </Td>
                   <Td>
                     <span className="mo-muted">
-                      {a.capturedAt === null ? '—' : new Date(a.capturedAt).toLocaleString('en-IN')}
+                      {a.capturedAt === null ? '—' : <When iso={a.capturedAt} time />}
                     </span>
                   </Td>
                   <Td align="right" className="mo-num">

@@ -1,5 +1,6 @@
 'use client';
 
+import { When } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import Link from 'next/link';
@@ -203,9 +204,7 @@ function ResellerStoresIndex(): ReactElement {
                       <span className="sk-figure">{s.memberCount}</span>
                     </Td>
                     <Td>
-                      <span className="sk-figure ac-faint">
-                        {new Date(s.createdAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
-                      </span>
+                      <span className="sk-figure ac-faint">{<When iso={s.createdAt} />}</span>
                     </Td>
                   </Tr>
                 ))}

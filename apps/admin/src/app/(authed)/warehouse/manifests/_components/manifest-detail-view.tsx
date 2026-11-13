@@ -1,5 +1,6 @@
 'use client';
 
+import { When } from '@/components/easy/when';
 import '@/components/easy/easy.css';
 import { useCodeLabel } from '@/components/easy/code-label';
 import Link from 'next/link';
@@ -252,7 +253,7 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
                     )}
                   </Td>
                   <Td className="stk-muted sk-figure stk-nowrap">
-                    {s.packCompletedAt ? new Date(s.packCompletedAt).toLocaleString() : '—'}
+                    {s.packCompletedAt ? <When iso={s.packCompletedAt} time /> : '—'}
                   </Td>
                 </Tr>
               ))}
