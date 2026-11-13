@@ -1104,3 +1104,113 @@
   line-height: 1.3;
   text-align: center;
 }
+
+/* ── "What needs my attention?" card (an empty chat, above the input) ── */
+.sk-ai-greet {
+  display: grid;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-4);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+  text-align: start;
+  animation: sk-ai-in var(--dur) var(--ease-out) both;
+}
+.sk-ai-greet__title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+.sk-ai-greet__badge {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--accent-tint);
+  color: var(--blue-text);
+}
+.sk-ai-greet[data-clear='1'] .sk-ai-greet__badge {
+  background: var(--green-tint);
+  color: var(--green-text);
+}
+.sk-ai-greet__clear {
+  margin: 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.sk-ai-greet__list {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sk-ai-greet__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.sk-ai-greet__row:hover {
+  transform: translateX(3px);
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+}
+.sk-ai-greet__row:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.sk-ai-greet__count {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  padding-inline: var(--sp-2);
+  border-radius: 999px;
+  background: var(--saffron-fill);
+  color: var(--saffron-on-fill, var(--fg-strong));
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.sk-ai-greet__text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sk-ai-greet__go {
+  flex: none;
+  color: var(--fg-muted);
+}
+.sk-ai-greet .sk-ai-cta {
+  margin-top: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-ai-greet {
+    animation: none;
+  }
+  .sk-ai-greet__row {
+    transition: none;
+  }
+  .sk-ai-greet__row:hover {
+    transform: none;
+  }
+}

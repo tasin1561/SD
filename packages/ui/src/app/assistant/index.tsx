@@ -51,6 +51,12 @@ import { Markdown } from './markdown';
 import { AnswerFeedback, type AnswerRating } from './feedback';
 import { TicketProposalCard, toTicketProposal, type TicketProposal } from './ticket-card';
 import { readAssistantStream, type HelpLink, type NoticeCode } from './sse';
+import {
+  ASK_ASSISTANT_EVENT,
+  registerAssistantAvailable,
+  type AskAssistantDetail,
+} from './ask-why';
+import { GreetingCard, explainQuestion, loadGreeting, type GreetingResult } from './greeting';
 import { useAssistantSound } from './sound';
 import './assistant.css';
 
@@ -61,6 +67,9 @@ export * from './quick-actions';
 export * from './sound';
 export * from './ticket-card';
 export * from './feedback';
+export * from './ask-why';
+export * from './greeting';
+export * from './ticket-photos';
 
 /** How the widget reaches the API: each app passes its `ApiClient` (bearer token, single-flight refresh, same-origin proxy). The widget never fetches by itself. */
 export interface AssistantTransport {
@@ -237,7 +246,15 @@ export function AssistantWidget({
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [dragging, setDragging] = useState(false);
   const [attachNote, setAttachNote] = useState('');
+  // Is the assistant on for this console, and which greeting permissions the caller holds.
+  const [status, setStatus] = useState<{ enabled: boolean; permissions: readonly string[] } | null>(
+    null,
+  );
+  const [greeting, setGreeting] = useState<GreetingResult | null>(null);
 
+  // The transport can be a fresh object each render; these effects must not re-run for that.
+  const transportRef = useRef(transport);
+  transportRef.current = transport;
   const launcherRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -263,6 +280,52 @@ export function AssistantWidget({
     setNudge(true);
     const id = window.setTimeout(() => setNudge(false), 9000);
     return () => window.clearTimeout(id);
+  }, []);
+
+  // ── is the assistant on for this console? (one cheap read, no model call) ──
+  useEffect(() => {
+    let live = true;
+    let unregister: (() => void) | null = null;
+    transportRef.current
+      .request<{ enabled?: unknown; permissions?: unknown }>(`${base}/status`)
+      .then((r) => {
+        if (!live || r === null || typeof r !== 'object' || r.enabled !== true) return;
+        const permissions = Array.isArray(r.permissions)
+          ? r.permissions.filter((p): p is string => typeof p === 'string')
+          : [];
+        setStatus({ enabled: true, permissions });
+        // From here on "Ask AI why" may show wherever an error is shown.
+        unregister = registerAssistantAvailable();
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+      unregister?.();
+    };
+  }, [base]);
+
+  // ── "Ask AI why": open with the question pre-filled; the error is already the page context ──
+  useEffect(() => {
+    const onAsk = (e: Event): void => {
+      const q = (e as CustomEvent<AskAssistantDetail>).detail?.question;
+      setMounted(true);
+      setOpen(true);
+      setNudge(false);
+      setView('chat');
+      if (typeof q === 'string' && q !== '') {
+        setDraft(q);
+        window.requestAnimationFrame(() => {
+          const el = inputRef.current;
+          if (el) {
+            el.focus();
+            el.style.height = 'auto';
+            el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+          }
+        });
+      }
+    };
+    window.addEventListener(ASK_ASSISTANT_EVENT, onAsk);
+    return () => window.removeEventListener(ASK_ASSISTANT_EVENT, onAsk);
   }, []);
 
   // ── keep the launcher above any sticky bottom action bar ────────────
@@ -322,6 +385,24 @@ export function AssistantWidget({
   );
 
   const uploading = pending.some((f) => f.state === 'busy');
+
+  // ── the greeting card: plain data from endpoints the console already has, read when an EMPTY chat is open ──
+  const showGreeting = open && view === 'chat' && messages.length === 0 && status !== null;
+  useEffect(() => {
+    if (!showGreeting || status === null) return;
+    let live = true;
+    setGreeting(null);
+    loadGreeting(consoleName, status.permissions, transportRef.current)
+      .then((g) => {
+        if (live) setGreeting(g);
+      })
+      .catch(() => {
+        if (live) setGreeting({ state: 'unavailable' });
+      });
+    return () => {
+      live = false;
+    };
+  }, [showGreeting, status, consoleName]);
 
   /** The conversation files and questions belong to: made on first need, once. */
   const ensureConversation = useCallback((): Promise<string> => {
@@ -876,6 +957,15 @@ export function AssistantWidget({
                   </span>
                   <h3>{t('ui.assistant.emptyTitle')}</h3>
                   <p>{t('ui.assistant.emptyBody')}</p>
+                  {greeting !== null && greeting.state === 'lines' ? (
+                    <GreetingCard
+                      lines={greeting.lines}
+                      t={t}
+                      onOpen={go}
+                      onExplain={() => void send(explainQuestion(t, greeting.lines))}
+                      disabled={busy}
+                    />
+                  ) : null}
                   <p className="sk-ai-hint">{t('ui.assistant.suggestions')}</p>
                   <div className="sk-ai-chips">
                     {suggestions.map((key) => (

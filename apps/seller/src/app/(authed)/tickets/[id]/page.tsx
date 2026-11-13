@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { TicketDetail } from '../_components/ticket-detail';
+import { SellerTicketPhotos } from './photos';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -7,5 +8,10 @@ interface PageProps {
 
 export default async function SellerTicketDetailPage({ params }: PageProps): Promise<ReactElement> {
   const { id } = await params;
-  return <TicketDetail ticketId={id} />;
+  return (
+    <>
+      <TicketDetail ticketId={id} />
+      <SellerTicketPhotos ticketId={id} />
+    </>
+  );
 }

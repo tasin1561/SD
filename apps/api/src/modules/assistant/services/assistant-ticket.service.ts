@@ -151,6 +151,25 @@ export class AssistantTicketService {
         }`,
       );
     }
+    // The photos the person already sent in this conversation go with the
+    // ticket. Best effort and AFTER the outcome: the ticket exists, so a
+    // failure here is logged and never turns the press into an error.
+    if (outcome.ticketId !== null) {
+      try {
+        await this.store.linkSentAttachmentsToTicket(
+          scope,
+          owned.conversationId,
+          outcome.ticketId,
+          id,
+        );
+      } catch (e) {
+        this.log.error(
+          `proposal ${id}: ticket ${outcome.ticketId} was raised but its photos were not linked: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+      }
+    }
     const done = await this.store.findOwnedProposal(scope, id);
     return toProposalView(done ?? { ...owned, status: 'CONFIRMED', ...outcome });
   }

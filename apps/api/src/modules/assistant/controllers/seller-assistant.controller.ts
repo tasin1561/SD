@@ -37,6 +37,8 @@ import { AssistantFeedbackService } from '../services/assistant-feedback.service
 import { AssistantChatService } from '../services/assistant-chat.service';
 import { AssistantConversationService } from '../services/assistant-conversation.service';
 import { AssistantTicketService } from '../services/assistant-ticket.service';
+import { AssistantTicketPhotosService } from '../services/assistant-ticket-photos.service';
+import { AssistantStatusService } from '../services/assistant-status.service';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -61,6 +63,8 @@ export class SellerAssistantController {
     private readonly attachments: AssistantAttachmentService,
     private readonly ticketProposals: AssistantTicketService,
     private readonly feedback: AssistantFeedbackService,
+    private readonly ticketPhotos: AssistantTicketPhotosService,
+    private readonly status: AssistantStatusService,
   ) {}
 
   @Post('conversations')
@@ -177,5 +181,26 @@ export class SellerAssistantController {
       body.rating,
       body.comment,
     );
+  }
+
+  @Get('status')
+  @ApiOperation({
+    summary:
+      'Is the assistant switched on for this console, and which permissions the greeting card may use',
+  })
+  statusOf(@CurrentSeller() who: AuthenticatedSeller) {
+    return this.status.status(scopeFromSeller(who));
+  }
+
+  @Get('tickets/:ticketId/photos')
+  @ApiOperation({
+    summary:
+      'The photos that went with a ticket, as short-lived signed download links (needs tickets.view)',
+  })
+  ticketPhotosOf(
+    @CurrentSeller() who: AuthenticatedSeller,
+    @Param('ticketId', uuid()) ticketId: string,
+  ) {
+    return this.ticketPhotos.list(scopeFromSeller(who), ticketId);
   }
 }
