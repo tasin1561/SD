@@ -1,3 +1,4 @@
+import { InfoButton } from '@/components/easy/info-button';
 import type { ReactElement } from 'react';
 import { AreaPage, StockPageHeader } from '../../inventory/_components/stock-kit';
 import { ConsignmentsIndex } from './_components/consignments-index';
@@ -12,8 +13,15 @@ export default async function ConsignmentsPage(): Promise<ReactElement> {
           { label: t('warehouseConsignmentsPage.warehouse'), href: '/warehouse' },
           { label: t('warehouseConsignmentsPage.consignments') },
         ]}
-        title={t('warehouseConsignmentsPage.consignments')}
-        subtitle={t('warehouseConsignmentsPage.theWholeJourneyInOne')}
+        title={
+          <span className="ez-titled">
+            {t('warehouseConsignmentsPage.consignments')}
+            <InfoButton
+              title={t('warehouseConsignmentsPage.consignments')}
+              text={t('warehouseConsignmentsPage.theWholeJourneyInOne')}
+            />
+          </span>
+        }
       />
       <ConsignmentsIndex />
     </AreaPage>

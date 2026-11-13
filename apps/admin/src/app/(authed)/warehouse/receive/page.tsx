@@ -1,3 +1,4 @@
+import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import type { ReactElement } from 'react';
 import { PageHeader } from '@skydrop/ui/app/page-header';
@@ -10,8 +11,15 @@ export default async function ReceivePage(): Promise<ReactElement> {
   return (
     <div className="wh-page ez-touch">
       <PageHeader
-        title={t('warehouseReceivePage.receiveStation')}
-        subtitle={t('warehouseReceivePage.whereCountingHappensStartReceiving')}
+        title={
+          <span className="ez-titled">
+            {t('warehouseReceivePage.receiveStation')}
+            <InfoButton
+              title={t('warehouseReceivePage.receiveStation')}
+              text={t('warehouseReceivePage.whereCountingHappensStartReceiving')}
+            />
+          </span>
+        }
       />
       <ReceiveIndex />
     </div>

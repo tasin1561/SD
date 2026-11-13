@@ -1,5 +1,6 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
 import { useMemo, useState, type ReactElement } from 'react';
 import { Num, useToast } from '@skydrop/ui/components';
 import { Plus, Trash2 } from 'lucide-react';
@@ -207,8 +208,15 @@ export function BinsIndex(): ReactElement {
   return (
     <AreaPage>
       <PageHeader
-        title={tr('warehouseBinsBinsIndex.bins')}
-        subtitle={tr('warehouseBinsBinsIndex.whereStockPhysicallySitsAnd')}
+        title={
+          <span className="ez-titled">
+            {tr('warehouseBinsBinsIndex.bins')}
+            <InfoButton
+              title={tr('warehouseBinsBinsIndex.bins')}
+              text={tr('warehouseBinsBinsIndex.whereStockPhysicallySitsAnd')}
+            />
+          </span>
+        }
         action={
           <Actions>
             {(warehouses.data?.length ?? 0) > 1 && (

@@ -1,5 +1,6 @@
 'use client';
 
+import { When } from '@/components/easy/when';
 import { useRouter } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 import { ConsignmentRoute, ConsignmentStatus } from '@skydrop/db';
@@ -138,7 +139,9 @@ export function ConsignmentsIndex(): ReactElement {
                   <Td align="right" className="sk-figure">
                     {c.receipts.length}
                   </Td>
-                  <Td>{new Date(c.createdAt).toLocaleDateString('en-IN')}</Td>
+                  <Td>
+                    <When iso={c.createdAt} />
+                  </Td>
                 </Tr>
               ))}
             </TBody>

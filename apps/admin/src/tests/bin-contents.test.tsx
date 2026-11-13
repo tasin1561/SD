@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/i18n/format';
 import { describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { BinContentsOverview } from '../app/(authed)/warehouse/bins/_components/bin-contents-overview';
@@ -293,7 +294,8 @@ describe('one bin, all of it', () => {
     expect(screen.getByText('Bin FLOOR')).toBeTruthy();
     expect(screen.getByText('Menev Store')).toBeTruthy();
     expect(
-      screen.getByText(new Date('2026-09-10T08:00:00.000Z').toLocaleString('en-IN')),
+      // The time follows the chosen language now (it was fixed to 'en-IN').
+      screen.getByText(formatDateTime('2026-09-10T08:00:00.000Z', 'en')),
     ).toBeTruthy();
     const mv = screen.getByRole('link', { name: 'Movements for this bin' });
     expect(mv.getAttribute('href')).toBe('/inventory/movements?warehouse=w-ccu&bin=b-floor');

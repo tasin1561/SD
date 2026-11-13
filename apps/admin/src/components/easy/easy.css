@@ -427,6 +427,7 @@ button.ez-guide__pick:hover {
   .ez-touch a.sk-btn,
   .ez-touch button.sk-filter__reset,
   .ez-touch button.oo-search-btn,
+  .ez-touch button.sk-tabs__tab,
   .ez-touch select.sk-select__native {
     min-height: 44px;
   }

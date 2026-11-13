@@ -1,5 +1,6 @@
 'use client';
 
+import { When } from '@/components/easy/when';
 import type { ReactElement } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
@@ -66,9 +67,7 @@ export function OpenReturns({
                   </Td>
                   <Td className="wh-note">{r.sellerName ?? '—'}</Td>
                   <Td className="sk-figure wh-note wh-nowrap">
-                    {r.rtoReceivedAt === null
-                      ? '—'
-                      : new Date(r.rtoReceivedAt).toLocaleDateString()}
+                    {r.rtoReceivedAt === null ? '—' : <When iso={r.rtoReceivedAt} />}
                   </Td>
                   <Td>
                     <span className="sk-figure">{r.itemCount}</span>

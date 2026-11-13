@@ -1,5 +1,6 @@
 'use client';
 
+import { When } from '@/components/easy/when';
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { Ident, Num } from '@skydrop/ui/components';
@@ -146,11 +147,7 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
                   <Td align="right" className="sk-figure">
                     {l.qtyReserved > 0 ? <Num value={l.qtyReserved} /> : '—'}
                   </Td>
-                  <Td>
-                    {l.lastMovementAt === null
-                      ? '—'
-                      : new Date(l.lastMovementAt).toLocaleString('en-IN')}
-                  </Td>
+                  <Td>{l.lastMovementAt === null ? '—' : <When iso={l.lastMovementAt} time />}</Td>
                   {canAdjust && (
                     <Td>
                       {/* The way stock leaves a bin by hand — for the

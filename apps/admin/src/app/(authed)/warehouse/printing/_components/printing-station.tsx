@@ -1,5 +1,7 @@
 'use client';
 
+import { When } from '@/components/easy/when';
+import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import Link from 'next/link';
 import { useEffect, useState, type KeyboardEvent, type ReactElement } from 'react';
@@ -129,8 +131,15 @@ export function PrintingStation(): ReactElement {
           { label: t('warehousePrintingPrintingStation.printing') },
         ]}
         Link={Link}
-        title={t('warehousePrintingPrintingStation.printing')}
-        subtitle={t('warehousePrintingPrintingStation.labelsFirstThenThePicking')}
+        title={
+          <span className="ez-titled">
+            {t('warehousePrintingPrintingStation.printing')}
+            <InfoButton
+              title={t('warehousePrintingPrintingStation.printing')}
+              text={t('warehousePrintingPrintingStation.labelsFirstThenThePicking')}
+            />
+          </span>
+        }
       />
 
       {/* Real buttons (the specs drive them by role), drawn as one
@@ -903,7 +912,7 @@ function BatchesTab(): ReactElement {
                   </Td>
                   <Td>
                     <div className="sk-figure">
-                      {new Date(b.createdAtIso).toLocaleString('en-IN')}
+                      <When iso={b.createdAtIso} time />
                     </div>
                     <div className="wh-faint">{b.createdByName ?? '—'}</div>
                   </Td>
@@ -913,7 +922,7 @@ function BatchesTab(): ReactElement {
                     ) : (
                       <>
                         <div className="sk-figure">
-                          {new Date(b.printedAtIso).toLocaleString('en-IN')}
+                          <When iso={b.printedAtIso} time />
                         </div>
                         <div className="wh-faint">{b.printedByName ?? '—'}</div>
                       </>
