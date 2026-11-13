@@ -16,6 +16,9 @@ import {
   type SupersedeReasonCode,
 } from '@/lib/api-hooks';
 import { ManualPlacementPanel } from '../../orders/_components/manual-placement-panel';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
+import './manual-placement.css';
 import { useT } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
@@ -135,7 +138,7 @@ function Row({ row }: { row: ManualPlacementQueueRow }): ReactElement {
         <AgeChip tone={waitTone(row.waitingHours)}>
           {row.waitingHours < 1
             ? t('manualPlacementManualPlacementIndex.justNow')
-            : `${row.waitingHours}h`}
+            : t('easy.hours', { n: row.waitingHours })}
         </AgeChip>
       </Td>
       <Td>
@@ -155,15 +158,22 @@ export function ManualPlacementIndex(): ReactElement {
   const rows = queue.data ?? [];
 
   return (
-    <div className="oo-page">
+    <div className="oo-page ez-touch mp-page">
       <PageHeader
-        title={t('manualPlacementManualPlacementIndex.manualPlacement')}
-        subtitle={t('manualPlacementManualPlacementIndex.parcelsNoIntegratedCourierWould')}
+        title={
+          <span className="ez-titled">
+            {t('manualPlacementManualPlacementIndex.manualPlacement')}
+            <InfoButton
+              title={t('manualPlacementManualPlacementIndex.manualPlacement')}
+              text={t('manualPlacementManualPlacementIndex.parcelsNoIntegratedCourierWould')}
+            />
+          </span>
+        }
       />
 
       <OoSection
         title={t('manualPlacementManualPlacementIndex.waitingForAWaybill')}
-        note={queue.data === undefined ? undefined : `${rows.length} waiting`}
+        note={queue.data === undefined ? undefined : t('easy.waitingCount', { n: rows.length })}
         flush
       >
         {queue.isLoading ? (
@@ -198,9 +208,52 @@ export function ManualPlacementIndex(): ReactElement {
               <Tr>
                 <Th>{t('manualPlacementManualPlacementIndex.order')}</Th>
                 <Th>{t('manualPlacementManualPlacementIndex.destination')}</Th>
-                <Th>COD</Th>
-                <Th>{t('manualPlacementManualPlacementIndex.whyItIsHere')}</Th>
-                <Th>{t('manualPlacementManualPlacementIndex.afterTheWaybill')}</Th>
+                <Th>{t('easy.cod')}</Th>
+                <Th>
+                  <span className="ez-titled">
+                    {t('manualPlacementManualPlacementIndex.whyItIsHere')}
+                    <InfoButton
+                      title={t('manualPlacementManualPlacementIndex.whyItIsHere')}
+                      text={t('ezPlacement.whyInfo')}
+                      facts={[
+                        {
+                          label: t('manualPlacementManualPlacementIndex.addressNotServed'),
+                          value: t('ezPlacement.whyNotServed'),
+                        },
+                        {
+                          label: t('manualPlacementManualPlacementIndex.courierRefusedIt'),
+                          value: t('ezPlacement.whyRefused'),
+                        },
+                        {
+                          label: t('manualPlacementManualPlacementIndex.courierUnreachable'),
+                          value: t('ezPlacement.whyUnreachable'),
+                        },
+                        {
+                          label: t('manualPlacementManualPlacementIndex.replacedByHand'),
+                          value: t('ezPlacement.whyByHand'),
+                        },
+                      ]}
+                    />
+                  </span>
+                </Th>
+                <Th>
+                  <span className="ez-titled">
+                    {t('manualPlacementManualPlacementIndex.afterTheWaybill')}
+                    <InfoButton
+                      title={t('manualPlacementManualPlacementIndex.afterTheWaybill')}
+                      facts={[
+                        {
+                          label: t('manualPlacementManualPlacementIndex.needsPicking'),
+                          value: t('ezPlacement.afterNeedsPicking'),
+                        },
+                        {
+                          label: t('manualPlacementManualPlacementIndex.readyToGo'),
+                          value: t('ezPlacement.afterReady'),
+                        },
+                      ]}
+                    />
+                  </span>
+                </Th>
                 <Th>{t('manualPlacementManualPlacementIndex.waiting')}</Th>
                 <Th>{t('manualPlacementManualPlacementIndex.placeIt')}</Th>
               </Tr>

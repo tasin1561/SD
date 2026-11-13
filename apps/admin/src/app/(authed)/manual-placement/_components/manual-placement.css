@@ -1,0 +1,24 @@
+/* Manual placement: the two action buttons sit in the last, narrowest
+   column. Their labels wrap rather than run off the edge of the table. */
+.mp-page .os-panel,
+.mp-page .os-tools {
+  min-width: 0;
+  max-width: 100%;
+}
+.mp-page .os-tools {
+  flex-wrap: wrap;
+}
+.mp-page .os-tools button.sk-btn {
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
+  text-align: left;
+}
+.mp-page td .os-panel {
+  padding: var(--sp-2);
+}
+.mp-page td .os-tools button.sk-btn {
+  width: 100%;
+  justify-content: flex-start;
+  border-radius: var(--r-md);
+}
