@@ -285,6 +285,8 @@ export const PORTAL_TEXT_ADMIN: ReadonlyArray<TextRow> = [
   ["ezTicket.helpReturned","The goods were sent back to the client. No money is paid."],
   ["ezTicket.helpWriteOff","The client agreed to take the loss. No money is paid and nothing goes back."],
   ["ezTicket.helpRejected","We do not agree with the claim. The ticket closes with no refund."],
+  ["ezWithdraw.helpPaid","Use this after the money has been sent and the remittance is recorded. It only links this request to that remittance and closes it. No money moves here."],
+  ["ezWithdraw.helpReject","The request is closed without paying. The client sees your reason, and the amount is free in their wallet again."],
   ["ezPlacement.whyInfo","Why no connected courier took this parcel. The courier’s own words, when there are any, are shown under the reason."],
   ["ezPlacement.whyNotServed","The courier does not deliver to this address or PIN code."],
   ["ezPlacement.whyRefused","The courier said no when the waybill was asked for. Read its message."],

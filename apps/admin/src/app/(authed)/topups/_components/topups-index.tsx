@@ -27,6 +27,9 @@ import {
 } from '@/lib/ops-hooks';
 import { MkAlert, MkCard, TopupChip } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 import { richMessage } from '@/i18n/client';
 
 /**
@@ -116,10 +119,17 @@ export function TopupsIndex(): ReactElement {
   const rows = list.data ?? [];
 
   return (
-    <div className="mk-page">
+    <div className="mk-page ez-touch">
       <PageHeader
-        title={tr('topupsTopupsIndex.walletTopUps')}
-        subtitle={tr('topupsTopupsIndex.clientsTellingUsTheyHave')}
+        title={
+          <span className="ez-titled">
+            {tr('topupsTopupsIndex.walletTopUps')}
+            <InfoButton
+              title={tr('topupsTopupsIndex.walletTopUps')}
+              text={tr('topupsTopupsIndex.clientsTellingUsTheyHave')}
+            />
+          </span>
+        }
         action={
           // The accounts moved to their own page. A pointer stays,
           // because with none configured nothing can ever arrive here,
@@ -251,7 +261,7 @@ export function TopupsIndex(): ReactElement {
                           asked about later. */}
                       {t.reviewedAt !== null && (
                         <span className="mk-faint">
-                          {new Date(t.reviewedAt).toLocaleString()}
+                          <When iso={t.reviewedAt} time />
                           {t.reviewedByEmail !== null ? ` · ${t.reviewedByEmail}` : ''}
                         </span>
                       )}

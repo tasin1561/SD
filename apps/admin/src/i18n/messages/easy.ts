@@ -252,6 +252,18 @@ export const easy = defineMessages({
   // ── Capacity (/system/capacity) ───────────────────────────────────────
   'ezCapacity.of': ['of {n} {unit}', '{n} {unit}-এর মধ্যে', '{n} {unit} में से'],
 
+  // ── Withdrawals (/withdrawals) ────────────────────────────────────────
+  'ezWithdraw.helpPaid': [
+    'Use this after the money has been sent and the remittance is recorded. It only links this request to that remittance and closes it. No money moves here.',
+    'টাকা পাঠানো এবং রেমিট্যান্স রেকর্ড করার পরে এটি ব্যবহার করুন। এটি শুধু এই অনুরোধকে সেই রেমিট্যান্সের সঙ্গে যুক্ত করে বন্ধ করে। এখানে কোনো টাকা সরে না।',
+    'पैसे भेजने और रेमिटेंस दर्ज करने के बाद इसे इस्तेमाल करें। यह केवल इस अनुरोध को उस रेमिटेंस से जोड़कर बंद करता है। यहाँ कोई पैसा नहीं चलता।',
+  ],
+  'ezWithdraw.helpReject': [
+    'The request is closed without paying. The client sees your reason, and the amount is free in their wallet again.',
+    'টাকা না দিয়েই অনুরোধটি বন্ধ হয়। ক্লায়েন্ট আপনার কারণটি দেখতে পান, এবং পরিমাণটি তাদের ওয়ালেটে আবার মুক্ত হয়।',
+    'अनुरोध बिना भुगतान के बंद होता है। क्लाइंट को आपका कारण दिखता है, और रकम उनके वॉलेट में फिर से उपलब्ध हो जाती है।',
+  ],
+
   // ── Manual placement (/manual-placement) ──────────────────────────────
   'ezPlacement.whyInfo': [
     'Why no connected courier took this parcel. The courier’s own words, when there are any, are shown under the reason.',

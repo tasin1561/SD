@@ -444,6 +444,8 @@ button.ez-guide__pick:hover {
     min-height: 44px;
   }
   .ez-touch a.sk-ident,
+  .ez-touch td a.mk-name,
+  .ez-touch td button.mk-inline-link,
   .ez-touch td a.oo-link,
   .ez-touch a.nsa-call {
     display: inline-flex;

@@ -16,7 +16,10 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { ChoiceGuide } from '@/components/easy/choice-guide';
+import { formatDateTime } from '@/i18n/format';
+import '@/components/easy/easy.css';
 
 type Mode = 'paid' | 'reject';
 
@@ -37,6 +40,7 @@ export function ResolveWithdrawalModal({
   readonly onClose: () => void;
 }): ReactElement {
   const t = useT();
+  const locale = useLocale();
   // Paying is only possible once approved — `markPaid` refuses anything
   // else. A PENDING request can still be rejected, so the modal opens
   // in the only mode that would work rather than offering one the
@@ -108,7 +112,7 @@ export function ResolveWithdrawalModal({
             <WithdrawalChip status={request.status} />
             <span className="mk-faint">
               {t('withdrawalsResolveWithdrawalModal.raised', {
-                value: new Date(request.createdAt).toLocaleString(),
+                value: formatDateTime(request.createdAt, locale),
               })}
             </span>
           </span>
@@ -193,6 +197,20 @@ export function ResolveWithdrawalModal({
               </label>
             ))}
           </fieldset>
+
+          {/* What each outcome does — hidden until somebody asks. */}
+          <ChoiceGuide
+            selected={mode}
+            onChoose={(m) => setMode(m)}
+            choices={(payable ? (['paid', 'reject'] as const) : (['reject'] as const)).map((m) => ({
+              value: m,
+              label:
+                m === 'paid'
+                  ? t('withdrawalsResolveWithdrawalModal.markPaid')
+                  : t('withdrawalsResolveWithdrawalModal.reject'),
+              helper: m === 'paid' ? t('ezWithdraw.helpPaid') : t('ezWithdraw.helpReject'),
+            }))}
+          />
 
           {mode === 'paid' ? (
             <TextField

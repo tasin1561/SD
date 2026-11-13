@@ -29,6 +29,9 @@ import {
   WithdrawalChip,
 } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import { When } from '@/components/easy/when';
+import '@/components/easy/easy.css';
 import { ClientFilter } from '@/components/client-filter';
 
 const PAGE_SIZE = 25;
@@ -89,10 +92,17 @@ export function WithdrawalsIndex(): ReactElement {
   }
 
   return (
-    <div className="mk-page">
+    <div className="mk-page ez-touch">
       <PageHeader
-        title={t('withdrawalsWithdrawalsIndex.withdrawals')}
-        subtitle={t('withdrawalsWithdrawalsIndex.clientWithdrawalRequestsAndThe')}
+        title={
+          <span className="ez-titled">
+            {t('withdrawalsWithdrawalsIndex.withdrawals')}
+            <InfoButton
+              title={t('withdrawalsWithdrawalsIndex.withdrawals')}
+              text={t('withdrawalsWithdrawalsIndex.clientWithdrawalRequestsAndThe')}
+            />
+          </span>
+        }
       />
 
       <div className="mk-kpis">
@@ -215,7 +225,7 @@ export function WithdrawalsIndex(): ReactElement {
                   <Td>
                     <div className="mk-cell">
                       <span className="mk-when sk-figure">
-                        {new Date(w.createdAt).toLocaleDateString()}
+                        <When iso={w.createdAt} />
                       </span>
                       {/* The wait, on the row that is waiting. A date alone
                           makes an operator do the arithmetic, and they only
