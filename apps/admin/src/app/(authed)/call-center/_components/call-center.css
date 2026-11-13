@@ -355,3 +355,97 @@
 .cc-history-pager {
   padding-top: var(--sp-3);
 }
+
+/* ── The bench: read on the left, record on the right ─────────────────── */
+.cc-bench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.cc-bench__info {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.cc-bench__act {
+  min-width: 0;
+  /* The jump link lands here; keep the form clear of the sticky top bar. */
+  scroll-margin-top: calc(var(--sk-sticky-top, 64px) + var(--sp-3));
+}
+@media (min-width: 1100px) {
+  .cc-bench {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+    align-items: start;
+  }
+  .cc-bench__act {
+    position: sticky;
+    top: calc(var(--sk-sticky-top, 64px) + var(--sp-3));
+    max-height: calc(100dvh - var(--sk-sticky-top, 64px) - var(--sp-6));
+    /* Top padding: the first field's floating label sits above its box
+       and a scroll container would clip it. */
+    padding: var(--sp-2) 0 var(--sp-1) var(--sp-4);
+    border-left: 1px solid var(--line);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .cc-bench__act .cc-form {
+    padding-top: 0;
+  }
+  /* Full width in the narrow column, and clear of the corner launcher. */
+  .cc-bench__act .cc-form__submit > * {
+    flex: 1 1 auto;
+  }
+}
+/* Narrow screens: one press to the form instead of a long scroll. */
+.cc-jump {
+  position: sticky;
+  bottom: var(--sp-3);
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--blue-line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: var(--elev-2);
+  color: var(--blue-on-tint);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  text-decoration: none;
+}
+.cc-jump:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+@media (min-width: 1100px) {
+  .cc-jump {
+    display: none;
+  }
+}
+
+/* On a touch screen the links an agent presses mid-call are finger-sized:
+   the number to dial, its copy button, and "Open" on a client's issue. */
+@media (pointer: coarse) {
+  .cc-recipient a,
+  .cc-recipient button,
+  .cc-purpose a {
+    min-height: 44px;
+  }
+  .cc-recipient a,
+  .cc-purpose a {
+    display: inline-flex;
+    align-items: center;
+  }
+  /* The outcome dropdown and the notes box, the two things typed into
+     with a thumb at the end of every call. */
+  .cc-form select,
+  .cc-bench .cc-form input.sk-field__input {
+    height: auto;
+    min-height: 44px;
+  }
+}

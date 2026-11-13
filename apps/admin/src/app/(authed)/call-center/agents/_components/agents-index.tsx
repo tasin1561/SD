@@ -4,6 +4,8 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { Num } from '@skydrop/ui/components';
 import { Headset, PhoneCall, UserCheck } from 'lucide-react';
 import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { KpiCard } from '@skydrop/ui/app/kpi-card';
@@ -59,8 +61,15 @@ export function AgentsIndex(): ReactElement {
   return (
     <div className="oo-page">
       <PageHeader
-        title={t('callCenterAgentsAgentsIndex.callAgents')}
-        subtitle={t('callCenterAgentsAgentsIndex.whoIsTakingCallsWhat')}
+        title={
+          <span className="ez-titled">
+            {t('callCenterAgentsAgentsIndex.callAgents')}
+            <InfoButton
+              title={t('callCenterAgentsAgentsIndex.callAgents')}
+              text={t('callCenterAgentsAgentsIndex.whoIsTakingCallsWhat')}
+            />
+          </span>
+        }
       />
 
       <div className="oo-kpis">

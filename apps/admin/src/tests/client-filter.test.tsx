@@ -100,7 +100,8 @@ describe('Client filter - call queue', () => {
       expect(last?.searchParams.get('status')).toBe('OPEN');
     });
     // The two existing filters are still there.
-    expect(screen.getByRole('combobox', { name: /^status$/i })).toBeInTheDocument();
+    // The status filter is a row of pills now (owner, 2026-11-13), still labelled Status.
+    expect(screen.getByRole('group', { name: /^status$/i })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /^agent$/i })).toBeInTheDocument();
   });
 

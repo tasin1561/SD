@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { Ident, Num } from '@skydrop/ui/components';
 import { ArrowLeftRight, Clock3, Headset, PhoneCall, Users } from 'lucide-react';
 import { PageHeader } from '@skydrop/ui/app/page-header';
+import { InfoButton } from '@/components/easy/info-button';
+import { FilterPills } from '@/components/easy/filter-pills';
+import '@/components/easy/easy.css';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { KpiCard } from '@skydrop/ui/app/kpi-card';
@@ -95,8 +98,15 @@ export function QueueIndex(): ReactElement {
   return (
     <div className="oo-page">
       <PageHeader
-        title={t('callCenterQueueQueueIndex.callQueue')}
-        subtitle={t('callCenterQueueQueueIndex.whatIsWaitingToBe')}
+        title={
+          <span className="ez-titled">
+            {t('callCenterQueueQueueIndex.callQueue')}
+            <InfoButton
+              title={t('callCenterQueueQueueIndex.callQueue')}
+              text={t('callCenterQueueQueueIndex.whatIsWaitingToBe')}
+            />
+          </span>
+        }
         action={
           <LinkButton href="/call-center" variant="ghost" icon={<Headset size={15} />}>
             {t('callCenterQueueQueueIndex.agentStation')}
@@ -140,21 +150,27 @@ export function QueueIndex(): ReactElement {
         />
       </div>
 
-      <div className="cc-filters">
-        <Select
-          id="q-status"
+      {/* Which calls to show: six choices, all on the screen, in the
+          reader's language (four of them were raw status words in lower
+          case in every language). The "i" says what each one means. */}
+      <div className="ez-titled">
+        <FilterPills
           label={t('callCenterQueueQueueIndex.status')}
           value={status}
-          onChange={(e) => change(() => setStatus(e.target.value))}
-        >
-          <option value="OPEN">{t('callCenterQueueQueueIndex.openWaitingOrAssigned')}</option>
-          <option value="">{t('callCenterQueueQueueIndex.allIncludingFinishedAttempts')}</option>
-          {['PENDING', 'ASSIGNED', 'COMPLETED', 'EXPIRED'].map((s) => (
-            <option key={s} value={s}>
-              {s.toLowerCase()}
-            </option>
-          ))}
-        </Select>
+          onChange={(v) => change(() => setStatus(v))}
+          options={[
+            { key: 'OPEN', label: t('ezQueue.open') },
+            { key: 'PENDING', label: t('ezQueue.waiting') },
+            { key: 'ASSIGNED', label: t('ezQueue.withAgent') },
+            { key: 'COMPLETED', label: t('ezQueue.finished') },
+            { key: 'EXPIRED', label: t('ezQueue.expired') },
+            { key: '', label: t('ezQueue.all') },
+          ]}
+        />
+        <InfoButton title={t('callCenterQueueQueueIndex.status')} text={t('ezQueue.statusInfo')} />
+      </div>
+
+      <div className="cc-filters">
         <Select
           id="q-agent"
           label={t('callCenterQueueQueueIndex.agent')}

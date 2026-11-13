@@ -10,7 +10,8 @@
   gap: var(--sp-2);
   min-width: 0;
 }
-.si-count {
+/* `button.`: see the note on filter pills in components/easy/easy.css. */
+button.si-count {
   display: inline-flex;
   align-items: baseline;
   gap: var(--sp-2);
