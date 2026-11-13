@@ -1717,6 +1717,8 @@ Reference this document at every step. Do not deviate without explicit approval.
 
 Four tables, no FKs to people (a conversation outlives its account and support session — the `audit_logs` precedent): `assistant_conversations` (audience STAFF|SELLER|STORE|ASSOCIATE, soft `owner_user_id` = `staff_users`/`seller_users`/`store_users` id by audience, `seller_id`, `store_id`, nullable `impersonated_by_staff_id`, soft delete), `assistant_messages` (APPEND-ONLY, `content` = the full block array incl. thinking blocks), `assistant_tool_calls` (audit: tool, validated input, result size, ok/error code — never the result), `assistant_usage` (one row per model response: tokens, cache tokens, `cost_usd`). Settings: `assistant.enabled`, `assistant.monthly_budget_usd`, `assistant.daily_messages_per_user`.
 
+**Attachments (2026-11-13):** `assistant_attachments` — a file attached to a question (kind IMAGE|PDF). Owner columns mirror `assistant_conversations`; FKs to the conversation and (once sent) the message, both RESTRICT. IMMUTABLE after insert except `message_id` set once (guarded `updateMany where message_id IS NULL`). `storage_key` (`assistant/<conversationId>/<uuid>`) points at the REBUILT bytes in the private bucket; `sha256`/`bytes` describe those bytes. The stored user turn holds `{type:'skydrop_attachment', id, mediaType, tokens}`, resolved to an image/document block at replay.
+
 ---
 
 *Last updated: 2026-05-14*

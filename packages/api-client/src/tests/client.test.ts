@@ -79,6 +79,21 @@ describe('ApiClient', () => {
     expect(fetchImpl.mock.calls[1]![1].headers.get('Authorization')).toBe('Bearer TOKEN-A');
   });
 
+  it('a FormData body goes out untouched: no JSON Content-Type, no stringify (the runtime adds the boundary)', async () => {
+    const fetchImpl = mockFetch([
+      { urlMatch: /\/api\/up$/, res: { status: 201, body: { ok: true } } },
+    ]);
+    const { client } = makeClient(fetchImpl as unknown as typeof fetch);
+    const form = new FormData();
+    form.append('file', new File([new Uint8Array([1, 2])], 'a.png', { type: 'image/png' }));
+    await client.request('/api/up', { method: 'POST', body: form });
+    const init = fetchImpl.mock.calls[0]![1] as RequestInit;
+    expect(init.body).toBe(form);
+    expect(new Headers(init.headers).has('Content-Type')).toBe(false);
+    // and a plain object is still JSON
+    await client.request('/api/up', { method: 'POST', body: { a: 1 } }).catch(() => undefined);
+  });
+
   it('401 → single-flight refresh → retry → returns success on the second attempt', async () => {
     const future = '2099-01-01T00:00:00.000Z';
     const fetchImpl = mockFetch([

@@ -18,6 +18,8 @@ export type NoticeCode =
   | 'RESTING_DAILY'
   | 'REFUSED'
   | 'TRUNCATED'
+  | 'ATTACHMENTS_TOO_LARGE'
+  | 'ATTACHMENT_UNAVAILABLE'
   | 'FAILED';
 
 export interface HelpLink {
@@ -43,6 +45,8 @@ const NOTICE_CODES: ReadonlySet<string> = new Set([
   'RESTING_DAILY',
   'REFUSED',
   'TRUNCATED',
+  'ATTACHMENTS_TOO_LARGE',
+  'ATTACHMENT_UNAVAILABLE',
   'FAILED',
 ]);
 

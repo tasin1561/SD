@@ -179,3 +179,5 @@ export { StoreDisputeKind } from '@prisma/client';
 // 2026-11-12 — in-app AI assistant (phase A): which console a conversation
 // belongs to, and who a stored turn is from.
 export { AssistantAudience, AssistantMessageRole } from '@prisma/client';
+// 2026-11-13 — what an assistant attachment is.
+export { AssistantAttachmentKind } from '@prisma/client';

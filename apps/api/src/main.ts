@@ -31,6 +31,15 @@ const DOCUMENT_WEBHOOK_PREFIX = '/public/tracking/documents';
  * the document pushes use rather than a figure cut to today's size.
  */
 const WALLET_IMPORT_PREFIX = '/admin/courier/wallet-import';
+/**
+ * The assistant's file upload: POST /{admin,seller,store}/assistant/conversations/<id>/attachments.
+ * A multipart body (never read by the JSON parser), so only the
+ * content-length guard below needs to know it: 10 MB of file plus the
+ * multipart framing. multer enforces the real cap while it streams.
+ */
+const ASSISTANT_UPLOAD_PATH =
+  /^\/(admin|seller|store)\/assistant\/conversations\/[0-9a-f-]{36}\/attachments(\?|$)/;
+const ASSISTANT_UPLOAD_BODY_LIMIT_BYTES = 10 * 1024 * 1024 + 64 * 1024;
 const GENERAL_BODY_LIMIT = '1mb';
 const GENERAL_BODY_LIMIT_BYTES = 1024 * 1024;
 const DOCUMENT_BODY_LIMIT = '12mb';
@@ -78,6 +87,20 @@ async function bootstrap(): Promise<void> {
       return next();
     }
     const declared = Number(req.headers['content-length'] ?? '0');
+    if (req.method === 'POST' && ASSISTANT_UPLOAD_PATH.test(url)) {
+      if (Number.isFinite(declared) && declared > ASSISTANT_UPLOAD_BODY_LIMIT_BYTES) {
+        res.statusCode = 413;
+        res.setHeader('content-type', 'application/json');
+        res.end(
+          JSON.stringify({
+            code: 'PAYLOAD_TOO_LARGE',
+            message: 'Request body is larger than this endpoint accepts',
+          }),
+        );
+        return;
+      }
+      return next();
+    }
     if (Number.isFinite(declared) && declared > GENERAL_BODY_LIMIT_BYTES) {
       res.statusCode = 413;
       res.setHeader('content-type', 'application/json');

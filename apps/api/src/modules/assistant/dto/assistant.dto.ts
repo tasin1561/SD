@@ -1,6 +1,16 @@
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsOptional, IsString, MaxLength, MinLength, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
 import { MAX_QUESTION_CHARS } from '../services/assistant-chat.service';
 
 export class CreateConversationDto {
@@ -52,4 +62,13 @@ export class SendAssistantMessageDto {
   @ValidateNested()
   @Type(() => AssistantPageContextDto)
   context?: AssistantPageContextDto;
+
+  /** Files uploaded to THIS conversation and not yet sent. Anyone else's, or another conversation's, is a 404. */
+  @ApiPropertyOptional({ type: [String], maxItems: 3 })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(3)
+  @ArrayUnique()
+  @IsUUID('7', { each: true })
+  attachmentIds?: string[];
 }

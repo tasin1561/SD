@@ -7,8 +7,11 @@ import {
   AssistantModelGateway,
   type AssistantModelRequest,
 } from '../../src/modules/assistant/services/assistant-model-gateway';
+import { NotFoundException } from '@nestjs/common';
+import { AssistantAttachmentService } from '../../src/modules/assistant/services/assistant-attachment.service';
 import type {
   AssistantStoreService,
+  AttachmentRow,
   ConversationRow,
   StoredMessage,
 } from '../../src/modules/assistant/services/assistant-store.service';
@@ -155,6 +158,97 @@ export class MemoryStore {
       createdAt: new Date(),
     });
   }
+  // ── attachments: the same ownership predicate the real store applies ──
+  attachments: Array<
+    AttachmentRow & {
+      audience: AssistantAudience;
+      ownerUserId: string;
+      impersonatedByStaffId: string | null;
+    }
+  > = [];
+  /** Rows reading back as present or missing, for the bucket-failure test. */
+  async appendQuestion(
+    scope: CallerScope,
+    conversationId: string,
+    content: unknown,
+    attachmentIds: readonly string[],
+  ) {
+    const mine = (a: (typeof this.attachments)[number]) =>
+      attachmentIds.includes(a.id) &&
+      a.conversationId === conversationId &&
+      a.messageId === null &&
+      a.audience === scope.audience &&
+      a.ownerUserId === scope.userId &&
+      a.impersonatedByStaffId === scope.impersonatingStaffId;
+    const hits = this.attachments.filter(mine);
+    if (hits.length !== attachmentIds.length) {
+      throw new NotFoundException({ code: 'ASSISTANT_ATTACHMENT_NOT_FOUND', message: 'x' });
+    }
+    await this.appendMessage(conversationId, 'USER', content, true);
+    const id = this.rows[this.rows.length - 1]?.id ?? '';
+    for (const h of hits) (h as { messageId: string | null }).messageId = id;
+  }
+  async createAttachment(row: {
+    scope: CallerScope;
+    conversationId: string;
+    kind: 'IMAGE' | 'PDF';
+    mediaType: string;
+    originalName: string;
+    bytes: number;
+    pages: number | null;
+    width: number | null;
+    height: number | null;
+    sha256: string;
+    storageKey: string;
+  }): Promise<AttachmentRow> {
+    const { scope: sc, ...rest } = row;
+    const a = {
+      ...rest,
+      id: `0191a000-0000-7000-8000-${String(++this.seq + 5000).padStart(12, '0')}`,
+      messageId: null,
+      audience: sc.audience,
+      ownerUserId: sc.userId,
+      impersonatedByStaffId: sc.impersonatingStaffId,
+    };
+    this.attachments.push(a);
+    return a;
+  }
+  async findOwnedAttachments(
+    scope: CallerScope,
+    conversationId: string,
+    ids: readonly string[],
+    unsentOnly: boolean,
+  ) {
+    return this.attachments.filter(
+      (a) =>
+        ids.includes(a.id) &&
+        a.conversationId === conversationId &&
+        (!unsentOnly || a.messageId === null) &&
+        a.audience === scope.audience &&
+        a.ownerUserId === scope.userId &&
+        a.impersonatedByStaffId === scope.impersonatingStaffId,
+    );
+  }
+  async countUnsentAttachments(scope: CallerScope, conversationId: string) {
+    return (
+      await this.findOwnedAttachments(
+        scope,
+        conversationId,
+        this.attachments.map((a) => a.id),
+        true,
+      )
+    ).length;
+  }
+  async attachmentsByIds(conversationId: string, ids: readonly string[]) {
+    return this.attachments.filter(
+      (a) => a.conversationId === conversationId && ids.includes(a.id),
+    );
+  }
+  async sentAttachments(conversationId: string) {
+    return this.attachments.filter(
+      (a) => a.conversationId === conversationId && a.messageId !== null,
+    );
+  }
   async appendToolRound(conversationId: string, a: unknown, u: unknown) {
     await this.appendMessage(conversationId, 'ASSISTANT', a);
     await this.appendMessage(conversationId, 'USER', u);
@@ -226,7 +320,28 @@ export function message(
   } as unknown as Anthropic.Message;
 }
 
+/** An in-memory stand-in for the private bucket. */
+export class FakeSpaces {
+  objects = new Map<string, Buffer>();
+  failReads = false;
+  async putObject(key: string, body: Buffer) {
+    this.objects.set(key, Buffer.from(body));
+  }
+  async getObject(key: string) {
+    if (this.failReads) throw new Error('bucket down');
+    return this.objects.get(key) ?? null;
+  }
+  async deleteObjects(keys: string[]) {
+    for (const k of keys) this.objects.delete(k);
+  }
+  async presignGetUrl(key: string, ttl = 900, response?: { contentDisposition?: string }) {
+    return `https://signed.example/${key}?ttl=${ttl}&d=${encodeURIComponent(response?.contentDisposition ?? '')}`;
+  }
+}
+
 export interface ChatRig {
+  readonly attachments: AssistantAttachmentService;
+  readonly spaces: FakeSpaces;
   readonly chat: AssistantChatService;
   readonly store: MemoryStore;
   readonly gateway: FakeGateway;
@@ -247,11 +362,17 @@ export function chatRig(
     new FakeSettings(opts.settings ?? {}) as never,
     store as unknown as AssistantStoreService,
   );
+  const spaces = new FakeSpaces();
+  const attachments = new AssistantAttachmentService(
+    store as unknown as AssistantStoreService,
+    spaces as never,
+  );
   const chat = new AssistantChatService(
     store as unknown as AssistantStoreService,
     budget,
     fakeRegistry(opts.orders ?? []),
     gateway,
+    attachments,
   );
-  return { chat, store, gateway };
+  return { chat, store, gateway, attachments, spaces };
 }

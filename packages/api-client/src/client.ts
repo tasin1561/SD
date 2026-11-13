@@ -45,7 +45,7 @@ export interface ApiClientOptions {
 
 export interface ApiRequestInit extends Omit<RequestInit, 'body' | 'method'> {
   readonly method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
-  readonly body?: unknown; // serialized as JSON if present
+  readonly body?: unknown; // serialized as JSON if present; a FormData is sent as multipart, untouched
   /** If true, suppress the on-401 silent-refresh-and-retry (used by
    *  the refresh call itself, and by /me when the caller wants to
    *  treat a 401 as "not logged in" rather than "try to refresh"). */
@@ -188,7 +188,10 @@ export class ApiClient {
   private async doFetch(path: string, init: ApiRequestInit): Promise<Response> {
     const headers = new Headers(init.headers);
     headers.set('Accept', 'application/json');
-    if (init.body !== undefined) headers.set('Content-Type', 'application/json');
+    // A FormData body is multipart: the runtime sets `Content-Type` WITH
+    // its boundary, so setting it here would break the upload.
+    const multipart = typeof FormData !== 'undefined' && init.body instanceof FormData;
+    if (init.body !== undefined && !multipart) headers.set('Content-Type', 'application/json');
 
     const token = this.tokenStore.get().token;
     if (token !== null) headers.set('Authorization', `Bearer ${token}`);
@@ -198,7 +201,9 @@ export class ApiClient {
       headers,
       credentials: 'include',
       ...(init.signal ? { signal: init.signal } : {}),
-      ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+      ...(init.body !== undefined
+        ? { body: multipart ? (init.body as FormData) : JSON.stringify(init.body) }
+        : {}),
       cache: 'no-store',
     });
   }

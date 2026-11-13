@@ -49,6 +49,8 @@ describe('every fixed notice exists in all five languages', () => {
     'RESTING_DAILY',
     'REFUSED',
     'TRUNCATED',
+    'ATTACHMENTS_TOO_LARGE',
+    'ATTACHMENT_UNAVAILABLE',
     'FAILED',
   ];
   const langs: ReplyLanguage[] = ['en', 'bn', 'hi', 'bnLatn', 'hiLatn'];

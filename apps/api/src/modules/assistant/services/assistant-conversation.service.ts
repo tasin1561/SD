@@ -7,6 +7,15 @@ export interface TranscriptLine {
   readonly role: 'user' | 'assistant';
   readonly text: string;
   readonly at: string;
+  /** Chips for the files a question carried: name, type and size. Never the bytes. */
+  readonly attachments?: ReadonlyArray<{
+    readonly id: string;
+    readonly kind: 'IMAGE' | 'PDF';
+    readonly mediaType: string;
+    readonly name: string;
+    readonly bytes: number;
+    readonly pages: number | null;
+  }>;
 }
 
 type Block = { type?: string; text?: string };
@@ -52,13 +61,27 @@ export class AssistantConversationService {
     const conversation = await this.chat.requireOwned(scope, id);
     const rows = await this.store.messages(conversation.id);
     const messages: TranscriptLine[] = [];
+    const sent = await this.store.sentAttachments(conversation.id);
     for (const r of rows) {
       const text = visibleText(r.content);
-      if (text.trim() === '') continue;
+      const files = sent.filter((a) => a.messageId === r.id);
+      if (text.trim() === '' && files.length === 0) continue;
       messages.push({
         role: r.role === 'USER' ? 'user' : 'assistant',
         text,
         at: r.createdAt.toISOString(),
+        ...(files.length > 0
+          ? {
+              attachments: files.map((a) => ({
+                id: a.id,
+                kind: a.kind,
+                mediaType: a.mediaType,
+                name: a.originalName,
+                bytes: a.bytes,
+                pages: a.pages,
+              })),
+            }
+          : {}),
       });
     }
     return { conversation, messages };

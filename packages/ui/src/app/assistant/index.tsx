@@ -7,6 +7,7 @@ import {
   History,
   Info,
   MessageSquarePlus,
+  Paperclip,
   Send,
   Sparkles,
   Volume2,
@@ -20,12 +21,25 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ClipboardEvent,
+  type DragEvent,
   type KeyboardEvent,
   type MouseEvent,
   type ReactElement,
 } from 'react';
 import { useLocale, useUiT } from '../i18n-client';
 import { readLastError } from '../last-error';
+import {
+  AttachmentChip,
+  FILE_ACCEPT,
+  MAX_FILES,
+  SentFiles,
+  describeUploadError,
+  kindOfFile,
+  type PendingFile,
+  type SentFile,
+  type UploadedAttachment,
+} from './attachments';
 import { trapTab, useInertBackground, useIsPhone } from './phone-sheet';
 import {
   ASSISTANT_API_BASE,
@@ -38,6 +52,7 @@ import { readAssistantStream, type HelpLink, type NoticeCode } from './sse';
 import { useAssistantSound } from './sound';
 import './assistant.css';
 
+export * from './attachments';
 export * from './sse';
 export * from './markdown';
 export * from './quick-actions';
@@ -76,6 +91,10 @@ interface ChatMessage {
   readonly notice?: Notice;
   /** The question to re-send when a send failed. */
   readonly retryText?: string;
+  /** The files it carried, to re-send with it. */
+  readonly retryIds?: readonly string[];
+  /** The files that went with a question (chips: name, type, size; never bytes). */
+  readonly attachments?: readonly SentFile[];
 }
 
 interface ConversationRow {
@@ -90,6 +109,13 @@ interface ConversationDetail {
     readonly role: 'user' | 'assistant';
     readonly text: string;
     readonly at: string;
+    readonly attachments?: ReadonlyArray<{
+      readonly id: string;
+      readonly kind: 'IMAGE' | 'PDF';
+      readonly name: string;
+      readonly bytes: number;
+      readonly pages: number | null;
+    }>;
   }>;
 }
 
@@ -195,6 +221,9 @@ export function AssistantWidget({
     { state: 'loading' } | { state: 'error' } | { state: 'ready'; rows: ConversationRow[] }
   >({ state: 'loading' });
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [pending, setPending] = useState<PendingFile[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const [attachNote, setAttachNote] = useState('');
 
   const launcherRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -203,6 +232,10 @@ export function AssistantWidget({
   const abortRef = useRef<AbortController | null>(null);
   const wasOpen = useRef(false);
   const panelRef = useRef<HTMLElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const convPromise = useRef<Promise<string> | null>(null);
+  // Every blob: URL made for a thumbnail, revoked when the chat is left.
+  const blobUrls = useRef<string[]>([]);
   const isPhone = useIsPhone();
   // The phone sheet covers the whole screen, so it is modal; the desktop side panel is not.
   const modal = open && isPhone;
@@ -267,7 +300,128 @@ export function AssistantWidget({
     if (el && stickRef.current) el.scrollTop = el.scrollHeight;
   }, [messages, busy, view]);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      blobUrls.current.forEach((u) => URL.revokeObjectURL(u));
+    },
+    [],
+  );
+
+  const uploading = pending.some((f) => f.state === 'busy');
+
+  /** The conversation files and questions belong to: made on first need, once. */
+  const ensureConversation = useCallback((): Promise<string> => {
+    if (conversationId !== null) return Promise.resolve(conversationId);
+    if (convPromise.current === null) {
+      convPromise.current = transport
+        .request<{ id: string }>(`${base}/conversations`, { method: 'POST', body: {} })
+        .then((created) => {
+          setConversationId(created.id);
+          return created.id;
+        })
+        .catch((e: unknown) => {
+          convPromise.current = null;
+          throw e;
+        });
+    }
+    return convPromise.current;
+  }, [base, conversationId, transport]);
+
+  const patchFile = (key: string, fn: (f: PendingFile) => PendingFile): void =>
+    setPending((all) => all.map((f) => (f.key === key ? fn(f) : f)));
+
+  const uploadOne = async (file: File, key: string): Promise<void> => {
+    try {
+      const id = await ensureConversation();
+      const form = new FormData();
+      form.append('file', file, file.name);
+      const res = await transport.request<UploadedAttachment>(
+        `${base}/conversations/${id}/attachments`,
+        { method: 'POST', body: form },
+      );
+      patchFile(key, (f) => ({
+        ...f,
+        state: 'done',
+        id: res.id,
+        name: res.name,
+        // The size of the file we kept (the rebuilt copy), as a reload will show it.
+        size: res.bytes,
+        pages: res.pages,
+        kind: res.kind,
+      }));
+      setAnnounce(t('ui.assistant.attachReady', { name: res.name }));
+    } catch (e) {
+      patchFile(key, (f) => ({
+        ...f,
+        state: 'error',
+        error: describeUploadError(e, t('ui.assistant.attachFailed', { name: f.name })),
+      }));
+    }
+  };
+
+  const addFiles = (list: ArrayLike<File>): void => {
+    const files = Array.from(list);
+    if (files.length === 0) return;
+    const room = Math.max(0, MAX_FILES - pending.length);
+    const take = files.slice(0, room);
+    setAttachNote(files.length > take.length ? t('ui.assistant.attachMax') : '');
+    for (const file of take) {
+      const key = nextId();
+      const kind = kindOfFile(file);
+      let preview: string | undefined;
+      if (kind === 'IMAGE') {
+        try {
+          preview = URL.createObjectURL(file);
+          blobUrls.current.push(preview);
+        } catch {
+          preview = undefined;
+        }
+      }
+      setPending((all) => [
+        ...all,
+        {
+          key,
+          name: file.name === '' ? 'attachment' : file.name,
+          size: file.size,
+          kind,
+          state: 'busy',
+          ...(preview !== undefined ? { preview } : {}),
+        },
+      ]);
+      void uploadOne(file, key);
+    }
+  };
+
+  const removeFile = (key: string): void => {
+    setAttachNote('');
+    setPending((all) => all.filter((f) => f.key !== key));
+    inputRef.current?.focus();
+  };
+
+  const hasFiles = (e: DragEvent<HTMLElement>): boolean =>
+    Array.from(e.dataTransfer?.types ?? []).includes('Files');
+  const onDragOver = (e: DragEvent<HTMLElement>): void => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    setDragging(true);
+  };
+  const onDragLeave = (e: DragEvent<HTMLElement>): void => {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    setDragging(false);
+  };
+  const onDrop = (e: DragEvent<HTMLElement>): void => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    setDragging(false);
+    addFiles(e.dataTransfer.files);
+  };
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>): void => {
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (files.length === 0) return;
+    e.preventDefault();
+    addFiles(files);
+  };
 
   const growInput = (el: HTMLTextAreaElement): void => {
     el.style.height = 'auto';
@@ -290,9 +444,23 @@ export function AssistantWidget({
     });
 
   const send = useCallback(
-    async (raw: string): Promise<void> => {
+    async (raw: string, idsOverride?: readonly string[]): Promise<void> => {
       const text = raw.trim();
-      if (text === '' || busy) return;
+      if (text === '' || busy || uploading) return;
+      const ready = pending.filter((f) => f.state === 'done' && f.id !== undefined);
+      const attachmentIds = idsOverride ?? ready.map((f) => f.id as string);
+      const sentFiles: SentFile[] = ready.map((f) => ({
+        id: f.id as string,
+        kind: f.kind,
+        name: f.name,
+        bytes: f.size,
+        pages: f.pages ?? null,
+        ...(f.preview !== undefined ? { preview: f.preview } : {}),
+      }));
+      if (idsOverride === undefined) {
+        setPending((all) => all.filter((f) => f.state === 'error'));
+        setAttachNote('');
+      }
       sound.tick();
       setView('chat');
       setDraft('');
@@ -304,7 +472,14 @@ export function AssistantWidget({
       const now = new Date().toISOString();
       setMessages((all) => [
         ...all.filter((m) => m.retryText === undefined),
-        { id: nextId(), role: 'user', text, at: now, status: 'done' },
+        {
+          id: nextId(),
+          role: 'user',
+          text,
+          at: now,
+          status: 'done',
+          ...(sentFiles.length > 0 ? { attachments: sentFiles } : {}),
+        },
         { id: nextId(), role: 'assistant', text: '', at: now, status: 'streaming' },
       ]);
       const ac = new AbortController();
@@ -312,19 +487,14 @@ export function AssistantWidget({
       let sawNotice = false;
       let answer = '';
       try {
-        let id = conversationId;
-        if (id === null) {
-          const created = await transport.request<{ id: string }>(`${base}/conversations`, {
-            method: 'POST',
-            body: {},
-          });
-          id = created.id;
-          setConversationId(id);
-        }
+        const id = await ensureConversation();
         const context = buildContext(pathname);
+        const payload: Record<string, unknown> = { text };
+        if (context !== undefined) payload['context'] = context;
+        if (attachmentIds.length > 0) payload['attachmentIds'] = attachmentIds;
         const res = await transport.requestStream(`${base}/conversations/${id}/messages`, {
           method: 'POST',
-          body: context === undefined ? { text } : { text, context },
+          body: payload,
           signal: ac.signal,
         });
         if (res.body === null) throw new Error('no stream');
@@ -357,6 +527,7 @@ export function AssistantWidget({
           status: 'done',
           notice: { code: 'SEND_FAILED', text: t('ui.assistant.sendFailed'), helpLinks: [] },
           retryText: text,
+          ...(attachmentIds.length > 0 ? { retryIds: attachmentIds } : {}),
         }));
         sound.error();
       } finally {
@@ -367,7 +538,7 @@ export function AssistantWidget({
         }
       }
     },
-    [base, busy, conversationId, pathname, sound, t, transport],
+    [base, busy, ensureConversation, pathname, pending, sound, t, transport, uploading],
   );
 
   const newChat = (): void => {
@@ -376,6 +547,11 @@ export function AssistantWidget({
     setBusy(false);
     setMessages([]);
     setConversationId(null);
+    convPromise.current = null;
+    setPending([]);
+    setAttachNote('');
+    blobUrls.current.forEach((u) => URL.revokeObjectURL(u));
+    blobUrls.current = [];
     setAnnounce('');
     setView('chat');
     window.requestAnimationFrame(() => inputRef.current?.focus());
@@ -398,6 +574,9 @@ export function AssistantWidget({
       .request<ConversationDetail>(`${base}/conversations/${id}`)
       .then((d) => {
         setConversationId(d.conversation.id);
+        convPromise.current = null;
+        setPending([]);
+        setAttachNote('');
         setMessages(
           d.messages.map((m) => ({
             id: nextId(),
@@ -405,12 +584,43 @@ export function AssistantWidget({
             text: m.text,
             at: m.at,
             status: 'done' as const,
+            ...(m.attachments !== undefined && m.attachments.length > 0
+              ? {
+                  attachments: m.attachments.map((a) => ({
+                    id: a.id,
+                    kind: a.kind,
+                    name: a.name,
+                    bytes: a.bytes,
+                    pages: a.pages,
+                  })),
+                }
+              : {}),
           })),
         );
         stickRef.current = true;
         setView('chat');
       })
       .catch(() => setHistory({ state: 'error' }));
+  };
+
+  /** Owner-only signed link that downloads (never renders on our origin). */
+  const downloadFile = (file: SentFile): void => {
+    if (conversationId === null) return;
+    transport
+      .request<{ url: string }>(
+        `${base}/conversations/${conversationId}/attachments/${file.id}/download`,
+      )
+      .then((r) => {
+        if (!/^https?:\/\//.test(r.url)) return;
+        const a = document.createElement('a');
+        a.href = r.url;
+        a.rel = 'noopener noreferrer';
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      })
+      .catch(() => setAnnounce(t('ui.assistant.attachFailed', { name: file.name })));
   };
 
   const copy = (m: ChatMessage): void => {
@@ -500,6 +710,9 @@ export function AssistantWidget({
           data-open={open ? '1' : '0'}
           inert={!open}
           onKeyDown={onPanelKey}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
         >
           <div className="sk-ai-grab" aria-hidden="true" />
           <header className="sk-ai-head">
@@ -673,6 +886,9 @@ export function AssistantWidget({
                         ) : null}
                       </div>
                     )}
+                    {m.attachments !== undefined ? (
+                      <SentFiles files={m.attachments} t={t} onDownload={downloadFile} />
+                    ) : null}
                     {m.notice !== undefined ? (
                       <div className="sk-ai-notice" data-code={m.notice.code}>
                         <Info size={16} aria-hidden="true" />
@@ -694,7 +910,7 @@ export function AssistantWidget({
                               type="button"
                               className="sk-ai-cta"
                               disabled={busy}
-                              onClick={() => void send(m.retryText ?? '')}
+                              onClick={() => void send(m.retryText ?? '', m.retryIds ?? [])}
                             >
                               {t('ui.retry')}
                             </button>
@@ -738,6 +954,39 @@ export function AssistantWidget({
               void send(draft);
             }}
           >
+            {pending.length > 0 ? (
+              <ul className="sk-ai-files" aria-label={t('ui.assistant.attachments')}>
+                {pending.map((f) => (
+                  <AttachmentChip key={f.key} file={f} t={t} onRemove={removeFile} />
+                ))}
+              </ul>
+            ) : null}
+            {attachNote !== '' ? (
+              <p className="sk-ai-hint sk-ai-compose__note">{attachNote}</p>
+            ) : null}
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="sk-ai-sr"
+              accept={FILE_ACCEPT}
+              multiple
+              tabIndex={-1}
+              aria-hidden="true"
+              onChange={(e) => {
+                addFiles(e.target.files ?? []);
+                e.target.value = '';
+              }}
+            />
+            <button
+              type="button"
+              className="sk-ai-attach"
+              disabled={pending.length >= MAX_FILES}
+              onClick={() => fileInputRef.current?.click()}
+              aria-label={t('ui.assistant.attach')}
+              title={t('ui.assistant.attach')}
+            >
+              <Paperclip size={18} aria-hidden="true" />
+            </button>
             <label htmlFor={inputId} className="sk-ai-sr">
               {t('ui.assistant.inputLabel')}
             </label>
@@ -754,17 +1003,24 @@ export function AssistantWidget({
                 growInput(e.target);
               }}
               onKeyDown={onInputKey}
+              onPaste={onPaste}
             />
             <button
               type="submit"
               className="sk-ai-send"
-              disabled={busy || draft.trim() === ''}
-              aria-label={t('ui.assistant.send')}
-              title={t('ui.assistant.send')}
+              disabled={busy || uploading || draft.trim() === ''}
+              aria-label={uploading ? t('ui.assistant.attachWait') : t('ui.assistant.send')}
+              title={uploading ? t('ui.assistant.attachWait') : t('ui.assistant.send')}
             >
               <Send size={18} aria-hidden="true" />
             </button>
           </form>
+          {dragging ? (
+            <div className="sk-ai-drop" aria-hidden="true">
+              <Paperclip size={22} />
+              <span>{t('ui.assistant.attachDrop')}</span>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </>

@@ -10635,9 +10635,10 @@ model AssistantConversation {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz
 
-  messages  AssistantMessage[]
-  toolCalls AssistantToolCall[]
-  usage     AssistantUsage[]
+  messages    AssistantMessage[]
+  toolCalls   AssistantToolCall[]
+  usage       AssistantUsage[]
+  attachments AssistantAttachment[]
 
   @@index([audience, ownerUserId, updatedAt])
   @@map("assistant_conversations")
@@ -10657,6 +10658,7 @@ model AssistantMessage {
   createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz
 
   conversation AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  attachments  AssistantAttachment[]
 
   @@index([conversationId, id])
   @@map("assistant_messages")
@@ -10713,4 +10715,53 @@ model AssistantUsage {
   @@index([createdAt])
   @@index([callerUserId, createdAt])
   @@map("assistant_usage")
+}
+
+/// 2026-11-13 — what kind of file a person attached to a question.
+enum AssistantAttachmentKind {
+  IMAGE @map("image")
+  PDF   @map("pdf")
+
+  @@map("assistant_attachment_kind")
+}
+
+/// A file attached to an assistant question. IMMUTABLE after insert: the
+/// only UPDATE ever issued is linking `message_id` once, guarded by
+/// `updateMany where message_id IS NULL`. The bytes in the private bucket
+/// are the REBUILT copy (a fresh JPEG/PNG or a fresh PDF) — the upload
+/// itself is never stored — and they are replayed byte-identically on
+/// every later turn, because Haiku 5.5 binds thinking blocks to the exact
+/// prior bytes. The owner columns mirror `assistant_conversations`; a row
+/// is only ever read through them.
+model AssistantAttachment {
+  id             String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  conversationId String  @map("conversation_id") @db.Uuid
+  /// Null until the question that carries it is sent.
+  messageId      String? @map("message_id") @db.Uuid
+
+  audience              AssistantAudience
+  ownerUserId           String            @map("owner_user_id") @db.Uuid
+  sellerId              String?           @map("seller_id") @db.Uuid
+  storeId               String?           @map("store_id") @db.Uuid
+  impersonatedByStaffId String?           @map("impersonated_by_staff_id") @db.Uuid
+
+  kind         AssistantAttachmentKind
+  mediaType    String                  @map("media_type")
+  /// Display only: trimmed, control characters stripped, at most 120 characters.
+  originalName String                  @map("original_name")
+  /// Size of the REBUILT bytes.
+  bytes        Int
+  pages        Int?
+  width        Int?
+  height       Int?
+  sha256       String
+  storageKey   String                  @map("storage_key")
+  createdAt    DateTime                @default(now()) @map("created_at") @db.Timestamptz
+
+  conversation AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  message      AssistantMessage?     @relation(fields: [messageId], references: [id], onDelete: Restrict)
+
+  @@index([conversationId, createdAt])
+  @@index([messageId])
+  @@map("assistant_attachments")
 }

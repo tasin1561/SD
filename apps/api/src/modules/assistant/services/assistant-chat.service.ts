@@ -1,10 +1,18 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type Anthropic from '@anthropic-ai/sdk';
-import { windowStart, toApiMessages } from '../assistant-history';
+import { attachmentBlocksIn } from '../assistant-attachment-block';
+import { MAX_QUESTION_ATTACHMENT_BYTES } from '../assistant-attachment-rebuild';
+import {
+  estimateTokens,
+  toApiMessages,
+  windowStart,
+  type ApiFileBlock,
+} from '../assistant-history';
 import { detectReplyLanguage, helpLinks, noticeText, type NoticeCode } from '../assistant-language';
 import { assistantCostUsd } from '../assistant-pricing';
 import { systemPromptFor } from '../assistant-system-prompt';
 import { ASSISTANT_MODEL, type AssistantStreamEvent, type CallerScope } from '../assistant.types';
+import { AssistantAttachmentService, AttachmentUnavailable } from './assistant-attachment.service';
 import { AssistantBudgetService } from './assistant-budget.service';
 import { AssistantModelGateway, type AssistantModelRequest } from './assistant-model-gateway';
 import { AssistantStoreService, type ConversationRow } from './assistant-store.service';
@@ -16,6 +24,13 @@ export const MAX_OUTPUT_TOKENS = 6000;
 /** Tool rounds inside one answer. */
 export const MAX_TOOL_ROUNDS = 5;
 export const MAX_QUESTION_CHARS = 2000;
+/**
+ * What ONE question's files (plus its words) may cost in prompt tokens. The
+ * whole request must stay under 100K (above that the prompt is billed at
+ * 5x); history gets 60K, and the files of the current question get the
+ * same 60K minus 10K kept free for the tool rounds this question may add.
+ */
+export const ATTACHMENT_QUESTION_TOKEN_BUDGET = 50_000;
 
 type Emit = (event: AssistantStreamEvent) => void;
 
@@ -39,6 +54,7 @@ export class AssistantChatService {
     private readonly budget: AssistantBudgetService,
     private readonly registry: AssistantToolRegistry,
     private readonly gateway: AssistantModelGateway,
+    private readonly attachments: AssistantAttachmentService,
   ) {}
 
   /** 404 unless the conversation is the caller's (shared by every endpoint). */
@@ -59,6 +75,7 @@ export class AssistantChatService {
     text: string,
     emit: Emit,
     pageContext?: AssistantPageContext | null,
+    attachmentIds: readonly string[] = [],
   ): Promise<void> {
     const conv = await this.requireOwned(scope, conversationId);
     const lang = detectReplyLanguage(text);
@@ -86,9 +103,51 @@ export class AssistantChatService {
     // the live bug of 2026-11-12: every second question failed.) The
     // transcript hides it — see `visibleText`.
     const ctxText = renderPageContext(pageContext);
-    const question: Anthropic.TextBlockParam[] = [{ type: 'text', text }];
+
+    // The files this question carries: the caller's own, in this
+    // conversation, unsent (else a 404 — the controller has already asked
+    // once, before the stream opened; the link below asks again atomically).
+    const files = await this.attachments.requireUnsent(scope, conv.id, attachmentIds);
+    let loaded = new Map<string, ApiFileBlock>();
+    if (files.length > 0) {
+      const fileBytes = files.reduce((n, f) => n + f.bytes, 0);
+      const fileTokens = files.reduce((n, f) => n + attachmentBlocksTokens(this.attachments, f), 0);
+      // Too big to ever fit: refuse BEFORE the question is stored and
+      // before Claude is called. The files stay unsent, so the person can
+      // remove one and ask again.
+      if (
+        fileBytes > MAX_QUESTION_ATTACHMENT_BYTES ||
+        fileTokens + estimateTokens(text) > ATTACHMENT_QUESTION_TOKEN_BUDGET
+      ) {
+        return notice('ATTACHMENTS_TOO_LARGE');
+      }
+      // Read the bytes back NOW, before anything is stored: a question
+      // that cannot be replayed must not become part of the history.
+      try {
+        loaded = await this.attachments.loadBlocks(
+          conv.id,
+          files.map((f) => f.id),
+        );
+      } catch (e) {
+        if (e instanceof AttachmentUnavailable) return notice('ATTACHMENT_UNAVAILABLE');
+        throw e;
+      }
+    }
+
+    const question: Anthropic.ContentBlockParam[] = [
+      // Files first, then the words: the order the API recommends.
+      ...files.map(
+        (f) => this.attachments.storedBlock(f) as unknown as Anthropic.ContentBlockParam,
+      ),
+      { type: 'text', text },
+    ];
     if (ctxText !== null) question.push({ type: 'text', text: ctxText });
-    await this.store.appendMessage(conv.id, 'USER', question, true);
+    await this.store.appendQuestion(
+      scope,
+      conv.id,
+      question,
+      files.map((f) => f.id),
+    );
     await this.store.setTitleIfEmpty(conv.id, text.replace(/\s+/g, ' ').slice(0, 60));
 
     // The window is fixed ONCE per question: if it moved between tool
@@ -103,7 +162,25 @@ export class AssistantChatService {
         break;
       }
     }
-    const messages = toApiMessages(rows, start, currentTurnStart);
+    // Earlier turns' files, read back from the bucket (the same immutable
+    // bytes as the first time). A failed read ends THIS turn with a plain
+    // notice; it is never a 500 and never a different prompt.
+    const wanted = new Set<string>();
+    for (let i = start; i < rows.length; i++) {
+      for (const b of attachmentBlocksIn(rows[i]?.content)) {
+        if (!loaded.has(b.id)) wanted.add(b.id);
+      }
+    }
+    if (wanted.size > 0) {
+      try {
+        const more = await this.attachments.loadBlocks(conv.id, [...wanted]);
+        loaded = new Map([...loaded, ...more]);
+      } catch (e) {
+        if (e instanceof AttachmentUnavailable) return notice('ATTACHMENT_UNAVAILABLE');
+        throw e;
+      }
+    }
+    const messages = toApiMessages(rows, start, currentTurnStart, loaded);
 
     const system: Anthropic.TextBlockParam[] = [
       {
@@ -248,6 +325,13 @@ export class AssistantChatService {
       `assistant usage audience=${scope.audience} input=${tokens.inputTokens} output=${tokens.outputTokens} cache_read_input_tokens=${tokens.cacheReadTokens} cache_creation_input_tokens=${tokens.cacheWriteTokens}`,
     );
   }
+}
+
+function attachmentBlocksTokens(
+  svc: AssistantAttachmentService,
+  row: Parameters<AssistantAttachmentService['storedBlock']>[0],
+): number {
+  return svc.storedBlock(row).tokens;
 }
 
 /** The history-editing check: a replayed thinking block no longer matches its prefix. */

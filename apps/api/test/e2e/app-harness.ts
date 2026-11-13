@@ -454,6 +454,7 @@ export async function resetAssistantState(prisma: PrismaClient): Promise<void> {
     prisma,
     'TRUNCATE TABLE ' +
       [
+        'assistant_attachments',
         'assistant_usage',
         'assistant_tool_calls',
         'assistant_messages',

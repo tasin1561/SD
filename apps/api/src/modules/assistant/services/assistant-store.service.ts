@@ -1,5 +1,10 @@
-import { Injectable } from '@nestjs/common';
-import { Prisma, type AssistantAudience, type AssistantMessageRole } from '@skydrop/db';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Prisma,
+  type AssistantAttachmentKind,
+  type AssistantAudience,
+  type AssistantMessageRole,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import type { CallerScope } from '../assistant.types';
 
@@ -38,6 +43,47 @@ export function ownedBy(scope: CallerScope): Prisma.AssistantConversationWhereIn
     ownerUserId: scope.userId,
     impersonatedByStaffId: scope.impersonatingStaffId,
     deletedAt: null,
+  };
+}
+
+/** The attachment columns a caller may read (never the owner columns). */
+export interface AttachmentRow {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly messageId: string | null;
+  readonly kind: AssistantAttachmentKind;
+  readonly mediaType: string;
+  readonly originalName: string;
+  readonly bytes: number;
+  readonly pages: number | null;
+  readonly width: number | null;
+  readonly height: number | null;
+  readonly sha256: string;
+  readonly storageKey: string;
+}
+
+const ATTACHMENT_SELECT = {
+  id: true,
+  conversationId: true,
+  messageId: true,
+  kind: true,
+  mediaType: true,
+  originalName: true,
+  bytes: true,
+  pages: true,
+  width: true,
+  height: true,
+  sha256: true,
+  storageKey: true,
+} as const;
+
+/** The same predicate for an attachment row: the owner columns must be the caller's. */
+export function attachmentOwnedBy(scope: CallerScope): Prisma.AssistantAttachmentWhereInput {
+  return {
+    audience: scope.audience,
+    ownerUserId: scope.userId,
+    impersonatedByStaffId: scope.impersonatingStaffId,
+    conversation: ownedBy(scope),
   };
 }
 
@@ -111,6 +157,122 @@ export class AssistantStoreService {
   ): Promise<void> {
     await this.prisma.client.assistantMessage.create({
       data: { conversationId, role, content: asJson(content), isQuestion },
+    });
+  }
+
+  /**
+   * The question a person typed, and the link from each attachment it
+   * carries to it, in ONE transaction. The link is a guarded `updateMany`
+   * (`message_id IS NULL`, same conversation, same owner): an id that is
+   * someone else's, from another conversation, or already sent matches
+   * nothing, the count falls short, and the whole question is rolled back
+   * with a 404 — so two racing sends of the same attachment cannot both win.
+   */
+  async appendQuestion(
+    scope: CallerScope,
+    conversationId: string,
+    content: unknown,
+    attachmentIds: readonly string[],
+  ): Promise<void> {
+    await this.prisma.client.$transaction(async (tx) => {
+      const msg = await tx.assistantMessage.create({
+        data: { conversationId, role: 'USER', content: asJson(content), isQuestion: true },
+        select: { id: true },
+      });
+      if (attachmentIds.length === 0) return;
+      const linked = await tx.assistantAttachment.updateMany({
+        where: {
+          id: { in: [...attachmentIds] },
+          conversationId,
+          messageId: null,
+          audience: scope.audience,
+          ownerUserId: scope.userId,
+          impersonatedByStaffId: scope.impersonatingStaffId,
+        },
+        data: { messageId: msg.id },
+      });
+      if (linked.count !== attachmentIds.length) {
+        throw new NotFoundException({
+          code: 'ASSISTANT_ATTACHMENT_NOT_FOUND',
+          message: 'Attachment not found',
+        });
+      }
+    });
+  }
+
+  createAttachment(row: {
+    scope: CallerScope;
+    conversationId: string;
+    kind: AssistantAttachmentKind;
+    mediaType: string;
+    originalName: string;
+    bytes: number;
+    pages: number | null;
+    width: number | null;
+    height: number | null;
+    sha256: string;
+    storageKey: string;
+  }): Promise<AttachmentRow> {
+    return this.prisma.client.assistantAttachment.create({
+      data: {
+        conversationId: row.conversationId,
+        audience: row.scope.audience,
+        ownerUserId: row.scope.userId,
+        sellerId: row.scope.sellerId,
+        storeId: row.scope.storeId,
+        impersonatedByStaffId: row.scope.impersonatingStaffId,
+        kind: row.kind,
+        mediaType: row.mediaType,
+        originalName: row.originalName,
+        bytes: row.bytes,
+        pages: row.pages,
+        width: row.width,
+        height: row.height,
+        sha256: row.sha256,
+        storageKey: row.storageKey,
+      },
+      select: ATTACHMENT_SELECT,
+    });
+  }
+
+  /** The caller's own attachments, in THIS conversation, among `ids`. */
+  findOwnedAttachments(
+    scope: CallerScope,
+    conversationId: string,
+    ids: readonly string[],
+    unsentOnly: boolean,
+  ): Promise<AttachmentRow[]> {
+    return this.prisma.client.assistantAttachment.findMany({
+      where: {
+        id: { in: [...ids] },
+        conversationId,
+        ...(unsentOnly ? { messageId: null } : {}),
+        ...attachmentOwnedBy(scope),
+      },
+      select: ATTACHMENT_SELECT,
+    });
+  }
+
+  countUnsentAttachments(scope: CallerScope, conversationId: string): Promise<number> {
+    return this.prisma.client.assistantAttachment.count({
+      where: { conversationId, messageId: null, ...attachmentOwnedBy(scope) },
+    });
+  }
+
+  /** Replay: rows of a conversation the caller already owns, by id. */
+  attachmentsByIds(conversationId: string, ids: readonly string[]): Promise<AttachmentRow[]> {
+    return this.prisma.client.assistantAttachment.findMany({
+      where: { id: { in: [...ids] }, conversationId },
+      select: ATTACHMENT_SELECT,
+    });
+  }
+
+  /** The transcript's chips: every SENT attachment of a conversation. */
+  sentAttachments(conversationId: string): Promise<AttachmentRow[]> {
+    return this.prisma.client.assistantAttachment.findMany({
+      where: { conversationId, messageId: { not: null } },
+      orderBy: { id: 'asc' },
+      select: ATTACHMENT_SELECT,
     });
   }
 

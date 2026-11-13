@@ -99,6 +99,8 @@ export type AssistantStreamEvent =
         | 'RESTING_DAILY'
         | 'REFUSED'
         | 'TRUNCATED'
+        | 'ATTACHMENTS_TOO_LARGE'
+        | 'ATTACHMENT_UNAVAILABLE'
         | 'FAILED';
       readonly text: string;
       readonly helpLinks: ReadonlyArray<{ readonly label: string; readonly path: string }>;

@@ -64,6 +64,7 @@ function fakePrisma(
         findFirst: async ({ where }: { where: Record<string, unknown> }) =>
           rows.find((r) => matches(r, where)) ?? null,
       },
+      assistantAttachment: { findMany: async () => [] },
       assistantMessage: {
         findMany: async ({ where }: { where: { conversationId: string } }) =>
           messages.filter((m) => m.conversationId === where.conversationId),
@@ -83,7 +84,7 @@ function rig() {
     createdAt: Date;
   }> = [];
   const store = new AssistantStoreService(fakePrisma(rows, messages) as never);
-  const chat = new AssistantChatService(store, {} as never, {} as never, {} as never);
+  const chat = new AssistantChatService(store, {} as never, {} as never, {} as never, {} as never);
   const svc = new AssistantConversationService(store, chat);
   return { store, svc, messages };
 }
