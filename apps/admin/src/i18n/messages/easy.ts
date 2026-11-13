@@ -139,6 +139,68 @@ export const easy = defineMessages({
   'easy.cod': ['COD', 'সিওডি', 'सीओडी'],
   'easy.waitingCount': ['{n} waiting', '{n}টি অপেক্ষায়', '{n} प्रतीक्षा में'],
 
+  'easy.awb': ['AWB', 'এডব্লিউবি', 'एडब्ल्यूबी'],
+
+  // ── Needs attention (/nsa) ────────────────────────────────────────────
+  'ezNsa.night1': ['1st night', '1ম রাত', 'पहली रात'],
+  'ezNsa.night2': ['2nd night', '2য় রাত', 'दूसरी रात'],
+  'ezNsa.night3': ['3rd night or more', '3য় রাত বা বেশি', 'तीसरी रात या ज़्यादा'],
+  'ezNsa.call': ['Call {phone}', '{phone} নম্বরে কল করুন', '{phone} पर कॉल करें'],
+  'ezNsa.nightInfo': [
+    'How many evenings the parcel has been out for delivery without being delivered.\n\n1st night: it went out today and did not arrive.\n2nd night: still out a day later.\n3rd night or more: chase these first.',
+    'পার্সেলটি ডেলিভারির জন্য বেরিয়ে কত সন্ধ্যা ধরে পৌঁছায়নি।\n\n1ম রাত: আজ বেরিয়েছে, পৌঁছায়নি।\n2য় রাত: এক দিন পরও বাইরে।\n3য় রাত বা বেশি: এগুলো আগে দেখুন।',
+    'पार्सल डिलीवरी के लिए निकलकर कितनी शामों से नहीं पहुँचा।\n\nपहली रात: आज निकला, नहीं पहुँचा।\nदूसरी रात: एक दिन बाद भी बाहर।\nतीसरी रात या ज़्यादा: इन्हें पहले देखें।',
+  ],
+
+  // ── Failed deliveries (/delivery-actions) ─────────────────────────────
+  'ezDelivery.shown': ['{n} shown', '{n}টি দেখানো হচ্ছে', '{n} दिख रहे हैं'],
+  'ezDelivery.stPending': ['Waiting', 'অপেক্ষায়', 'प्रतीक्षा में'],
+  'ezDelivery.stApproved': ['Approved', 'অনুমোদিত', 'स्वीकृत'],
+  'ezDelivery.stExecuted': ['Sent', 'পাঠানো হয়েছে', 'भेजा गया'],
+  'ezDelivery.stFailed': ['Failed', 'ব্যর্থ', 'विफल'],
+  'ezDelivery.stRejected': ['Declined', 'প্রত্যাখ্যাত', 'अस्वीकृत'],
+  'ezDelivery.stExpired': ['Timed out', 'সময় শেষ', 'समय निकल गया'],
+  'ezDelivery.isPending': [
+    'Nobody has decided yet.',
+    'এখনো কেউ সিদ্ধান্ত নেননি।',
+    'अभी किसी ने फ़ैसला नहीं किया।',
+  ],
+  'ezDelivery.isApproved': [
+    'Approved. The action has not finished yet.',
+    'অনুমোদিত। কাজটি এখনো শেষ হয়নি।',
+    'स्वीकृत। काम अभी पूरा नहीं हुआ।',
+  ],
+  'ezDelivery.isExecuted': [
+    'Approved and sent: it reached the courier, or the call queue.',
+    'অনুমোদিত এবং পাঠানো হয়েছে: এটি কুরিয়ার বা কল কিউতে পৌঁছেছে।',
+    'स्वीकृत और भेजा गया: यह कूरियर या कॉल कतार तक पहुँच गया।',
+  ],
+  'ezDelivery.isFailed': [
+    'Approved, but the courier refused it. The reason is shown in red.',
+    'অনুমোদিত, কিন্তু কুরিয়ার তা নেয়নি। কারণ লাল রঙে দেখানো আছে।',
+    'स्वीकृत, पर कूरियर ने मना कर दिया। कारण लाल रंग में दिखता है।',
+  ],
+  'ezDelivery.isRejected': [
+    'Declined. The client sees the reason.',
+    'প্রত্যাখ্যাত। ক্লায়েন্ট কারণটি দেখতে পান।',
+    'अस्वीकृत। क्लाइंट को कारण दिखता है।',
+  ],
+  'ezDelivery.isExpired': [
+    'The client did not decide in time, so the request closed by itself.',
+    'ক্লায়েন্ট সময়মতো সিদ্ধান্ত নেননি, তাই অনুরোধটি নিজে থেকেই বন্ধ হয়েছে।',
+    'क्लाइंट ने समय पर फ़ैसला नहीं किया, इसलिए अनुरोध अपने आप बंद हो गया।',
+  ],
+  'ezDelivery.doReattempt': [
+    'Reaches the courier. A van goes out to try the delivery again.',
+    'কুরিয়ারের কাছে যায়। ডেলিভারির জন্য আবার একটি ভ্যান বের হয়।',
+    'कूरियर तक जाता है। डिलीवरी के लिए फिर से एक वैन निकलती है।',
+  ],
+  'ezDelivery.doReturn': [
+    'Reaches the courier. The parcel comes back to us and the sale ends.',
+    'কুরিয়ারের কাছে যায়। পার্সেলটি আমাদের কাছে ফিরে আসে এবং বিক্রি শেষ হয়।',
+    'कूरियर तक जाता है। पार्सल हमारे पास लौटता है और बिक्री समाप्त हो जाती है।',
+  ],
+
   // ── Manual placement (/manual-placement) ──────────────────────────────
   'ezPlacement.whyInfo': [
     'Why no connected courier took this parcel. The courier’s own words, when there are any, are shown under the reason.',

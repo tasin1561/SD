@@ -19,7 +19,11 @@ import { useAcknowledgeNsa, useNsaList, useRunNsaSweep, type NsaOrderView } from
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { AgeChip, Notice, OoSection } from '../../orders/_components/order-ops-parts';
-import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
+import './nsa.css';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
 
 /**
  * OUR side of the NSA worklist.
@@ -47,6 +51,7 @@ import { useT } from '@/i18n/client';
  */
 export function NsaIndex(): ReactElement {
   const t = useT();
+  const locale = useLocale();
   const mayAct = usePermission('orders.tracking.manual_scan');
   const list = useNsaList(usePermission('orders.view'));
   const ack = useAcknowledgeNsa();
@@ -82,10 +87,17 @@ export function NsaIndex(): ReactElement {
   }
 
   return (
-    <div className="oo-page">
+    <div className="oo-page ez-touch">
       <PageHeader
-        title={t('nsaNsaIndex.needsAttention')}
-        subtitle={t('nsaNsaIndex.parcelsThatWentOutFor')}
+        title={
+          <span className="ez-titled">
+            {t('nsaNsaIndex.needsAttention')}
+            <InfoButton
+              title={t('nsaNsaIndex.needsAttention')}
+              text={t('nsaNsaIndex.parcelsThatWentOutFor')}
+            />
+          </span>
+        }
         action={
           mayAct ? (
             <Button
@@ -148,13 +160,26 @@ export function NsaIndex(): ReactElement {
           <Table caption={t('nsaNsaIndex.parcelsStillOutForDelivery')}>
             <THead>
               <Tr>
-                <Th>{t('nsaNsaIndex.night')}</Th>
+                <Th>
+                  <span className="ez-titled">
+                    {t('nsaNsaIndex.night')}
+                    <InfoButton title={t('nsaNsaIndex.night')} text={t('ezNsa.nightInfo')} />
+                  </span>
+                </Th>
                 <Th>{t('nsaNsaIndex.order')}</Th>
                 <Th>{t('nsaNsaIndex.client')}</Th>
                 <Th>{t('nsaNsaIndex.recipient')}</Th>
-                <Th>AWB</Th>
-                <Th align="right">COD</Th>
-                <Th>{t('nsaNsaIndex.beingChased')}</Th>
+                <Th>{t('easy.awb')}</Th>
+                <Th align="right">{t('easy.cod')}</Th>
+                <Th>
+                  <span className="ez-titled">
+                    {t('nsaNsaIndex.beingChased')}
+                    <InfoButton
+                      title={t('nsaNsaIndex.beingChased')}
+                      text={t('nsaNsaIndex.recordedSoNobodyElseRings')}
+                    />
+                  </span>
+                </Th>
                 <Th align="right" />
               </Tr>
             </THead>
@@ -165,7 +190,11 @@ export function NsaIndex(): ReactElement {
                     <AgeChip
                       tone={r.dayCount >= 3 ? 'late' : r.dayCount === 2 ? 'aging' : 'neutral'}
                     >
-                      {r.dayCount === 1 ? '1st' : r.dayCount === 2 ? '2nd' : `${r.dayCount}rd+`}
+                      {r.dayCount === 1
+                        ? t('ezNsa.night1')
+                        : r.dayCount === 2
+                          ? t('ezNsa.night2')
+                          : t('ezNsa.night3')}
                     </AgeChip>
                   </Td>
                   <Td>
@@ -182,9 +211,17 @@ export function NsaIndex(): ReactElement {
                     <span className="oo-strong">{r.recipientName}</span>
                     {/* The phone is here rather than a click away: the
                         action this page exists for is a phone call. */}
-                    <span className="oo-sub">
-                      {r.recipientCity} · {r.recipientPhoneE164}
-                    </span>
+                    <span className="oo-sub">{r.recipientCity}</span>
+                    {/* A phone number on a phone is a button: one press
+                        starts the call. */}
+                    <a
+                      href={`tel:${r.recipientPhoneE164}`}
+                      className="nsa-call sk-figure"
+                      aria-label={t('ezNsa.call', { phone: r.recipientPhoneE164 })}
+                    >
+                      <PhoneOutgoing size={14} aria-hidden />
+                      {r.recipientPhoneE164}
+                    </a>
                   </Td>
                   <Td>
                     {r.awbNumber === null ? (
@@ -208,9 +245,7 @@ export function NsaIndex(): ReactElement {
                       <StatusChip size="sm" kind="pending" label={t('nsaNsaIndex.nobodyYet')} />
                     ) : (
                       <div>
-                        <span className="oo-muted">
-                          {new Date(r.acknowledgedAt).toLocaleString()}
-                        </span>
+                        <span className="oo-muted">{formatDateTime(r.acknowledgedAt, locale)}</span>
                         {r.note !== null && <span className="oo-sub">{r.note}</span>}
                       </div>
                     )}

@@ -1,0 +1,22 @@
+/* Needs attention: the recipient's number is a call link. Tokens only. */
+.nsa-call {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--blue-on-tint);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+}
+.nsa-call:hover {
+  text-decoration: underline;
+}
+.nsa-call:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+@media (pointer: coarse) {
+  a.nsa-call {
+    min-height: 44px;
+  }
+}

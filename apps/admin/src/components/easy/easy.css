@@ -430,7 +430,9 @@ button.ez-guide__pick:hover {
   .ez-touch input.sk-field__input {
     min-height: 44px;
   }
-  .ez-touch a.sk-ident {
+  .ez-touch a.sk-ident,
+  .ez-touch td a.oo-link,
+  .ez-touch a.nsa-call {
     display: inline-flex;
     align-items: center;
     min-height: 44px;

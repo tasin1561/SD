@@ -27,7 +27,10 @@ import {
   OoSection,
   elapsedSince,
 } from '../../orders/_components/order-ops-parts';
-import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 
@@ -54,6 +57,23 @@ function actionLabel(t: Translate<MessageKey>, a: AdminDeliveryActionView['actio
   }
 }
 
+function statusLabel(t: Translate<MessageKey>, s: AdminDeliveryActionView['status']): string {
+  switch (s) {
+    case 'PENDING':
+      return t('ezDelivery.stPending');
+    case 'APPROVED':
+      return t('ezDelivery.stApproved');
+    case 'EXECUTED':
+      return t('ezDelivery.stExecuted');
+    case 'FAILED':
+      return t('ezDelivery.stFailed');
+    case 'REJECTED':
+      return t('ezDelivery.stRejected');
+    case 'EXPIRED':
+      return t('ezDelivery.stExpired');
+  }
+}
+
 function statusKind(
   s: AdminDeliveryActionView['status'],
 ): 'pending' | 'confirmed' | 'failed' | 'cancelled' {
@@ -73,6 +93,7 @@ function statusKind(
 
 export function DeliveryActionsIndex(): ReactElement {
   const t = useT();
+  const locale = useLocale();
 
   const canDecide = usePermission('courier.ops.write');
   const [showAll, setShowAll] = useState(false);
@@ -112,10 +133,17 @@ export function DeliveryActionsIndex(): ReactElement {
   const rows = queue.data ?? [];
 
   return (
-    <div className="oo-page">
+    <div className="oo-page ez-touch">
       <PageHeader
-        title={t('deliveryActionsDeliveryActionsIndex.failedDeliveries')}
-        subtitle={t('deliveryActionsDeliveryActionsIndex.whatClientsHaveAskedUs')}
+        title={
+          <span className="ez-titled">
+            {t('deliveryActionsDeliveryActionsIndex.failedDeliveries')}
+            <InfoButton
+              title={t('deliveryActionsDeliveryActionsIndex.failedDeliveries')}
+              text={t('deliveryActionsDeliveryActionsIndex.whatClientsHaveAskedUs')}
+            />
+          </span>
+        }
       />
 
       <OoCard>
@@ -123,7 +151,6 @@ export function DeliveryActionsIndex(): ReactElement {
           checked={showAll}
           onChange={(e) => setShowAll(e.target.checked)}
           label={t('deliveryActionsDeliveryActionsIndex.showDecidedRequestsToo')}
-          description={t('deliveryActionsDeliveryActionsIndex.approvingAReAttemptSends')}
         />
       </OoCard>
 
@@ -133,7 +160,7 @@ export function DeliveryActionsIndex(): ReactElement {
             ? t('deliveryActionsDeliveryActionsIndex.allRequests')
             : t('deliveryActionsDeliveryActionsIndex.waitingOnADecision')
         }
-        note={queue.data === undefined ? undefined : `${rows.length} shown`}
+        note={queue.data === undefined ? undefined : t('ezDelivery.shown', { n: rows.length })}
         flush
       >
         {queue.isLoading ? (
@@ -176,9 +203,47 @@ export function DeliveryActionsIndex(): ReactElement {
               <Tr>
                 <Th>{t('deliveryActionsDeliveryActionsIndex.order')}</Th>
                 <Th>{t('deliveryActionsDeliveryActionsIndex.client')}</Th>
-                <Th>{t('deliveryActionsDeliveryActionsIndex.askedFor')}</Th>
+                <Th>
+                  <span className="ez-titled">
+                    {t('deliveryActionsDeliveryActionsIndex.askedFor')}
+                    {/* What approving each kind of request does. */}
+                    <InfoButton
+                      title={t('deliveryActionsDeliveryActionsIndex.askedFor')}
+                      text={t('deliveryActionsDeliveryActionsIndex.approvingAReAttemptSends')}
+                      facts={[
+                        {
+                          label: t('deliveryActionsDeliveryActionsIndex.reAttemptDelivery'),
+                          value: t('ezDelivery.doReattempt'),
+                        },
+                        {
+                          label: t('deliveryActionsDeliveryActionsIndex.callTheCustomer'),
+                          value: t('deliveryActionsDeliveryActionsIndex.queuesTheOrderForOne'),
+                        },
+                        {
+                          label: t('deliveryActionsDeliveryActionsIndex.returnToUs'),
+                          value: t('ezDelivery.doReturn'),
+                        },
+                      ]}
+                    />
+                  </span>
+                </Th>
                 <Th>{t('deliveryActionsDeliveryActionsIndex.why')}</Th>
-                <Th>{t('deliveryActionsDeliveryActionsIndex.state')}</Th>
+                <Th>
+                  <span className="ez-titled">
+                    {t('deliveryActionsDeliveryActionsIndex.state')}
+                    <InfoButton
+                      title={t('deliveryActionsDeliveryActionsIndex.state')}
+                      facts={[
+                        { label: t('ezDelivery.stPending'), value: t('ezDelivery.isPending') },
+                        { label: t('ezDelivery.stApproved'), value: t('ezDelivery.isApproved') },
+                        { label: t('ezDelivery.stExecuted'), value: t('ezDelivery.isExecuted') },
+                        { label: t('ezDelivery.stFailed'), value: t('ezDelivery.isFailed') },
+                        { label: t('ezDelivery.stRejected'), value: t('ezDelivery.isRejected') },
+                        { label: t('ezDelivery.stExpired'), value: t('ezDelivery.isExpired') },
+                      ]}
+                    />
+                  </span>
+                </Th>
                 <Th align="right">{t('deliveryActionsDeliveryActionsIndex.decide')}</Th>
               </Tr>
             </THead>
@@ -221,11 +286,11 @@ export function DeliveryActionsIndex(): ReactElement {
                         <StatusChip
                           size="sm"
                           kind={statusKind(r.status)}
-                          label={r.status.toLowerCase()}
+                          label={statusLabel(t, r.status)}
                         />
                         <AgeChip
                           title={t('deliveryActionsDeliveryActionsIndex.asked', {
-                            value: new Date(r.createdAt).toLocaleString('en-IN'),
+                            value: formatDateTime(r.createdAt, locale),
                           })}
                         >
                           {elapsedSince(r.createdAt)}
