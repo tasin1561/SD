@@ -13,13 +13,15 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
-import { AgeChip, Notice, OoSection } from '../../orders/_components/order-ops-parts';
+import { AgeChip, OoSection } from '../../orders/_components/order-ops-parts';
 import { EarlyReservationReviewStatus } from '@skydrop/db';
 import { useAdminHoldReviews } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useT, useLocale } from '@/i18n/client';
 import { usePermission } from '@/lib/use-permission';
 import { ClientFilter } from '@/components/client-filter';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 
 /** Whole days a hold has been sitting, for the ageing column. */
 function ageDays(iso: string): number {
@@ -64,10 +66,18 @@ export function AdminHoldsIndex(): ReactElement {
   const dash = <span className="oo-faint">—</span>;
 
   return (
-    <div className="oo-page">
+    <div className="oo-page ez-touch">
       <PageHeader
-        title={t('holdsAdminHoldsIndex.heldStock')}
-        subtitle={t('holdsAdminHoldsIndex.ordersWhereStockWasClaimed')}
+        title={
+          <span className="ez-titled">
+            {t('holdsAdminHoldsIndex.heldStock')}
+            {/* What this page is, and why it has no release button. */}
+            <InfoButton
+              title={t('holdsAdminHoldsIndex.heldStock')}
+              text={`${t('holdsAdminHoldsIndex.ordersWhereStockWasClaimed')}\n\n${t('holdsAdminHoldsIndex.thereIsNoReleaseControl')}`}
+            />
+          </span>
+        }
       />
 
       <div className="oo-kpis">
@@ -96,7 +106,7 @@ export function AdminHoldsIndex(): ReactElement {
 
       <OoSection
         title={t('holdsAdminHoldsIndex.holds')}
-        note={list.data === undefined ? undefined : `${rows.length} shown`}
+        note={list.data === undefined ? undefined : t('ezDelivery.shown', { n: rows.length })}
         flush
       >
         <div className="oo-card__pad">
@@ -119,7 +129,7 @@ export function AdminHoldsIndex(): ReactElement {
                 <option value="">{t('holdsAdminHoldsIndex.all')}</option>
                 {Object.values(EarlyReservationReviewStatus).map((s) => (
                   <option key={s} value={s}>
-                    {humanise(s)}
+                    {statusLabel(s, locale)}
                   </option>
                 ))}
               </Select>
@@ -212,6 +222,7 @@ export function AdminHoldsIndex(): ReactElement {
                         kind={earlyReviewStatusKind(r.status)}
                         label={statusLabel(r.status, locale)}
                       />
+                      {r.note !== null && r.note !== '' && <span className="oo-sub">{r.note}</span>}
                     </Td>
                   </Tr>
                 );
@@ -220,15 +231,6 @@ export function AdminHoldsIndex(): ReactElement {
           </Table>
         )}
       </OoSection>
-
-      <Notice tone="info">
-        <p>{t('holdsAdminHoldsIndex.thereIsNoReleaseControl')}</p>
-      </Notice>
     </div>
   );
-}
-
-function humanise(value: string): string {
-  const lower = value.replaceAll('_', ' ').toLowerCase();
-  return lower.charAt(0).toUpperCase() + lower.slice(1);
 }

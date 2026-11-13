@@ -322,3 +322,12 @@
     transition: none;
   }
 }
+
+/* The order link is the way into the record: finger-sized on a phone. */
+@media (pointer: coarse) {
+  a.hb-card__link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}

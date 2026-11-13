@@ -17,6 +17,8 @@ import {
   type LabelReprint,
 } from '@/lib/activity-hooks';
 import { actorIsPerson, actorLabel, clockTime } from '@/lib/activity-format';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import './holds.css';
 
 /**
@@ -61,10 +63,14 @@ export function HoldsBoard(): ReactElement {
   };
 
   return (
-    <div className="hb-page">
+    <div className="hb-page ez-touch">
       <PageHeader
-        title={t('holds.title')}
-        subtitle={t('holds.subtitle')}
+        title={
+          <span className="ez-titled">
+            {t('holds.title')}
+            <InfoButton title={t('holds.title')} text={t('holds.subtitle')} />
+          </span>
+        }
         action={
           <div className="hb-head">
             {data !== undefined && (
@@ -111,8 +117,10 @@ export function HoldsBoard(): ReactElement {
           )}
 
           <section className="hb-section">
-            <SectionHeading title={t('holds.reprints.title')} />
-            <p className="hb-note">{t('holds.reprints.note')}</p>
+            <div className="ez-titled">
+              <SectionHeading title={t('holds.reprints.title')} />
+              <InfoButton title={t('holds.reprints.title')} text={t('holds.reprints.note')} />
+            </div>
             {data.reprints.length === 0 ? (
               <p className="hb-quiet">{t('holds.reprints.empty')}</p>
             ) : (
