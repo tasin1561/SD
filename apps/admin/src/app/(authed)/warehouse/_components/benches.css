@@ -1092,6 +1092,16 @@ p.wh-alert {
 .wh-step__line--lead {
   font-weight: var(--fw-semibold);
 }
+/* One language under each step now, so the line can be a size larger than
+   when three were stacked. */
+.wh-step__line--only {
+  font-size: var(--fs-xs);
+}
+@media (min-width: 48rem) {
+  .wh-step__line--only {
+    font-size: var(--fs-sm);
+  }
+}
 @media (min-width: 48rem) {
   .wh-step__line {
     font-size: var(--fs-xs);

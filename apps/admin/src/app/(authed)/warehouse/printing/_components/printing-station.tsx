@@ -1006,10 +1006,13 @@ function BatchesTab(): ReactElement {
                       )}
                       {/* Only a printed batch can be walked, so only a
                           printed batch can come back from one. */}
+                      {/* The one thing a picker does to a printed batch when
+                          the walk is done, so it is the filled button on the
+                          row. "Short" and "Abandon" stay quiet beside it. */}
                       {b.status === 'PRINTED' && (
                         <Button
-                          variant="ghost"
-                          size="sm"
+                          variant="primary"
+                          size="md"
                           onClick={() =>
                             ask({
                               kind: 'picked',
