@@ -25,6 +25,21 @@ vi.mock('@/lib/inventory-hooks', () => ({
   }),
 }));
 vi.mock('@/lib/use-permission', () => ({ usePermission: () => true }));
+// The pick-by-name fields read three lists. Left empty here, so the form
+// falls back to its typed id fields, which is what this spec fills in.
+vi.mock('@/lib/api-hooks', async (original) => ({
+  ...(await original<typeof import('@/lib/api-hooks')>()),
+  useSellersList: () => ({ data: undefined }),
+}));
+vi.mock('@/lib/bin-contents-hooks', async (original) => ({
+  ...(await original<typeof import('@/lib/bin-contents-hooks')>()),
+  useBinOptions: () => ({ data: [], isError: false }),
+}));
+vi.mock('@/lib/ops-hooks', async (original) => ({
+  ...(await original<typeof import('@/lib/ops-hooks')>()),
+  useProductLocations: () => ({ data: [], isError: false, isLoading: false }),
+  useWarehouseOptions: () => ({ data: [] }),
+}));
 
 import { NewAdjustmentPanel } from '../app/(authed)/inventory/adjustments/_components/new-adjustment-panel';
 

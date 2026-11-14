@@ -335,4 +335,32 @@ export const easy = defineMessages({
     'অর্ডারটি আবার কল কিউতে যায় এবং একজন এজেন্ট গ্রাহককে আবার ফোন করেন।\n\nকতগুলো অতিরিক্ত কল দেওয়া হবে তা আপনি ঠিক করেন।\n\nগ্রাহক একবার না বলেছেন, তাই আগে ক্লায়েন্টের কারণটি পড়ুন।',
     'ऑर्डर फिर से कॉल कतार में जाता है और एक एजेंट ग्राहक को दोबारा फ़ोन करता है।\n\nकितनी अतिरिक्त कॉल दी जाएँ, यह आप चुनते हैं।\n\nग्राहक एक बार मना कर चुका है, इसलिए पहले क्लाइंट का कारण पढ़ें।',
   ],
+
+  // ── Pick by name instead of typing an id (stock forms) ────────────────
+  'ezPick.client': ['Client', 'ক্লায়েন্ট', 'क्लाइंट'],
+  'ezPick.product': ['Product', 'পণ্য', 'उत्पाद'],
+  'ezPick.bin': ['Shelf (bin)', 'তাক (বিন)', 'शेल्फ़ (बिन)'],
+  'ezPick.warehouse': ['Warehouse', 'গুদাম', 'गोदाम'],
+  'ezPick.warehouseHint': [
+    'Only used to list its shelves.',
+    'শুধু এর তাকগুলো দেখাতে লাগে।',
+    'केवल इसकी शेल्फ़ दिखाने के लिए।',
+  ],
+  'ezPick.choose': ['Choose…', 'বেছে নিন…', 'चुनें…'],
+  'ezPick.typed': ['Typed by hand', 'হাতে লেখা', 'हाथ से लिखा गया'],
+  'ezPick.byHand': ['Type the id instead', 'এর বদলে আইডি লিখুন', 'इसके बजाय आईडी लिखें'],
+  'ezPick.warehouseFirst': [
+    'Choose the warehouse first.',
+    'আগে গুদাম বেছে নিন।',
+    'पहले गोदाम चुनें।',
+  ],
+  'ezPick.findProduct': ['Find the product', 'পণ্য খুঁজুন', 'उत्पाद खोजें'],
+  'ezPick.findHint': [
+    'Type a name, SKU or barcode.',
+    'নাম, SKU বা বারকোড লিখুন।',
+    'नाम, SKU या बारकोड लिखें।',
+  ],
+  'ezPick.searching': ['Searching…', 'খোঁজা হচ্ছে…', 'खोज रहे हैं…'],
+  'ezPick.noMatch': ['Nothing matches.', 'কিছু মেলেনি।', 'कुछ नहीं मिला।'],
+  'ezPick.change': ['Change', 'বদলান', 'बदलें'],
 });

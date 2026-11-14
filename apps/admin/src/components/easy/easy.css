@@ -515,3 +515,127 @@ button.ez-guide__pick:hover {
     order: -1;
   }
 }
+
+/* ── Pick by name instead of typing an id ─────────────────────────────── */
+.ez-pick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.ez-byhand > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.ez-byhand > summary:hover {
+  color: var(--fg-strong);
+}
+.ez-byhand > summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.ez-byhand__body {
+  padding-top: var(--sp-2);
+}
+.ez-pick__results {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.ez-pick__results > li + li {
+  border-top: 1px solid var(--line);
+}
+.ez-pick__empty {
+  padding: var(--sp-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+button.ez-pick__result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  width: 100%;
+  min-height: 48px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+button.ez-pick__result:hover {
+  background: var(--blue-tint);
+}
+button.ez-pick__result:focus-visible,
+button.ez-pick__change:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.ez-pick__chosen {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--blue-line);
+  border-radius: var(--r-md);
+  background: var(--blue-tint);
+}
+.ez-pick__chosen-text {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+.ez-pick__label {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.ez-pick__name {
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+}
+.ez-pick__sub {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+button.ez-pick__change {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+@media (pointer: coarse) {
+  .ez-byhand > summary,
+  button.ez-pick__change {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  button.ez-pick__result {
+    transition: none;
+  }
+}

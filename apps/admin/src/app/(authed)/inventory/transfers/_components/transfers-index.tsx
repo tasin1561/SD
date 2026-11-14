@@ -22,6 +22,7 @@ import {
 } from '../../_components/stock-kit';
 import { useT } from '@/i18n/client';
 import { InfoButton } from '@/components/easy/info-button';
+import { BinPick, ClientPick, ProductPick } from '@/components/easy/id-picks';
 
 /**
  * Move stock between warehouses.
@@ -126,20 +127,24 @@ export function TransfersIndex(): ReactElement {
 
       <Panel title={t('inventoryTransfersTransfersIndex.whatIsMoving')}>
         <FieldGrid columns={3}>
-          <TextField
-            id="tr-seller"
-            label={t('inventoryTransfersTransfersIndex.clientId')}
-            inputClassName="sk-ident"
-            value={form.sellerId}
-            onChange={(e) => set('sellerId', e.target.value)}
-          />
-          <TextField
-            id="tr-variant"
-            label={t('inventoryTransfersTransfersIndex.variantId')}
-            inputClassName="sk-ident"
-            value={form.variantId}
-            onChange={(e) => set('variantId', e.target.value)}
-          />
+          <ClientPick value={form.sellerId} onChange={(id) => set('sellerId', id)}>
+            <TextField
+              id="tr-seller"
+              label={t('inventoryTransfersTransfersIndex.clientId')}
+              inputClassName="sk-ident"
+              value={form.sellerId}
+              onChange={(e) => set('sellerId', e.target.value)}
+            />
+          </ClientPick>
+          <ProductPick value={form.variantId} onChange={(id) => set('variantId', id)}>
+            <TextField
+              id="tr-variant"
+              label={t('inventoryTransfersTransfersIndex.variantId')}
+              inputClassName="sk-ident"
+              value={form.variantId}
+              onChange={(e) => set('variantId', e.target.value)}
+            />
+          </ProductPick>
           <TextField
             id="tr-qty"
             label={t('inventoryTransfersTransfersIndex.quantity')}
@@ -172,13 +177,19 @@ export function TransfersIndex(): ReactElement {
                 </option>
               ))}
             </Select>
-            <TextField
-              id="tr-src-bin"
-              label={t('inventoryTransfersTransfersIndex.binId')}
-              inputClassName="sk-ident"
+            <BinPick
+              warehouseId={form.sourceWarehouseId}
               value={form.sourceBinId}
-              onChange={(e) => set('sourceBinId', e.target.value)}
-            />
+              onChange={(id) => set('sourceBinId', id)}
+            >
+              <TextField
+                id="tr-src-bin"
+                label={t('inventoryTransfersTransfersIndex.binId')}
+                inputClassName="sk-ident"
+                value={form.sourceBinId}
+                onChange={(e) => set('sourceBinId', e.target.value)}
+              />
+            </BinPick>
             <TextField
               id="tr-src-batch"
               label={t('inventoryTransfersTransfersIndex.batchId')}
@@ -209,13 +220,19 @@ export function TransfersIndex(): ReactElement {
                 </option>
               ))}
             </Select>
-            <TextField
-              id="tr-dst-bin"
-              label={t('inventoryTransfersTransfersIndex.binId')}
-              inputClassName="sk-ident"
+            <BinPick
+              warehouseId={form.destWarehouseId}
               value={form.destBinId}
-              onChange={(e) => set('destBinId', e.target.value)}
-            />
+              onChange={(id) => set('destBinId', id)}
+            >
+              <TextField
+                id="tr-dst-bin"
+                label={t('inventoryTransfersTransfersIndex.binId')}
+                inputClassName="sk-ident"
+                value={form.destBinId}
+                onChange={(e) => set('destBinId', e.target.value)}
+              />
+            </BinPick>
             <TextField
               id="tr-dst-batch"
               label={t('inventoryTransfersTransfersIndex.batchId')}

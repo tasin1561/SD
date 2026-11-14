@@ -31,6 +31,57 @@ const respond: Respond<F> = (_fixture, req) => {
       examined: 0,
     });
   }
+  // Invented names for the pick-by-name fields on the transfer and
+  // adjustment forms.
+  if (req.path.startsWith('/api/admin/sellers')) {
+    return json({
+      items: [
+        { id: '01a1cf45-0000-73cf-8f7e-aaaaaaaaaaa1', companyName: 'Dhaka Threads Ltd' },
+        {
+          id: '01a1cf45-0000-73cf-8f7e-aaaaaaaaaaa2',
+          companyName: 'Chittagong Home & Lifestyle Exports Private Limited',
+        },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 100,
+    });
+  }
+  if (req.path === '/api/admin/warehouses') {
+    return json([
+      { id: 'wh-ccu', name: 'CCU-01', code: 'CCU-01' },
+      { id: 'wh-dac', name: 'DAC-01', code: 'DAC-01' },
+    ]);
+  }
+  if (/\/api\/admin\/warehouses\/[^/]+\/bins/.test(req.path)) {
+    return json([
+      { id: 'bin-1', code: 'A-01-03', type: 'STORAGE' },
+      { id: 'bin-2', code: 'PICK-07', type: 'PICKING' },
+      { id: 'bin-3', code: 'RTO-HOLD-1', type: 'RTO_HOLD' },
+    ]);
+  }
+  if (req.path.startsWith('/api/admin/warehouse/printing/product-locations')) {
+    return json([
+      {
+        variantId: 'var-1',
+        skuCode: 'DT-KURTI-BLU-M',
+        productName: 'Cotton kurti with hand block print',
+        variantLabel: 'Blue / M',
+        barcode: null,
+        sellerCompanyName: 'Dhaka Threads Ltd',
+        locations: [],
+      },
+      {
+        variantId: 'var-2',
+        skuCode: 'DT-KURTI-RED-L',
+        productName: 'Cotton kurti with hand block print',
+        variantLabel: 'Red / L',
+        barcode: null,
+        sellerCompanyName: 'Dhaka Threads Ltd',
+        locations: [],
+      },
+    ]);
+  }
   if (/warehouses|bins|units/.test(req.path)) return json([]);
   return json({ items: [], total: 0, page: 1, pageSize: 20 });
 };

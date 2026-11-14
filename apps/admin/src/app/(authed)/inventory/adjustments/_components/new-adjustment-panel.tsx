@@ -21,6 +21,8 @@ import {
   mutationPhase,
 } from '../../_components/stock-kit';
 import { useT } from '@/i18n/client';
+import { useWarehouseOptions } from '@/lib/ops-hooks';
+import { BinPick, ClientPick, ProductPick } from '@/components/easy/id-picks';
 
 /**
  * Raising a stock correction.
@@ -71,6 +73,8 @@ export function NewAdjustmentPanel({
   const [description, setDescription] = useState('');
   const [variantId, setVariantId] = useState(prefill?.variantId ?? '');
   const [binId, setBinId] = useState(prefill?.binId ?? '');
+  const warehouses = useWarehouseOptions();
+  const [pickWarehouseId, setPickWarehouseId] = useState('');
   const [batchId, setBatchId] = useState(prefill?.batchId ?? '');
   const [qty, setQty] = useState('');
   const [unitCost, setUnitCost] = useState('');
@@ -195,13 +199,15 @@ export function NewAdjustmentPanel({
 
           {error !== null && <InlineError message={error} />}
 
-          <TextField
-            label={t('inventoryAdjustmentsNewAdjustmentPanel.clientId')}
-            requiredMark
-            inputClassName="sk-ident"
-            value={sellerId}
-            onChange={(e) => setSellerId(e.target.value)}
-          />
+          <ClientPick value={sellerId} onChange={setSellerId} requiredMark>
+            <TextField
+              label={t('inventoryAdjustmentsNewAdjustmentPanel.clientId')}
+              requiredMark
+              inputClassName="sk-ident"
+              value={sellerId}
+              onChange={(e) => setSellerId(e.target.value)}
+            />
+          </ClientPick>
 
           <FieldGrid columns={2}>
             <Select
@@ -245,20 +251,41 @@ export function NewAdjustmentPanel({
             <Note tone="faint">
               {t('inventoryAdjustmentsNewAdjustmentPanel.stockIsHeldPerBatch')}
             </Note>
-            <TextField
-              label={t('inventoryAdjustmentsNewAdjustmentPanel.variantId')}
-              requiredMark
-              inputClassName="sk-ident"
-              value={variantId}
-              onChange={(e) => setVariantId(e.target.value)}
-            />
-            <TextField
-              label={t('inventoryAdjustmentsNewAdjustmentPanel.binId')}
-              requiredMark
-              inputClassName="sk-ident"
-              value={binId}
-              onChange={(e) => setBinId(e.target.value)}
-            />
+            <ProductPick value={variantId} onChange={setVariantId}>
+              <TextField
+                label={t('inventoryAdjustmentsNewAdjustmentPanel.variantId')}
+                requiredMark
+                inputClassName="sk-ident"
+                value={variantId}
+                onChange={(e) => setVariantId(e.target.value)}
+              />
+            </ProductPick>
+            {/* The warehouse is not sent: it only decides which shelves the
+                list below offers. */}
+            {(warehouses.data ?? []).length > 0 && (
+              <Select
+                label={t('ezPick.warehouse')}
+                hint={t('ezPick.warehouseHint')}
+                value={pickWarehouseId}
+                onChange={(e) => setPickWarehouseId(e.target.value)}
+              >
+                <option value="">{t('ezPick.choose')}</option>
+                {(warehouses.data ?? []).map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+            <BinPick warehouseId={pickWarehouseId} value={binId} onChange={setBinId} requiredMark>
+              <TextField
+                label={t('inventoryAdjustmentsNewAdjustmentPanel.binId')}
+                requiredMark
+                inputClassName="sk-ident"
+                value={binId}
+                onChange={(e) => setBinId(e.target.value)}
+              />
+            </BinPick>
             <TextField
               label={t('inventoryAdjustmentsNewAdjustmentPanel.batchId')}
               requiredMark
