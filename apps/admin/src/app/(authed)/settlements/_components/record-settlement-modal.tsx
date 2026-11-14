@@ -1,5 +1,6 @@
 'use client';
 
+import { OrderPick } from '@/components/easy/id-picks';
 import { useMemo, useState, type ReactElement } from 'react';
 import { CircleCheck, Plus, Trash2, TriangleAlert, Upload } from 'lucide-react';
 import { Money } from '@skydrop/ui/components';
@@ -431,14 +432,19 @@ export function RecordSettlementModal({
         <div className="mk-stack mk-stack--tight">
           {lines.map((line) => (
             <div key={line.key} className="mk-line">
-              <TextField
-                aria-label={t('settlementsRecordSettlementModal.orderId')}
-                label={t('settlementsRecordSettlementModal.orderId')}
+              <OrderPick
                 value={line.orderId}
-                onChange={(e) => updateLine(line.key, { orderId: e.target.value })}
-                autoComplete="off"
-                inputClassName="sk-ident"
-              />
+                onChange={(id) => updateLine(line.key, { orderId: id })}
+              >
+                <TextField
+                  aria-label={t('settlementsRecordSettlementModal.orderId')}
+                  label={t('settlementsRecordSettlementModal.orderId')}
+                  value={line.orderId}
+                  onChange={(e) => updateLine(line.key, { orderId: e.target.value })}
+                  autoComplete="off"
+                  inputClassName="sk-ident"
+                />
+              </OrderPick>
               <TextField
                 aria-label={t('settlementsRecordSettlementModal.amountAttributedToThisOrder')}
                 label={t('settlementsRecordSettlementModal.amount')}

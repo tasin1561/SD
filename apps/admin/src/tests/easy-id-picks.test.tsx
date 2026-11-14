@@ -17,6 +17,45 @@ vi.mock('@/lib/api-hooks', () => ({
   useSellersList: () => ({
     data: { items: [{ id: 'seller-1', companyName: 'Dhaka Threads Ltd' }] },
   }),
+  useOrdersList: (query: { search: string }, opts: { enabled: boolean }) => ({
+    isError: false,
+    isLoading: false,
+    data: !opts.enabled
+      ? undefined
+      : {
+          items: [
+            {
+              id: 'order-1',
+              orderNumber: 'SD-10231',
+              recipientName: 'Anita Rao',
+              status: 'DELIVERED',
+              codAmountInr: '1499.00',
+            },
+          ].filter((o) => o.orderNumber.includes(query.search)),
+        },
+  }),
+  useRemittancesList: (query: { sellerId: string }) => ({
+    data: {
+      items: [
+        {
+          id: 'rem-1',
+          sellerId: 'seller-1',
+          currency: 'BDT',
+          amount: '16800.00',
+          bankReference: 'UTR2611130001',
+          paidAt: '2026-11-13T06:00:00.000Z',
+        },
+        {
+          id: 'rem-other',
+          sellerId: 'seller-2',
+          currency: 'BDT',
+          amount: '1.00',
+          bankReference: 'NOT-THEIRS',
+          paidAt: '2026-11-13T06:00:00.000Z',
+        },
+      ].filter(() => query.sellerId !== ''),
+    },
+  }),
   useStaffUsersList: () => ({
     data: [{ id: 'staff-1', emailDisplay: 'ops@example.test', roleNames: ['Warehouse lead'] }],
   }),
@@ -102,7 +141,9 @@ import {
   BatchPick,
   BinPick,
   ClientPick,
+  OrderPick,
   ProductPick,
+  RemittancePick,
   StaffPick,
   StorePick,
 } from '@/components/easy/id-picks';
@@ -241,5 +282,50 @@ describe('pick by name', () => {
     expect(onStaff).toHaveBeenCalledWith('staff-1');
     expect(onStore).toHaveBeenCalledWith('store-1');
     expect(screen.getByLabelText('typed store id')).toBeTruthy();
+  });
+
+  it('order: found by its number, shown with who it went to and its COD, id handed back', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <OrderPick value="" onChange={onChange}>
+        {typed}
+      </OrderPick>,
+    );
+    await user.type(screen.getByLabelText(/^Find the order/), '10231');
+    const result = await screen.findByRole('button', { name: /SD-10231/ });
+    expect(result.textContent).toContain('Anita Rao');
+    expect(result.textContent).toContain('1499.00');
+    await user.click(result);
+    expect(onChange).toHaveBeenCalledWith('order-1');
+    expect(screen.getByLabelText('typed id')).toBeTruthy();
+  });
+
+  it('payout: offers only that client’s payouts, by date, amount and bank reference', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <RemittancePick sellerId="seller-1" value="" onChange={onChange}>
+        {typed}
+      </RemittancePick>,
+    );
+    const select = screen.getByLabelText(/^Payout that paid this/) as HTMLSelectElement;
+    const labels = [...select.options].map((o) => o.textContent ?? '');
+    expect(labels.some((l) => l.includes('BDT 16800.00') && l.includes('UTR2611130001'))).toBe(
+      true,
+    );
+    expect(labels.some((l) => l.includes('NOT-THEIRS'))).toBe(false);
+    await user.selectOptions(select, 'rem-1');
+    expect(onChange).toHaveBeenCalledWith('rem-1');
+  });
+
+  it('payout: with no client to list for, only the typed field is shown', () => {
+    render(
+      <RemittancePick sellerId="" value="" onChange={vi.fn()}>
+        {typed}
+      </RemittancePick>,
+    );
+    expect(screen.queryByLabelText(/^Payout that paid this/)).toBeNull();
+    expect(screen.getByLabelText('typed id')).toBeTruthy();
   });
 });

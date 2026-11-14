@@ -1,14 +1,21 @@
 'use client';
 
-import { useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { Select } from '@skydrop/ui/app/select';
 import { TextField } from '@skydrop/ui/app/text-field';
-import { useSellersList, useStaffUsersList } from '@/lib/api-hooks';
+import {
+  useOrdersList,
+  useRemittancesList,
+  useSellersList,
+  useStaffUsersList,
+} from '@/lib/api-hooks';
 import { useAdminResellerStores } from '@/lib/reseller-store-hooks';
 import { useBinOptions, type BinStockLine } from '@/lib/bin-contents-hooks';
 import { useProductLocations, useWarehouseOptions, type ProductLocationRow } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDate } from '@/i18n/format';
+import { codeLabel } from './code-label';
 import { useBinLines } from './use-bin-lines';
 import { binTypeLabelIn } from '@/app/(authed)/warehouse/bins/_components/bin-note';
 
@@ -308,8 +315,10 @@ function NameList({
   value,
   onChange,
   children,
+  hint,
 }: PickProps & {
   readonly label: string;
+  readonly hint?: string | undefined;
   readonly options: ReadonlyArray<{ readonly id: string; readonly name: string }>;
 }): ReactElement {
   const t = useT();
@@ -319,6 +328,7 @@ function NameList({
     <div className="ez-pick">
       <Select
         label={label}
+        hint={hint}
         value={known ? value : TYPED}
         onChange={(e) => {
           if (e.target.value !== TYPED) onChange(e.target.value);
@@ -367,4 +377,138 @@ function StoreList(props: PickProps): ReactElement {
 export function StorePick(props: PickProps): ReactElement {
   const may = usePermission('reseller.stores.view');
   return may ? <StoreList {...props} /> : <>{props.children}</>;
+}
+
+/**
+ * The order, found by its order number, waybill or the customer's phone.
+ *
+ * Searches the same list the orders page searches. The settlement forms
+ * allocate money to an order, so the result shows the three things that
+ * tell one order from another before money is put against it: the order
+ * number, who it went to, and its cash-on-delivery amount.
+ */
+export function OrderPick({ value, onChange, children }: PickProps): ReactElement {
+  const t = useT();
+  const locale = useLocale();
+  const may = usePermission('orders.view');
+  const [term, setTerm] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const [chosen, setChosen] = useState<{
+    readonly id: string;
+    readonly orderNumber: string;
+    readonly detail: string;
+  } | null>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(term.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [term]);
+  const found = useOrdersList(
+    { search: debounced, pageSize: 8 },
+    { enabled: may && debounced.length >= 2 },
+  );
+  if (!may || found.isError) return <>{children}</>;
+  const rows = found.data?.items ?? [];
+  const showChosen = chosen !== null && chosen.id === value;
+  return (
+    <div className="ez-pick">
+      {showChosen ? (
+        <div className="ez-pick__chosen">
+          <div className="ez-pick__chosen-text">
+            <span className="ez-pick__label">{t('ezPick.order')}</span>
+            <span className="ez-pick__name sk-ident">{chosen.orderNumber}</span>
+            <span className="ez-pick__sub">{chosen.detail}</span>
+          </div>
+          <button
+            type="button"
+            className="ez-pick__change"
+            onClick={() => {
+              setChosen(null);
+              onChange('');
+            }}
+          >
+            {t('ezPick.change')}
+          </button>
+        </div>
+      ) : (
+        <>
+          <TextField
+            label={t('ezPick.findOrder')}
+            hint={t('ezPick.findOrderHint')}
+            autoComplete="off"
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
+          />
+          {debounced.length >= 2 && (
+            <ul className="ez-pick__results" aria-label={t('ezPick.findOrder')}>
+              {found.isLoading && <li className="ez-pick__empty">{t('ezPick.searching')}</li>}
+              {!found.isLoading && rows.length === 0 && (
+                <li className="ez-pick__empty">{t('ezPick.noMatch')}</li>
+              )}
+              {rows.map((o) => {
+                const detail = [
+                  o.recipientName,
+                  codeLabel(o.status, locale),
+                  o.codAmountInr === null ? null : `${t('easy.cod')} ₹${o.codAmountInr}`,
+                ]
+                  .filter((x) => x !== null && x !== '')
+                  .join(' · ');
+                return (
+                  <li key={o.id}>
+                    <button
+                      type="button"
+                      className="ez-pick__result"
+                      onClick={() => {
+                        setChosen({ id: o.id, orderNumber: o.orderNumber, detail });
+                        setTerm('');
+                        onChange(o.id);
+                      }}
+                    >
+                      <span className="ez-pick__name sk-ident">{o.orderNumber}</span>
+                      <span className="ez-pick__sub">{detail}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
+      )}
+      <ByHand>{children}</ByHand>
+    </div>
+  );
+}
+
+function RemittanceList({
+  sellerId,
+  ...props
+}: PickProps & { readonly sellerId: string; readonly hint?: string | undefined }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
+  const list = useRemittancesList({ sellerId, page: 1, pageSize: 20 });
+  // Only this client's payouts: the list is asked for by client, and a row
+  // for anyone else is dropped rather than offered.
+  const options = (list.data?.items ?? [])
+    .filter((r) => r.sellerId === sellerId)
+    .map((r) => ({
+      id: r.id,
+      name: `${formatDate(r.paidAt, locale)} · ${r.currency} ${r.amount} · ${r.bankReference}`,
+    }));
+  return <NameList {...props} label={t('ezPick.remittance')} options={options} />;
+}
+
+/**
+ * The payout that paid a withdrawal, from that client's own recent
+ * payouts: date, amount and bank reference. Only asks for the list when
+ * the viewer may read money screens.
+ */
+export function RemittancePick({
+  sellerId,
+  ...props
+}: PickProps & { readonly sellerId: string; readonly hint?: string | undefined }): ReactElement {
+  const may = usePermission('money.view');
+  return may && sellerId !== '' ? (
+    <RemittanceList sellerId={sellerId} {...props} />
+  ) : (
+    <>{props.children}</>
+  );
 }

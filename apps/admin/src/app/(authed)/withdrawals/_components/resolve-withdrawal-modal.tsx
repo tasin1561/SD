@@ -1,5 +1,6 @@
 'use client';
 
+import { RemittancePick } from '@/components/easy/id-picks';
 import { useEffect, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Ident, Money } from '@skydrop/ui/components';
@@ -155,7 +156,7 @@ export function ResolveWithdrawalModal({
                 label: t('withdrawalsResolveWithdrawalModal.client'),
                 value: (
                   <Link href={`/sellers/${request.sellerId}`} className="mk-inline-link">
-                    <Ident value={request.sellerId} />
+                    {request.sellerName ?? <Ident value={request.sellerId} />}
                   </Link>
                 ),
               },
@@ -213,17 +214,24 @@ export function ResolveWithdrawalModal({
           />
 
           {mode === 'paid' ? (
-            <TextField
-              id="wd-remittance"
-              label={t('withdrawalsResolveWithdrawalModal.remittanceId')}
+            <RemittancePick
+              sellerId={request?.sellerId ?? ''}
               hint={t('withdrawalsResolveWithdrawalModal.theRemittanceThatActuallyPaid')}
-              requiredMark
               value={remittanceId}
-              onChange={(e) => setRemittanceId(e.target.value)}
-              placeholder="0198f3c2-…"
-              autoComplete="off"
-              inputClassName="sk-ident"
-            />
+              onChange={setRemittanceId}
+            >
+              <TextField
+                id="wd-remittance"
+                label={t('withdrawalsResolveWithdrawalModal.remittanceId')}
+                hint={t('withdrawalsResolveWithdrawalModal.theRemittanceThatActuallyPaid')}
+                requiredMark
+                value={remittanceId}
+                onChange={(e) => setRemittanceId(e.target.value)}
+                placeholder="0198f3c2-…"
+                autoComplete="off"
+                inputClassName="sk-ident"
+              />
+            </RemittancePick>
           ) : (
             <TextArea
               id="wd-reason"

@@ -1,5 +1,6 @@
 'use client';
 
+import { OrderPick } from '@/components/easy/id-picks';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Plus } from 'lucide-react';
 import { Ident, Money } from '@skydrop/ui/components';
@@ -122,13 +123,15 @@ export function AllocateSettlementModal({
 
         {lines.map((line, i) => (
           <div key={i} className="mk-line mk-line--2">
-            <TextField
-              label={t('settlementsAllocateSettlementModal.orderId')}
-              value={line.orderId}
-              onChange={(e) => set(i, 'orderId', e.target.value)}
-              placeholder={t('settlementsAllocateSettlementModal.orderUuid')}
-              inputClassName="sk-ident"
-            />
+            <OrderPick value={line.orderId} onChange={(id) => set(i, 'orderId', id)}>
+              <TextField
+                label={t('settlementsAllocateSettlementModal.orderId')}
+                value={line.orderId}
+                onChange={(e) => set(i, 'orderId', e.target.value)}
+                placeholder={t('settlementsAllocateSettlementModal.orderUuid')}
+                inputClassName="sk-ident"
+              />
+            </OrderPick>
             <TextField
               label={t('settlementsAllocateSettlementModal.settledInr')}
               value={line.settledInr}

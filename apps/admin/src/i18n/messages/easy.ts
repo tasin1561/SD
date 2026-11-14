@@ -364,6 +364,18 @@ export const easy = defineMessages({
   'ezPick.noMatch': ['Nothing matches.', 'কিছু মেলেনি।', 'कुछ नहीं मिला।'],
   'ezPick.change': ['Change', 'বদলান', 'बदलें'],
   'ezPick.batch': ['Batch', 'ব্যাচ', 'बैच'],
+  'ezPick.order': ['Order', 'অর্ডার', 'ऑर्डर'],
+  'ezPick.findOrder': ['Find the order', 'অর্ডার খুঁজুন', 'ऑर्डर खोजें'],
+  'ezPick.findOrderHint': [
+    'Type an order number, waybill or phone.',
+    'অর্ডার নম্বর, ওয়েবিল বা ফোন লিখুন।',
+    'ऑर्डर नंबर, वेबिल या फ़ोन लिखें।',
+  ],
+  'ezPick.remittance': [
+    'Payout that paid this',
+    'যে পেআউটে এটি দেওয়া হয়েছে',
+    'जिस पेआउट से यह चुकाया गया',
+  ],
   'ezPick.staff': ['Staff member', 'স্টাফ সদস্য', 'स्टाफ़ सदस्य'],
   'ezPick.store': ['Member store', 'মেম্বার স্টোর', 'मेंबर स्टोर'],
   'ezPick.shelfFirst': ['Choose the shelf first.', 'আগে তাক বেছে নিন।', 'पहले शेल्फ़ चुनें।'],

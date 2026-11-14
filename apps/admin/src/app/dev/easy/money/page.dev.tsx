@@ -73,6 +73,31 @@ const respond: Respond<F> = (fixture, req) => {
       oldestPendingHours: fixture === 'c' ? null : 60,
     });
   }
+  // Invented payouts for the "which payout paid this" list.
+  if (req.path.startsWith('/api/admin/remittances')) {
+    return json({
+      items: [0, 1].map((i) => ({
+        id: `0198f3c2-0000-7000-8000-00000000000${i + 1}`,
+        sellerId: 'wd1'.replace('wd1', `01a1cf45-0000-73cf-8f7e-aaaaaaaaaaa1`),
+        sellerName: 'Chittagong Home & Lifestyle Exports Private Limited',
+        currency: 'BDT',
+        amount: ['16800.00', '4200.00'][i],
+        sourceCurrency: 'INR',
+        sourceAmount: ['12000.00', '3000.00'][i],
+        fxRateSnapshot: '1.40',
+        bankReference: ['UTR2611130001', 'UTR2611090417'][i],
+        paidAt: ago(60 * 24 * (i + 1)),
+        note: null,
+        createdAt: ago(60 * 24 * (i + 1)),
+        paidFromLabel: 'Main payout account',
+        paidFromBank: 'BRAC Bank',
+        recordedByName: 'Finance',
+      })),
+      total: 2,
+      page: 1,
+      pageSize: 20,
+    });
+  }
   if (req.path === '/api/admin/wallet/topups') return json(fixture === 'd' ? [] : TOPUPS);
   if (req.method === 'GET') return json({ items: [], total: 0, page: 1, pageSize: 20 });
   // Every write is answered with a refusal: the test page changes nothing.
