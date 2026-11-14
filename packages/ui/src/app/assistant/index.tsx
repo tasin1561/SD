@@ -143,7 +143,10 @@ interface ConversationDetail {
 
 export const SEEN_KEY = 'skydrop.assistant.seen';
 /** A sticky bottom action bar the launcher must sit above. */
-export const BOTTOM_BAR_SELECTOR = '[data-bottom-bar], .as-bar, .prd-savebar';
+// `.ord-bar` (client order forms) and `.ro-bar` (member-store order forms)
+// were missing, so the launcher sat on "Submit for confirmation" / "Place
+// order" — found while re-filming the tutorials, 2026-11-14.
+export const BOTTOM_BAR_SELECTOR = '[data-bottom-bar], .as-bar, .prd-savebar, .ord-bar, .ro-bar';
 
 let counter = 0;
 const nextId = (): string => `m${Date.now().toString(36)}${(counter++).toString(36)}`;
