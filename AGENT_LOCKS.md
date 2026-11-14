@@ -29,6 +29,7 @@ Admin "easy pages" redesign (owner's list of 31 admin pages, 2026-11-13): light 
 - `apps/admin/src/app/(authed)/{account,notifications}/**`, `apps/admin/src/app/(authed)/warehouse/{pick,manifests,pickups,collapse}/**` — 2026-11-13 — the admin pages on none of the owner's lists ("if any page is missed do that too"). Screen-only. `ai/**` stays Claude Code's and is not touched.
 - `apps/admin/src/middleware.ts` — 2026-11-13 — ONE change: allow Spaces images (`imgExtra`) so ticket photos show as thumbnails; asked for by Claude Code through the owner.
 - `apps/admin/src/app/(authed)/orders/_components/{manual-scan-panel,order-charges}.tsx`, `apps/admin/src/app/(authed)/_components/order-omnisearch.tsx` — 2026-11-13 — status labels only (raw codes → the shared label table).
+- `apps/admin/src/app/(authed)/system/_components/af-parts.tsx` — 2026-11-14 — ONE change: a plain-text section note sits behind an (i) beside the heading (courier and system screens)
 - Detail pages (`[id]`) under every claimed list page are part of the claim.
 - Existing admin message files (`apps/admin/src/i18n/messages/*.ts`): not claimed; I add keys only, never rename or remove, and regenerate the assistant help index in the same commit.
 

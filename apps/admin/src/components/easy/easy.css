@@ -768,3 +768,60 @@ button.ez-pick__change {
     min-width: min(220px, 40vw);
   }
 }
+
+/* ── Jump to a section ─────────────────────────────────────────────────
+   One row of links, scrolled sideways inside itself when it does not fit. */
+.ez-jump {
+  display: flex;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin: 0 calc(-1 * var(--sp-1));
+  padding: var(--sp-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ez-jump::-webkit-scrollbar {
+  display: none;
+}
+a.ez-jump__link {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+a.ez-jump__link:hover {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+}
+a.ez-jump__link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* A jumped-to heading clears the bar that stays at the top of the page. */
+.ez-touch section[id^='cd-'],
+.ez-touch section[id^='jp-'] {
+  scroll-margin-top: 88px;
+}
+
+@media (pointer: coarse) {
+  a.ez-jump__link {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  a.ez-jump__link {
+    transition: none;
+  }
+}

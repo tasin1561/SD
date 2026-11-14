@@ -269,7 +269,19 @@ export function CourierEscalationIndex(): ReactElement {
               <span className="af-mini__label">
                 {t('courierEscalationCourierEscalationIndex.mode')}
               </span>
-              <span className="af-mini__value">{settings?.writeMode ?? '—'}</span>
+              <span className="af-mini__value">
+                {settings === undefined
+                  ? '—'
+                  : settings.writeMode === 'MANUAL'
+                    ? t('courierEscalationCourierEscalationIndex.manualEverythingToThisQueue')
+                    : settings.writeMode === 'SUPERVISED'
+                      ? t(
+                          'courierEscalationCourierEscalationIndex.supervisedPreparedHeldForApproval',
+                        )
+                      : t(
+                          'courierEscalationCourierEscalationIndex.autoUnattendedExceptLockedCategories',
+                        )}
+              </span>
             </div>
             <div className="af-mini">
               <span className="af-mini__label">
@@ -474,7 +486,7 @@ export function CourierEscalationIndex(): ReactElement {
                       </div>
                     </Td>
                     <Td>
-                      <div className="af-stack af-stack--tight">
+                      <div className="af-stack af-stack--tight ce-state">
                         <StatusChip
                           size="sm"
                           kind={

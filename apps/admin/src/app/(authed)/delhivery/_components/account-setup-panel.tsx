@@ -1,5 +1,6 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
 import { useState, type ReactElement } from 'react';
 import { Button } from '@skydrop/ui/app/button';
 import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
@@ -167,6 +168,7 @@ export function AccountSetupPanel(): ReactElement | null {
 
   return (
     <AfSection
+      id="jp-setup"
       title={t('delhiveryAccountSetupPanel.accountSetup')}
       note={t('delhiveryAccountSetupPanel.whatHasToBeTrue')}
     >
@@ -176,10 +178,15 @@ export function AccountSetupPanel(): ReactElement | null {
 
       <div className="af-grid-2">
         <AfCard>
-          <h3 className="af-card__title">{t('delhiveryAccountSetupPanel.reachability')}</h3>
-          <p className="af-muted">
-            {t('delhiveryAccountSetupPanel.oneLiveServiceabilityLookupUsing')}
-          </p>
+          <h3 className="af-card__title">
+            <span className="ez-titled">
+              {t('delhiveryAccountSetupPanel.reachability')}
+              <InfoButton
+                title={t('delhiveryAccountSetupPanel.reachability')}
+                text={t('delhiveryAccountSetupPanel.oneLiveServiceabilityLookupUsing')}
+              />
+            </span>
+          </h3>
           <div className="af-row af-row--bottom">
             <div className="af-grow">
               <TextField
@@ -229,10 +236,15 @@ export function AccountSetupPanel(): ReactElement | null {
         </AfCard>
 
         <AfCard>
-          <h3 className="af-card__title">{t('delhiveryAccountSetupPanel.pickupLocation')}</h3>
-          <p className="af-muted">
-            {t('delhiveryAccountSetupPanel.everyShipmentSendsThisWarehouse')}
-          </p>
+          <h3 className="af-card__title">
+            <span className="ez-titled">
+              {t('delhiveryAccountSetupPanel.pickupLocation')}
+              <InfoButton
+                title={t('delhiveryAccountSetupPanel.pickupLocation')}
+                text={t('delhiveryAccountSetupPanel.everyShipmentSendsThisWarehouse')}
+              />
+            </span>
+          </h3>
           {mayRegister ? (
             <div className="af-row">
               <Button variant="primary" size="md" onClick={() => openFor('REGISTER')}>

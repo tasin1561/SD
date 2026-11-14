@@ -90,3 +90,22 @@
   flex: 1 1 14rem;
   min-width: 0;
 }
+
+/* On a phone the message is the thing the worker reads and copies, so it
+   takes the full width of the card and reads from the left like any text;
+   the state chip keeps its own size instead of stretching across. */
+@media (max-width: 767.98px) {
+  .sd-table-cards td .ce-message {
+    flex: 1 1 100%;
+    text-align: left;
+  }
+  .sd-table-cards td .ce-message .af-pre {
+    text-align: left;
+  }
+  .sd-table-cards td .ce-state {
+    align-items: flex-end;
+  }
+  .sd-table-cards td .ce-state .ce-error-text {
+    text-align: right;
+  }
+}

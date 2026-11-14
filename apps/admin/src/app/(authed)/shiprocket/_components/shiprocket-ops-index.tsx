@@ -1,5 +1,6 @@
 'use client';
 
+import { JumpBar } from '@/components/easy/jump-bar';
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { pageDateTag } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
@@ -91,6 +92,15 @@ export function ShiprocketOpsIndex(): ReactElement {
         </div>
       ) : (
         <>
+          <JumpBar
+            label={t('ezClient.jump')}
+            items={[
+              ['jp-connection', t('shiprocketShiprocketOpsIndex.connection')],
+              ['jp-accounts', t('shiprocketShiprocketOpsIndex.accounts')],
+              ['jp-parcels', t('shiprocketShiprocketOpsIndex.recentParcels')],
+              ['jp-reach', t('shiprocketShiprocketOpsIndex.reachability')],
+            ]}
+          />
           {/*
             THE STUBBED-BESIDE-LIVE WARNING (CUR-15).
 
@@ -115,6 +125,7 @@ export function ShiprocketOpsIndex(): ReactElement {
 
           {/* ── mode + the two switches ── */}
           <AfSection
+            id="jp-connection"
             title={t('shiprocketShiprocketOpsIndex.connection')}
             note={t('shiprocketShiprocketOpsIndex.stubModeMeansNoNetwork')}
           >
@@ -188,6 +199,7 @@ export function ShiprocketOpsIndex(): ReactElement {
 
           {/* ── accounts ── */}
           <AfSection
+            id="jp-accounts"
             title={t('shiprocketShiprocketOpsIndex.accounts')}
             note={t('shiprocketShiprocketOpsIndex.thePickupLocationNameIs')}
           >
@@ -297,6 +309,7 @@ export function ShiprocketOpsIndex(): ReactElement {
 
           {/* ── connectivity ── */}
           <AfSection
+            id="jp-reach"
             title={t('shiprocketShiprocketOpsIndex.reachability')}
             note={t('shiprocketShiprocketOpsIndex.oneServiceabilityLookupOnA')}
           >
@@ -366,6 +379,7 @@ export function ShiprocketOpsIndex(): ReactElement {
 
           {/* ── bookings ── */}
           <AfSection
+            id="jp-parcels"
             title={t('shiprocketShiprocketOpsIndex.recentParcels')}
             note={t('shiprocketShiprocketOpsIndex.theTwentyMostRecentShiprocket')}
           >

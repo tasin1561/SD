@@ -64,6 +64,7 @@ export function TrackingPollPanel(): ReactElement | null {
 
   return (
     <AfSection
+      id="jp-tracking"
       title={t('delhiveryTrackingPollPanel.tracking')}
       note={t('delhiveryTrackingPollPanel.delhiverySendsUsNoWebhooks')}
     >

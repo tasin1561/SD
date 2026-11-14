@@ -80,6 +80,7 @@ export function TrackingLookupPanel(): ReactElement | null {
 
   return (
     <AfSection
+      id="jp-lookup"
       title={t('delhiveryTrackingLookupPanel.lookUpAWaybill')}
       note={t('delhiveryTrackingLookupPanel.whatOurCouriersKnowAbout')}
     >

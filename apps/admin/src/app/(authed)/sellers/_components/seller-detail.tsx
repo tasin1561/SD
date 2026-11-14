@@ -4,6 +4,7 @@ import { TidyCards } from '@/components/easy/tidy-cards';
 import { When } from '@/components/easy/when';
 import '@/components/easy/easy.css';
 import './client-detail.css';
+import { JumpBar } from '@/components/easy/jump-bar';
 import Link from 'next/link';
 import { ArrowLeftRight, Eye, PackageSearch, PencilLine, ShieldAlert } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
@@ -155,23 +156,18 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
           />
         )}
 
-        <nav className="cd-jump" aria-label={t('ezClient.jump')}>
-          {(
-            [
-              ['cd-profile', t('sellersSellerDetail.profile')],
-              ['cd-status', t('sellersSellerDetail.status')],
-              ['cd-hold', t('sellersSellerDetail.accountHold')],
-              ['cd-bank', t('sellersSellerDetail.bankAccount')],
-              ['cd-settings', t('ezClient.settings')],
-              ['cd-couriers', t('ezClient.couriers')],
-              ['cd-stores', t('ezClient.memberStores')],
-            ] as const
-          ).map(([id, label]) => (
-            <a key={id} className="cd-jump__link" href={`#${id}`}>
-              {label}
-            </a>
-          ))}
-        </nav>
+        <JumpBar
+          label={t('ezClient.jump')}
+          items={[
+            ['cd-profile', t('sellersSellerDetail.profile')],
+            ['cd-status', t('sellersSellerDetail.status')],
+            ['cd-hold', t('sellersSellerDetail.accountHold')],
+            ['cd-bank', t('sellersSellerDetail.bankAccount')],
+            ['cd-settings', t('ezClient.settings')],
+            ['cd-couriers', t('ezClient.couriers')],
+            ['cd-stores', t('ezClient.memberStores')],
+          ]}
+        />
 
         <AcSection id="cd-profile" title={t('sellersSellerDetail.profile')}>
           <AcDl

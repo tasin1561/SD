@@ -21,7 +21,7 @@ import {
   type CourierAccountView,
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
-import { AfCard, Notice } from '@/app/(authed)/system/_components/af-parts';
+import { AfCard } from '@/app/(authed)/system/_components/af-parts';
 import { EditCourierAccountModal } from './edit-courier-account-modal';
 import { PortalLoginModal } from './portal-login-modal';
 import { SignInCodeMailboxModal } from './sign-in-code-mailbox-modal';
@@ -83,12 +83,14 @@ export function CourierAccountsIndex(): ReactElement {
         }
       />
 
-      <Notice tone="info">
-        <p className="ca-shield">
-          <ShieldCheck size={14} aria-hidden />
-          <span>{t('courierAccountsCourierAccountsIndex.apiCredentialsAreEncryptedAt')}</span>
-        </p>
-      </Notice>
+      <p className="ca-shield ez-titled">
+        <ShieldCheck size={14} aria-hidden />
+        <span>{t('ezCourier.credentialsSafe')}</span>
+        <InfoButton
+          title={t('ezCourier.credentialsSafe')}
+          text={t('courierAccountsCourierAccountsIndex.apiCredentialsAreEncryptedAt')}
+        />
+      </p>
 
       {/* Above the accounts, because it decides whether any of them are
           used at all. */}

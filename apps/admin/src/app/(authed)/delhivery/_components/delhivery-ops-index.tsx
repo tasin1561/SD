@@ -1,5 +1,6 @@
 'use client';
 
+import { JumpBar } from '@/components/easy/jump-bar';
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
@@ -100,6 +101,19 @@ export function DelhiveryOpsIndex(): ReactElement {
         }
       />
 
+      <JumpBar
+        label={t('ezClient.jump')}
+        items={[
+          ['jp-tracking', t('delhiveryTrackingPollPanel.tracking')],
+          ['jp-pool', t('delhiveryDelhiveryOpsIndex.waybillPool')],
+          ['jp-budget', t('delhiveryDelhiveryOpsIndex.rateBudget')],
+          ['jp-lookup', t('delhiveryTrackingLookupPanel.lookUpAWaybill')],
+          ['jp-charged', t('delhiveryWalletImportPanel.whatDelhiveryCharged')],
+          ['jp-connection', t('delhiveryDelhiveryOpsIndex.connection')],
+          ['jp-setup', t('delhiveryAccountSetupPanel.accountSetup')],
+        ]}
+      />
+
       <TrackingPollPanel />
       <TrackingLookupPanel />
       <WalletImportPanel />
@@ -121,6 +135,7 @@ export function DelhiveryOpsIndex(): ReactElement {
         <>
           {/* ── mode + guard ── */}
           <AfSection
+            id="jp-connection"
             title={t('delhiveryDelhiveryOpsIndex.connection')}
             note={t('delhiveryDelhiveryOpsIndex.stubModeMeansNoNetwork')}
           >
@@ -173,6 +188,7 @@ export function DelhiveryOpsIndex(): ReactElement {
 
           {/* ── waybill pool ── */}
           <AfSection
+            id="jp-pool"
             title={t('delhiveryDelhiveryOpsIndex.waybillPool')}
             note={t('delhiveryDelhiveryOpsIndex.awbsAreFetchedInBulk')}
           >
@@ -211,6 +227,7 @@ export function DelhiveryOpsIndex(): ReactElement {
 
           {/* ── rate budget ── */}
           <AfSection
+            id="jp-budget"
             title={t('delhiveryDelhiveryOpsIndex.rateBudget')}
             note={t('delhiveryDelhiveryOpsIndex.budgetedTo80OfDelhivery')}
           >

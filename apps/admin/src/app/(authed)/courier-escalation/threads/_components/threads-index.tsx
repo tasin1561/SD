@@ -162,9 +162,7 @@ export function CourierThreadsIndex(): ReactElement {
                   </Td>
                   <Td>
                     <span className="af-small af-nowrap">
-                      {r.lastMessageAt === null
-                        ? '—'
-                        : new Date(r.lastMessageAt).toLocaleString('en-IN')}
+                      {r.lastMessageAt === null ? '—' : <When iso={r.lastMessageAt} time />}
                     </span>
                   </Td>
                   <Td>

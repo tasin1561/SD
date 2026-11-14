@@ -66,6 +66,7 @@ export function WalletImportPanel(): ReactElement | null {
 
   return (
     <AfSection
+      id="jp-charged"
       title={t('delhiveryWalletImportPanel.whatDelhiveryCharged')}
       note={t('delhiveryWalletImportPanel.financesDownloadLedgerThenDrop')}
     >

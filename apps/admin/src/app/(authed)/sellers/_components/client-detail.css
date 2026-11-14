@@ -5,51 +5,6 @@
  * been agreed with them that differs from everyone else. It used to be
  * fifteen phone screens long, most of it settings on their default. */
 
-/* ── Jump to a section ─────────────────────────────────────────────────
-   One row of links, scrolled sideways inside itself when it does not fit. */
-.cd-jump {
-  display: flex;
-  gap: var(--sp-2);
-  min-width: 0;
-  margin: 0 calc(-1 * var(--sp-1));
-  padding: var(--sp-1);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.cd-jump::-webkit-scrollbar {
-  display: none;
-}
-a.cd-jump__link {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  min-height: 36px;
-  padding: 0 var(--sp-4);
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill);
-  background: var(--surface);
-  color: var(--fg-strong);
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-medium);
-  white-space: nowrap;
-  text-decoration: none;
-  transition:
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
-}
-a.cd-jump__link:hover {
-  border-color: var(--blue-line);
-  background: var(--blue-tint);
-}
-a.cd-jump__link:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-/* A jumped-to heading clears the bar that stays at the top of the page. */
-.cd-page section[id^='cd-'] {
-  scroll-margin-top: 88px;
-}
-
 /* ── A phone number that can be tapped to call ─────────────────────────── */
 a.cd-tel {
   color: inherit;
@@ -82,9 +37,6 @@ a.cd-tel:focus-visible {
 }
 
 @media (pointer: coarse) {
-  a.cd-jump__link {
-    min-height: 44px;
-  }
   a.cd-tel {
     display: inline-flex;
     align-items: center;
@@ -135,11 +87,5 @@ a.cd-tel:focus-visible {
      "system default" and "source" lines only appear when they differ. */
   .cd-settings .sd-table-cards tbody > tr > td.cd-same {
     display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  a.cd-jump__link {
-    transition: none;
   }
 }

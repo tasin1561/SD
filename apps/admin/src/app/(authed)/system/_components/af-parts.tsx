@@ -5,6 +5,8 @@ import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 import { SectionHeading } from '@skydrop/ui/app/page-header';
 import { buttonClassName, type ButtonSize, type ButtonVariant } from '@skydrop/ui/app/button';
+import { InfoButton } from '@/components/easy/info-button';
+import '@/components/easy/easy.css';
 import './af.css';
 
 /**
@@ -30,7 +32,22 @@ export function AfSection({
 }): ReactElement {
   return (
     <section id={id} className="af-section">
-      <SectionHeading title={title} note={note} action={action} />
+      {/* A plain-text explanation sits behind an (i) beside the heading, so
+          the screen shows the work and the words are one tap away. A note
+          that is not plain text (a live count, a link) stays in view. */}
+      {typeof title === 'string' && typeof note === 'string' ? (
+        <SectionHeading
+          title={
+            <span className="ez-titled">
+              {title}
+              <InfoButton title={title} text={note} />
+            </span>
+          }
+          action={action}
+        />
+      ) : (
+        <SectionHeading title={title} note={note} action={action} />
+      )}
       {children}
     </section>
   );
