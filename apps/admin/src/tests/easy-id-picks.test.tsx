@@ -17,6 +17,21 @@ vi.mock('@/lib/api-hooks', () => ({
   useSellersList: () => ({
     data: { items: [{ id: 'seller-1', companyName: 'Dhaka Threads Ltd' }] },
   }),
+  useStaffUsersList: () => ({
+    data: [{ id: 'staff-1', emailDisplay: 'ops@example.test', roleNames: ['Warehouse lead'] }],
+  }),
+}));
+vi.mock('@/lib/reseller-store-hooks', () => ({
+  useAdminResellerStores: () => ({
+    data: [
+      {
+        id: 'store-1',
+        name: 'rupa',
+        displayName: 'Rupa Boutique',
+        sellerCompanyName: 'Dhaka Threads Ltd',
+      },
+    ],
+  }),
 }));
 vi.mock('@/lib/bin-contents-hooks', () => ({
   useBinOptions: (warehouseId: string) => ({
@@ -83,7 +98,14 @@ vi.mock('@/components/easy/use-bin-lines', () => ({
   }),
 }));
 
-import { BatchPick, BinPick, ClientPick, ProductPick } from '@/components/easy/id-picks';
+import {
+  BatchPick,
+  BinPick,
+  ClientPick,
+  ProductPick,
+  StaffPick,
+  StorePick,
+} from '@/components/easy/id-picks';
 
 const typed = <input aria-label="typed id" />;
 
@@ -195,5 +217,29 @@ describe('pick by name', () => {
     );
     expect(screen.queryByLabelText(/^Batch/)).toBeNull();
     expect(screen.getByLabelText('typed id')).toBeTruthy();
+  });
+
+  it('staff and member store: chosen by name, the id handed back', async () => {
+    const onStaff = vi.fn();
+    const onStore = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <>
+        <StaffPick value="" onChange={onStaff}>
+          {typed}
+        </StaffPick>
+        <StorePick value="" onChange={onStore}>
+          <input aria-label="typed store id" />
+        </StorePick>
+      </>,
+    );
+    await user.selectOptions(screen.getByLabelText(/^Staff member/), 'staff-1');
+    await user.selectOptions(
+      screen.getByLabelText(/^Member store/),
+      'Rupa Boutique · Dhaka Threads Ltd',
+    );
+    expect(onStaff).toHaveBeenCalledWith('staff-1');
+    expect(onStore).toHaveBeenCalledWith('store-1');
+    expect(screen.getByLabelText('typed store id')).toBeTruthy();
   });
 });

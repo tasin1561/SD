@@ -4,7 +4,8 @@ import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import { When } from '@/components/easy/when';
-import { useState, type ReactElement } from 'react';
+import { Fragment, useState, type ReactElement } from 'react';
+import { ClientPick, StaffPick, StorePick } from '@/components/easy/id-picks';
 import { Megaphone, Send, Users } from 'lucide-react';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Checkbox } from '@skydrop/ui/app/checkbox';
@@ -243,21 +244,40 @@ export function BroadcastsView(): ReactElement {
               </Select>
               {pick.fields.length > 0 && (
                 <div className="ac-form-grid" data-cols={pick.fields.length > 1 ? '2' : undefined}>
-                  {pick.fields.map((field, i) => (
-                    <TextField
-                      key={field}
-                      aria-label={field}
-                      inputClassName="sk-ident"
-                      placeholder={field}
-                      value={audienceValues[i] ?? ''}
-                      onChange={(e) => {
-                        const next = [...audienceValues];
-                        next[i] = e.target.value;
-                        setAudienceValues(next);
-                        preview.reset();
-                      }}
-                    />
-                  ))}
+                  {pick.fields.map((field, i) => {
+                    const setValue = (value: string): void => {
+                      const next = [...audienceValues];
+                      next[i] = value;
+                      setAudienceValues(next);
+                      preview.reset();
+                    };
+                    const typed = (
+                      <TextField
+                        aria-label={field}
+                        inputClassName="sk-ident"
+                        placeholder={field}
+                        value={audienceValues[i] ?? ''}
+                        onChange={(e) => setValue(e.target.value)}
+                      />
+                    );
+                    // A client, a staff member and a member store can be
+                    // chosen by name; the typed id stays underneath.
+                    const Pick =
+                      field === t('notificationsBroadcastsBroadcastsView.sellerId')
+                        ? ClientPick
+                        : field === t('notificationsBroadcastsBroadcastsView.staffId')
+                          ? StaffPick
+                          : field === t('notificationsBroadcastsBroadcastsView.storeId')
+                            ? StorePick
+                            : null;
+                    return Pick === null ? (
+                      <Fragment key={field}>{typed}</Fragment>
+                    ) : (
+                      <Pick key={field} value={audienceValues[i] ?? ''} onChange={setValue}>
+                        {typed}
+                      </Pick>
+                    );
+                  })}
                 </div>
               )}
             </div>

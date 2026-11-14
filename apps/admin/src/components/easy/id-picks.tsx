@@ -3,7 +3,8 @@
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { Select } from '@skydrop/ui/app/select';
 import { TextField } from '@skydrop/ui/app/text-field';
-import { useSellersList } from '@/lib/api-hooks';
+import { useSellersList, useStaffUsersList } from '@/lib/api-hooks';
+import { useAdminResellerStores } from '@/lib/reseller-store-hooks';
 import { useBinOptions, type BinStockLine } from '@/lib/bin-contents-hooks';
 import { useProductLocations, useWarehouseOptions, type ProductLocationRow } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
@@ -298,4 +299,72 @@ export function WarehouseName({ id }: { readonly id: string }): ReactElement {
   const warehouses = useWarehouseOptions();
   const name = (warehouses.data ?? []).find((w) => w.id === id)?.name;
   return name === undefined ? <span className="sk-ident">{id}</span> : <>{name}</>;
+}
+
+/** One list of names, with the typed id field kept underneath. */
+function NameList({
+  label,
+  options,
+  value,
+  onChange,
+  children,
+}: PickProps & {
+  readonly label: string;
+  readonly options: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+}): ReactElement {
+  const t = useT();
+  if (options.length === 0) return <>{children}</>;
+  const known = value === '' || options.some((o) => o.id === value);
+  return (
+    <div className="ez-pick">
+      <Select
+        label={label}
+        value={known ? value : TYPED}
+        onChange={(e) => {
+          if (e.target.value !== TYPED) onChange(e.target.value);
+        }}
+      >
+        <option value="">{t('ezPick.choose')}</option>
+        {!known && <option value={TYPED}>{t('ezPick.typed')}</option>}
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.name}
+          </option>
+        ))}
+      </Select>
+      <ByHand>{children}</ByHand>
+    </div>
+  );
+}
+
+function StaffList(props: PickProps): ReactElement {
+  const t = useT();
+  const staff = useStaffUsersList();
+  const options = (staff.data ?? []).map((u) => ({
+    id: u.id,
+    name: `${u.emailDisplay} · ${u.roleNames.join(', ')}`,
+  }));
+  return <NameList {...props} label={t('ezPick.staff')} options={options} />;
+}
+
+/** A staff member, by email and role. Only asks for the list when allowed to read it. */
+export function StaffPick(props: PickProps): ReactElement {
+  const may = usePermission('staff.view', 'staff.manage');
+  return may ? <StaffList {...props} /> : <>{props.children}</>;
+}
+
+function StoreList(props: PickProps): ReactElement {
+  const t = useT();
+  const stores = useAdminResellerStores({});
+  const options = (stores.data ?? []).map((s) => ({
+    id: s.id,
+    name: `${s.displayName ?? s.name} · ${s.sellerCompanyName}`,
+  }));
+  return <NameList {...props} label={t('ezPick.store')} options={options} />;
+}
+
+/** A member store, by its name and its client. Only asks for the list when allowed. */
+export function StorePick(props: PickProps): ReactElement {
+  const may = usePermission('reseller.stores.view');
+  return may ? <StoreList {...props} /> : <>{props.children}</>;
 }
