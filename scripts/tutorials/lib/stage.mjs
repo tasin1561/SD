@@ -208,9 +208,65 @@ export function makeStage(page) {
     await page.evaluate(() => window.__tut?.clearHalo());
   }
 
+  /**
+   * The launcher already knows how to sit ABOVE a sticky bottom action bar,
+   * but only for the bars named in the assistant's `BOTTOM_BAR_SELECTOR`
+   * (`[data-bottom-bar]`, `.as-bar`, `.prd-savebar`). The seller order form's
+   * `.ord-bar` and the member store's `.ro-bar` are not on that list, so on
+   * those two forms the launcher sits on the bar's right-hand end — exactly
+   * where "Submit for confirmation" / "Place order" live. Marking them with
+   * the contract's own attribute is what the app should do itself; until it
+   * does, the take does it, so the button is clickable and visible. Idempotent
+   * and silent on every screen that has no such bar.
+   */
+  async function liftLauncherAboveBars() {
+    const marked = await page.evaluate(() => {
+      const bars = document.querySelectorAll(
+        '.ord-bar:not([data-bottom-bar]), .ro-bar:not([data-bottom-bar])',
+      );
+      bars.forEach((el) => el.setAttribute('data-bottom-bar', '1'));
+      if (bars.length > 0) window.dispatchEvent(new Event('resize'));
+      return bars.length;
+    });
+    if (marked > 0) await page.waitForTimeout(500);
+  }
+
+  /**
+   * Keep the floating "Ask Skydrop AI" launcher off whatever is about to be
+   * pointed at. It sits fixed at the bottom-right of every screen, so a
+   * control that `scrollIntoViewIfNeeded` leaves in that corner is under it:
+   * the halo is drawn over the launcher and the click is refused as
+   * "intercepts pointer events". When the two boxes overlap, centre the
+   * target in the viewport instead. Nothing happens when they do not, so a
+   * flow that never came near the corner films exactly as it did before.
+   */
+  async function clearOfLauncher(locator) {
+    await liftLauncherAboveBars();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const target = await locator.boundingBox();
+      const covered = await page.evaluate((box) => {
+        const l = document.querySelector('.sk-ai-launcher');
+        if (l === null || box === null) return false;
+        const r = l.getBoundingClientRect();
+        if (r.width === 0 || getComputedStyle(l).opacity === '0') return false;
+        const pad = 12;
+        return (
+          box.x < r.right + pad &&
+          box.x + box.width > r.left - pad &&
+          box.y < r.bottom + pad &&
+          box.y + box.height > r.top - pad
+        );
+      }, target);
+      if (!covered) return;
+      await locator.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+      await page.waitForTimeout(260);
+    }
+  }
+
   /** Bring a control into view, outline it, then leave it outlined. */
   async function point(locator, { settle = 500 } = {}) {
     await locator.scrollIntoViewIfNeeded();
+    await clearOfLauncher(locator);
     await page.waitForTimeout(220);
     const box = await halo(locator);
     if (box !== null) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -260,5 +316,16 @@ export function makeStage(page) {
     await page.waitForTimeout(220);
   }
 
-  return { marker, halo, clearHalo, point, clickIt, typeIn, dwellOn, glide };
+  return {
+    marker,
+    halo,
+    clearHalo,
+    point,
+    clickIt,
+    typeIn,
+    dwellOn,
+    glide,
+    clearOfLauncher,
+    liftLauncherAboveBars,
+  };
 }

@@ -16,6 +16,7 @@
 import path from 'node:path';
 import { GENERATED_DIR, TUTORIALS_DIR } from './lib/paths.mjs';
 import { readFixture } from './lib/fixture.mjs';
+import { assertOrderFormV2, codCard, waitForAddressScore } from './lib/order-pages.mjs';
 
 /**
  * The CSV the bulk-import video uploads. A COMMITTED fixture rather than
@@ -1994,28 +1995,63 @@ export const FLOWS = {
         await page.waitForTimeout(700);
       },
 
+      /**
+       * THE FORM IS THE v2 ONE, and the take must prove it before it types a
+       * word. `orders.page_v2_audience` decides which form `/orders/new`
+       * shows, a fresh stack opens on OFF, and the original form has the same
+       * labels in a different order with no address check at all — so a run
+       * against the wrong setting would film a perfect-looking video of the
+       * wrong screen. `seed-demo-data.mjs` sets it to ALL; this is the
+       * tripwire if it did not.
+       */
       async recipient({ page, stage }) {
+        await assertOrderFormV2(page);
+        // Top to bottom, in the order the form is laid out: the client's own
+        // order ID first, then who it goes to.
+        await stage.typeIn(page.getByLabel('Order ID', { exact: true }), CUSTOMER.reference, {
+          delay: 60,
+        });
         await stage.typeIn(page.getByLabel('Full name'), CUSTOMER.name);
         await stage.typeIn(page.getByLabel(/^Phone number,/), CUSTOMER.phone, { delay: 70 });
+      },
+
+      async pincode({ page, stage }) {
+        // THE PIN COMES BEFORE THE ADDRESS now (owner, 2026-11-09): it is what
+        // the courier routes on, and it tells the operator at once whether the
+        // address they are about to type is in the right part of the country.
+        await stage.typeIn(page.getByLabel('PIN code'), CUSTOMER.pin, { delay: 130, after: 1500 });
+        // The district and state read-back ("Bengaluru Urban, Karnataka from PIN
+        // code") resolves a beat after the sixth digit. The narration reads it
+        // out, so a PIN the address service cannot place stops the take.
+        await page
+          .getByText('from PIN code')
+          .first()
+          .waitFor({ state: 'visible', timeout: 12_000 });
+        await page.waitForTimeout(900);
+      },
+
+      async address({ page, stage }) {
         await stage.typeIn(page.getByLabel('Address line 1'), CUSTOMER.line1, { delay: 34 });
       },
 
       async landmark({ page, stage }) {
         await stage.typeIn(page.getByLabel('Address line 2 (the landmark)'), CUSTOMER.line2, {
           delay: 36,
-          after: 900,
+          after: 600,
         });
       },
 
-      async pincode({ page, stage }) {
-        await stage.typeIn(page.getByLabel('PIN code'), CUSTOMER.pin, { delay: 130, after: 1500 });
-        // The serviceability chip resolves a beat after the sixth digit.
-        await page.waitForTimeout(1200);
+      async 'address-check'({ page, stage }) {
+        // Nobody presses anything: the check runs by itself about a second
+        // after the landmark stops changing. What the scene is about is the
+        // 0-100 score, so the take waits for the score — and refuses to go on
+        // without it, because the narration reads it out.
+        const panel = await waitForAddressScore(page);
+        await stage.dwellOn(panel, 4200);
       },
 
       async reference({ page, stage }) {
-        await stage.typeIn(page.getByLabel('Your reference'), CUSTOMER.reference, { delay: 60 });
-        await stage.typeIn(page.getByLabel('Notes for the call agent'), CUSTOMER.note, {
+        await stage.typeIn(page.getByLabel('Delivery Notes'), CUSTOMER.note, {
           delay: 32,
           after: 800,
         });
@@ -2039,8 +2075,14 @@ export const FLOWS = {
       },
 
       async payment({ page, stage }) {
-        const field = page.getByLabel('Collectable amount (INR)');
-        await stage.typeIn(field, CUSTOMER.collectable, { delay: 150, clear: true, after: 1200 });
+        // NOTHING IS TYPED HERE ANY MORE. The collectable amount works itself
+        // out — goods, plus the delivery fee, minus any advance or discount —
+        // and the line under it spells the sum. Typing a different figure into
+        // it would move the DISCOUNT to make the sum add up, which is a
+        // different lesson.
+        const collect = page.locator('.ord-collect').first();
+        await collect.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(collect, 4200);
       },
 
       async submit({ page, stage }) {
@@ -2048,6 +2090,8 @@ export const FLOWS = {
         // The sticky bar's button OPENS a confirmation dialog; the dialog
         // carries a button of the same name, so both halves are needed and
         // the second must be scoped to the dialog or it re-finds the first.
+        // (`stage` lifts the "Ask Skydrop AI" launcher above the bar first —
+        // the bar's right-hand end is where the launcher would sit.)
         const bar = page.getByRole('button', { name: /^Submit for confirmation$/ }).last();
         await stage.clickIt(bar, { settle: 900, after: 900 });
 
@@ -2063,9 +2107,14 @@ export const FLOWS = {
       },
 
       async detail({ page, stage }) {
-        await page.waitForTimeout(1400);
-        await stage.glide(420);
-        await page.waitForTimeout(1000);
+        // The redesigned order page: pinned header with the new number, the
+        // one-paragraph summary, and the progress steps underneath.
+        const summary = page.locator('.cod-summary').first();
+        await summary.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(page.locator('.cod-bar').first(), 2200);
+        await stage.dwellOn(summary, 2600);
+        await stage.dwellOn(page.getByRole('region', { name: 'Order progress' }), 2600);
       },
     },
   },
@@ -2218,11 +2267,19 @@ export const FLOWS = {
         await stage.point(link, { settle: 900 });
         await stage.clickIt(link, { settle: 260, after: 1500 });
         await page.waitForURL(/\/orders\/import/, { timeout: 30_000 });
+        // THE IMPORT PAGE WAS REDESIGNED (2026-10-28): a "Bulk import" header
+        // with the two template buttons, a four-step rail — Download template,
+        // Upload file, Review matches, Import — the upload card, and "Recent
+        // imports" underneath. The rail is what this scene is about.
+        const rail = page.getByRole('list', { name: 'Import steps' });
+        await rail.waitFor({ state: 'visible', timeout: 20_000 });
         await page.waitForTimeout(1200);
+        await stage.dwellOn(rail, 3200);
       },
 
       async template({ page, stage }) {
-        // A rolling-label button: Download template → Downloading… →
+        // A rolling-label button in the page header ("CSV template", next to the
+        // Excel one): CSV template → Downloading… →
         // Downloaded, which is the only sign on screen that a file came
         // down, so the dwell after the press is the point of the scene.
         //
@@ -2241,7 +2298,7 @@ export const FLOWS = {
         // go through the ApiClient now. **A screen existing is not
         // evidence its endpoint does**, and a recording is a surprisingly
         // good way to find out which.
-        await stage.clickIt(page.getByRole('button', { name: /^Download template$/ }).first(), {
+        await stage.clickIt(page.getByRole('button', { name: /^CSV template$/ }).first(), {
           settle: 800,
           after: 2600,
         });
@@ -2257,35 +2314,66 @@ export const FLOWS = {
         // path a person's picker takes.
         await page.locator('input.sk-drop__input').setInputFiles(BULK_CSV);
         await page.waitForTimeout(900);
-        // The zone's label becomes the file name once one is chosen.
-        await stage.dwellOn(zone, 2000);
+        // The zone shows the chosen file as a chip: its name and its size.
+        await stage.dwellOn(page.locator('.imp-upload'), 2400);
       },
 
+      /**
+       * THE CHECK NOW OPENS A WINDOW, AND THE IMPORT STARTS BY ITSELF.
+       * "Upload and check" no longer ends on a page with an "Import N orders"
+       * button: when the check finds nothing for the client to DECIDE (no
+       * missing column, not over the row limit, at least one order, and no
+       * stock refusal) the panel queues the import on its own and opens the
+       * check result as a dialog saying so (`decideAutoImport`,
+       * `import-auto.ts`; written 2026-10-28). The fixture's one bad row does
+       * not stop it — rejected rows are reported, not a reason to wait.
+       */
       async preview({ page, stage }) {
         await stage.clickIt(page.getByRole('button', { name: /^Upload and check$/ }), {
           settle: 700,
           after: 900,
         });
-        await page.getByText('Check before importing').waitFor({ timeout: 45_000 });
-        await page.waitForTimeout(1400);
-        // "<file> · 6 rows · 4 orders" — the sentence the narration reads.
-        await stage.dwellOn(page.locator('.ord-mapping'), 7000);
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 45_000 });
+        // The verdict is the dialog's own title: "4 orders being created, 1 row
+        // rejected." — and it reads "will be created" for an instant first.
+        await dialog
+          .getByText(/being created/)
+          .first()
+          .waitFor({ timeout: 45_000 });
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(dialog.locator('.sk-dialog__head'), 7000);
       },
 
       async 'problem-row'({ page, stage }) {
-        // Held for most of the scene: this and the scene before it sit on
-        // the same unscrolled page, so the moving highlight is the only
-        // thing telling a viewer which half is being talked about.
-        await stage.dwellOn(page.locator('.ord-notice').first(), 9000);
+        // Held for most of the scene: the same dialog stays on screen, so the
+        // moving highlight is what tells a viewer which half is being talked
+        // about.
+        const rejected = page.getByRole('dialog').getByRole('region', { name: 'Rejected rows' });
+        await rejected.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(rejected, 9000);
       },
 
-      async import({ page, stage }) {
-        const button = page.getByRole('button', { name: /^Import \d+ orders?$/ });
-        await stage.point(button, { settle: 1100 });
-        await stage.clickIt(button, { settle: 300, after: 1600 });
+      async 'auto-import'({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        // The sentence that replaces the old button: "Imported automatically —
+        // the check found nothing to decide."
+        const note = dialog.getByText(/Imported automatically/).first();
+        await note.waitFor({ state: 'visible', timeout: 30_000 });
+        await stage.dwellOn(note, 3600);
+        // And what the dialog leaves for the rejected row.
+        await stage.dwellOn(dialogActions(page), 3200);
       },
 
       async processing({ page, stage }) {
+        // Close ONLY the footer's button — every dialog header carries an X
+        // that is also named "Close" (see the README on dialogs).
+        const dialog = page.getByRole('dialog');
+        await stage.clickIt(dialogActions(page).getByRole('button', { name: 'Close' }), {
+          settle: 500,
+          after: 1200,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 15_000 });
         // The table polls every 5s, so PROCESSING → terminal is not
         // instant. Wait for the run to land rather than timing it: a
         // scene that ends mid-poll shows a spinner over a line about
@@ -2303,17 +2391,7 @@ export const FLOWS = {
           )
           .catch(() => {});
         await page.waitForTimeout(900);
-        await stage.dwellOn(row, 2600);
-        // And press the errors file the narration is naming. A download
-        // shows nothing on camera, so what this actually films is the
-        // ABSENCE of a red notice — which is the whole of the second half
-        // of the 401 described on the `template` scene. It goes here
-        // rather than in a scene of its own because the link is already
-        // on screen and the line already names the file.
-        await stage.clickIt(page.getByRole('button', { name: /Errors CSV/i }).first(), {
-          settle: 500,
-          after: 1400,
-        });
+        await stage.dwellOn(row, 3200);
       },
 
       async 'orders-list'({ page, stage }) {
@@ -2352,9 +2430,9 @@ export const FLOWS = {
         // The Items section is below the fold and says "2 lines" over a
         // row per product — which is the whole claim of this video, on
         // screen rather than only in the narration.
+        // (Redesigned order page: the "Items & charges" card, "Items · 2 lines".)
         const items = page.getByRole('table', { name: 'Items on this order' });
-        await items.scrollIntoViewIfNeeded().catch(() => {});
-        await page.waitForTimeout(800);
+        await codCard(page, 'items');
         await stage.dwellOn(items, 3000);
       },
     },
@@ -6863,62 +6941,79 @@ export const FLOWS = {
         await stage.dwellOn(ref, 2800);
       },
 
-      async 'four-facts'({ page, stage }) {
-        await stage.dwellOn(page.locator('.ord-kpis').first(), 3600);
+      /**
+       * THE REDESIGNED PAGE (2026-11-13): a pinned header bar, ONE summary
+       * paragraph ("In short"), a progress stepper, then two columns of
+       * collapsible cards. The four-facts tiles (`.ord-kpis`) are gone. Cards
+       * are reached by the `id` their `DetailCard` gives the section — see
+       * `codCard`.
+       */
+      async summary({ page, stage }) {
+        // The pinned bar first: number, status, how it is paid.
+        await stage.dwellOn(page.locator('.cod-bar').first(), 2600);
+        // Then the paragraph under it — the sentence this scene is about.
+        await stage.dwellOn(page.getByLabel('In short'), 3600);
       },
 
-      async tracker({ page, stage }) {
-        await stage.dwellOn(await ordSection(page, 'Order tracker'), 3600);
+      async stepper({ page, stage }) {
+        await stage.dwellOn(page.getByRole('region', { name: 'Order progress' }), 3800);
       },
 
-      async 'tracker-detail'({ page, stage }) {
-        // The HANDOVER step, which is the line the sentence turns on:
-        // everything above it is ours, everything below is the courier's.
-        const step = page.getByText('Handed to courier').first();
-        await step.scrollIntoViewIfNeeded();
-        await page.waitForTimeout(700);
-        await stage.dwellOn(step, 3400);
+      async 'stepper-detail'({ page, stage }) {
+        // The owner labels over the steps — who is responsible for each
+        // stretch — which is what the sentence turns on.
+        const groups = page.locator('.cod-stepper__groups').first();
+        await groups.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(groups, 3400);
       },
 
       async recipient({ page, stage }) {
-        await stage.dwellOn(await ordSection(page, 'Recipient'), 3600);
-      },
-
-      async payment({ page, stage }) {
-        await stage.dwellOn(await ordSection(page, 'Payment & parcel'), 3600);
-      },
-
-      async items({ page, stage }) {
-        await stage.dwellOn(await ordSection(page, 'Items'), 3400);
-      },
-
-      async charges({ page, stage }) {
-        await stage.dwellOn(await ordSection(page, 'Charges'), 3600);
-      },
-
-      async invoice({ page, stage }) {
-        await stage.dwellOn(await ordSection(page, 'Invoice'), 3200);
+        await stage.dwellOn(await codCard(page, 'recipient'), 3600);
       },
 
       async parcel({ page, stage }) {
-        await stage.dwellOn(await ordSection(page, 'Parcel'), 3400);
+        await stage.dwellOn(await codCard(page, 'parcel'), 3600);
       },
 
       async 'parcel-figures'({ page, stage }) {
-        const line = page.getByText('Chargeable weight').first();
+        const line = page.getByText('Weight the courier bills for').first();
         await line.scrollIntoViewIfNeeded();
         await page.waitForTimeout(700);
         await stage.dwellOn(line, 3400);
       },
 
+      async payment({ page, stage }) {
+        await stage.dwellOn(await codCard(page, 'payment'), 3600);
+      },
+
+      async items({ page, stage }) {
+        await stage.dwellOn(await codCard(page, 'items'), 3400);
+      },
+
+      async charges({ page, stage }) {
+        // Inside the same card, under the items table.
+        const charges = page.locator('.cod-charges-wrap').first();
+        await charges.waitFor({ state: 'visible', timeout: 25_000 });
+        await charges.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(charges, 3600);
+      },
+
+      async invoice({ page, stage }) {
+        await stage.dwellOn(await codCard(page, 'invoice'), 3200);
+      },
+
       async history({ page, stage }) {
-        await stage.dwellOn(await ordSection(page, 'Full history'), 3800);
+        await stage.dwellOn(await codCard(page, 'activity'), 3800);
       },
 
       async outro({ page, stage }) {
-        const actions = page.getByRole('button', { name: 'Raise an issue' }).first();
-        await actions.scrollIntoViewIfNeeded();
+        // Back to the top: the actions sit under the order number, and the
+        // pinned bar above them is what is left on screen while scrolled.
+        await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
         await page.waitForTimeout(700);
+        const actions = page.getByRole('group', { name: 'Order actions' });
+        await actions.waitFor({ state: 'visible', timeout: 15_000 });
         await stage.dwellOn(actions, 3200);
       },
     },

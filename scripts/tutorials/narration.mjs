@@ -40,19 +40,27 @@ export const VIDEOS = [
       },
       {
         id: 'recipient',
-        say: 'Start with who it goes to. The customer’s name, an Indian mobile number, and the street address they gave you. Skydrop checks the number is a real one as you type it.',
+        say: 'Start at the top. Your own order ID, if you keep one. Then who it goes to — the customer’s name and their Indian mobile number. The country code is already there, so you only type the ten digits.',
+      },
+      {
+        id: 'pincode',
+        say: 'Next the PIN code, before the address. It is all the courier needs to route the parcel, and Skydrop reads back the district and state, so you can see at once that you typed the right one.',
+      },
+      {
+        id: 'address',
+        say: 'Now the street address, the way the customer gave it to you.',
       },
       {
         id: 'landmark',
         say: 'The second address line is the landmark, and it matters more than it looks: on a rural address it is the line that decides whether the driver finds the door.',
       },
       {
-        id: 'pincode',
-        say: 'Then the PIN code. That is all the courier needs — Delhivery routes on the PIN and works the city out itself, so there is nothing else to type.',
+        id: 'address-check',
+        say: 'Now Skydrop checks the address by itself. You get a score out of one hundred, and a plain verdict — looks deliverable, confirm with the customer, or do not ship as written. The customer sees none of this.',
       },
       {
         id: 'reference',
-        say: 'Add your own reference so the order lines up with your books, and a note for the call centre — anything they should know before they ring the customer.',
+        say: 'Delivery Notes is for the call centre — a preferred time, a fragile item, a second number. The agent reads it out when they ring the customer. None of it reaches the customer.',
       },
       {
         id: 'products',
@@ -60,11 +68,11 @@ export const VIDEOS = [
       },
       {
         id: 'quantity',
-        say: 'Add a second product the same way, then set the quantity on the line itself. The subtotal keeps up with you, and so does the parcel weight underneath.',
+        say: 'Add a second product the same way, then set the quantity on the line itself. The subtotal on the card keeps up with you.',
       },
       {
         id: 'payment',
-        say: 'Cash on delivery is the norm in India, so that is the default. Type what the customer hands over when the parcel arrives.',
+        say: 'Cash on delivery is the norm in India, so that is the default. The amount to collect works itself out — the goods plus the delivery fee — and the line under it shows the sum, so you can check what the customer will hand over.',
       },
       {
         id: 'submit',
@@ -72,7 +80,7 @@ export const VIDEOS = [
       },
       {
         id: 'detail',
-        say: 'And there it is, with its own Skydrop order number and a timeline you can follow all the way from the call centre to the customer’s door.',
+        say: 'And there it is. Its own Skydrop order number at the top, one line saying where it has got to, and the steps it will pass through, all the way from the call centre to the customer’s door.',
       },
     ],
   },
@@ -138,35 +146,35 @@ export const VIDEOS = [
       },
       {
         id: 'open-import',
-        say: 'CSV import sits next to New order, at the top. This is the whole of bulk ordering: one page, one file, and a look at what we made of it before anything is placed.',
+        say: 'CSV import sits next to New order, at the top. This is the whole of bulk ordering, and the four steps across the top of the page are the path: download the template, upload your file, review what we matched, import.',
       },
       {
         id: 'template',
-        say: 'Start from our template. It carries every column we read, with an example filled in \u2014 and the example is two rows sharing one reference. That part is deliberate.',
+        say: 'Start from a template — Excel or CSV, both are at the top. It carries every column we read, with an example filled in \u2014 and the example is two rows sharing one reference. That part is deliberate.',
       },
       {
         id: 'choose-file',
-        say: 'Here is that template filled in: six rows of orders for six deliveries. Drop the file onto the page, or choose it from your computer. Nothing has been sent anywhere yet.',
+        say: 'Here is that template filled in: six rows of orders. Drop the file onto the page, or choose it from your computer. The file name and size show here, and nothing has been sent anywhere yet.',
       },
       {
         id: 'preview',
-        say: 'Upload and check reads the file and imports none of it. Every column we matched is listed. And it counts orders, not rows: one row is one line, and rows sharing a reference are one order.',
+        say: 'Upload and check reads the file, and a window opens with what we made of it. It counts orders, not rows: one row is one line, and rows sharing a reference are one order. So six rows become four orders, and one row is rejected.',
       },
       {
         id: 'problem-row',
-        say: 'It also says which rows will not import, and why. This one has no landmark \u2014 and the courier address is line one plus line two, so without it nobody finds the door.',
+        say: 'Rejected rows are listed with the reason. This one has no landmark \u2014 and the courier address is line one plus line two, so without it nobody finds the door.',
       },
       {
-        id: 'import',
-        say: 'So four orders go, and the one we cannot place stays behind for you to fix. It does not hold the others up, and nothing is imported until you press this.',
+        id: 'auto-import',
+        say: 'There is no import button to press here. When the check finds nothing for you to decide, Skydrop starts the import by itself, as it says at the top. The rejected row does not hold the good ones up, and View errors takes you to fix it.',
       },
       {
         id: 'processing',
-        say: 'Every import is a job you can watch. Six rows in, four orders created, one failed \u2014 with an errors file telling you exactly what was wrong with that row.',
+        say: 'Every import is a job you can watch. Six rows in, four orders created, one failed \u2014 and on the right, an Errors button and a View errors link that tell you exactly what was wrong with that row.',
       },
       {
         id: 'orders-list',
-        say: 'And there they are: four new orders waiting on the call centre to ring each customer. The row we could not place is counted at the top, waiting for you to finish it.',
+        say: 'And there they are: four new orders waiting on the call centre to ring each customer. The row we could not place is counted at the top as pending, waiting for you to finish it.',
       },
       {
         id: 'multi-line',
@@ -1905,52 +1913,52 @@ export const VIDEOS = [
         say: 'The order number, its status, how it is paid for, and your own reference underneath — the one from your spreadsheet, so you know you are looking at the right thing.',
       },
       {
-        id: 'four-facts',
-        say: 'Four facts you would otherwise scroll for. Where it has got to, what is being collected at the door, how many lines and how heavy, and when it was placed.',
+        id: 'summary',
+        say: 'Under it, one short paragraph says where the order has got to. Here it is delivered. Then how many lines, units and grams are in it. While an order is still on its way, the paragraph also says what happens next, and what the courier will collect.',
       },
       {
-        id: 'tracker',
-        say: 'Then the tracker, which is the whole journey stage by stage. Each step says who recorded it — us, in our warehouse, or the courier, out on the road.',
+        id: 'stepper',
+        say: 'Then the progress steps, the whole journey from order received to delivered. The ticks are done, the highlighted one is where it is now, and each done step shows when it happened.',
       },
       {
-        id: 'tracker-detail',
-        say: 'That distinction is worth having. Everything up to the handover is ours and we can answer for it; everything after is the courier telling us where they have been.',
+        id: 'stepper-detail',
+        say: 'Labels above the steps say who is responsible for each stretch — Skydrop first, then the courier. What is under Skydrop, we can answer for. What is under the courier is the courier telling us where they have been.',
       },
       {
         id: 'recipient',
-        say: 'On the right, the recipient exactly as it was when the order was placed. It is a snapshot, not a link — changing a customer’s details later never rewrites a parcel that has already gone.',
-      },
-      {
-        id: 'payment',
-        say: 'What it is worth and what it weighs. The amount to collect is what the courier asks for at the door; the declared value is what it is worth if it goes missing.',
-      },
-      {
-        id: 'items',
-        say: 'The lines, by your own SKU. This is the snapshot too — the product can be renamed or archived afterwards and this order still says what was sold.',
-      },
-      {
-        id: 'charges',
-        say: 'Charges is what the parcel costs you, line by line, with tax on its own row. Estimated means the figure is worked out and not yet taken from your wallet.',
-      },
-      {
-        id: 'invoice',
-        say: 'And the tax document for the sale, with its own number, downloadable as a PDF. Skydrop issues it when the parcel is delivered.',
+        say: 'Now the cards. Recipient and address first, exactly as it was when the order was placed. It is a snapshot, not a link — changing a customer’s details later never rewrites a parcel that has already gone.',
       },
       {
         id: 'parcel',
-        say: 'Back on the left: the parcel itself. The waybill, which courier is carrying it, and a tracking link written for your customer rather than for you.',
+        say: 'On the right, the parcel itself. The tracking number, the AWB, and a tracking link written for your customer rather than for you — copy it and send it to them.',
       },
       {
         id: 'parcel-figures',
-        say: 'Under it, what the COURIER says rather than what you declared — the weight they charged on, and whether they have handed the money over. Here they have told us neither, and the page says so rather than guessing.',
+        say: 'Under it, what the COURIER says rather than what you declared — the weight they bill for, and what they collect at the door. If their amount ever differs from yours, the page says so.',
+      },
+      {
+        id: 'payment',
+        say: 'Payment and package. How it is paid, what is to be collected, the value you declared — what it is worth if it goes missing — and the weight and the package type.',
+      },
+      {
+        id: 'items',
+        say: 'Items and charges. The lines, by your own SKU. This is a snapshot too — the product can be renamed or archived afterwards and this order still says what was sold.',
+      },
+      {
+        id: 'charges',
+        say: 'And under the items, what this parcel costs you, line by line, with tax on its own row. Estimated means the figure is worked out and not yet taken from your wallet.',
+      },
+      {
+        id: 'invoice',
+        say: 'The invoice is the tax document for the sale, with its own number, downloadable as a PDF. Skydrop issues it when the parcel is delivered.',
       },
       {
         id: 'history',
-        say: 'Full history is the same journey without the shaping: our handling and every courier scan, newest first, and it is never edited. This is what an argument gets settled from.',
+        say: 'Activity is everything that happened to the order, newest first — our handling and every courier scan — and it is never edited. This is what an argument gets settled from. The Milestones tab shows the same journey as steps.',
       },
       {
         id: 'outro',
-        say: 'And the two buttons at the top are the actions — raise an issue, or ask for it back. Each has its own tutorial; from here you can read any order without pressing a thing.',
+        say: 'And the buttons under the order number are the actions — raise an issue, and, depending on where the order is, edit, cancel or ask for it back. Each has its own tutorial; from here you can read any order without pressing a thing.',
       },
     ],
   },

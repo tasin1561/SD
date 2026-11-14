@@ -818,3 +818,28 @@ created_at ASC` — a released call goes in front of every unstarted one
   breaks (`out/verify/` on stack `a`, `out/verify-b/` on stack `b`). It is
   usually enough on its own — the failures during this build were all visible
   in it.
+- **Re-film after the 2026-11-13 order-screen redesign — four things a run
+  against a fresh stack gets wrong without saying so.**
+  1. `/orders/new` is chosen by the DATABASE setting `orders.page_v2_audience`
+     (fresh stack: OFF = the old form). `seed-demo-data.mjs` now sets it per
+     video (`orderFormWorldFor`: ALL for `place-an-order` and
+     `seller-everything`), and the flows call `assertOrderFormV2`
+     (`lib/order-pages.mjs`) before typing, so the wrong form is a failed step
+     rather than a perfect take of the wrong screen. Only the CLIENT form has the
+     address check; the member-store and associate "v2" forms are the old forms
+     with the same fields.
+  2. The address-check score needs `SOLUSTATION_ADDRESS_KEY` and
+     `SOLUSTATION_ADDRESS_URL` in the API's environment. Without them the panel
+     reads "Address check unavailable" and `waitForAddressScore` stops the take.
+  3. The "Ask Skydrop AI" launcher is fixed bottom-right on every screen.
+     `stage.point` (and so `clickIt`, `typeIn`, `dwellOn`) now scrolls a target
+     to the middle of the window when it would sit under the launcher. The
+     seller order form's `.ord-bar` and the member store's `.ro-bar` are not in
+     the launcher's `BOTTOM_BAR_SELECTOR`, so it would cover "Submit for
+     confirmation" / "Place order"; `stage.liftLauncherAboveBars` marks them
+     `data-bottom-bar` first. Delete it the day the app lists them itself.
+  4. The client order page is `.cod-*` now: cards are `section#recipient`,
+     `#items`, `#payment`, `#parcel`, `#invoice`, `#activity`, `#trouble`
+     (`codCard`), the journey is the stepper (`stepOf`, `stepperRegion`) and a
+     step's own detail lives under Activity → Milestones (`milestoneRow`).
+     The member-store and associate order pages were NOT redesigned.

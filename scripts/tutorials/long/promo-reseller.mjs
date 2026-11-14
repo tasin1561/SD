@@ -245,7 +245,16 @@ export const flow = {
         await page.waitForLoadState('networkidle').catch(() => {});
         await page.waitForTimeout(1800);
         await stage.glide(420);
-        await page.waitForTimeout(2000);
+        // Held ON the parcel block rather than on whatever the scroll left
+        // there: `stage.dwellOn` also keeps it clear of the floating "Ask
+        // Skydrop AI" launcher in the bottom-right corner. A store order that
+        // has no parcel yet simply keeps the old pause.
+        const parcel = page
+          .locator('.ro-section')
+          .filter({ has: page.getByRole('heading', { name: 'Parcel', exact: true }) })
+          .first();
+        if ((await parcel.count()) > 0) await stage.dwellOn(parcel, 2000);
+        else await page.waitForTimeout(2000);
       },
     },
     {

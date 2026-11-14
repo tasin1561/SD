@@ -67,6 +67,14 @@
  */
 import path from 'node:path';
 import { GENERATED_DIR, TUTORIALS_DIR } from '../lib/paths.mjs';
+import {
+  assertOrderFormV2,
+  codCard,
+  milestoneRow,
+  stepOf,
+  stepperRegion,
+  waitForAddressScore,
+} from '../lib/order-pages.mjs';
 
 /* ─────────────────────────────── DATA ──────────────────────────────── */
 
@@ -317,28 +325,6 @@ async function area(page, title) {
 }
 
 /**
- * One titled area of an ORDER page, by its heading EXACTLY.
- *
- * Not `area()`. Playwright's `hasText` is a case-insensitive SUBSTRING
- * match, so "Parcel" also matches the "Payment & parcel" section a few
- * hundred pixels above — and `.last()` resolving to the right one
- * depends on which panel the page happens to render second. The order
- * page's headings carry nothing appended to them (the consignment
- * page's carry a goods-receipt number, which is why that one cannot use
- * this), so the heading is an exact handle and the ambiguity disappears.
- */
-async function ordSection(page, heading) {
-  const section = page
-    .locator('.ord-section')
-    .filter({ has: page.getByRole('heading', { name: heading, exact: true }) })
-    .first();
-  await section.waitFor({ state: 'visible', timeout: 25_000 });
-  await section.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
-  await page.waitForTimeout(700);
-  return section;
-}
-
-/**
  * One tile on the inventory or freight page, by its label.
  *
  * Both grids are listed rather than a second helper written — a tile is
@@ -384,20 +370,11 @@ function freightRow(page) {
 }
 
 /**
- * One rung of the order tracker, by its label.
- *
- * The seller's `OrderJourney` passes the `Timeline` no `collapseEarlier`,
- * so every rung is rendered and none hides behind a fold — if that ever
- * changes, this helper is where the expand goes, and the symptom will be
- * a timeout on a delivered order's earliest rung.
+ * One step of the order's progress stepper, by its label. The redesigned
+ * order page (2026-11-13) replaced the vertical tracker and its rungs with a
+ * horizontal stepper; see `stepOf` in `lib/order-pages.mjs`.
  */
-async function rung(page, label) {
-  const step = page.locator('.sk-tl__step').filter({ hasText: label }).first();
-  await step.waitFor({ state: 'visible', timeout: 25_000 });
-  await step.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
-  await page.waitForTimeout(600);
-  return step;
-}
+const rung = stepOf;
 
 /**
  * One row of the wallet ledger, by the words the entry's direction prints.
@@ -754,43 +731,51 @@ export const narration = {
     },
     {
       id: 'order-recipient',
-      say: 'Who it goes to. Their name, an Indian mobile, and the street address they gave you. We check the number is a real one as you type it.',
+      say: 'Who it goes to. Start with your own order ID if you keep one, then their name and an Indian mobile. The country code is already in, so you only type the ten digits.',
       sayBn:
-        'কার কাছে যাবে। তার নাম, ভারতের একটা মোবাইল নম্বর, আর সে যে ঠিকানা দিয়েছে। আপনি টাইপ করার সময়ই আমরা দেখে নিই নম্বরটা আসল কি না।',
+        'কার কাছে যাবে। আপনার নিজের order ID থাকলে সেটা দিয়ে শুরু করুন, তারপর তার নাম আর ভারতের একটা মোবাইল নম্বর। দেশের কোড আগে থেকেই বসানো, তাই শুধু দশটা সংখ্যা লিখুন।',
       sayHi:
-        'किसके पास जाएगा। उसका नाम, भारत का एक मोबाइल नंबर, और उसने जो पता दिया है वह। आप टाइप करते ही हम देख लेते हैं कि नंबर असली है या नहीं।',
+        'किसके पास जाएगा। अपना order ID हो तो उससे शुरू करें, फिर उसका नाम और भारत का एक मोबाइल नंबर। देश का कोड पहले से भरा है, इसलिए सिर्फ़ दस अंक लिखें।',
     },
     {
       id: 'order-address',
-      say: 'The second line is the landmark, and it decides whether a driver finds a rural door. Then the PIN code — that is all the courier needs, and it works the city out itself.',
+      say: 'PIN code first — that is all the courier needs, and we read back the district and state so you know you typed the right one. Then the street address. The second line is the landmark, and it decides whether a driver finds a rural door.',
       sayBn:
-        'দ্বিতীয় লাইনটা ল্যান্ডমার্ক, আর গ্রামের একটা দরজা ড্রাইভার খুঁজে পাবে কি না সেটা এটাই ঠিক করে। তারপর PIN code — কুরিয়ারের এটুকুই দরকার, শহরটা সে নিজেই বের করে নেয়।',
+        'আগে PIN code — কুরিয়ারের এটুকুই দরকার, আর আমরা জেলা ও রাজ্যটা পড়ে দেখাই, যাতে বোঝেন ঠিক PIN-ই লিখেছেন। তারপর রাস্তার ঠিকানা। দ্বিতীয় লাইনটা ল্যান্ডমার্ক, আর গ্রামের একটা দরজা ড্রাইভার খুঁজে পাবে কি না সেটা এটাই ঠিক করে।',
       sayHi:
-        'दूसरी लाइन लैंडमार्क है, और गाँव का कोई दरवाज़ा ड्राइवर ढूँढ पाएगा या नहीं यह वही तय करती है। फिर PIN code — कूरियर को इतना ही चाहिए, शहर वह ख़ुद निकाल लेता है।',
+        'पहले PIN code — कूरियर को इतना ही चाहिए, और हम ज़िला और राज्य पढ़कर दिखाते हैं, ताकि आप जान सकें कि सही PIN ही लिखा है। फिर सड़क का पता। दूसरी लाइन लैंडमार्क है, और गाँव का कोई दरवाज़ा ड्राइवर ढूँढ पाएगा या नहीं यह वही तय करती है।',
+    },
+    {
+      id: 'order-check',
+      say: 'Then Skydrop checks the address by itself. You get a score out of one hundred and a plain verdict — looks deliverable, confirm with the customer, or do not ship as written. The customer sees none of this.',
+      sayBn:
+        'এরপর Skydrop নিজেই ঠিকানাটা যাচাই করে। আপনি পান একশোর মধ্যে একটা স্কোর, আর সহজ একটা রায় — looks deliverable, confirm with the customer, অথবা do not ship as written। ক্রেতা এর কিছুই দেখতে পান না।',
+      sayHi:
+        'फिर Skydrop ख़ुद पता जाँच लेता है। आपको सौ में से एक स्कोर मिलता है और एक सीधा फ़ैसला — looks deliverable, confirm with the customer, या do not ship as written। ग्राहक को इसमें से कुछ नहीं दिखता।',
     },
     {
       id: 'order-note',
-      say: 'Your own reference, and a note for the call agent. Anything you know that helps the phone call: a second number, the hours she is home, a gate that is hard to find.',
+      say: 'Delivery Notes is for the call agent. Anything you know that helps the phone call: a second number, the hours she is home, a gate that is hard to find.',
       sayBn:
-        'আপনার নিজের reference, আর কল এজেন্টের জন্য একটা নোট। ফোন কলে কাজে লাগবে এমন যা যা আপনি জানেন: আরেকটা নম্বর, কোন সময়ে সে বাড়িতে থাকে, খুঁজে পেতে কষ্ট হয় এমন একটা গেট।',
+        'Delivery Notes ঘরটা কল এজেন্টের জন্য। ফোন কলে কাজে লাগবে এমন যা যা আপনি জানেন: আরেকটা নম্বর, কোন সময়ে সে বাড়িতে থাকে, খুঁজে পেতে কষ্ট হয় এমন একটা গেট।',
       sayHi:
-        'आपका अपना reference, और call agent के लिए एक note। फ़ोन कॉल में काम आने वाली जो भी बात आप जानते हैं: एक दूसरा नंबर, वह किस वक़्त घर पर रहती है, या कोई गेट जो ढूँढना मुश्किल है।',
+        'Delivery Notes call agent के लिए है। फ़ोन कॉल में काम आने वाली जो भी बात आप जानते हैं: एक दूसरा नंबर, वह किस वक़्त घर पर रहती है, या कोई गेट जो ढूँढना मुश्किल है।',
     },
     {
       id: 'order-products',
-      say: 'Then the products. Price and sellable stock sit on every row, so you see both before committing, and the weight underneath keeps up as you add lines.',
+      say: 'Then the products. Price and sellable stock sit on every row, so you see both before committing, and the subtotal keeps up as you add lines.',
       sayBn:
-        'তারপর পণ্য। প্রতিটা সারিতেই দাম আর বিক্রিযোগ্য স্টক থাকে, তাই চূড়ান্ত করার আগেই দুটোই দেখতে পান, আর লাইন যোগ করার সঙ্গে সঙ্গে নিচের ওজনটাও হিসাব করে বদলে যায়।',
+        'তারপর পণ্য। প্রতিটা সারিতেই দাম আর বিক্রিযোগ্য স্টক থাকে, তাই চূড়ান্ত করার আগেই দুটোই দেখতে পান, আর লাইন যোগ করার সঙ্গে সঙ্গে সাবটোটাল হিসাব করে বদলে যায়।',
       sayHi:
-        'फिर प्रोडक्ट। हर row पर कीमत और बिकने लायक़ स्टॉक, दोनों रहते हैं, इसलिए पक्का करने से पहले ही आप दोनों देख लेते हैं, और लाइन जोड़ने के साथ-साथ नीचे का वज़न भी हिसाब में बदलता रहता है।',
+        'फिर प्रोडक्ट। हर row पर कीमत और बिकने लायक़ स्टॉक, दोनों रहते हैं, इसलिए पक्का करने से पहले ही आप दोनों देख लेते हैं, और लाइन जोड़ने के साथ-साथ subtotal हिसाब में बदलता रहता है।',
     },
     {
       id: 'order-cod',
-      say: 'Cash on delivery is the norm in India, so it is the default. Type exactly what the customer hands over at the door.',
+      say: 'Cash on delivery is the norm in India, so it is the default. The amount to collect works itself out — the goods plus delivery — and the line under it shows the sum.',
       sayBn:
-        'Cash on delivery ভারতে স্বাভাবিক নিয়ম, তাই এটাই আগে থেকে বাছা থাকে। ক্রেতা দরজায় ঠিক যত টাকা হাতে দেবে, হুবহু সেটাই লিখুন।',
+        'Cash on delivery ভারতে স্বাভাবিক নিয়ম, তাই এটাই আগে থেকে বাছা থাকে। আদায়যোগ্য টাকাটা নিজেই হিসাব হয়ে যায় — পণ্যের দাম আর ডেলিভারি চার্জ — আর নিচের লাইনে যোগফলটা দেখানো থাকে।',
       sayHi:
-        'Cash on delivery भारत में आम चलन है, इसलिए यही पहले से चुना रहता है। ग्राहक दरवाज़े पर जितना पैसा हाथ में देगा, हूबहू वही लिखें।',
+        'Cash on delivery भारत में आम चलन है, इसलिए यही पहले से चुना रहता है। वसूली की रक़म अपने आप हिसाब हो जाती है — सामान की कीमत और डिलीवरी शुल्क — और नीचे की लाइन में जोड़ दिखता है।',
     },
     {
       id: 'order-submit',
@@ -802,11 +787,11 @@ export const narration = {
     },
     {
       id: 'order-placed',
-      say: 'And there it is, with its own Skydrop number and a tracker you can follow from the call centre to the door. Status: awaiting the call.',
+      say: 'And there it is, with its own Skydrop number, one line saying where it has got to, and the steps to follow from the call centre to the door. Status: awaiting the call.',
       sayBn:
-        'এই তো, নিজের একটা Skydrop নম্বর নিয়ে, আর সঙ্গে একটা tracker — কল সেন্টার থেকে দরজা পর্যন্ত অনুসরণ করা যায়। অবস্থা: কলের অপেক্ষায়।',
+        'এই তো, নিজের একটা Skydrop নম্বর নিয়ে, একটা লাইনে বলা আছে অর্ডারটা কোথায় পৌঁছেছে, আর কল সেন্টার থেকে দরজা পর্যন্ত অনুসরণ করার ধাপগুলো। অবস্থা: কলের অপেক্ষায়।',
       sayHi:
-        'यह हो गया, अपने एक Skydrop नंबर के साथ, और साथ में एक tracker — call centre से दरवाज़े तक पीछे चला जा सकता है। हालत: कॉल के इंतज़ार में।',
+        'यह हो गया, अपने एक Skydrop नंबर के साथ, एक लाइन जो बताती है कि ऑर्डर कहाँ तक पहुँचा है, और call centre से दरवाज़े तक के चरण। हालत: कॉल के इंतज़ार में।',
     },
 
     /* ── act six: the phone call ──────────────────────────────────── */
@@ -854,11 +839,11 @@ export const narration = {
     },
     {
       id: 'wh-handover',
-      say: 'Then the courier’s driver takes it and the box is scanned out. That line is the handover: everything above it we did, everything below is the courier’s.',
+      say: 'Then the courier’s driver takes it and the box is scanned out. That step is the handover: everything before it we did, everything after is the courier’s.',
       sayBn:
-        'তারপর কুরিয়ারের ড্রাইভার এটা নিয়ে যায় আর বাক্সটা বেরিয়ে যাওয়ার সময় স্ক্যান হয়। ওই লাইনটাই হস্তান্তর: তার উপরের সবকিছু আমরা করেছি, নিচের সবকিছু কুরিয়ারের।',
+        'তারপর কুরিয়ারের ড্রাইভার এটা নিয়ে যায় আর বাক্সটা বেরিয়ে যাওয়ার সময় স্ক্যান হয়। ওই ধাপটাই হস্তান্তর: তার আগের সবকিছু আমরা করেছি, পরের সবকিছু কুরিয়ারের।',
       sayHi:
-        'फिर कूरियर का ड्राइवर इसे ले जाता है और डिब्बा बाहर निकलते वक़्त स्कैन होता है। वही लाइन सुपुर्दगी है: उसके ऊपर का सब हमने किया, नीचे का सब कूरियर का है।',
+        'फिर कूरियर का ड्राइवर इसे ले जाता है और डिब्बा बाहर निकलते वक़्त स्कैन होता है। वही चरण सुपुर्दगी है: उससे पहले का सब हमने किया, उसके बाद का सब कूरियर का है।',
     },
 
     /* ── act eight: tracking ──────────────────────────────────────── */
@@ -1592,28 +1577,51 @@ export const flow = {
     {
       id: 'order-recipient',
       async run({ page, stage }) {
+        // The form is the v2 one — proven before a word is typed (see
+        // `assertOrderFormV2`): a fresh stack opens on the old form.
+        await assertOrderFormV2(page);
+        // Top to bottom, as the form is laid out: the client's own order ID,
+        // then who it goes to.
+        await stage.typeIn(page.getByLabel('Order ID', { exact: true }), CUSTOMER.reference, {
+          delay: 60,
+        });
         await stage.typeIn(page.getByLabel('Full name'), CUSTOMER.name, { delay: 50 });
         await stage.typeIn(page.getByLabel(/^Phone number,/), CUSTOMER.phone, { delay: 70 });
-        await stage.typeIn(page.getByLabel('Address line 1'), CUSTOMER.line1, { delay: 30 });
       },
     },
     {
       id: 'order-address',
       async run({ page, stage }) {
+        // PIN FIRST, then the two address lines (owner, 2026-11-09). The
+        // read-back of district and state is part of the narration, so a PIN
+        // the address service cannot place stops the take.
+        await stage.typeIn(page.getByLabel('PIN code'), CUSTOMER.pin, { delay: 130, after: 1200 });
+        await page
+          .getByText('from PIN code')
+          .first()
+          .waitFor({ state: 'visible', timeout: 12_000 });
+        await page.waitForTimeout(900);
+        await stage.typeIn(page.getByLabel('Address line 1'), CUSTOMER.line1, { delay: 30 });
         await stage.typeIn(page.getByLabel('Address line 2 (the landmark)'), CUSTOMER.landmark, {
           delay: 32,
-          after: 700,
+          after: 600,
         });
-        await stage.typeIn(page.getByLabel('PIN code'), CUSTOMER.pin, { delay: 130, after: 1200 });
-        // The serviceability chip resolves a beat after the sixth digit.
-        await page.waitForTimeout(1200);
+      },
+    },
+    {
+      id: 'order-check',
+      async run({ page, stage }) {
+        // Nobody presses anything: the check runs by itself about a second
+        // after the landmark stops changing. The narration reads the 0-100
+        // score, so the take waits for it and refuses to go on without it.
+        const panel = await waitForAddressScore(page);
+        await stage.dwellOn(panel, 3600);
       },
     },
     {
       id: 'order-note',
       async run({ page, stage }) {
-        await stage.typeIn(page.getByLabel('Your reference'), CUSTOMER.reference, { delay: 60 });
-        await stage.typeIn(page.getByLabel('Notes for the call agent'), CUSTOMER.note, {
+        await stage.typeIn(page.getByLabel('Delivery Notes'), CUSTOMER.note, {
           delay: 28,
           after: 900,
         });
@@ -1656,11 +1664,13 @@ export const flow = {
     {
       id: 'order-cod',
       async run({ page, stage }) {
-        await stage.typeIn(page.getByLabel('Collectable amount (INR)'), CUSTOMER.collectable, {
-          delay: 150,
-          clear: true,
-          after: 1200,
-        });
+        // NOTHING IS TYPED. The collectable amount works itself out — goods
+        // plus delivery, minus any advance or discount — and the line under
+        // it spells the sum. Typing a different figure would move the
+        // DISCOUNT to make it add up, which is another lesson.
+        const collect = page.locator('.ord-collect').first();
+        await collect.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(collect, 3200);
       },
     },
     {
@@ -1669,7 +1679,9 @@ export const flow = {
         await page.waitForTimeout(600);
         // The sticky bar's button OPENS a confirmation, and the dialog
         // carries a button of the same name — so both halves are needed
-        // and the second must be scoped or it re-finds the first.
+        // and the second must be scoped or it re-finds the first. The
+        // "Ask Skydrop AI" launcher would sit on the bar's right-hand end;
+        // `stage` lifts it above the bar before the press.
         await stage.clickIt(
           page.getByRole('button', { name: /^Submit for confirmation$/ }).last(),
           {
@@ -1691,9 +1703,13 @@ export const flow = {
     {
       id: 'order-placed',
       async run({ page, stage }) {
+        // The redesigned page: the pinned bar (number, status, payment), then
+        // the one-paragraph summary under it.
+        const summary = page.locator('.cod-summary').first();
+        await summary.waitFor({ state: 'visible', timeout: 25_000 });
         await page.waitForTimeout(1200);
-        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 1600);
-        await stage.dwellOn(page.locator('.ord-kpis').first(), 2400);
+        await stage.dwellOn(page.locator('.cod-bar').first(), 1800);
+        await stage.dwellOn(summary, 2400);
       },
     },
 
@@ -1701,11 +1717,11 @@ export const flow = {
     {
       id: 'call-waiting',
       async run({ page, stage }) {
-        // Held on the tracker of the order just placed, whose first rung
-        // is the call that has not happened yet. This is the one scene in
-        // the video that is argument rather than instruction, so the
-        // picture stays still and the voice carries it.
-        await stage.dwellOn(await ordSection(page, 'Order tracker'), 2400);
+        // Held on the progress steps of the order just placed, whose current
+        // step is the call that has not happened yet. This is the one scene in
+        // the video that is argument rather than instruction, so the picture
+        // stays still and the voice carries it.
+        await stage.dwellOn(await stepperRegion(page), 2400);
         await stage.dwellOn(await rung(page, 'Confirmed by phone'), 3000);
       },
     },
@@ -1713,16 +1729,18 @@ export const flow = {
       id: 'call-confirmed',
       async run(ctx) {
         await openOrderByRef(ctx, READ_ORDERS.delivered);
-        await ctx.stage.dwellOn(await ordSection(ctx.page, 'Order tracker'), 2200);
+        await ctx.stage.dwellOn(await stepperRegion(ctx.page), 2200);
       },
     },
     {
       id: 'call-why',
       async run({ page, stage }) {
-        // THE AGENT'S OWN WORDS, which the rung carries as its detail —
-        // the one step no courier panel has. Held on the rung itself,
-        // because the sentence is about what it says.
-        await stage.dwellOn(await rung(page, 'Confirmed by phone'), 3600);
+        // THE AGENT'S OWN WORDS, which the step carries as its detail — the
+        // one step no courier panel has. The stepper shows a step's detail
+        // only for the CURRENT step, so this opens the Activity card's
+        // "Milestones" tab, where every step shows its own. Held on the line
+        // itself, because the sentence is about what it says.
+        await stage.dwellOn(await milestoneRow(page, stage, 'Confirmed by phone'), 3600);
       },
     },
 
@@ -1752,7 +1770,7 @@ export const flow = {
     {
       id: 'parcel-waybill',
       async run({ page, stage }) {
-        const parcel = await ordSection(page, 'Parcel');
+        const parcel = await codCard(page, 'parcel');
         await stage.dwellOn(parcel, 3400);
       },
     },
@@ -1787,12 +1805,12 @@ export const flow = {
         // absence means the seeding did not leave this order failed —
         // reported as a timeout rather than filmed as a page that
         // quietly does not say this.
-        const panel = page
-          .locator('.ord-section')
-          .filter({ hasText: 'Delivery did not succeed' })
-          .first();
+        // (`section#trouble` is the trouble card's own id —
+        // `delivery-trouble-panel.tsx` — titled "Delivery did not succeed"
+        // while the parcel is failed.)
+        const panel = page.locator('section#trouble.cod-card').first();
         await panel.waitFor({ state: 'visible', timeout: 25_000 });
-        await panel.scrollIntoViewIfNeeded();
+        await panel.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
         await page.waitForTimeout(800);
         await stage.dwellOn(panel.locator('.ord-notice, [class*="notice"]').first(), 2800);
       },
@@ -1839,7 +1857,7 @@ export const flow = {
       id: 'returned-open',
       async run(ctx) {
         await openOrderByRef(ctx, READ_ORDERS.restocked);
-        await ctx.stage.dwellOn(await ordSection(ctx.page, 'Order tracker'), 2600);
+        await ctx.stage.dwellOn(await stepperRegion(ctx.page), 2600);
       },
     },
     {

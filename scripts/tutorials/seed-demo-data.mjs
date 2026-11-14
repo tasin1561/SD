@@ -8856,6 +8856,44 @@ async function systemSettingsWorldFor(slug) {
 }
 
 /**
+ * WHICH ORDER FORM `/orders/new` SHOWS, set per video (2026-11-14).
+ *
+ * `/orders/new` chooses between the original form and the v2 form (live
+ * address check, "Order form sections" rail) by the DATABASE setting
+ * `orders.page_v2_audience`, and a fresh stack opens on OFF. Without this the
+ * client place-an-order videos film the old form under narration written for
+ * the v2 one, with every selector still resolving.
+ *
+ * ALL for the videos whose narration describes the v2 client form, OFF for the
+ * rest, so each video sees the same form on every take whatever the last one
+ * left behind. (The member-store and associate forms are the same either way
+ * - their v2 copies carry no address check - so they are not listed.)
+ *
+ * Through Prisma, not the admin endpoint, for the reason
+ * `systemSettingsWorldFor` gives: nobody changed it, so no audit row should say
+ * somebody did. `assertStackEnvironment` has already refused a non-filming
+ * database by the time this runs.
+ */
+const V2_ORDER_FORM_SLUGS = new Set(['place-an-order', 'seller-everything']);
+
+async function orderFormWorldFor(slug) {
+  const want = V2_ORDER_FORM_SLUGS.has(slug) ? 'ALL' : 'OFF';
+  const row = await prisma.systemSetting.findUnique({
+    where: { key: 'orders.page_v2_audience' },
+    select: { valueString: true },
+  });
+  if (row === null) {
+    throw new Error('"orders.page_v2_audience" is not in system_settings \u2014 run the db seed.');
+  }
+  if ((row.valueString ?? '').trim().toUpperCase() === want) return;
+  await prisma.systemSetting.update({
+    where: { key: 'orders.page_v2_audience' },
+    data: { valueString: want },
+  });
+  console.log(`  \u00b7 orders.page_v2_audience put to ${want} for ${slug}`);
+}
+
+/**
  * The colleague O5 changes the role of and then deactivates.
  *
  * DELIBERATELY NOT `tutorial-ops`: that is the account the camera is
@@ -13592,6 +13630,7 @@ async function main() {
   await sellerAccountWorldFor(slug, staffToken);
   await sellerRoutingWorldFor(slug, staffToken);
   await systemSettingsWorldFor(slug);
+  await orderFormWorldFor(slug);
   await staffWorldFor(slug);
   await manualPlacementWorldFor(slug, sellerId, sellerToken, staffToken);
   await transferWorldFor(slug, sellerId, sellerToken, staffToken);
