@@ -11,6 +11,7 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { TBody, Table, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
 import { AcAlert, AcSection } from '../../settings/_components/ac-parts';
+import { FilterPills } from '@/components/easy/filter-pills';
 import {
   useClearOverride,
   useSellerSettings,
@@ -71,9 +72,27 @@ export function SellerSettingsSection({ sellerId }: { readonly sellerId: string 
   const all = list.data ?? [];
   const items = sortByGroup(all.filter((s) => !isConfirmationKey(s.key)));
   const overridden = all.filter((s) => s.source === 'SELLER_OVERRIDE');
+  // What is different for THIS client is the question asked on this page,
+  // so that is the list shown first whenever anything is different. Every
+  // setting is one tap away under "All settings", and a search finds one
+  // by its plain name or its key.
+  const changedCount = items.filter((s) => s.source === 'SELLER_OVERRIDE').length;
+  const [view, setView] = useState<'changed' | 'all' | null>(null);
+  const [find, setFind] = useState('');
+  const mode = view ?? (changedCount > 0 ? 'changed' : 'all');
+  const needle = find.trim().toLowerCase();
+  const shown = items
+    .filter((s) => needle !== '' || mode === 'all' || s.source === 'SELLER_OVERRIDE')
+    .filter(
+      (s) =>
+        needle === '' ||
+        s.key.toLowerCase().includes(needle) ||
+        (settingGuide(s.key)?.name ?? fallbackSettingName(s.key)).toLowerCase().includes(needle),
+    );
 
   return (
     <AcSection
+      id="cd-settings"
       title={t('sellersSellerSettingsSection.settingsForThisClient')}
       note={
         overridden.length === 0
@@ -98,66 +117,90 @@ export function SellerSettingsSection({ sellerId }: { readonly sellerId: string 
           description={t('sellersSellerSettingsSection.aKeyBecomesSettablePer')}
         />
       ) : (
-        <div className="ez-wrap ez-cards">
-          <Table caption={t('sellersSellerSettingsSection.settingsForThisClient')}>
-            <THead>
-              <Tr>
-                <Th>{t('sellersSellerSettingsSection.setting')}</Th>
-                <Th>{t('sellersSellerSettingsSection.inEffect')}</Th>
-                <Th>{t('sellersSellerSettingsSection.systemDefault')}</Th>
-                <Th>{t('sellersSellerSettingsSection.source')}</Th>
-                <Th align="right">{t('sellersSellerSettingsSection.actions')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {items.map((s) => (
-                <Tr key={s.key}>
-                  <Td>
-                    <SettingName settingKey={s.key} showGroup />
-                  </Td>
-                  <Td>
-                    <span className="ac-strong">{settingValueLabel(s.key, s.value)}</span>
-                  </Td>
-                  <Td>
-                    <span className="ac-faint">{settingValueLabel(s.key, s.systemDefault)}</span>
-                  </Td>
-                  <Td>
-                    <StatusChip
-                      kind={s.source === 'SELLER_OVERRIDE' ? 'confirmed' : 'draft'}
-                      label={s.source === 'SELLER_OVERRIDE' ? 'override' : 'default'}
-                      size="sm"
-                    />
-                  </Td>
-                  <Td align="right">
-                    <div className="ac-buttons">
-                      <Button
-                        variant="ghost"
+        <>
+          <div className="cd-settings-bar">
+            <FilterPills
+              label={t('sellersSellerSettingsSection.settingsForThisClient')}
+              value={mode}
+              onChange={setView}
+              options={[
+                { key: 'changed', label: t('ezClient.changed'), count: changedCount },
+                { key: 'all', label: t('ezClient.all'), count: items.length },
+              ]}
+            />
+            <TextField
+              aria-label={t('ezClient.find')}
+              placeholder={t('ezClient.find')}
+              value={find}
+              onChange={(e) => setFind(e.target.value)}
+            />
+          </div>
+          {shown.length === 0 && (
+            <p className="cd-settings-empty">
+              {needle === '' ? t('ezClient.nothingChanged') : t('ezClient.noMatch')}
+            </p>
+          )}
+          <div className="ez-wrap ez-cards cd-settings" hidden={shown.length === 0}>
+            <Table caption={t('sellersSellerSettingsSection.settingsForThisClient')}>
+              <THead>
+                <Tr>
+                  <Th>{t('sellersSellerSettingsSection.setting')}</Th>
+                  <Th>{t('sellersSellerSettingsSection.inEffect')}</Th>
+                  <Th>{t('sellersSellerSettingsSection.systemDefault')}</Th>
+                  <Th>{t('sellersSellerSettingsSection.source')}</Th>
+                  <Th align="right">{t('sellersSellerSettingsSection.actions')}</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {shown.map((s) => (
+                  <Tr key={s.key}>
+                    <Td>
+                      <SettingName settingKey={s.key} showGroup />
+                    </Td>
+                    <Td>
+                      <span className="ac-strong">{settingValueLabel(s.key, s.value)}</span>
+                    </Td>
+                    <Td className={s.source === 'SELLER_OVERRIDE' ? undefined : 'cd-same'}>
+                      <span className="ac-faint">{settingValueLabel(s.key, s.systemDefault)}</span>
+                    </Td>
+                    <Td className={s.source === 'SELLER_OVERRIDE' ? undefined : 'cd-same'}>
+                      <StatusChip
+                        kind={s.source === 'SELLER_OVERRIDE' ? 'confirmed' : 'draft'}
+                        label={s.source === 'SELLER_OVERRIDE' ? 'override' : 'default'}
                         size="sm"
-                        icon={<SlidersHorizontal size={14} />}
-                        onClick={() => setEditing(s)}
-                      >
-                        {s.source === 'SELLER_OVERRIDE'
-                          ? t('sellersSellerSettingsSection.change')
-                          : t('sellersSellerSettingsSection.override')}
-                      </Button>
-                      {s.source === 'SELLER_OVERRIDE' && (
+                      />
+                    </Td>
+                    <Td align="right">
+                      <div className="ac-buttons">
                         <Button
                           variant="ghost"
                           size="sm"
-                          icon={<RotateCcw size={14} />}
-                          disabled={clear.isPending}
-                          onClick={() => clear.mutate({ key: s.key })}
+                          icon={<SlidersHorizontal size={14} />}
+                          onClick={() => setEditing(s)}
                         >
-                          {t('sellersSellerSettingsSection.reset')}
+                          {s.source === 'SELLER_OVERRIDE'
+                            ? t('sellersSellerSettingsSection.change')
+                            : t('sellersSellerSettingsSection.override')}
                         </Button>
-                      )}
-                    </div>
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
-        </div>
+                        {s.source === 'SELLER_OVERRIDE' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<RotateCcw size={14} />}
+                            disabled={clear.isPending}
+                            onClick={() => clear.mutate({ key: s.key })}
+                          >
+                            {t('sellersSellerSettingsSection.reset')}
+                          </Button>
+                        )}
+                      </div>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
+        </>
       )}
 
       {clear.error !== null && (

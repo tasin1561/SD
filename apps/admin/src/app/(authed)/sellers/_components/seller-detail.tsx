@@ -3,6 +3,7 @@
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { When } from '@/components/easy/when';
 import '@/components/easy/easy.css';
+import './client-detail.css';
 import Link from 'next/link';
 import { ArrowLeftRight, Eye, PackageSearch, PencilLine, ShieldAlert } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
@@ -86,7 +87,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
   const d = detail.data;
 
   return (
-    <div className="ez-touch ez-wrap ez-phone">
+    <div className="ez-touch ez-wrap ez-phone cd-page">
       <TidyCards />
       <AcPage>
         <AcHeader
@@ -154,7 +155,25 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
           />
         )}
 
-        <AcSection title={t('sellersSellerDetail.profile')}>
+        <nav className="cd-jump" aria-label={t('ezClient.jump')}>
+          {(
+            [
+              ['cd-profile', t('sellersSellerDetail.profile')],
+              ['cd-status', t('sellersSellerDetail.status')],
+              ['cd-hold', t('sellersSellerDetail.accountHold')],
+              ['cd-bank', t('sellersSellerDetail.bankAccount')],
+              ['cd-settings', t('ezClient.settings')],
+              ['cd-couriers', t('ezClient.couriers')],
+              ['cd-stores', t('ezClient.memberStores')],
+            ] as const
+          ).map(([id, label]) => (
+            <a key={id} className="cd-jump__link" href={`#${id}`}>
+              {label}
+            </a>
+          ))}
+        </nav>
+
+        <AcSection id="cd-profile" title={t('sellersSellerDetail.profile')}>
           <AcDl
             items={[
               {
@@ -164,11 +183,30 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
               { label: t('sellersSellerDetail.contactName'), value: d.contactPersonName },
               {
                 label: t('sellersSellerDetail.phone'),
-                value: <span className="sk-figure">{d.phone}</span>,
+                value: (
+                  <a
+                    className="cd-tel sk-figure"
+                    href={`tel:${d.phone}`}
+                    aria-label={t('ezClient.call', { phone: d.phone })}
+                  >
+                    {d.phone}
+                  </a>
+                ),
               },
               {
                 label: t('sellersSellerDetail.whatsapp'),
-                value: <span className="sk-figure">{d.whatsapp ?? '—'}</span>,
+                value:
+                  d.whatsapp === null ? (
+                    <span className="sk-figure">—</span>
+                  ) : (
+                    <a
+                      className="cd-tel sk-figure"
+                      href={`tel:${d.whatsapp}`}
+                      aria-label={t('ezClient.call', { phone: d.whatsapp })}
+                    >
+                      {d.whatsapp}
+                    </a>
+                  ),
               },
               { label: t('sellersSellerDetail.country'), value: d.countryCode },
               { label: t('sellersSellerDetail.displayCurrency'), value: d.displayCurrency },
@@ -210,6 +248,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
           <AcCard
             title={t('sellersSellerDetail.companyNameAndPhone')}
             note={t('sellersSellerDetail.whatThisAccountWasApproved')}
+            noteAsInfo
           >
             <IdentityCorrectionPanel
               sellerId={d.id}
@@ -219,10 +258,11 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
           </AcCard>
         </AcSection>
 
-        <AcSection title={t('sellersSellerDetail.status')} bare>
+        <AcSection id="cd-status" title={t('sellersSellerDetail.status')} bare>
           <AcCard
             title={t('sellersSellerDetail.accountStatus')}
             note={t('sellersSellerDetail.suspendAClientToImmediately')}
+            noteAsInfo
           >
             <StatusActionPanel
               sellerId={d.id}
@@ -233,15 +273,44 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
           </AcCard>
         </AcSection>
 
-        <AcSection title={t('sellersSellerDetail.accountHold')} bare>
+        <AcSection id="cd-hold" title={t('sellersSellerDetail.accountHold')} bare>
           <RestrictionPanel sellerId={d.id} canManage={canChangeStatus} />
           <BulkDequeuePanel sellerId={d.id} sellerName={d.companyName} />
         </AcSection>
 
-        <AcSection title={t('sellersSellerDetail.bankAccount')} bare>
+        <AcSection id="cd-bank" title={t('sellersSellerDetail.bankAccount')} bare>
+          {/* What is on file, before anything is revealed: the worker checks
+              it is the right bank and the right name first. The number
+              stays masked here; revealing it is the audited step below. */}
+          <AcCard title={t('ezClient.onFile')}>
+            {d.bankName === null && d.bankAccountNumberMasked === null ? (
+              <p className="ac-faint">{t('ezClient.noBank')}</p>
+            ) : (
+              <AcDl
+                items={[
+                  { label: t('ezClient.bank'), value: d.bankName ?? '—' },
+                  { label: t('ezClient.branch'), value: d.bankBranchName ?? '—' },
+                  { label: t('ezClient.accountName'), value: d.bankAccountName ?? '—' },
+                  {
+                    label: t('ezClient.accountNumber'),
+                    value: <span className="sk-ident">{d.bankAccountNumberMasked ?? '—'}</span>,
+                  },
+                  {
+                    label: t('ezClient.routing'),
+                    value: <span className="sk-ident">{d.bankRoutingNumber ?? '—'}</span>,
+                  },
+                  {
+                    label: t('ezClient.swift'),
+                    value: <span className="sk-ident">{d.bankSwiftCode ?? '—'}</span>,
+                  },
+                ]}
+              />
+            )}
+          </AcCard>
           <AcCard
             title={t('sellersSellerDetail.revealBankAccountNumber')}
             note={t('sellersSellerDetail.decryptsAuditsHighUseOnly')}
+            noteAsInfo
             tone="warn"
           >
             <RevealBankAccountPanel sellerId={d.id} />

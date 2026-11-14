@@ -77,6 +77,7 @@ export function CreditAfterConfirmationPanel({
 
   return (
     <AcSection
+      id="cd-stores"
       title={
         <span className="ez-titled">
           {t('sellersCreditAfterConfirmationPanel.memberStoresCreditAfterConfirmation')}

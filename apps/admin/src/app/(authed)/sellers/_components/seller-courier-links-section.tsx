@@ -1,5 +1,6 @@
 'use client';
 
+import { Code } from '@/components/easy/code-label';
 import { useMemo, useState, type ReactElement } from 'react';
 import { Link2, Link2Off, Pause, Play, Scale } from 'lucide-react';
 // The legacy toast on purpose: the component tests mount this section
@@ -72,6 +73,7 @@ export function SellerCourierLinksSection({
 
   return (
     <AcSection
+      id="cd-couriers"
       title={tr('sellersSellerCourierLinksSection.courierAccounts')}
       note={
         rows.length === 0
@@ -223,9 +225,13 @@ function LinkRow({
     <Tr>
       <Td>
         <span className="ac-cell-main">{accountName(account)}</span>
-        {account !== null && <span className="ac-cell-sub">{account.environment}</span>}
+        {account !== null && (
+          <span className="ac-cell-sub">
+            <Code value={account.environment} />
+          </span>
+        )}
       </Td>
-      <Td>{account?.courierCode ?? '—'}</Td>
+      <Td>{account === null ? '—' : <Code value={account.courierCode.toUpperCase()} />}</Td>
       <Td align="right">
         <span className="sk-figure">{link.distributionWeight}</span>
       </Td>

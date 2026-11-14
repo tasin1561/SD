@@ -1,5 +1,6 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
 import { useCodeLabel } from '@/components/easy/code-label';
 import Link from 'next/link';
 import { useState, type ReactElement, type ReactNode } from 'react';
@@ -108,9 +109,12 @@ export function AcCard({
   flush = false,
   className,
   children,
+  noteAsInfo = false,
 }: {
   readonly title?: ReactNode;
   readonly note?: ReactNode;
+  /** Keep the explanation behind an (i) beside the title instead of printing it. */
+  readonly noteAsInfo?: boolean;
   readonly action?: ReactNode;
   readonly tone?: 'critical' | 'warn' | undefined;
   readonly flush?: boolean;
@@ -127,8 +131,22 @@ export function AcCard({
       {head && (
         <div className="ac-card__head">
           <div className="ac-card__titles">
-            {title !== undefined && <h3 className="ac-card__title">{title}</h3>}
-            {note !== undefined && <div className="ac-card__note">{note}</div>}
+            {title !== undefined && (
+              <h3 className="ac-card__title">
+                {noteAsInfo && typeof title === 'string' && typeof note === 'string' ? (
+                  <span className="ez-titled">
+                    {title}
+                    <InfoButton title={title} text={note} />
+                  </span>
+                ) : (
+                  title
+                )}
+              </h3>
+            )}
+            {note !== undefined &&
+              !(noteAsInfo && typeof title === 'string' && typeof note === 'string') && (
+                <div className="ac-card__note">{note}</div>
+              )}
           </div>
           {action !== undefined && action !== null && (
             <div className="ac-card__action">{action}</div>

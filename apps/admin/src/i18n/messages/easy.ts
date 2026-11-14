@@ -385,4 +385,36 @@ export const easy = defineMessages({
     'उस शेल्फ़ पर इस उत्पाद का कुछ नहीं है। नीचे बैच आईडी लिखें।',
   ],
   'ezPick.onShelf': ['{n} on the shelf', 'তাকে {n}টি', 'शेल्फ़ पर {n}'],
+
+  // ── One client's page ─────────────────────────────────────────────────
+  'ezClient.jump': ['Jump to a section', 'একটি অংশে যান', 'किसी हिस्से पर जाएँ'],
+  'ezClient.settings': ['Settings', 'সেটিংস', 'सेटिंग्स'],
+  'ezClient.couriers': ['Couriers', 'কুরিয়ার', 'कूरियर'],
+  'ezClient.memberStores': ['Member stores', 'মেম্বার স্টোর', 'मेंबर स्टोर'],
+  'ezClient.onFile': ['Bank account on file', 'নথিভুক্ত ব্যাংক অ্যাকাউন্ট', 'दर्ज बैंक खाता'],
+  'ezClient.bank': ['Bank', 'ব্যাংক', 'बैंक'],
+  'ezClient.branch': ['Branch', 'শাখা', 'शाखा'],
+  'ezClient.accountName': ['Account name', 'অ্যাকাউন্টের নাম', 'खाते का नाम'],
+  'ezClient.accountNumber': ['Account number', 'অ্যাকাউন্ট নম্বর', 'खाता संख्या'],
+  'ezClient.routing': ['Routing number', 'রাউটিং নম্বর', 'राउटिंग नंबर'],
+  'ezClient.swift': ['SWIFT code', 'SWIFT কোড', 'SWIFT कोड'],
+  'ezClient.noBank': [
+    'No bank account on file yet.',
+    'এখনও কোনো ব্যাংক অ্যাকাউন্ট নথিভুক্ত নেই।',
+    'अभी कोई बैंक खाता दर्ज नहीं है।',
+  ],
+  'ezClient.call': ['Call {phone}', '{phone} নম্বরে কল করুন', '{phone} पर कॉल करें'],
+  'ezClient.changed': [
+    'Changed for this client',
+    'এই ক্লায়েন্টের জন্য বদলানো',
+    'इस क्लाइंट के लिए बदली गई',
+  ],
+  'ezClient.all': ['All settings', 'সব সেটিংস', 'सभी सेटिंग्स'],
+  'ezClient.find': ['Find a setting', 'সেটিং খুঁজুন', 'सेटिंग खोजें'],
+  'ezClient.noMatch': ['No setting matches.', 'কোনো সেটিং মেলেনি।', 'कोई सेटिंग नहीं मिली।'],
+  'ezClient.nothingChanged': [
+    'Nothing is changed for this client. Everything follows the system default.',
+    'এই ক্লায়েন্টের জন্য কিছুই বদলানো হয়নি। সবকিছু সিস্টেম ডিফল্ট অনুযায়ী চলছে।',
+    'इस क्लाइंट के लिए कुछ नहीं बदला गया है। सब कुछ सिस्टम डिफ़ॉल्ट पर है।',
+  ],
 });

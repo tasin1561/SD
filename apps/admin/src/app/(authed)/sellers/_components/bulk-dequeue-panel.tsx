@@ -73,6 +73,7 @@ export function BulkDequeuePanel({
     <AcCard
       title={t('sellersBulkDequeuePanel.callQueue')}
       note={t('sellersBulkDequeuePanel.stopAgentsCallingThisClient')}
+      noteAsInfo
     >
       <div className="ac-form">
         <TextArea

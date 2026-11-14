@@ -1,0 +1,145 @@
+/* One client's page (`seller-detail.tsx`).
+ *
+ * The page answers a handful of questions for the person who opened it:
+ * who is this, can they trade, what is on file at the bank, and what has
+ * been agreed with them that differs from everyone else. It used to be
+ * fifteen phone screens long, most of it settings on their default. */
+
+/* ── Jump to a section ─────────────────────────────────────────────────
+   One row of links, scrolled sideways inside itself when it does not fit. */
+.cd-jump {
+  display: flex;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin: 0 calc(-1 * var(--sp-1));
+  padding: var(--sp-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.cd-jump::-webkit-scrollbar {
+  display: none;
+}
+a.cd-jump__link {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+a.cd-jump__link:hover {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+}
+a.cd-jump__link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* A jumped-to heading clears the bar that stays at the top of the page. */
+.cd-page section[id^='cd-'] {
+  scroll-margin-top: 88px;
+}
+
+/* ── A phone number that can be tapped to call ─────────────────────────── */
+a.cd-tel {
+  color: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+a.cd-tel:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── Settings: what is changed, and a search ───────────────────────────── */
+.cd-settings-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: center;
+  padding: var(--sp-3) var(--sp-4);
+}
+@media (min-width: 768px) {
+  .cd-settings-bar {
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 300px);
+  }
+}
+.cd-settings-empty {
+  margin: 0;
+  padding: var(--sp-4);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
+@media (pointer: coarse) {
+  a.cd-jump__link {
+    min-height: 44px;
+  }
+  a.cd-tel {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  /* The three actions each take a full line, and a long company name in
+     "Sign in as …" wraps instead of pushing the page sideways. */
+  .cd-page .sk-ph__action,
+  .cd-page .sk-ph__action .ac-buttons {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .cd-page .sk-ph__action .ac-buttons > * {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .cd-page .sk-ph__action .sk-btn {
+    height: auto;
+    min-height: 44px;
+    padding-block: var(--sp-2);
+    white-space: normal;
+  }
+  .cd-page .sk-ph__action .sk-btn__label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    text-align: left;
+  }
+  /* Phone confirmation: the "set for this client" mark drops under the
+     title instead of squeezing the explanation into a narrow column. */
+  .cd-page .cc-panel__head {
+    flex-wrap: wrap;
+  }
+  .cd-page .cc-panel__titles {
+    flex: 1 1 0;
+    min-width: 12rem;
+  }
+  /* Profile: two facts to a line. */
+  .cd-page #cd-profile .ac-dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3) var(--sp-4);
+  }
+  /* A setting on its default: the card says the name and the value. The
+     "system default" and "source" lines only appear when they differ. */
+  .cd-settings .sd-table-cards tbody > tr > td.cd-same {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  a.cd-jump__link {
+    transition: none;
+  }
+}

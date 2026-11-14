@@ -137,6 +137,7 @@ export function RestrictionPanel({
     <AcCard
       title={t('sellersRestrictionPanel.accountHold')}
       note={t('sellersRestrictionPanel.stopAClientWhoOwes')}
+      noteAsInfo
       tone={hold === null ? undefined : 'warn'}
       action={
         canManage && hold === null ? (

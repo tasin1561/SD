@@ -316,6 +316,7 @@ export const PORTAL_TEXT_ADMIN: ReadonlyArray<TextRow> = [
   ["ezCourier.pickInfo","Press a carrier to book the parcel with it.\n\nIt is booked straight away. There is no second step, so check the row first.\n\nThe price is on the right. The delivery days are under the name. The cheapest and the fastest are marked."],
   ["ezReattempt.approveInfo","The order goes back into the call queue and an agent phones the customer again.\n\nYou choose how many extra calls to allow.\n\nThe customer already said no once, so read the client’s reason first."],
   ["ezPick.noBatchHere","Nothing of this product is on that shelf. Type the batch id below."],
+  ["ezClient.nothingChanged","Nothing is changed for this client. Everything follows the system default."],
   ["callCenterCustomerRiskStrip.returnRate","{pct} of this customer's parcels came back"],
   ["warehouseRtoRtoItemRow.mismatchMissingRestock","A missing unit cannot go back on the shelf — you probably mean Write off."],
   ["warehouseRtoRtoItemRow.mismatchDamagedRestock","A damaged unit put back in stock will be sold to the next customer. Is it really sellable?"],
