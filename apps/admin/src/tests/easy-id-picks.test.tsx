@@ -45,7 +45,45 @@ vi.mock('@/lib/ops-hooks', () => ({
   }),
 }));
 
-import { BinPick, ClientPick, ProductPick } from '@/components/easy/id-picks';
+vi.mock('@/components/easy/use-bin-lines', () => ({
+  useBinLines: (binId: string) => ({
+    isError: binId === 'not-a-shelf',
+    isSuccess: binId !== '' && binId !== 'not-a-shelf',
+    data:
+      binId === 'bin-1'
+        ? {
+            items: [
+              {
+                stockLevelId: 'sl-1',
+                sellerId: 'seller-1',
+                sellerName: 'Dhaka Threads Ltd',
+                variantId: 'variant-1',
+                productName: 'Cotton kurti',
+                skuCode: 'DT-KURTI-BLU-M',
+                variantLabel: 'Blue / M',
+                batchId: 'batch-1',
+                batchCode: 'B-2611-A',
+                qtyOnHand: 40,
+              },
+              {
+                stockLevelId: 'sl-2',
+                sellerId: 'seller-2',
+                sellerName: 'Other Co',
+                variantId: 'variant-2',
+                productName: 'Jute bag',
+                skuCode: 'OC-BAG',
+                variantLabel: null,
+                batchId: 'batch-2',
+                batchCode: 'B-2610-C',
+                qtyOnHand: 5,
+              },
+            ],
+          }
+        : undefined,
+  }),
+}));
+
+import { BatchPick, BinPick, ClientPick, ProductPick } from '@/components/easy/id-picks';
 
 const typed = <input aria-label="typed id" />;
 
@@ -115,6 +153,47 @@ describe('pick by name', () => {
     await user.type(screen.getByLabelText(/^Find the product/), 'kurti');
     await user.click(screen.getByRole('button', { name: /Cotton kurti/ }));
     expect(onChange).toHaveBeenCalledWith('variant-1');
+    expect(screen.getByLabelText('typed id')).toBeTruthy();
+  });
+
+  it('batch: lists what is on the shelf and hands back the batch and its line', async () => {
+    const onChange = vi.fn();
+    const onLine = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BatchPick binId="bin-1" variantId="" value="" onChange={onChange} onLine={onLine}>
+        {typed}
+      </BatchPick>,
+    );
+    const select = screen.getByLabelText(/^Batch/) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.textContent)).toContain(
+      'B-2611-A · DT-KURTI-BLU-M · 40 on the shelf',
+    );
+    await user.selectOptions(select, 'batch-1');
+    expect(onChange).toHaveBeenCalledWith('batch-1');
+    expect(onLine.mock.calls[0]?.[0]).toMatchObject({
+      sellerId: 'seller-1',
+      variantId: 'variant-1',
+    });
+  });
+
+  it('batch: with a product chosen, only that product’s batches are offered', () => {
+    render(
+      <BatchPick binId="bin-1" variantId="variant-2" value="" onChange={vi.fn()}>
+        {typed}
+      </BatchPick>,
+    );
+    const select = screen.getByLabelText(/^Batch/) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).toEqual(['', 'batch-2']);
+  });
+
+  it('batch: a typed id that is not a shelf leaves only the typed batch field', () => {
+    render(
+      <BatchPick binId="not-a-shelf" variantId="" value="" onChange={vi.fn()}>
+        {typed}
+      </BatchPick>,
+    );
+    expect(screen.queryByLabelText(/^Batch/)).toBeNull();
     expect(screen.getByLabelText('typed id')).toBeTruthy();
   });
 });

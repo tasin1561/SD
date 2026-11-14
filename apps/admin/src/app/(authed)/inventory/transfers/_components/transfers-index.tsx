@@ -22,7 +22,13 @@ import {
 } from '../../_components/stock-kit';
 import { useT } from '@/i18n/client';
 import { InfoButton } from '@/components/easy/info-button';
-import { BinPick, ClientPick, ProductPick } from '@/components/easy/id-picks';
+import {
+  BatchPick,
+  BinPick,
+  ClientPick,
+  ProductPick,
+  type PickedProduct,
+} from '@/components/easy/id-picks';
 
 /**
  * Move stock between warehouses.
@@ -58,6 +64,7 @@ export function TransfersIndex(): ReactElement {
     description: '',
   });
   const [done, setDone] = useState(false);
+  const [lineProduct, setLineProduct] = useState<PickedProduct | null>(null);
   // A transfer moves real stock between buildings, so it is confirmed
   // first (owner). The request it sends is unchanged.
   const [confirming, setConfirming] = useState(false);
@@ -136,7 +143,11 @@ export function TransfersIndex(): ReactElement {
               onChange={(e) => set('sellerId', e.target.value)}
             />
           </ClientPick>
-          <ProductPick value={form.variantId} onChange={(id) => set('variantId', id)}>
+          <ProductPick
+            value={form.variantId}
+            onChange={(id) => set('variantId', id)}
+            known={lineProduct}
+          >
             <TextField
               id="tr-variant"
               label={t('inventoryTransfersTransfersIndex.variantId')}
@@ -190,13 +201,32 @@ export function TransfersIndex(): ReactElement {
                 onChange={(e) => set('sourceBinId', e.target.value)}
               />
             </BinPick>
-            <TextField
-              id="tr-src-batch"
-              label={t('inventoryTransfersTransfersIndex.batchId')}
-              inputClassName="sk-ident"
+            <BatchPick
+              binId={form.sourceBinId}
+              variantId={form.variantId}
               value={form.sourceBatchId}
-              onChange={(e) => set('sourceBatchId', e.target.value)}
-            />
+              onChange={(id) => set('sourceBatchId', id)}
+              onLine={(line) => {
+                // The shelf line names the client and the product too.
+                set('sellerId', line.sellerId);
+                set('variantId', line.variantId);
+                setLineProduct({
+                  variantId: line.variantId,
+                  productName: line.productName,
+                  variantLabel: line.variantLabel,
+                  skuCode: line.skuCode,
+                  sellerCompanyName: line.sellerName,
+                });
+              }}
+            >
+              <TextField
+                id="tr-src-batch"
+                label={t('inventoryTransfersTransfersIndex.batchId')}
+                inputClassName="sk-ident"
+                value={form.sourceBatchId}
+                onChange={(e) => set('sourceBatchId', e.target.value)}
+              />
+            </BatchPick>
           </FieldGrid>
         </Panel>
       </AreaSection>
@@ -233,13 +263,20 @@ export function TransfersIndex(): ReactElement {
                 onChange={(e) => set('destBinId', e.target.value)}
               />
             </BinPick>
-            <TextField
-              id="tr-dst-batch"
-              label={t('inventoryTransfersTransfersIndex.batchId')}
-              inputClassName="sk-ident"
+            <BatchPick
+              binId={form.destBinId}
+              variantId={form.variantId}
               value={form.destBatchId}
-              onChange={(e) => set('destBatchId', e.target.value)}
-            />
+              onChange={(id) => set('destBatchId', id)}
+            >
+              <TextField
+                id="tr-dst-batch"
+                label={t('inventoryTransfersTransfersIndex.batchId')}
+                inputClassName="sk-ident"
+                value={form.destBatchId}
+                onChange={(e) => set('destBatchId', e.target.value)}
+              />
+            </BatchPick>
           </FieldGrid>
           <TextField
             id="tr-desc"

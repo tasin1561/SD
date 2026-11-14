@@ -363,4 +363,12 @@ export const easy = defineMessages({
   'ezPick.searching': ['Searching…', 'খোঁজা হচ্ছে…', 'खोज रहे हैं…'],
   'ezPick.noMatch': ['Nothing matches.', 'কিছু মেলেনি।', 'कुछ नहीं मिला।'],
   'ezPick.change': ['Change', 'বদলান', 'बदलें'],
+  'ezPick.batch': ['Batch', 'ব্যাচ', 'बैच'],
+  'ezPick.shelfFirst': ['Choose the shelf first.', 'আগে তাক বেছে নিন।', 'पहले शेल्फ़ चुनें।'],
+  'ezPick.noBatchHere': [
+    'Nothing of this product is on that shelf. Type the batch id below.',
+    'ওই তাকে এই পণ্যের কিছু নেই। নিচে ব্যাচ আইডি লিখুন।',
+    'उस शेल्फ़ पर इस उत्पाद का कुछ नहीं है। नीचे बैच आईडी लिखें।',
+  ],
+  'ezPick.onShelf': ['{n} on the shelf', 'তাকে {n}টি', 'शेल्फ़ पर {n}'],
 });

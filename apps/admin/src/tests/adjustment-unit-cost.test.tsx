@@ -35,6 +35,9 @@ vi.mock('@/lib/bin-contents-hooks', async (original) => ({
   ...(await original<typeof import('@/lib/bin-contents-hooks')>()),
   useBinOptions: () => ({ data: [], isError: false }),
 }));
+vi.mock('@/components/easy/use-bin-lines', () => ({
+  useBinLines: () => ({ data: undefined, isError: false, isSuccess: false }),
+}));
 vi.mock('@/lib/ops-hooks', async (original) => ({
   ...(await original<typeof import('@/lib/ops-hooks')>()),
   useProductLocations: () => ({ data: [], isError: false, isLoading: false }),

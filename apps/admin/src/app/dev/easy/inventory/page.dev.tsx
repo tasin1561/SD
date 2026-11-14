@@ -47,6 +47,48 @@ const respond: Respond<F> = (_fixture, req) => {
       pageSize: 100,
     });
   }
+  if (req.path.startsWith('/api/admin/bin-contents/')) {
+    return json({
+      bin: { id: 'bin-1', code: 'A-01-03', type: 'STORAGE' },
+      items: [
+        {
+          stockLevelId: 'sl-1',
+          sellerId: '01a1cf45-0000-73cf-8f7e-aaaaaaaaaaa1',
+          sellerName: 'Dhaka Threads Ltd',
+          variantId: 'var-1',
+          productName: 'Cotton kurti with hand block print',
+          thumbnailUrl: null,
+          skuCode: 'DT-KURTI-BLU-M',
+          variantLabel: 'Blue / M',
+          batchId: 'batch-1',
+          batchCode: 'B-2611-A',
+          batchExpiresAt: null,
+          qtyOnHand: 40,
+          qtyReserved: 0,
+          lastMovementAt: null,
+        },
+        {
+          stockLevelId: 'sl-2',
+          sellerId: '01a1cf45-0000-73cf-8f7e-aaaaaaaaaaa1',
+          sellerName: 'Dhaka Threads Ltd',
+          variantId: 'var-2',
+          productName: 'Cotton kurti with hand block print',
+          thumbnailUrl: null,
+          skuCode: 'DT-KURTI-RED-L',
+          variantLabel: 'Red / L',
+          batchId: 'batch-2',
+          batchCode: 'B-2610-C',
+          batchExpiresAt: null,
+          qtyOnHand: 5,
+          qtyReserved: 0,
+          lastMovementAt: null,
+        },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 100,
+    });
+  }
   if (req.path === '/api/admin/warehouses') {
     return json([
       { id: 'wh-ccu', name: 'CCU-01', code: 'CCU-01' },

@@ -4,10 +4,11 @@ import { useState, type ReactElement, type ReactNode } from 'react';
 import { Select } from '@skydrop/ui/app/select';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { useSellersList } from '@/lib/api-hooks';
-import { useBinOptions } from '@/lib/bin-contents-hooks';
+import { useBinOptions, type BinStockLine } from '@/lib/bin-contents-hooks';
 import { useProductLocations, type ProductLocationRow } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { useT } from '@/i18n/client';
+import { useBinLines } from './use-bin-lines';
 import { binTypeLabelIn } from '@/app/(authed)/warehouse/bins/_components/bin-note';
 
 /**
@@ -26,10 +27,16 @@ import { binTypeLabelIn } from '@/app/(authed)/warehouse/bins/_components/bin-no
 
 const TYPED = '__typed__';
 
-function ByHand({ children }: { readonly children: ReactNode }): ReactElement {
+function ByHand({
+  children,
+  open = false,
+}: {
+  readonly children: ReactNode;
+  readonly open?: boolean;
+}): ReactElement {
   const t = useT();
   return (
-    <details className="ez-byhand">
+    <details className="ez-byhand" open={open || undefined}>
       <summary>{t('ezPick.byHand')}</summary>
       <div className="ez-byhand__body">{children}</div>
     </details>
@@ -119,15 +126,36 @@ export function BinPick({
   );
 }
 
-function productLine(row: ProductLocationRow): string {
-  return [row.productName, row.variantLabel].filter((x) => x !== null && x !== '').join(' · ');
+/** What the "chosen product" card shows. */
+export interface PickedProduct {
+  readonly variantId: string;
+  readonly productName: string | null;
+  readonly variantLabel: string | null;
+  readonly skuCode: string | null;
+  readonly sellerCompanyName: string | null;
+}
+
+function productLine(row: PickedProduct | ProductLocationRow): string {
+  const text = [row.productName, row.variantLabel]
+    .filter((x) => x !== null && x !== '')
+    .join(' · ');
+  return text === '' ? (row.skuCode ?? '—') : text;
 }
 
 /** The product, found by name, SKU or barcode. */
-export function ProductPick({ value, onChange, children }: PickProps): ReactElement {
+export function ProductPick({
+  value,
+  onChange,
+  children,
+  known = null,
+}: PickProps & {
+  /** A product the form already knows by name (picked from a shelf line). */
+  readonly known?: PickedProduct | null;
+}): ReactElement {
   const t = useT();
   const [query, setQuery] = useState('');
-  const [chosen, setChosen] = useState<ProductLocationRow | null>(null);
+  const [found1, setChosen] = useState<PickedProduct | null>(null);
+  const chosen = found1 !== null && found1.variantId === value ? found1 : known;
   const found = useProductLocations(query);
   if (found.isError) return <>{children}</>;
   const rows = (found.data ?? []).slice(0, 8);
@@ -175,7 +203,13 @@ export function ProductPick({ value, onChange, children }: PickProps): ReactElem
                     type="button"
                     className="ez-pick__result"
                     onClick={() => {
-                      setChosen(row);
+                      setChosen({
+                        variantId: row.variantId,
+                        productName: row.productName,
+                        variantLabel: row.variantLabel,
+                        skuCode: row.skuCode,
+                        sellerCompanyName: row.sellerCompanyName,
+                      });
                       setQuery('');
                       onChange(row.variantId);
                     }}
@@ -193,6 +227,68 @@ export function ProductPick({ value, onChange, children }: PickProps): ReactElem
         </>
       )}
       <ByHand>{children}</ByHand>
+    </div>
+  );
+}
+
+/**
+ * The batch, from what is actually on the chosen shelf.
+ *
+ * A batch id is the hardest of the four to know by heart, and the shelf's
+ * own contents already name it. Each choice reads "batch · product · how
+ * many are there". With a product chosen, only that product's batches are
+ * offered. `onLine` also hands back the whole line, so a form can fill in
+ * the client and the product from the same tap.
+ */
+export function BatchPick({
+  binId,
+  variantId,
+  value,
+  onChange,
+  onLine,
+  children,
+  requiredMark = false,
+}: PickProps & {
+  readonly binId: string;
+  readonly variantId: string;
+  readonly onLine?: (line: BinStockLine) => void;
+}): ReactElement {
+  const t = useT();
+  const may = usePermission('warehouse.view');
+  const bin = binId.trim();
+  const contents = useBinLines(bin, may);
+  if (!may || contents.isError) return <>{children}</>;
+  const all = contents.data?.items ?? [];
+  const wanted = variantId.trim();
+  const items = wanted === '' ? all : all.filter((l) => l.variantId === wanted);
+  const known = value === '' || items.some((l) => l.batchId === value);
+  const empty = bin !== '' && contents.isSuccess && items.length === 0;
+  return (
+    <div className="ez-pick">
+      <Select
+        label={t('ezPick.batch')}
+        requiredMark={requiredMark}
+        hint={bin === '' ? t('ezPick.shelfFirst') : empty ? t('ezPick.noBatchHere') : undefined}
+        disabled={bin === '' || empty}
+        value={known ? value : TYPED}
+        onChange={(e) => {
+          const line = items.find((l) => l.batchId === e.target.value);
+          if (line === undefined) return;
+          onChange(line.batchId);
+          onLine?.(line);
+        }}
+      >
+        <option value="">{t('ezPick.choose')}</option>
+        {!known && <option value={TYPED}>{t('ezPick.typed')}</option>}
+        {items.map((l) => (
+          <option key={l.stockLevelId} value={l.batchId}>
+            {[l.batchCode, l.skuCode ?? l.productName, t('ezPick.onShelf', { n: l.qtyOnHand })]
+              .filter((x) => x !== null && x !== '')
+              .join(' · ')}
+          </option>
+        ))}
+      </Select>
+      <ByHand open={empty}>{children}</ByHand>
     </div>
   );
 }

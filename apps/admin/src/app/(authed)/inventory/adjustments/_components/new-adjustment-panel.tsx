@@ -22,7 +22,13 @@ import {
 } from '../../_components/stock-kit';
 import { useT } from '@/i18n/client';
 import { useWarehouseOptions } from '@/lib/ops-hooks';
-import { BinPick, ClientPick, ProductPick } from '@/components/easy/id-picks';
+import {
+  BatchPick,
+  BinPick,
+  ClientPick,
+  ProductPick,
+  type PickedProduct,
+} from '@/components/easy/id-picks';
 
 /**
  * Raising a stock correction.
@@ -75,6 +81,7 @@ export function NewAdjustmentPanel({
   const [binId, setBinId] = useState(prefill?.binId ?? '');
   const warehouses = useWarehouseOptions();
   const [pickWarehouseId, setPickWarehouseId] = useState('');
+  const [lineProduct, setLineProduct] = useState<PickedProduct | null>(null);
   const [batchId, setBatchId] = useState(prefill?.batchId ?? '');
   const [qty, setQty] = useState('');
   const [unitCost, setUnitCost] = useState('');
@@ -251,7 +258,7 @@ export function NewAdjustmentPanel({
             <Note tone="faint">
               {t('inventoryAdjustmentsNewAdjustmentPanel.stockIsHeldPerBatch')}
             </Note>
-            <ProductPick value={variantId} onChange={setVariantId}>
+            <ProductPick value={variantId} onChange={setVariantId} known={lineProduct}>
               <TextField
                 label={t('inventoryAdjustmentsNewAdjustmentPanel.variantId')}
                 requiredMark
@@ -286,13 +293,33 @@ export function NewAdjustmentPanel({
                 onChange={(e) => setBinId(e.target.value)}
               />
             </BinPick>
-            <TextField
-              label={t('inventoryAdjustmentsNewAdjustmentPanel.batchId')}
-              requiredMark
-              inputClassName="sk-ident"
+            <BatchPick
+              binId={binId}
+              variantId={variantId}
               value={batchId}
-              onChange={(e) => setBatchId(e.target.value)}
-            />
+              onChange={setBatchId}
+              onLine={(line) => {
+                // The shelf line names the client and the product too.
+                setSellerId(line.sellerId);
+                setVariantId(line.variantId);
+                setLineProduct({
+                  variantId: line.variantId,
+                  productName: line.productName,
+                  variantLabel: line.variantLabel,
+                  skuCode: line.skuCode,
+                  sellerCompanyName: line.sellerName,
+                });
+              }}
+              requiredMark
+            >
+              <TextField
+                label={t('inventoryAdjustmentsNewAdjustmentPanel.batchId')}
+                requiredMark
+                inputClassName="sk-ident"
+                value={batchId}
+                onChange={(e) => setBatchId(e.target.value)}
+              />
+            </BatchPick>
             {/*
               WITHOUT THIS FIELD, MOST BATCHES COULD NOT BE ADJUSTED AT
               ALL. The value impact decides whether an adjustment needs a
