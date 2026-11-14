@@ -422,6 +422,7 @@ export const easy = defineMessages({
     'পরিচয়তথ্য এনক্রিপ্ট করে রাখা হয়',
     'क्रेडेंशियल एन्क्रिप्ट करके रखे जाते हैं',
   ],
+  'easy.whatThisDoes': ['What this does', 'এটি কী করে', 'यह क्या करता है'],
   'easy.showAll': ['Show all {n}', 'সব {n}টি দেখান', 'सभी {n} दिखाएँ'],
   'easy.showFewer': ['Show fewer', 'কম দেখান', 'कम दिखाएँ'],
 });

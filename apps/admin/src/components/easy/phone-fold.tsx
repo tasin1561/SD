@@ -3,10 +3,8 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { useT } from '@/i18n/client';
 
-const FIRST = 6;
-
 /**
- * A long list on a phone: the first six cards, then "Show all 43".
+ * A long list on a phone: the first six cards (or three), then "Show all 43".
  *
  * On a phone every table row is a card, so a log of forty rows is forty
  * cards and whatever sits below it is a long way down. This wraps a
@@ -22,8 +20,11 @@ const FIRST = 6;
 export function PhoneFold({
   className,
   children,
+  first = 6,
 }: {
   readonly className?: string | undefined;
+  /** How many cards show before the button. Three for a log that is rarely read. */
+  readonly first?: 3 | 6;
   readonly children: ReactNode;
 }): ReactElement {
   const t = useT();
@@ -46,9 +47,10 @@ export function PhoneFold({
       ref={ref}
       className={className === undefined ? 'ez-fold' : `ez-fold ${className}`}
       data-open={open ? '' : undefined}
+      data-first={first}
     >
       {children}
-      {count > FIRST && (
+      {count > first && (
         <button
           type="button"
           className="ez-fold__more"

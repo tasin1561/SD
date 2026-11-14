@@ -811,7 +811,7 @@ a.ez-jump__link:focus-visible {
 }
 /* A jumped-to heading clears the bar that stays at the top of the page. */
 .ez-touch section[id^='cd-'],
-.ez-touch section[id^='jp-'] {
+.ez-touch [id^='jp-'] {
   scroll-margin-top: 88px;
 }
 
@@ -831,7 +831,8 @@ a.ez-jump__link:focus-visible {
   display: none;
 }
 @media (max-width: 767.98px) {
-  .ez-fold:not([data-open]) .sd-table-cards > tbody > tr:nth-child(n + 7) {
+  .ez-fold:not([data-open]) .sd-table-cards > tbody > tr:nth-child(n + 7),
+  .ez-fold[data-first='3']:not([data-open]) .sd-table-cards > tbody > tr:nth-child(n + 4) {
     display: none;
   }
   button.ez-fold__more {

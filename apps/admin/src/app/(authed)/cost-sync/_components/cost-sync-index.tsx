@@ -1,5 +1,6 @@
 'use client';
 
+import { JumpBar } from '@/components/easy/jump-bar';
 import { PhoneFold } from '@/components/easy/phone-fold';
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { pageDateTag } from '@/components/easy/when';
@@ -457,6 +458,15 @@ export function CostSyncIndex(): ReactElement {
         }
       />
 
+      <JumpBar
+        label={t('ezClient.jump')}
+        items={[
+          ['jp-runs', t('costSyncCostSyncIndex.recentRuns')],
+          ['jp-shiprocket', t('costSyncShiprocketCostSection.shiprocket')],
+          ['jp-sr-parcels', t('costSyncShiprocketCostSection.ourShiprocketParcels')],
+        ]}
+      />
+
       {panel.isLoading ? (
         <AfCard flush>
           <SkeletonRows rows={4} cols={4} label={t('costSyncCostSyncIndex.loadingTheSync')} />
@@ -482,6 +492,12 @@ export function CostSyncIndex(): ReactElement {
                       ? t('costSyncCostSyncIndex.onReadingAndRecordingCosts')
                       : t('costSyncCostSyncIndex.onButNotRecordingIt')
                     : t('costSyncCostSyncIndex.switchedOffNoCourierCosts')}
+                  {canRun && (
+                    <InfoButton
+                      title={t('easy.whatThisDoes')}
+                      text={t('costSyncCostSyncIndex.thisQueuesTheJobFor')}
+                    />
+                  )}
                 </p>
                 <p className="af-small">
                   {t('costSyncCostSyncIndex.asksForTheLastDays', {
@@ -502,12 +518,19 @@ export function CostSyncIndex(): ReactElement {
                 </Button>
               )}
             </div>
-            {canRun && <p className="af-small">{t('costSyncCostSyncIndex.thisQueuesTheJobFor')}</p>}
           </AfCard>
 
           <div className="af-kpis">
             <KpiCard
-              label={t('costSyncCostSyncIndex.parcelsWithARealCost')}
+              label={
+                <span className="ez-titled">
+                  {t('costSyncCostSyncIndex.parcelsWithARealCost')}
+                  <InfoButton
+                    title={t('costSyncCostSyncIndex.parcelsWithARealCost')}
+                    text={t('costSyncCostSyncIndex.dispatchedParcelsWhoseCourierCharge')}
+                  />
+                </span>
+              }
               figure={`${d.cost.withForwardCost} / ${d.cost.dispatched}`}
               tone={
                 STAT_TONE[
@@ -516,34 +539,54 @@ export function CostSyncIndex(): ReactElement {
               }
               // TRE-6: a missing cost is UNCOVERED, never zero. Zero
               // would report the whole of that revenue as profit.
-              hint={t('costSyncCostSyncIndex.dispatchedParcelsWhoseCourierCharge')}
             />
             <KpiCard
-              label={t('costSyncCostSyncIndex.returnsWithARealCost')}
+              label={
+                <span className="ez-titled">
+                  {t('costSyncCostSyncIndex.returnsWithARealCost')}
+                  <InfoButton
+                    title={t('costSyncCostSyncIndex.returnsWithARealCost')}
+                    text={t('costSyncCostSyncIndex.returnsAreBilledSeparatelyFrom')}
+                  />
+                </span>
+              }
               figure={`${d.cost.withRtoCost} / ${d.cost.returned}`}
               tone={
                 STAT_TONE[
                   d.cost.returned === 0 || d.cost.withRtoCost === d.cost.returned ? 'good' : 'warn'
                 ]
               }
-              hint={t('costSyncCostSyncIndex.returnsAreBilledSeparatelyFrom')}
             />
             <KpiCard
-              label={t('costSyncCostSyncIndex.forwardCostRecorded')}
+              label={
+                <span className="ez-titled">
+                  {t('costSyncCostSyncIndex.forwardCostRecorded')}
+                  <InfoButton
+                    title={t('costSyncCostSyncIndex.forwardCostRecorded')}
+                    text={t('costSyncCostSyncIndex.theSumOfWhatThe')}
+                  />
+                </span>
+              }
               figure={<Money amount={d.cost.forwardTotalInr} />}
-              hint={t('costSyncCostSyncIndex.theSumOfWhatThe')}
             />
             <KpiCard
-              label={t('costSyncCostSyncIndex.returnCostRecorded')}
+              label={
+                <span className="ez-titled">
+                  {t('costSyncCostSyncIndex.returnCostRecorded')}
+                  <InfoButton
+                    title={t('costSyncCostSyncIndex.returnCostRecorded')}
+                    text={t('costSyncCostSyncIndex.theSumOfWhatThe2')}
+                  />
+                </span>
+              }
               figure={<Money amount={d.cost.rtoTotalInr} />}
-              hint={t('costSyncCostSyncIndex.theSumOfWhatThe2')}
             />
           </div>
 
           {d.last !== null && <LastRun run={d.last} />}
 
-          <AfSection title={t('costSyncCostSyncIndex.recentRuns')}>
-            <PhoneFold className="ez-wrap ez-cards ez-lead-2">
+          <AfSection id="jp-runs" title={t('costSyncCostSyncIndex.recentRuns')}>
+            <PhoneFold first={3} className="ez-wrap ez-cards ez-lead-2">
               <Table>
                 <THead>
                   <Tr>

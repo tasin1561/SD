@@ -252,7 +252,8 @@ export default function AdminResellerStorePage(): ReactElement {
   const events = s.events;
 
   return (
-    <div className="ez-touch ez-wrap">
+    <div className="ez-touch ez-wrap ez-phone">
+      <TidyCards />
       <AcPage>
         <AcHeader
           crumbs={[...crumbs, { label: s.name }]}

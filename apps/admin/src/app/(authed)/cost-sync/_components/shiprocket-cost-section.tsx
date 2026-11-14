@@ -1,5 +1,6 @@
 'use client';
 
+import { InfoButton } from '@/components/easy/info-button';
 import { PhoneFold } from '@/components/easy/phone-fold';
 import { pageDateTag } from '@/components/easy/when';
 import { useState, type ReactElement } from 'react';
@@ -432,7 +433,7 @@ export function ShiprocketCostSection(): ReactElement {
 
   return (
     <section className="af-section">
-      <SectionHeading title={t('costSyncShiprocketCostSection.shiprocket')} />
+      <SectionHeading id="jp-shiprocket" title={t('costSyncShiprocketCostSection.shiprocket')} />
       {panel.isLoading ? (
         <AfCard flush>
           <SkeletonRows
@@ -512,8 +513,11 @@ export function ShiprocketCostSection(): ReactElement {
                         ? t('costSyncShiprocketCostSection.hasNotRunYet')
                         : invoiceRunLabel(t, lastInvoices),
                   })}
+                  <InfoButton
+                    title={t('easy.whatThisDoes')}
+                    text={t('costSyncShiprocketCostSection.everyNightAt0430')}
+                  />
                 </p>
-                <p className="af-small">{t('costSyncShiprocketCostSection.everyNightAt0430')}</p>
               </div>
               {canRun && runButton('invoices')}
             </div>
@@ -551,26 +555,47 @@ export function ShiprocketCostSection(): ReactElement {
               }
             />
             <KpiCard
-              label={t('costSyncShiprocketCostSection.parcelsWithARecordedCost')}
+              label={
+                <span className="ez-titled">
+                  {t('costSyncShiprocketCostSection.parcelsWithARecordedCost')}
+                  <InfoButton
+                    title={t('costSyncShiprocketCostSection.parcelsWithARecordedCost')}
+                    text={t('costSyncShiprocketCostSection.nettedFromTheirPassbookA')}
+                  />
+                </span>
+              }
               figure={`${recorded} / ${d.parcels.length}`}
               tone={
                 STAT_TONE[d.parcels.length === 0 || recorded === d.parcels.length ? 'good' : 'warn']
               }
-              hint={t('costSyncShiprocketCostSection.nettedFromTheirPassbookA')}
             />
             {lastBills === null ? (
               <KpiCard
-                label={t('costSyncShiprocketCostSection.finalBillsThatDisagree')}
+                label={
+                  <span className="ez-titled">
+                    {t('costSyncShiprocketCostSection.finalBillsThatDisagree')}
+                    <InfoButton
+                      title={t('costSyncShiprocketCostSection.finalBillsThatDisagree')}
+                      text={t('costSyncShiprocketCostSection.theirFinalBilledAmountAgainst')}
+                    />
+                  </span>
+                }
                 figure="—"
                 tone={STAT_TONE.neutral}
-                hint={t('costSyncShiprocketCostSection.theirFinalBilledAmountAgainst')}
               />
             ) : (
               <KpiCard
-                label={t('costSyncShiprocketCostSection.finalBillsThatDisagree')}
+                label={
+                  <span className="ez-titled">
+                    {t('costSyncShiprocketCostSection.finalBillsThatDisagree')}
+                    <InfoButton
+                      title={t('costSyncShiprocketCostSection.finalBillsThatDisagree')}
+                      text={t('costSyncShiprocketCostSection.theirFinalBilledAmountAgainst')}
+                    />
+                  </span>
+                }
                 value={disagree}
                 tone={STAT_TONE[disagree === 0 ? 'good' : 'bad']}
-                hint={t('costSyncShiprocketCostSection.theirFinalBilledAmountAgainst')}
               />
             )}
             <KpiCard
@@ -605,11 +630,12 @@ export function ShiprocketCostSection(): ReactElement {
                         ? t('costSyncShiprocketCostSection.switchedOff')
                         : t('costSyncShiprocketCostSection.on'),
                   })}
-                </p>
-                <p className="af-small">
-                  {t('costSyncShiprocketCostSection.readsEachOrderSCharges', {
-                    schedule: d.schedule,
-                  })}
+                  <InfoButton
+                    title={t('easy.whatThisDoes')}
+                    text={t('costSyncShiprocketCostSection.readsEachOrderSCharges', {
+                      schedule: d.schedule,
+                    })}
+                  />
                 </p>
               </div>
               {canRun && (
@@ -635,9 +661,14 @@ export function ShiprocketCostSection(): ReactElement {
             <div className="af-card__head">
               <div className="af-grow af-stack af-stack--tight">
                 <h3 className="af-title">
-                  {t('costSyncShiprocketCostSection.shiprocketWebsiteAccess')}
+                  <span className="ez-titled">
+                    {t('costSyncShiprocketCostSection.shiprocketWebsiteAccess')}
+                    <InfoButton
+                      title={t('costSyncShiprocketCostSection.shiprocketWebsiteAccess')}
+                      text={t('costSyncShiprocketCostSection.signsInAndSavesWhat')}
+                    />
+                  </span>
                 </h3>
-                <p className="af-small">{t('costSyncShiprocketCostSection.signsInAndSavesWhat')}</p>
               </div>
               {canRun && runButton('probe')}
             </div>
@@ -673,10 +704,11 @@ export function ShiprocketCostSection(): ReactElement {
 
           <div className="af-section">
             <SectionHeading
+              id="jp-sr-parcels"
               title={t('costSyncShiprocketCostSection.ourShiprocketParcels')}
               as="h3"
             />
-            <PhoneFold className="ez-wrap ez-cards">
+            <PhoneFold first={3} className="ez-wrap ez-cards">
               <Table>
                 <THead>
                   <Tr>

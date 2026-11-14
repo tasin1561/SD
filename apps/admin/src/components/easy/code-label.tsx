@@ -32,6 +32,9 @@ const CODES: Readonly<Record<string, Row>> = {
     'ক্লায়েন্টের টাকা পুনঃশ্রেণীবদ্ধ',
     'क्लाइंट की रकम पुनर्वर्गीकृत',
   ],
+  // ── courier conversations ──
+  WAITING_US: ['Waiting for us', 'আমাদের অপেক্ষায়', 'हमारी प्रतीक्षा में'],
+  WAITING_COURIER: ['Waiting for the courier', 'কুরিয়ারের অপেক্ষায়', 'कूरियर की प्रतीक्षा में'],
   // ── leads ──
   CONTACTED: ['Contacted', 'যোগাযোগ হয়েছে', 'संपर्क किया गया'],
   QUALIFIED: ['Qualified', 'যোগ্য', 'योग्य'],

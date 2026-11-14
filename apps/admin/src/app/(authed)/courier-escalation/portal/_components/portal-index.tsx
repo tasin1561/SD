@@ -143,7 +143,7 @@ export function CourierPortalIndex(): ReactElement {
             description={t('courierEscalationPortalPortalIndex.expectedItIsDeployedInert')}
           />
         ) : (
-          <PhoneFold className="ez-wrap ez-cards ez-lead-2">
+          <PhoneFold first={3} className="ez-wrap ez-cards ez-lead-2">
             <Table>
               <THead>
                 <Tr>
@@ -163,7 +163,7 @@ export function CourierPortalIndex(): ReactElement {
                       </span>
                     </Td>
                     <Td>
-                      <span className="af-nowrap">{humanise(r.kind)}</span>
+                      <span className="af-nowrap">{code(r.kind)}</span>
                     </Td>
                     <Td>
                       <StatusChip

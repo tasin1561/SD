@@ -161,7 +161,8 @@ export function LiabilitiesIndex(): ReactElement {
   const uncovered = d.sellerDebts.filter((s) => !s.covered);
 
   return (
-    <div className="mo-page ez-touch">
+    <div className="mo-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">

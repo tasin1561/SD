@@ -160,7 +160,7 @@ export function CourierTemplatesIndex(): ReactElement {
                       <code className="af-code">{t.pattern}</code>
                     </Td>
                     <Td>
-                      <span className="af-nowrap">{humanise(t.state)}</span>
+                      <span className="af-nowrap">{code(t.state)}</span>
                     </Td>
                     <Td>
                       <span className="af-small af-nowrap">

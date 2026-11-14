@@ -1,5 +1,6 @@
 'use client';
 
+import { Code } from '@/components/easy/code-label';
 import { PhoneFold } from '@/components/easy/phone-fold';
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { useState, type ReactElement } from 'react';
@@ -127,7 +128,8 @@ export function CourierWalletIndex(): ReactElement {
   const neverArrived = unmatched.data?.payments ?? [];
 
   return (
-    <div className="mo-page ez-touch">
+    <div className="mo-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -257,7 +259,9 @@ export function CourierWalletIndex(): ReactElement {
                         <Wallet size={16} aria-hidden />
                         {a.label}
                       </span>
-                      <span className="mo-sub">{a.courierCode}</span>
+                      <span className="mo-sub">
+                        <Code value={a.courierCode.toUpperCase()} />
+                      </span>
                     </Td>
                     <Td align="right">
                       {/* Never read is not the same as empty, and only
