@@ -1600,3 +1600,9 @@ p.wh-alert {
     transition: none;
   }
 }
+
+/* Awaiting returns: the AWB is already the button that loads it into the
+   bench, so the copy piece beside it shows only its copy button. */
+.wh-awb-copy-only .sk-awb__value {
+  display: none;
+}

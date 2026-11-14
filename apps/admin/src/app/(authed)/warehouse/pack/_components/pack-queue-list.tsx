@@ -1,5 +1,6 @@
 'use client';
 
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
@@ -154,7 +155,13 @@ function InProgressRow({ row }: { row: PackInProgress }): ReactElement {
     <li>
       <ListRow
         icon={<Package size={16} />}
-        title={<span className="sk-ident">{row.awbNumber ?? row.shipmentNumber}</span>}
+        title={
+          row.awbNumber === null ? (
+            <span className="sk-ident">{row.shipmentNumber}</span>
+          ) : (
+            <AwbCopy awb={row.awbNumber} size="inherit" />
+          )
+        }
         description={
           <>
             <span className="sk-ident">{row.orderNumber ?? '—'}</span>
@@ -206,7 +213,13 @@ function WaitingRow({ pack }: { pack: WaitingPack }): ReactElement {
     <li>
       <ListRow
         icon={<Package size={16} />}
-        title={<span className="sk-ident">{pack.awbNumber ?? pack.shipmentNumber}</span>}
+        title={
+          pack.awbNumber === null ? (
+            <span className="sk-ident">{pack.shipmentNumber}</span>
+          ) : (
+            <AwbCopy awb={pack.awbNumber} size="inherit" />
+          )
+        }
         description={
           <>
             <span className="sk-ident">{pack.orderNumber ?? '—'}</span>

@@ -1,5 +1,6 @@
 'use client';
 
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
@@ -427,7 +428,11 @@ export function CourierEscalationIndex(): ReactElement {
                     <Td>
                       <div className="af-stack af-stack--tight">
                         <span className="af-strong sk-ident">
-                          {item.awbNumber ?? t('courierEscalationCourierEscalationIndex.noAwb')}
+                          {item.awbNumber === null ? (
+                            t('courierEscalationCourierEscalationIndex.noAwb')
+                          ) : (
+                            <AwbCopy awb={item.awbNumber} size="inherit" />
+                          )}
                         </span>
                         <span className="af-small">
                           {item.courierName} · {item.sellerName ?? '—'}

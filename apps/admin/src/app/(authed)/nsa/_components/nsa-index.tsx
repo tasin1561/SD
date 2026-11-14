@@ -1,5 +1,6 @@
 'use client';
 
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, CircleCheck, PhoneOutgoing, RefreshCw, UserX } from 'lucide-react';
@@ -228,7 +229,7 @@ export function NsaIndex(): ReactElement {
                       <span className="oo-faint">—</span>
                     ) : (
                       <div>
-                        <Ident value={r.awbNumber} />
+                        <AwbCopy awb={r.awbNumber} />
                         <span className="oo-sub">{r.courierCode}</span>
                       </div>
                     )}

@@ -1,5 +1,6 @@
 'use client';
 
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { PackageCheck, Truck } from 'lucide-react';
@@ -91,6 +92,9 @@ function Row({
         >
           {row.awbNumber ?? row.shipmentNumber}
         </button>
+        {/* Copying sits beside the button, not inside it: tapping the AWB
+            still loads it into the bench. */}
+        {row.awbNumber !== null && <AwbCopy awb={row.awbNumber} className="wh-awb-copy-only" />}
         <div className="wh-faint">{row.courierCode}</div>
       </Td>
       <Td>

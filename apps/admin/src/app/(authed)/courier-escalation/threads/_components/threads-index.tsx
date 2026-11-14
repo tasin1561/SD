@@ -1,5 +1,6 @@
 'use client';
 
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { Code } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
@@ -123,7 +124,7 @@ export function CourierThreadsIndex(): ReactElement {
                     {r.awbNumber === null ? (
                       <span className="af-faint">—</span>
                     ) : (
-                      <Ident value={r.awbNumber} />
+                      <AwbCopy awb={r.awbNumber} />
                     )}
                   </Td>
                   <Td>

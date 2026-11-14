@@ -1,5 +1,6 @@
 'use client';
 
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import Link from 'next/link';
 import type { CSSProperties, ReactElement } from 'react';
 import { Boxes, Hand, PackageOpen, Printer, RefreshCw, ClipboardList } from 'lucide-react';
@@ -186,7 +187,7 @@ function HoldCard({
         {hold.batchNumber !== null && (
           <span className="sk-ident hb-card__id">{hold.batchNumber}</span>
         )}
-        {hold.awbNumber !== null && <span className="sk-ident hb-card__awb">{hold.awbNumber}</span>}
+        {hold.awbNumber !== null && <AwbCopy awb={hold.awbNumber} className="hb-card__awb" />}
         {hold.orderId !== null && hold.orderNumber !== null && (
           <Link
             className="hb-card__link"

@@ -1,5 +1,6 @@
 'use client';
 
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Truck } from 'lucide-react';
@@ -257,9 +258,13 @@ export function DeliveryActionsIndex(): ReactElement {
                     >
                       {r.order?.orderNumber ?? '—'}
                     </Link>
-                    <span className="oo-sub sk-ident">
-                      {r.shipment?.awbNumber ?? r.shipment?.shipmentNumber ?? ''}
-                    </span>
+                    {r.shipment?.awbNumber != null && r.shipment.awbNumber !== '' ? (
+                      <span className="oo-sub">
+                        <AwbCopy awb={r.shipment.awbNumber} />
+                      </span>
+                    ) : (
+                      <span className="oo-sub sk-ident">{r.shipment?.shipmentNumber ?? ''}</span>
+                    )}
                   </Td>
                   <Td className="oo-muted">
                     {r.seller?.companyName ?? '—'}

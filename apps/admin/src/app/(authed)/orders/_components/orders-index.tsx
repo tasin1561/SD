@@ -1,5 +1,6 @@
 'use client';
 
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
@@ -311,6 +312,13 @@ export function OrdersIndex(): ReactElement {
                     <Link href={`/orders/${o.id}`} className="oc-order-link sk-ident">
                       {o.orderNumber}
                     </Link>
+                    {/* The waybill, with a copy button, under the order number.
+                        Nothing is shown until a parcel has one. */}
+                    {o.shipment?.awbNumber != null && o.shipment.awbNumber !== '' && (
+                      <span className="oo-sub">
+                        <AwbCopy awb={o.shipment.awbNumber} />
+                      </span>
+                    )}
                     {o.sellerOrderRef && (
                       <span className="oo-sub">
                         {t('ordersList.ref')} <span className="sk-ident">{o.sellerOrderRef}</span>

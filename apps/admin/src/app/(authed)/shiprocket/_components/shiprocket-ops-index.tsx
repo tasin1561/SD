@@ -1,5 +1,6 @@
 'use client';
 
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { JumpBar } from '@/components/easy/jump-bar';
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { pageDateTag } from '@/components/easy/when';
@@ -409,7 +410,7 @@ export function ShiprocketOpsIndex(): ReactElement {
                           {b.awbNumber === null ? (
                             <span className="af-small af-bad">none</span>
                           ) : (
-                            <span className="sk-ident af-small">{b.awbNumber}</span>
+                            <AwbCopy awb={b.awbNumber} />
                           )}
                         </Td>
                         {/* WHICH carrier their ranking gave us. Blank on a

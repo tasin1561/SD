@@ -1,5 +1,6 @@
 'use client';
 
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import type { ReactElement } from 'react';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
@@ -132,7 +133,7 @@ function WaitingRow({
                 wrong van and nobody finds out until it is scanned at
                 somebody else's hub. Beside the AWB, loud, always. */}
             <span className="wh-ho__courier">{courierLabel(pack.courierCode)}</span>
-            <span className="sk-ident">{pack.awbNumber}</span>
+            <AwbCopy awb={pack.awbNumber} size="inherit" />
           </span>
         }
         description={

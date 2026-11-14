@@ -1,5 +1,6 @@
 'use client';
 
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { When } from '@/components/easy/when';
 import type { ReactElement } from 'react';
 import { AlertTriangle } from 'lucide-react';
@@ -62,7 +63,13 @@ export function OpenReturns({
               open.data.items.map((r) => (
                 <Tr key={r.shipmentId}>
                   <Td>
-                    <div className="sk-ident wh-item__name">{r.awbNumber ?? r.shipmentNumber}</div>
+                    <div className="sk-ident wh-item__name">
+                      {r.awbNumber === null ? (
+                        r.shipmentNumber
+                      ) : (
+                        <AwbCopy awb={r.awbNumber} size="inherit" />
+                      )}
+                    </div>
                     <div className="sk-ident wh-faint">{r.orderNumber ?? ''}</div>
                   </Td>
                   <Td className="wh-note">{r.sellerName ?? '—'}</Td>

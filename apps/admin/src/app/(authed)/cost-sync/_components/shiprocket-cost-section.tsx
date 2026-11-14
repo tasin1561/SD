@@ -1,5 +1,6 @@
 'use client';
 
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { InfoButton } from '@/components/easy/info-button';
 import { PhoneFold } from '@/components/easy/phone-fold';
 import { pageDateTag } from '@/components/easy/when';
@@ -749,7 +750,7 @@ export function ShiprocketCostSection(): ReactElement {
                             <span className="sk-ident">{p.orderNumber ?? '—'}</span>
                           </Td>
                           <Td>
-                            <span className="sk-ident">{p.awbNumber ?? '—'}</span>
+                            <AwbCopy awb={p.awbNumber} dashWhenEmpty />
                           </Td>
                           <Td>{p.theirStatus}</Td>
                           <Td>

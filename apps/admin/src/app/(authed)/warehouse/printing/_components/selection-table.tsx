@@ -1,5 +1,6 @@
 'use client';
 
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import type { ReactElement } from 'react';
 import { Money } from '@skydrop/ui/components';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
@@ -103,7 +104,7 @@ export function SelectionTable({
                 )}
               </Td>
               <Td>
-                <span className="sk-ident">{r.awbNumber ?? '—'}</span>
+                <AwbCopy awb={r.awbNumber} dashWhenEmpty />
               </Td>
               <Td>
                 <div>{r.destCity === '' ? '—' : r.destCity}</div>
