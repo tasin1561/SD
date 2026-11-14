@@ -7,6 +7,7 @@
  * telling a counter it was required, with a reason belonging to two other
  * fields. Found by filming it (L2, 2026-10-01).
  */
+import type { ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -40,6 +41,18 @@ vi.mock('@/lib/inventory-hooks', () => ({
   useCompleteCycleCount: () => ({ ...idle, reset: vi.fn() }),
 }));
 vi.mock('@/lib/ops-hooks', () => ({ useWarehouseOptions: () => ({ data: [] }) }));
+// The pick-by-name fields are covered by easy-id-picks.test.tsx. Here they
+// pass their typed field straight through, which is what this spec reads.
+vi.mock('@/components/easy/id-picks', () => {
+  const Pass = ({ children }: { children?: ReactNode }): ReactNode => children;
+  return {
+    BatchPick: Pass,
+    BinPick: Pass,
+    ClientPick: Pass,
+    ProductPick: Pass,
+    WarehouseName: ({ id }: { id: string }): ReactNode => id,
+  };
+});
 
 import { CycleCountsIndex } from '../app/(authed)/inventory/cycle-counts/_components/cycle-counts-index';
 

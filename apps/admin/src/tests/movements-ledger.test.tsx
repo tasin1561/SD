@@ -14,6 +14,7 @@
  * thirty-six characters and no clue which of three places to go and
  * look. Found by filming it (L3, 2026-10-01).
  */
+import type { ReactNode } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { StockMovementType } from '@skydrop/db';
@@ -62,6 +63,18 @@ vi.mock('@/lib/inventory-hooks', () => ({
 }));
 vi.mock('@/lib/ops-hooks', () => ({ useWarehouseOptions: () => ({ data: [] }) }));
 vi.mock('@/lib/bin-contents-hooks', () => ({ useBinOptions: () => ({ data: [] }) }));
+// The pick-by-name fields are covered by easy-id-picks.test.tsx. Here they
+// pass their typed field straight through, which is what this spec reads.
+vi.mock('@/components/easy/id-picks', () => {
+  const Pass = ({ children }: { children?: ReactNode }): ReactNode => children;
+  return {
+    BatchPick: Pass,
+    BinPick: Pass,
+    ClientPick: Pass,
+    ProductPick: Pass,
+    WarehouseName: ({ id }: { id: string }): ReactNode => id,
+  };
+});
 
 import { MovementsIndex } from '../app/(authed)/inventory/movements/_components/movements-index';
 

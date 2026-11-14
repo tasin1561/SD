@@ -25,6 +25,7 @@ import {
 } from '../../_components/stock-kit';
 import { useLocale, useT } from '@/i18n/client';
 import { InfoButton } from '@/components/easy/info-button';
+import { ProductPick } from '@/components/easy/id-picks';
 import { formatDateTime } from '@/i18n/format';
 
 const PAGE_SIZE = 50;
@@ -108,14 +109,16 @@ export function MovementsIndex({
 
       <Stack>
         <Toolbar>
-          <TextField
-            id="mv-variant"
-            label={tr('inventoryMovementsMovementsIndex.variantId')}
-            inputClassName="sk-ident"
-            value={variantId}
-            onChange={(e) => change(() => setVariantId(e.target.value))}
-            placeholder={tr('inventoryMovementsMovementsIndex.pasteAVariantIdTo')}
-          />
+          <ProductPick value={variantId} onChange={(id) => change(() => setVariantId(id))}>
+            <TextField
+              id="mv-variant"
+              label={tr('inventoryMovementsMovementsIndex.variantId')}
+              inputClassName="sk-ident"
+              value={variantId}
+              onChange={(e) => change(() => setVariantId(e.target.value))}
+              placeholder={tr('inventoryMovementsMovementsIndex.pasteAVariantIdTo')}
+            />
+          </ProductPick>
           <Select
             id="mv-wh"
             label={tr('inventoryMovementsMovementsIndex.warehouse')}

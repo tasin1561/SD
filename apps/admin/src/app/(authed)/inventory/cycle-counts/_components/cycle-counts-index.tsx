@@ -43,6 +43,13 @@ import {
 } from '../../_components/stock-kit';
 import { useLocale, useT } from '@/i18n/client';
 import { InfoButton } from '@/components/easy/info-button';
+import {
+  BatchPick,
+  BinPick,
+  ProductPick,
+  WarehouseName,
+  type PickedProduct,
+} from '@/components/easy/id-picks';
 import { formatDateTime } from '@/i18n/format';
 
 const PAGE_SIZE = 25;
@@ -174,7 +181,7 @@ export function CycleCountsIndex(): ReactElement {
                       <Code value={c.countType} />
                     </Td>
                     <Td>
-                      <Ident value={c.warehouseId} />
+                      <WarehouseName id={c.warehouseId} />
                     </Td>
                     <Td align="right" className="sk-figure">
                       <Num value={c.items.length} />
@@ -340,6 +347,7 @@ function CountDetail({
   const [binId, setBinId] = useState('');
   const [batchId, setBatchId] = useState('');
   const [countedQty, setCountedQty] = useState('');
+  const [lineProduct, setLineProduct] = useState<PickedProduct | null>(null);
   const [notes, setNotes] = useState('');
 
   const error = start.error ?? record.error ?? complete.error;
@@ -427,7 +435,7 @@ function CountDetail({
             items={[
               {
                 label: tr('inventoryCycleCountsCycleCountsIndex.warehouse'),
-                value: <Ident value={count.warehouseId} />,
+                value: <WarehouseName id={count.warehouseId} />,
               },
               {
                 label: tr('inventoryCycleCountsCycleCountsIndex.zone'),
@@ -456,14 +464,16 @@ function CountDetail({
             >
               <Panel>
                 <FieldGrid columns={2}>
-                  <TextField
-                    id="cc-variant"
-                    label={tr('inventoryCycleCountsCycleCountsIndex.variantId')}
-                    inputClassName="sk-ident"
-                    value={variantId}
-                    onChange={(e) => setVariantId(e.target.value)}
-                    placeholder="uuid"
-                  />
+                  <ProductPick value={variantId} onChange={setVariantId} known={lineProduct}>
+                    <TextField
+                      id="cc-variant"
+                      label={tr('inventoryCycleCountsCycleCountsIndex.variantId')}
+                      inputClassName="sk-ident"
+                      value={variantId}
+                      onChange={(e) => setVariantId(e.target.value)}
+                      placeholder="uuid"
+                    />
+                  </ProductPick>
                   <TextField
                     id="cc-qty"
                     label={tr('inventoryCycleCountsCycleCountsIndex.countedQuantity')}
@@ -473,22 +483,42 @@ function CountDetail({
                     value={countedQty}
                     onChange={(e) => setCountedQty(e.target.value)}
                   />
-                  <TextField
-                    id="cc-bin"
-                    label={tr('inventoryCycleCountsCycleCountsIndex.binId')}
-                    hint={tr('inventoryCycleCountsCycleCountsIndex.requiredACountIsPer')}
-                    inputClassName="sk-ident"
-                    value={binId}
-                    onChange={(e) => setBinId(e.target.value)}
-                  />
-                  <TextField
-                    id="cc-batch"
-                    label={tr('inventoryCycleCountsCycleCountsIndex.batchId')}
-                    hint={tr('inventoryCycleCountsCycleCountsIndex.requiredACountIsPer')}
-                    inputClassName="sk-ident"
+                  <BinPick warehouseId={count.warehouseId} value={binId} onChange={setBinId}>
+                    <TextField
+                      id="cc-bin"
+                      label={tr('inventoryCycleCountsCycleCountsIndex.binId')}
+                      hint={tr('inventoryCycleCountsCycleCountsIndex.requiredACountIsPer')}
+                      inputClassName="sk-ident"
+                      value={binId}
+                      onChange={(e) => setBinId(e.target.value)}
+                    />
+                  </BinPick>
+                  <BatchPick
+                    binId={binId}
+                    variantId={variantId}
                     value={batchId}
-                    onChange={(e) => setBatchId(e.target.value)}
-                  />
+                    onChange={setBatchId}
+                    onLine={(line) => {
+                      // The shelf line names the product too.
+                      setVariantId(line.variantId);
+                      setLineProduct({
+                        variantId: line.variantId,
+                        productName: line.productName,
+                        variantLabel: line.variantLabel,
+                        skuCode: line.skuCode,
+                        sellerCompanyName: line.sellerName,
+                      });
+                    }}
+                  >
+                    <TextField
+                      id="cc-batch"
+                      label={tr('inventoryCycleCountsCycleCountsIndex.batchId')}
+                      hint={tr('inventoryCycleCountsCycleCountsIndex.requiredACountIsPer')}
+                      inputClassName="sk-ident"
+                      value={batchId}
+                      onChange={(e) => setBatchId(e.target.value)}
+                    />
+                  </BatchPick>
                 </FieldGrid>
                 {/*
                   ITS OWN HINT. This carried the BIN AND BATCH one —

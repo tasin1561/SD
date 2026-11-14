@@ -17,6 +17,7 @@ import './pricing.css';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useT } from '@/i18n/client';
 import { InfoButton } from '@/components/easy/info-button';
+import { ClientPick } from '@/components/easy/id-picks';
 import '@/components/easy/easy.css';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
@@ -146,13 +147,15 @@ export function PricingIndex(): ReactElement {
 
       <MoSection title={t('pricingPricingIndex.theShipment')}>
         <div className="mo-fields" data-cols="2">
-          <TextField
-            id="pp-seller"
-            label={t('pricingPricingIndex.clientId')}
-            hint={t('pricingPricingIndex.theirRateCardAndDiscounts')}
-            value={form.sellerId}
-            onChange={(e) => set('sellerId', e.target.value)}
-          />
+          <ClientPick value={form.sellerId} onChange={(id) => set('sellerId', id)}>
+            <TextField
+              id="pp-seller"
+              label={t('pricingPricingIndex.clientId')}
+              hint={t('pricingPricingIndex.theirRateCardAndDiscounts')}
+              value={form.sellerId}
+              onChange={(e) => set('sellerId', e.target.value)}
+            />
+          </ClientPick>
           <TextField
             id="pp-pin"
             label={t('pricingPricingIndex.destinationPincode')}

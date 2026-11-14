@@ -5,7 +5,7 @@ import { Select } from '@skydrop/ui/app/select';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { useSellersList } from '@/lib/api-hooks';
 import { useBinOptions, type BinStockLine } from '@/lib/bin-contents-hooks';
-import { useProductLocations, type ProductLocationRow } from '@/lib/ops-hooks';
+import { useProductLocations, useWarehouseOptions, type ProductLocationRow } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { useT } from '@/i18n/client';
 import { useBinLines } from './use-bin-lines';
@@ -291,4 +291,11 @@ export function BatchPick({
       <ByHand open={empty}>{children}</ByHand>
     </div>
   );
+}
+
+/** A warehouse by its name; the id only while the list is not there. */
+export function WarehouseName({ id }: { readonly id: string }): ReactElement {
+  const warehouses = useWarehouseOptions();
+  const name = (warehouses.data ?? []).find((w) => w.id === id)?.name;
+  return name === undefined ? <span className="sk-ident">{id}</span> : <>{name}</>;
 }
