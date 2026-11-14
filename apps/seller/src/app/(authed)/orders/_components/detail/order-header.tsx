@@ -12,6 +12,7 @@ import { TooltipCard } from '@skydrop/ui/app/tooltip-card';
 import { useLocale, useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { LinkButton } from '../orders-parts';
+import { useOrderJourney } from '@/lib/api-hooks';
 import { CopyButton } from './copy-button';
 import { fmtFull, fmtWhen } from './format';
 
@@ -63,6 +64,16 @@ export function OrderHeader({
   );
   const status = order.status as OrderStatus;
   const crumb = `${t('orderDetail.clientConsole')} › ${t('orderDetail.orders')}`;
+  // The parcel journey the page already fetches (same query key, so no
+  // second request): every booked AWB, each once, in parcel order.
+  const journey = useOrderJourney(order.id);
+  const awbs = [
+    ...new Set(
+      (journey.data?.parcels ?? [])
+        .map((p) => p.awbNumber)
+        .filter((a): a is string => typeof a === 'string' && a.trim() !== ''),
+    ),
+  ];
   const primaryAsk = actions.askAdmin !== null;
   const primaryReattempt = !primaryAsk && actions.reattempt !== null;
 
@@ -81,8 +92,13 @@ export function OrderHeader({
         <Link href="/orders" className="cod-crumb">
           {t('orderDetail.orders')} <span aria-hidden>/</span>
         </Link>
-        <h1 className="cod-bar__no sk-ident">{order.orderNumber}</h1>
-        <CopyButton value={order.orderNumber} />
+        {/* Owner, 2026-11-14: the AWB leads, labelled "AWB"; with none
+            booked yet it reads "AWB ____". The order number moved to the
+            line below. The h1 stays the page's one heading. */}
+        <h1 className="cod-bar__no sk-ident" data-empty={awbs.length === 0 ? '1' : undefined}>
+          {t('orderPage.awbLabel')} {awbs.length === 0 ? '___________________' : awbs.join(' · ')}
+        </h1>
+        {awbs.length > 0 ? <CopyButton value={awbs.join(' ')} /> : null}
         <StatusChip
           kind={orderStatusKind(status)}
           label={statusLabel(status, locale)}
@@ -107,6 +123,10 @@ export function OrderHeader({
             was always the same time as "Last moved" (owner, 2026-11-13). The
             amount, contents and weight are in the summary sentence below. */}
         <p className="cod-meta__line">
+          <span className="cod-meta__order">
+            <span className="sk-ident">{order.orderNumber}</span>
+            <CopyButton value={order.orderNumber} />
+          </span>
           {order.sellerOrderRef ? (
             <span className="cod-ref">
               {richMessage(t('orderDetail.yourRef'), {

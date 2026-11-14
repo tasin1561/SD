@@ -2,7 +2,7 @@
 
 import type { ReactElement } from 'react';
 import { Check, PackageCheck, PackagePlus, ScanBarcode } from 'lucide-react';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
 
 /**
  * The whole pack job, as three numbered steps, permanently on screen.
@@ -22,25 +22,27 @@ import { useT } from '@/i18n/client';
  * are — so colour is never the only signal (a colour-blind packer reads
  * the numeral, the tick and the position).
  *
- * ── THREE LANGUAGES AT ONCE (2026-11-10, owner) ──────────────────────
- * The words under each step are English, বাংলা and हिन्दी together, for
- * exactly the reason the refusal dialog is (`pack-error-copy.ts`): a
- * packer who cannot read English cannot find the language switcher
- * either, and this strip is the thing that TEACHES the job — the worst
- * place on the screen to be monolingual.
+ * ── ONE LANGUAGE: THE ONE THE CONSOLE IS SET TO (2026-11-14, owner) ──
+ * From 2026-11-10 the words under each step were English, বাংলা and हिन्दी
+ * stacked together. The owner asked for only the chosen language: with
+ * English selected the strip reads in English, and so on. Three stacked
+ * lines under three steps was a lot of small text on a bench screen, and
+ * the numeral, the icon and the fill already carry the step for someone
+ * who reads none of them.
  *
- * They are deliberately SHORTER than the catalogue sentences they echo.
- * Three stacked lines × three steps has to fit across a 360px phone
- * without pushing the strip into a scroll, so each language gets three
- * words at most. The catalogue sentence survives as the step's ACCESSIBLE
- * name (one locale, read once) — a screen reader must not hear the same
- * instruction three times.
+ * The three short wordings are kept, one per language, and stay SHORTER
+ * than the catalogue sentences they echo so a step fits a 360px phone.
+ * The catalogue sentence is still the step's ACCESSIBLE name.
+ *
+ * The refusal dialog (`pack-error-copy.ts`) is a different thing and still
+ * shows all three languages: it appears when something has gone wrong,
+ * which is the moment a packer most needs to be able to read it.
  *
  * It is presentation only. It derives its state from what the bench
  * already knows and decides nothing.
  */
 
-/** One step's words, short, in all three. Western numerals everywhere. */
+/** One step's words, short, one per language. Western numerals everywhere. */
 export interface PackStepTriple {
   readonly en: string;
   readonly bn: string;
@@ -74,6 +76,9 @@ export const PACK_STEP_TRIPLES: readonly [PackStepTriple, PackStepTriple, PackSt
 
 export function PackStepStrip({ current }: { current: 1 | 2 | 3 }): ReactElement {
   const t = useT();
+  const locale = useLocale();
+  // Only the three languages the strip is written in; anything else reads English.
+  const lang: keyof PackStepTriple = locale === 'bn' || locale === 'hi' ? locale : 'en';
   const steps = [
     { n: 1, icon: <ScanBarcode />, label: t('warehousePackSteps.one'), tri: PACK_STEP_TRIPLES[0] },
     { n: 2, icon: <PackagePlus />, label: t('warehousePackSteps.two'), tri: PACK_STEP_TRIPLES[1] },
@@ -100,19 +105,12 @@ export function PackStepStrip({ current }: { current: 1 | 2 | 3 }): ReactElement
             <span className="wh-step__icon" aria-hidden>
               {s.icon}
             </span>
-            {/* The one translated sentence, for assistive tech only: the
-                three visible lines say the same thing three times and
-                nobody needs to hear that. */}
+            {/* The translated sentence is for assistive tech; the short
+                wording below is what the eye reads, in the chosen language. */}
             <span className="wh-sr">{s.label}</span>
             <span className="wh-step__label wh-step__tri" aria-hidden>
-              <span className="wh-step__line wh-step__line--lead" lang="en">
-                {s.tri.en}
-              </span>
-              <span className="wh-step__line" lang="bn">
-                {s.tri.bn}
-              </span>
-              <span className="wh-step__line" lang="hi">
-                {s.tri.hi}
+              <span className="wh-step__line wh-step__line--lead wh-step__line--only" lang={lang}>
+                {s.tri[lang]}
               </span>
             </span>
           </li>

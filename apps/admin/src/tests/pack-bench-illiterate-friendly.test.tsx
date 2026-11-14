@@ -14,7 +14,7 @@
  *      DOM, verbatim, for every refusal.
  */
 import { describe, expect, it } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PackStation } from '@/app/(authed)/warehouse/pack/_components/pack-station';
 import {
@@ -22,7 +22,11 @@ import {
   FALLBACK,
   packErrorCopy,
 } from '@/app/(authed)/warehouse/pack/_components/pack-error-copy';
-import { PACK_STEP_TRIPLES } from '@/app/(authed)/warehouse/pack/_components/pack-step-strip';
+import {
+  PACK_STEP_TRIPLES,
+  PackStepStrip,
+} from '@/app/(authed)/warehouse/pack/_components/pack-step-strip';
+import { LocaleProvider } from '@skydrop/ui/app/i18n-client';
 import { makeStaff, renderWithProviders } from './helpers';
 import { scanFetch, type Reply, type ScanRoute } from './scan-fetch';
 
@@ -619,8 +623,8 @@ describe('pack bench — what another bench is holding', () => {
   });
 });
 
-describe('pack bench — the step strip speaks all three languages', () => {
-  it('shows English, Bangla and Hindi under every step', async () => {
+describe('pack bench — the step strip speaks the chosen language only', () => {
+  it('shows English alone when the console is in English', async () => {
     renderBench([]);
     await waitFor(() => expect(document.activeElement).toBe(scanField()));
 
@@ -629,9 +633,30 @@ describe('pack bench — the step strip speaks all three languages', () => {
     steps.forEach((step, i) => {
       const triple = PACK_STEP_TRIPLES[i];
       expect(triple).toBeDefined();
-      expect(step.querySelector('[lang="en"]')?.textContent).toBe(triple?.en);
-      expect(step.querySelector('[lang="bn"]')?.textContent).toBe(triple?.bn);
-      expect(step.querySelector('[lang="hi"]')?.textContent).toBe(triple?.hi);
+      const lines = [...step.querySelectorAll('.wh-step__line')];
+      // One line, not three stacked.
+      expect(lines).toHaveLength(1);
+      expect(lines[0]?.getAttribute('lang')).toBe('en');
+      expect(lines[0]?.textContent).toBe(triple?.en);
+      expect(step.textContent).not.toContain(triple?.bn ?? '');
+      expect(step.textContent).not.toContain(triple?.hi ?? '');
+    });
+  });
+
+  it.each(['bn', 'hi'] as const)('shows %s alone when the console is in that language', (lang) => {
+    render(
+      <LocaleProvider initialLocale={lang}>
+        <PackStepStrip current={1} />
+      </LocaleProvider>,
+    );
+    const steps = [...document.querySelectorAll('.wh-step')];
+    expect(steps).toHaveLength(3);
+    steps.forEach((step, i) => {
+      const lines = [...step.querySelectorAll('.wh-step__line')];
+      expect(lines).toHaveLength(1);
+      expect(lines[0]?.getAttribute('lang')).toBe(lang);
+      expect(lines[0]?.textContent).toBe(PACK_STEP_TRIPLES[i]?.[lang]);
+      expect(step.textContent).not.toContain(PACK_STEP_TRIPLES[i]?.en ?? '');
     });
   });
 
@@ -641,7 +666,7 @@ describe('pack bench — the step strip speaks all three languages', () => {
 
     // The number is still there, and still its own signal.
     expect(document.querySelector('.wh-step__num')?.textContent).toBe('1');
-    // The three visible lines are hidden from assistive tech; the one
+    // The short visible line is hidden from assistive tech; the one
     // translated sentence is what it reads.
     const first = document.querySelectorAll('.wh-step')[0];
     expect(first?.querySelector('.wh-step__tri')?.getAttribute('aria-hidden')).toBe('true');
@@ -653,8 +678,7 @@ describe('pack bench — the step strip speaks all three languages', () => {
       expect(/[०-९০-৯]/.test(`${triple.en}${triple.bn}${triple.hi}`)).toBe(false);
       expect(/[ঀ-৿]/.test(triple.hi)).toBe(false);
       expect(/[ऀ-ॣ०-ॿ]/.test(triple.bn)).toBe(false);
-      // Short on purpose: three stacked lines × three steps must fit a
-      // 360px phone. Three words per language at most.
+      // Short on purpose: three steps side by side must fit a 360px phone.
       for (const line of [triple.en, triple.bn, triple.hi]) {
         expect(line.trim().split(/\s+/).length, line).toBeLessThanOrEqual(5);
       }

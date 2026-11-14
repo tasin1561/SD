@@ -84,8 +84,34 @@ export function OrderHeader({
               <ArrowLeft size={16} aria-hidden />
             </Link>
           </TooltipCard>
-          <span className="od-header__no sk-ident">{order.orderNumber}</span>
-          <CopyButton value={order.orderNumber} />
+          {/* Owner, 2026-11-14: the AWB leads (it is the number a courier, a
+              customer and the warehouse quote), labelled "AWB"; with none
+              booked yet the slot still reads "AWB ____" so it is plain one
+              is coming. The order number moved to the line below. */}
+          {awbs.length === 0 ? (
+            <span className="od-header__no od-header__no--empty sk-ident">
+              {t('orderDetail.header.awbLabel')} ___________________
+            </span>
+          ) : (
+            awbs.map((awb) => (
+              <span key={awb} className="od-header__lead">
+                <span className="od-header__no sk-ident">
+                  {t('orderDetail.header.awbLabel')} {awb}
+                </span>
+                <CopyButton value={awb} />
+                <a
+                  href={`${TRACK_URL}/${encodeURIComponent(awb)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="od-iconbtn od-iconbtn--sm"
+                  aria-label={`${t('ordersOrderShipmentsSection.publicTracking')}: ${awb}`}
+                  title={t('ordersOrderShipmentsSection.publicTracking')}
+                >
+                  <ExternalLink size={13} aria-hidden />
+                </a>
+              </span>
+            ))
+          )}
           {order.hasAdminOverride && (
             <span className="oc-override" title={t('orderDetail.override.title')}>
               <ShieldAlert size={12} aria-hidden />
@@ -116,22 +142,10 @@ export function OrderHeader({
               {t('orderDetail.clientRef')} <span className="sk-ident">{order.sellerOrderRef}</span>
             </span>
           ) : null}
-          {awbs.map((awb) => (
-            <span key={awb} className="od-header__awb">
-              <span className="sk-ident">{awb}</span>
-              <CopyButton value={awb} />
-              <a
-                href={`${TRACK_URL}/${encodeURIComponent(awb)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="od-iconbtn od-iconbtn--sm"
-                aria-label={`${t('ordersOrderShipmentsSection.publicTracking')}: ${awb}`}
-                title={t('ordersOrderShipmentsSection.publicTracking')}
-              >
-                <ExternalLink size={13} aria-hidden />
-              </a>
-            </span>
-          ))}
+          <span className="od-header__awb">
+            <span className="sk-ident">{order.orderNumber}</span>
+            <CopyButton value={order.orderNumber} />
+          </span>
           <span className="od-header__facts sk-figure">
             {[
               <span key="mode">{order.paymentMode}</span>,
