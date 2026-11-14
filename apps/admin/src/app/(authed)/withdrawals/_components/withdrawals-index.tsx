@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ArrowRight, Check, X } from 'lucide-react';
@@ -94,7 +95,8 @@ export function WithdrawalsIndex(): ReactElement {
   }
 
   return (
-    <div className="mk-page ez-touch ez-lead-2 ez-then-3">
+    <div className="mk-page ez-touch ez-lead-2 ez-then-3 ez-phone ez-cards">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">

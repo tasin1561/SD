@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { BillUnbilledCard, ChargesBackfillCard } from './charges-backfill-card';
 import { useState, type ReactElement } from 'react';
 import { useMutation, type UseMutationResult } from '@tanstack/react-query';
@@ -125,7 +126,8 @@ export function PricingIndex(): ReactElement {
   const r = preview.data;
 
   return (
-    <div className="mo-page ez-touch">
+    <div className="mo-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -281,46 +283,48 @@ export function PricingIndex(): ReactElement {
           </MoSection>
 
           <MoSection title={t('pricingPricingIndex.theCharge')} flush>
-            <Table caption={t('pricingPricingIndex.theCharge')}>
-              <THead>
-                <Tr>
-                  <Th>{t('pricingPricingIndex.line')}</Th>
-                  <Th align="right">{t('pricingPricingIndex.amount')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                <Tr>
-                  <Td>{t('pricingPricingIndex.baseShipping')}</Td>
-                  <Td align="right">
-                    <Money amount={r.baseShippingInr} />
-                  </Td>
-                </Tr>
-                {r.surcharges.map((s) => (
-                  <Tr key={`${s.type}-${s.description}`}>
-                    <Td>{s.description}</Td>
+            <div className="ez-wrap ez-cards ez-then-2">
+              <Table caption={t('pricingPricingIndex.theCharge')}>
+                <THead>
+                  <Tr>
+                    <Th>{t('pricingPricingIndex.line')}</Th>
+                    <Th align="right">{t('pricingPricingIndex.amount')}</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  <Tr>
+                    <Td>{t('pricingPricingIndex.baseShipping')}</Td>
                     <Td align="right">
-                      <Money amount={s.amountInr} />
+                      <Money amount={r.baseShippingInr} />
                     </Td>
                   </Tr>
-                ))}
-                <Tr>
-                  <Td>{t('pricingPricingIndex.gstAt', { gstRatePercent: r.gstRatePercent })}</Td>
-                  <Td align="right">
-                    <Money amount={r.gstAmountInr} />
-                  </Td>
-                </Tr>
-                <Tr className="mo-total-row">
-                  <Td>
-                    <strong>{t('pricingPricingIndex.total')}</strong>
-                  </Td>
-                  <Td align="right">
-                    <strong>
-                      <Money amount={r.totalInr} />
-                    </strong>
-                  </Td>
-                </Tr>
-              </TBody>
-            </Table>
+                  {r.surcharges.map((s) => (
+                    <Tr key={`${s.type}-${s.description}`}>
+                      <Td>{s.description}</Td>
+                      <Td align="right">
+                        <Money amount={s.amountInr} />
+                      </Td>
+                    </Tr>
+                  ))}
+                  <Tr>
+                    <Td>{t('pricingPricingIndex.gstAt', { gstRatePercent: r.gstRatePercent })}</Td>
+                    <Td align="right">
+                      <Money amount={r.gstAmountInr} />
+                    </Td>
+                  </Tr>
+                  <Tr className="mo-total-row">
+                    <Td>
+                      <strong>{t('pricingPricingIndex.total')}</strong>
+                    </Td>
+                    <Td align="right">
+                      <strong>
+                        <Money amount={r.totalInr} />
+                      </strong>
+                    </Td>
+                  </Tr>
+                </TBody>
+              </Table>
+            </div>
           </MoSection>
 
           <MoSection

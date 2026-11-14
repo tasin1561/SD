@@ -98,64 +98,66 @@ export function SellerSettingsSection({ sellerId }: { readonly sellerId: string 
           description={t('sellersSellerSettingsSection.aKeyBecomesSettablePer')}
         />
       ) : (
-        <Table caption={t('sellersSellerSettingsSection.settingsForThisClient')}>
-          <THead>
-            <Tr>
-              <Th>{t('sellersSellerSettingsSection.setting')}</Th>
-              <Th>{t('sellersSellerSettingsSection.inEffect')}</Th>
-              <Th>{t('sellersSellerSettingsSection.systemDefault')}</Th>
-              <Th>{t('sellersSellerSettingsSection.source')}</Th>
-              <Th align="right">{t('sellersSellerSettingsSection.actions')}</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {items.map((s) => (
-              <Tr key={s.key}>
-                <Td>
-                  <SettingName settingKey={s.key} showGroup />
-                </Td>
-                <Td>
-                  <span className="ac-strong">{settingValueLabel(s.key, s.value)}</span>
-                </Td>
-                <Td>
-                  <span className="ac-faint">{settingValueLabel(s.key, s.systemDefault)}</span>
-                </Td>
-                <Td>
-                  <StatusChip
-                    kind={s.source === 'SELLER_OVERRIDE' ? 'confirmed' : 'draft'}
-                    label={s.source === 'SELLER_OVERRIDE' ? 'override' : 'default'}
-                    size="sm"
-                  />
-                </Td>
-                <Td align="right">
-                  <div className="ac-buttons">
-                    <Button
-                      variant="ghost"
+        <div className="ez-wrap ez-cards">
+          <Table caption={t('sellersSellerSettingsSection.settingsForThisClient')}>
+            <THead>
+              <Tr>
+                <Th>{t('sellersSellerSettingsSection.setting')}</Th>
+                <Th>{t('sellersSellerSettingsSection.inEffect')}</Th>
+                <Th>{t('sellersSellerSettingsSection.systemDefault')}</Th>
+                <Th>{t('sellersSellerSettingsSection.source')}</Th>
+                <Th align="right">{t('sellersSellerSettingsSection.actions')}</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {items.map((s) => (
+                <Tr key={s.key}>
+                  <Td>
+                    <SettingName settingKey={s.key} showGroup />
+                  </Td>
+                  <Td>
+                    <span className="ac-strong">{settingValueLabel(s.key, s.value)}</span>
+                  </Td>
+                  <Td>
+                    <span className="ac-faint">{settingValueLabel(s.key, s.systemDefault)}</span>
+                  </Td>
+                  <Td>
+                    <StatusChip
+                      kind={s.source === 'SELLER_OVERRIDE' ? 'confirmed' : 'draft'}
+                      label={s.source === 'SELLER_OVERRIDE' ? 'override' : 'default'}
                       size="sm"
-                      icon={<SlidersHorizontal size={14} />}
-                      onClick={() => setEditing(s)}
-                    >
-                      {s.source === 'SELLER_OVERRIDE'
-                        ? t('sellersSellerSettingsSection.change')
-                        : t('sellersSellerSettingsSection.override')}
-                    </Button>
-                    {s.source === 'SELLER_OVERRIDE' && (
+                    />
+                  </Td>
+                  <Td align="right">
+                    <div className="ac-buttons">
                       <Button
                         variant="ghost"
                         size="sm"
-                        icon={<RotateCcw size={14} />}
-                        disabled={clear.isPending}
-                        onClick={() => clear.mutate({ key: s.key })}
+                        icon={<SlidersHorizontal size={14} />}
+                        onClick={() => setEditing(s)}
                       >
-                        {t('sellersSellerSettingsSection.reset')}
+                        {s.source === 'SELLER_OVERRIDE'
+                          ? t('sellersSellerSettingsSection.change')
+                          : t('sellersSellerSettingsSection.override')}
                       </Button>
-                    )}
-                  </div>
-                </Td>
-              </Tr>
-            ))}
-          </TBody>
-        </Table>
+                      {s.source === 'SELLER_OVERRIDE' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={<RotateCcw size={14} />}
+                          disabled={clear.isPending}
+                          onClick={() => clear.mutate({ key: s.key })}
+                        >
+                          {t('sellersSellerSettingsSection.reset')}
+                        </Button>
+                      )}
+                    </div>
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </div>
       )}
 
       {clear.error !== null && (

@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
@@ -123,7 +124,8 @@ export function LeadsIndex(): ReactElement {
     // A dense table is the opposite — every extra pixel goes into the
     // columns, and the contact column in particular was truncating names
     // while a third of the screen sat unused.
-    <div className="ez-touch ez-wrap">
+    <div className="ez-touch ez-wrap ez-phone">
+      <TidyCards />
       <AcPage>
         <AcHeader
           title={
@@ -189,67 +191,69 @@ export function LeadsIndex(): ReactElement {
           />
         ) : (
           <AcCard flush>
-            <Table caption={tr('leadsLeadsIndex.inviteRequests')}>
-              <THead>
-                <Tr>
-                  <Th>{tr('leadsLeadsIndex.company')}</Th>
-                  <Th>{tr('leadsLeadsIndex.contact')}</Th>
-                  <Th>{tr('leadsLeadsIndex.route')}</Th>
-                  <Th>{tr('leadsLeadsIndex.volume')}</Th>
-                  <Th>{tr('leadsLeadsIndex.status')}</Th>
-                  <Th align="right">{tr('leadsLeadsIndex.waiting')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {items.map((lead) => {
-                  const dir =
-                    lead.shippingDirection === null
-                      ? null
-                      : DIRECTION_SHORT(tr)[lead.shippingDirection];
-                  return (
-                    <Tr key={lead.id} onActivate={() => setSelected(lead)}>
-                      <Td>
-                        <span className="ac-cell-main">{lead.companyName}</span>
-                        {lead.submissionCount > 1 && (
-                          <>
-                            {' '}
-                            <AcFact tone="warn">×{lead.submissionCount}</AcFact>
-                          </>
-                        )}
-                      </Td>
-                      <Td>
-                        <span className="ac-text">{lead.fullName}</span>
-                        <span className="ac-cell-sub">{lead.email}</span>
-                      </Td>
-                      <Td>
-                        {dir === undefined || dir === null ? (
-                          <span className="ac-faint">—</span>
-                        ) : dir.unserved ? (
-                          <AcFact tone="bad">{dir.text}</AcFact>
-                        ) : (
-                          <span>{dir.text}</span>
-                        )}
-                      </Td>
-                      <Td>
-                        <span className="ac-muted">{lead.monthlyOrders ?? '—'}</span>
-                      </Td>
-                      <Td>
-                        <StatusChip
-                          kind={inviteLeadStatusKind(lead.status as InviteLeadStatus)}
-                          label={code(lead.status)}
-                          size="sm"
-                        />
-                      </Td>
-                      <Td align="right">
-                        <AcFact tone={waitTone(lead.createdAt)}>
-                          <span className="sk-figure">{waited(lead.createdAt)}</span>
-                        </AcFact>
-                      </Td>
-                    </Tr>
-                  );
-                })}
-              </TBody>
-            </Table>
+            <div className="ez-wrap ez-cards">
+              <Table caption={tr('leadsLeadsIndex.inviteRequests')}>
+                <THead>
+                  <Tr>
+                    <Th>{tr('leadsLeadsIndex.company')}</Th>
+                    <Th>{tr('leadsLeadsIndex.contact')}</Th>
+                    <Th>{tr('leadsLeadsIndex.route')}</Th>
+                    <Th>{tr('leadsLeadsIndex.volume')}</Th>
+                    <Th>{tr('leadsLeadsIndex.status')}</Th>
+                    <Th align="right">{tr('leadsLeadsIndex.waiting')}</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {items.map((lead) => {
+                    const dir =
+                      lead.shippingDirection === null
+                        ? null
+                        : DIRECTION_SHORT(tr)[lead.shippingDirection];
+                    return (
+                      <Tr key={lead.id} onActivate={() => setSelected(lead)}>
+                        <Td>
+                          <span className="ac-cell-main">{lead.companyName}</span>
+                          {lead.submissionCount > 1 && (
+                            <>
+                              {' '}
+                              <AcFact tone="warn">×{lead.submissionCount}</AcFact>
+                            </>
+                          )}
+                        </Td>
+                        <Td>
+                          <span className="ac-text">{lead.fullName}</span>
+                          <span className="ac-cell-sub">{lead.email}</span>
+                        </Td>
+                        <Td>
+                          {dir === undefined || dir === null ? (
+                            <span className="ac-faint">—</span>
+                          ) : dir.unserved ? (
+                            <AcFact tone="bad">{dir.text}</AcFact>
+                          ) : (
+                            <span>{dir.text}</span>
+                          )}
+                        </Td>
+                        <Td>
+                          <span className="ac-muted">{lead.monthlyOrders ?? '—'}</span>
+                        </Td>
+                        <Td>
+                          <StatusChip
+                            kind={inviteLeadStatusKind(lead.status as InviteLeadStatus)}
+                            label={code(lead.status)}
+                            size="sm"
+                          />
+                        </Td>
+                        <Td align="right">
+                          <AcFact tone={waitTone(lead.createdAt)}>
+                            <span className="sk-figure">{waited(lead.createdAt)}</span>
+                          </AcFact>
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </TBody>
+              </Table>
+            </div>
           </AcCard>
         )}
 

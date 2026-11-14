@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useState, type ReactElement } from 'react';
 import { History, PencilLine } from 'lucide-react';
 import { PageHeader } from '@skydrop/ui/app/page-header';
@@ -31,7 +32,8 @@ export function FxRatesIndex(): ReactElement {
   const toast = useToast();
 
   return (
-    <div className="mk-page ez-touch">
+    <div className="mk-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -58,87 +60,89 @@ export function FxRatesIndex(): ReactElement {
         />
       ) : (
         <MkCard flush>
-          <Table caption={t('fxFxRatesIndex.exchangeRates')}>
-            <THead>
-              <Tr>
-                <Th>{t('fxFxRatesIndex.pair')}</Th>
-                <Th align="right">{t('fxFxRatesIndex.rate')}</Th>
-                <Th>{t('fxFxRatesIndex.source')}</Th>
-                <Th>{t('fxFxRatesIndex.fetched')}</Th>
-                <Th align="right">{t('fxFxRatesIndex.actions')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {list.data.map((r) => (
-                <Tr key={`${r.fromCurrency}-${r.toCurrency}`}>
-                  <Td className="mk-strong">
-                    {r.fromCurrency} → {r.toCurrency}
-                  </Td>
-                  <Td align="right" className="mk-strong sk-figure">
-                    {Number(r.rate).toFixed(6)}
-                  </Td>
-                  <Td className="mk-small mk-body">
-                    {/* A rate OUT of INR is set by hand; the way back is
-                        generated from it. Saying so here is what stops
-                        someone treating the pair as two numbers to keep
-                        in step by eye — which is how they drifted. */}
-                    {r.fromCurrency === 'INR' ? (
-                      <>
-                        {r.source}
-                        {r.isManualOverride && (
-                          <span className="mk-tag">{t('fxFxRatesIndex.manual')}</span>
-                        )}
-                      </>
-                    ) : (
-                      <span className="mk-small">{t('fxFxRatesIndex.derivedExactInverse')}</span>
-                    )}
-                  </Td>
-                  <Td className="mk-when sk-figure">
-                    <When iso={r.fetchedAt} time />
-                  </Td>
-                  <Td align="right">
-                    <div className="mk-actions">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<History size={14} />}
-                        onClick={() =>
-                          setHistoryOf({
-                            from: r.fromCurrency,
-                            to: r.toCurrency,
-                          })
-                        }
-                      >
-                        {t('fxFxRatesIndex.timeline')}
-                      </Button>
-                      {canWrite &&
-                        (r.fromCurrency === 'INR' ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            icon={<PencilLine size={14} />}
-                            onClick={() => setEditing(r)}
-                          >
-                            {t('fxFxRatesIndex.override')}
-                          </Button>
-                        ) : (
-                          // Not offered, because the server refuses it
-                          // (FX_DERIVED_DIRECTION). One number decides
-                          // both directions; a second one typed by hand
-                          // is how a round trip starts losing a paisa.
-                          <span className="mk-faint">
-                            {t('fxFxRatesIndex.set', {
-                              toCurrency: r.toCurrency,
-                              fromCurrency: r.fromCurrency,
-                            })}
-                          </span>
-                        ))}
-                    </div>
-                  </Td>
+          <div className="ez-wrap ez-cards ez-then-2">
+            <Table caption={t('fxFxRatesIndex.exchangeRates')}>
+              <THead>
+                <Tr>
+                  <Th>{t('fxFxRatesIndex.pair')}</Th>
+                  <Th align="right">{t('fxFxRatesIndex.rate')}</Th>
+                  <Th>{t('fxFxRatesIndex.source')}</Th>
+                  <Th>{t('fxFxRatesIndex.fetched')}</Th>
+                  <Th align="right">{t('fxFxRatesIndex.actions')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {list.data.map((r) => (
+                  <Tr key={`${r.fromCurrency}-${r.toCurrency}`}>
+                    <Td className="mk-strong">
+                      {r.fromCurrency} → {r.toCurrency}
+                    </Td>
+                    <Td align="right" className="mk-strong sk-figure">
+                      {Number(r.rate).toFixed(6)}
+                    </Td>
+                    <Td className="mk-small mk-body">
+                      {/* A rate OUT of INR is set by hand; the way back is
+                          generated from it. Saying so here is what stops
+                          someone treating the pair as two numbers to keep
+                          in step by eye — which is how they drifted. */}
+                      {r.fromCurrency === 'INR' ? (
+                        <>
+                          {r.source}
+                          {r.isManualOverride && (
+                            <span className="mk-tag">{t('fxFxRatesIndex.manual')}</span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="mk-small">{t('fxFxRatesIndex.derivedExactInverse')}</span>
+                      )}
+                    </Td>
+                    <Td className="mk-when sk-figure">
+                      <When iso={r.fetchedAt} time />
+                    </Td>
+                    <Td align="right">
+                      <div className="mk-actions">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={<History size={14} />}
+                          onClick={() =>
+                            setHistoryOf({
+                              from: r.fromCurrency,
+                              to: r.toCurrency,
+                            })
+                          }
+                        >
+                          {t('fxFxRatesIndex.timeline')}
+                        </Button>
+                        {canWrite &&
+                          (r.fromCurrency === 'INR' ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              icon={<PencilLine size={14} />}
+                              onClick={() => setEditing(r)}
+                            >
+                              {t('fxFxRatesIndex.override')}
+                            </Button>
+                          ) : (
+                            // Not offered, because the server refuses it
+                            // (FX_DERIVED_DIRECTION). One number decides
+                            // both directions; a second one typed by hand
+                            // is how a round trip starts losing a paisa.
+                            <span className="mk-faint">
+                              {t('fxFxRatesIndex.set', {
+                                toCurrency: r.toCurrency,
+                                fromCurrency: r.fromCurrency,
+                              })}
+                            </span>
+                          ))}
+                      </div>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
         </MkCard>
       )}
 

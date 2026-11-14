@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
@@ -163,7 +164,8 @@ export function CourierEscalationIndex(): ReactElement {
   const rows = outbox.data ?? [];
 
   return (
-    <div className="af-page ez-touch">
+    <div className="af-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         breadcrumbs={[
           { label: t('courierEscalationCourierEscalationIndex.network') },
@@ -397,183 +399,185 @@ export function CourierEscalationIndex(): ReactElement {
             description={t('courierEscalationCourierEscalationIndex.messagesArriveHereWhenA')}
           />
         ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>{t('courierEscalationCourierEscalationIndex.parcel')}</Th>
-                <Th>{t('courierEscalationCourierEscalationIndex.message')}</Th>
-                <Th>{t('courierEscalationCourierEscalationIndex.status')}</Th>
-                <Th>{t('courierEscalationCourierEscalationIndex.actions')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.map((item: OpsQueueItem) => (
-                <Tr key={item.id}>
-                  <Td>
-                    <div className="af-stack af-stack--tight">
-                      <span className="af-strong sk-ident">
-                        {item.awbNumber ?? t('courierEscalationCourierEscalationIndex.noAwb')}
-                      </span>
-                      <span className="af-small">
-                        {item.courierName} · {item.sellerName ?? '—'}
-                      </span>
-                      <a
-                        href={item.deepLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="af-link af-small ce-ext"
-                      >
-                        {item.externalTicketId == null
-                          ? t('courierEscalationCourierEscalationIndex.raiseATicket')
-                          : t('courierEscalationCourierEscalationIndex.ticket', {
-                              externalTicketId: item.externalTicketId,
-                            })}
-                        <ExternalLink size={11} aria-hidden />
-                      </a>
-                      {item.supportPanelUrl !== null && item.supportPanelUrl !== item.deepLink ? (
+          <div className="ez-wrap ez-cards">
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>{t('courierEscalationCourierEscalationIndex.parcel')}</Th>
+                  <Th>{t('courierEscalationCourierEscalationIndex.message')}</Th>
+                  <Th>{t('courierEscalationCourierEscalationIndex.status')}</Th>
+                  <Th>{t('courierEscalationCourierEscalationIndex.actions')}</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {rows.map((item: OpsQueueItem) => (
+                  <Tr key={item.id}>
+                    <Td>
+                      <div className="af-stack af-stack--tight">
+                        <span className="af-strong sk-ident">
+                          {item.awbNumber ?? t('courierEscalationCourierEscalationIndex.noAwb')}
+                        </span>
+                        <span className="af-small">
+                          {item.courierName} · {item.sellerName ?? '—'}
+                        </span>
                         <a
-                          href={item.supportPanelUrl}
+                          href={item.deepLink}
                           target="_blank"
                           rel="noreferrer"
                           className="af-link af-small ce-ext"
                         >
-                          {t('courierEscalationCourierEscalationIndex.support', {
-                            courierName: item.courierName,
-                          })}
+                          {item.externalTicketId == null
+                            ? t('courierEscalationCourierEscalationIndex.raiseATicket')
+                            : t('courierEscalationCourierEscalationIndex.ticket', {
+                                externalTicketId: item.externalTicketId,
+                              })}
                           <ExternalLink size={11} aria-hidden />
                         </a>
-                      ) : null}
-                      <span className="af-small">
-                        {item.supportEmail ??
-                          t('courierEscalationCourierEscalationIndex.noSupportEmailSet', {
-                            supportEmailSettingKey: item.supportEmailSettingKey,
-                          })}
-                      </span>
-                    </div>
-                  </Td>
-                  <Td>
-                    {/* Verbatim. Never truncated in a way that changes it —
-                        the operator pastes exactly this. */}
-                    <div className="af-stack af-stack--tight ce-message">
-                      <pre className="af-pre" data-dense="1">
-                        {item.body}
-                      </pre>
-                      <div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={<Copy size={13} />}
-                          onClick={() => copy(item.body)}
-                        >
-                          {t('courierEscalationCourierEscalationIndex.copy')}
-                        </Button>
-                      </div>
-                    </div>
-                  </Td>
-                  <Td>
-                    <div className="af-stack af-stack--tight">
-                      <StatusChip
-                        size="sm"
-                        kind={
-                          item.status === 'SENT_UNCONFIRMED'
-                            ? 'pending'
-                            : item.status === 'SENDING'
-                              ? 'in-transit'
-                              : 'draft'
-                        }
-                        label={code(item.status)}
-                      />
-                      {item.lastError != null ? (
-                        <span className="af-small ce-error-text">{item.lastError}</span>
-                      ) : null}
-                    </div>
-                  </Td>
-                  <Td>
-                    <div className="af-stack af-stack--tight ce-actions">
-                      {!canWrite ? (
+                        {item.supportPanelUrl !== null && item.supportPanelUrl !== item.deepLink ? (
+                          <a
+                            href={item.supportPanelUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="af-link af-small ce-ext"
+                          >
+                            {t('courierEscalationCourierEscalationIndex.support', {
+                              courierName: item.courierName,
+                            })}
+                            <ExternalLink size={11} aria-hidden />
+                          </a>
+                        ) : null}
                         <span className="af-small">
-                          {t('courierEscalationCourierEscalationIndex.viewOnly')}
+                          {item.supportEmail ??
+                            t('courierEscalationCourierEscalationIndex.noSupportEmailSet', {
+                              supportEmailSettingKey: item.supportEmailSettingKey,
+                            })}
                         </span>
-                      ) : null}
-                      {canWrite && item.status === 'PENDING' ? (
-                        <AsyncButton
-                          variant="primary"
+                      </div>
+                    </Td>
+                    <Td>
+                      {/* Verbatim. Never truncated in a way that changes it —
+                          the operator pastes exactly this. */}
+                      <div className="af-stack af-stack--tight ce-message">
+                        <pre className="af-pre" data-dense="1">
+                          {item.body}
+                        </pre>
+                        <div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<Copy size={13} />}
+                            onClick={() => copy(item.body)}
+                          >
+                            {t('courierEscalationCourierEscalationIndex.copy')}
+                          </Button>
+                        </div>
+                      </div>
+                    </Td>
+                    <Td>
+                      <div className="af-stack af-stack--tight">
+                        <StatusChip
                           size="sm"
-                          labels={{
-                            idle: t('courierEscalationCourierEscalationIndex.claim'),
-                            busy: t('courierEscalationCourierEscalationIndex.claiming'),
-                            done: t('courierEscalationCourierEscalationIndex.claimed'),
-                          }}
-                          onAction={() =>
-                            act(
-                              () => claim.mutateAsync(item.id),
-                              t('courierEscalationCourierEscalationIndex.claimedFor10Minutes'),
-                            )
+                          kind={
+                            item.status === 'SENT_UNCONFIRMED'
+                              ? 'pending'
+                              : item.status === 'SENDING'
+                                ? 'in-transit'
+                                : 'draft'
                           }
+                          label={code(item.status)}
                         />
-                      ) : null}
-                      {canWrite && item.status === 'SENDING' ? (
-                        <>
-                          <TextField
-                            label={t('courierEscalationCourierEscalationIndex.ticketId')}
-                            placeholder={t(
-                              'courierEscalationCourierEscalationIndex.ticketIdPasteItHere',
-                            )}
-                            value={ticketIds[item.id] ?? ''}
-                            onChange={(e) =>
-                              setTicketIds((s) => ({ ...s, [item.id]: e.target.value }))
-                            }
-                          />
+                        {item.lastError != null ? (
+                          <span className="af-small ce-error-text">{item.lastError}</span>
+                        ) : null}
+                      </div>
+                    </Td>
+                    <Td>
+                      <div className="af-stack af-stack--tight ce-actions">
+                        {!canWrite ? (
+                          <span className="af-small">
+                            {t('courierEscalationCourierEscalationIndex.viewOnly')}
+                          </span>
+                        ) : null}
+                        {canWrite && item.status === 'PENDING' ? (
                           <AsyncButton
                             variant="primary"
                             size="sm"
                             labels={{
-                              idle: t('courierEscalationCourierEscalationIndex.markSent'),
-                              busy: t('courierEscalationCourierEscalationIndex.recording'),
-                              done: t('courierEscalationCourierEscalationIndex.recorded'),
+                              idle: t('courierEscalationCourierEscalationIndex.claim'),
+                              busy: t('courierEscalationCourierEscalationIndex.claiming'),
+                              done: t('courierEscalationCourierEscalationIndex.claimed'),
                             }}
                             onAction={() =>
                               act(
-                                () =>
-                                  markSent.mutateAsync({
-                                    itemId: item.id,
-                                    ...(((ticketIds[item.id] ?? '').trim() === ''
-                                      ? {}
-                                      : {
-                                          externalTicketId: (ticketIds[item.id] ?? '').trim(),
-                                        }) as {
-                                      externalTicketId?: string;
+                                () => claim.mutateAsync(item.id),
+                                t('courierEscalationCourierEscalationIndex.claimedFor10Minutes'),
+                              )
+                            }
+                          />
+                        ) : null}
+                        {canWrite && item.status === 'SENDING' ? (
+                          <>
+                            <TextField
+                              label={t('courierEscalationCourierEscalationIndex.ticketId')}
+                              placeholder={t(
+                                'courierEscalationCourierEscalationIndex.ticketIdPasteItHere',
+                              )}
+                              value={ticketIds[item.id] ?? ''}
+                              onChange={(e) =>
+                                setTicketIds((s) => ({ ...s, [item.id]: e.target.value }))
+                              }
+                            />
+                            <AsyncButton
+                              variant="primary"
+                              size="sm"
+                              labels={{
+                                idle: t('courierEscalationCourierEscalationIndex.markSent'),
+                                busy: t('courierEscalationCourierEscalationIndex.recording'),
+                                done: t('courierEscalationCourierEscalationIndex.recorded'),
+                              }}
+                              onAction={() =>
+                                act(
+                                  () =>
+                                    markSent.mutateAsync({
+                                      itemId: item.id,
+                                      ...(((ticketIds[item.id] ?? '').trim() === ''
+                                        ? {}
+                                        : {
+                                            externalTicketId: (ticketIds[item.id] ?? '').trim(),
+                                          }) as {
+                                        externalTicketId?: string;
+                                      }),
                                     }),
-                                  }),
-                                t(
-                                  'courierEscalationCourierEscalationIndex.recordedAsSentAwaitingRead',
-                                ),
-                              )
-                            }
-                          />
-                          <AsyncButton
-                            variant="ghost"
-                            size="sm"
-                            labels={{
-                              idle: t('courierEscalationCourierEscalationIndex.giveBack'),
-                              busy: t('courierEscalationCourierEscalationIndex.returning'),
-                              done: t('courierEscalationCourierEscalationIndex.returned'),
-                            }}
-                            onAction={() =>
-                              act(
-                                () => release.mutateAsync(item.id),
-                                t('courierEscalationCourierEscalationIndex.returnedToTheQueue'),
-                              )
-                            }
-                          />
-                        </>
-                      ) : null}
-                    </div>
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
+                                  t(
+                                    'courierEscalationCourierEscalationIndex.recordedAsSentAwaitingRead',
+                                  ),
+                                )
+                              }
+                            />
+                            <AsyncButton
+                              variant="ghost"
+                              size="sm"
+                              labels={{
+                                idle: t('courierEscalationCourierEscalationIndex.giveBack'),
+                                busy: t('courierEscalationCourierEscalationIndex.returning'),
+                                done: t('courierEscalationCourierEscalationIndex.returned'),
+                              }}
+                              onAction={() =>
+                                act(
+                                  () => release.mutateAsync(item.id),
+                                  t('courierEscalationCourierEscalationIndex.returnedToTheQueue'),
+                                )
+                              }
+                            />
+                          </>
+                        ) : null}
+                      </div>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
         )}
       </AfSection>
 

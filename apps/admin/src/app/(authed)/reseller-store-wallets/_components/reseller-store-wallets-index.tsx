@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { pageDateTag } from '@/components/easy/when';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -88,7 +89,8 @@ export function ResellerStoreWalletsIndex(): ReactElement {
   const storeId = raw !== null && UUID_RE.test(raw) ? raw : null;
   const scoped = useAdminStoreWallet(storeId ?? '', storeId !== null);
   return (
-    <div className="mk-page ez-touch ez-lead-2 ez-then-4">
+    <div className="mk-page ez-touch ez-lead-2 ez-then-4 ez-phone ez-cards">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">

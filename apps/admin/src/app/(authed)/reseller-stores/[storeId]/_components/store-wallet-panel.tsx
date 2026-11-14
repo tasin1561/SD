@@ -134,45 +134,47 @@ export function StoreWalletPanel({ storeId }: { readonly storeId: string }): Rea
         <EmptyState title={t('resellerStoresStoreIdStoreWalletPanel.nothingHasMovedYet')} />
       ) : (
         <AcCard flush>
-          <Table caption={t('resellerStoresStoreIdStoreWalletPanel.storeWalletLedger')}>
-            <THead>
-              <Tr>
-                <Th>{t('resellerStoresStoreIdStoreWalletPanel.when')}</Th>
-                <Th>{t('resellerStoresStoreIdStoreWalletPanel.what')}</Th>
-                <Th align="right">{t('resellerStoresStoreIdStoreWalletPanel.amount')}</Th>
-                <Th align="right">{t('resellerStoresStoreIdStoreWalletPanel.balanceAfter')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.map((e) => (
-                <Tr key={e.id}>
-                  <Td>
-                    <span className="sk-figure ac-faint">{when(e.createdAt)}</span>
-                  </Td>
-                  <Td>
-                    <span className="ac-cell-main">
-                      {storeWalletDirectionLabel(e.direction, summary.data?.sellerCompanyName)}
-                    </span>
-                    {e.linkedOrderId !== null ? (
-                      <Link href={`/orders/${e.linkedOrderId}`} className="ac-link ac-cell-sub">
-                        {t('resellerStoresStoreIdStoreWalletPanel.seeTheOrder')}
-                      </Link>
-                    ) : null}
-                    {e.note !== null ? <span className="ac-cell-sub">{e.note}</span> : null}
-                  </Td>
-                  <Td align="right">
-                    <Money
-                      amount={e.amountInr}
-                      direction={isStoreWalletCredit(e.direction) ? 'credit' : 'debit'}
-                    />
-                  </Td>
-                  <Td align="right">
-                    <Money amount={e.runningBalanceAfterInr} />
-                  </Td>
+          <div className="ez-wrap ez-cards ez-lead-2 ez-then-3">
+            <Table caption={t('resellerStoresStoreIdStoreWalletPanel.storeWalletLedger')}>
+              <THead>
+                <Tr>
+                  <Th>{t('resellerStoresStoreIdStoreWalletPanel.when')}</Th>
+                  <Th>{t('resellerStoresStoreIdStoreWalletPanel.what')}</Th>
+                  <Th align="right">{t('resellerStoresStoreIdStoreWalletPanel.amount')}</Th>
+                  <Th align="right">{t('resellerStoresStoreIdStoreWalletPanel.balanceAfter')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {rows.map((e) => (
+                  <Tr key={e.id}>
+                    <Td>
+                      <span className="sk-figure ac-faint">{when(e.createdAt)}</span>
+                    </Td>
+                    <Td>
+                      <span className="ac-cell-main">
+                        {storeWalletDirectionLabel(e.direction, summary.data?.sellerCompanyName)}
+                      </span>
+                      {e.linkedOrderId !== null ? (
+                        <Link href={`/orders/${e.linkedOrderId}`} className="ac-link ac-cell-sub">
+                          {t('resellerStoresStoreIdStoreWalletPanel.seeTheOrder')}
+                        </Link>
+                      ) : null}
+                      {e.note !== null ? <span className="ac-cell-sub">{e.note}</span> : null}
+                    </Td>
+                    <Td align="right">
+                      <Money
+                        amount={e.amountInr}
+                        direction={isStoreWalletCredit(e.direction) ? 'credit' : 'debit'}
+                      />
+                    </Td>
+                    <Td align="right">
+                      <Money amount={e.runningBalanceAfterInr} />
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
           <div className="ac-pad ac-toolbar">
             <p className="ac-muted">
               {entries.hasNextPage

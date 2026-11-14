@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { pageDateTag } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
 import { Code } from '@/components/easy/code-label';
@@ -56,7 +57,8 @@ export function ShiprocketOpsIndex(): ReactElement {
   const stubbedButLive = d?.liveMode === false && d?.intakeEnabled === true;
 
   return (
-    <div className="af-page ez-touch">
+    <div className="af-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         breadcrumbs={[
           { label: t('shiprocketShiprocketOpsIndex.network') },
@@ -189,51 +191,53 @@ export function ShiprocketOpsIndex(): ReactElement {
             title={t('shiprocketShiprocketOpsIndex.accounts')}
             note={t('shiprocketShiprocketOpsIndex.thePickupLocationNameIs')}
           >
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>{t('shiprocketShiprocketOpsIndex.account')}</Th>
-                  <Th>{t('shiprocketShiprocketOpsIndex.pickupLocation')}</Th>
-                  <Th align="right">{t('shiprocketShiprocketOpsIndex.wallet')}</Th>
-                  <Th>{t('shiprocketShiprocketOpsIndex.read')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {d?.accounts.length === 0 ? (
-                  <TableEmpty colSpan={4}>
-                    {t('shiprocketShiprocketOpsIndex.noShiprocketAccountIsConfigured')}
-                  </TableEmpty>
-                ) : (
-                  d?.accounts.map((a) => (
-                    <Tr key={a.courierAccountId}>
-                      <Td>
-                        <span>{a.label}</span>
-                        {!a.isActive && <span className="af-faint"> (inactive)</span>}
-                      </Td>
-                      <Td>
-                        {a.pickupLocationName === null ? (
-                          <span className="af-small af-bad">
-                            {t('shiprocketShiprocketOpsIndex.notSetBookingsRefuse')}
-                          </span>
-                        ) : (
-                          <span className="sk-ident af-small">{a.pickupLocationName}</span>
-                        )}
-                      </Td>
-                      <Td align="right">
-                        {a.walletBalanceInr === null ? (
-                          <span className="af-faint">—</span>
-                        ) : (
-                          <Money amount={a.walletBalanceInr} />
-                        )}
-                      </Td>
-                      <Td>
-                        <span className="af-faint sk-figure">{when(a.walletBalanceAt)}</span>
-                      </Td>
-                    </Tr>
-                  ))
-                )}
-              </TBody>
-            </Table>
+            <div className="ez-wrap ez-cards ez-then-3">
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>{t('shiprocketShiprocketOpsIndex.account')}</Th>
+                    <Th>{t('shiprocketShiprocketOpsIndex.pickupLocation')}</Th>
+                    <Th align="right">{t('shiprocketShiprocketOpsIndex.wallet')}</Th>
+                    <Th>{t('shiprocketShiprocketOpsIndex.read')}</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {d?.accounts.length === 0 ? (
+                    <TableEmpty colSpan={4}>
+                      {t('shiprocketShiprocketOpsIndex.noShiprocketAccountIsConfigured')}
+                    </TableEmpty>
+                  ) : (
+                    d?.accounts.map((a) => (
+                      <Tr key={a.courierAccountId}>
+                        <Td>
+                          <span>{a.label}</span>
+                          {!a.isActive && <span className="af-faint"> (inactive)</span>}
+                        </Td>
+                        <Td>
+                          {a.pickupLocationName === null ? (
+                            <span className="af-small af-bad">
+                              {t('shiprocketShiprocketOpsIndex.notSetBookingsRefuse')}
+                            </span>
+                          ) : (
+                            <span className="sk-ident af-small">{a.pickupLocationName}</span>
+                          )}
+                        </Td>
+                        <Td align="right">
+                          {a.walletBalanceInr === null ? (
+                            <span className="af-faint">—</span>
+                          ) : (
+                            <Money amount={a.walletBalanceInr} />
+                          )}
+                        </Td>
+                        <Td>
+                          <span className="af-faint sk-figure">{when(a.walletBalanceAt)}</span>
+                        </Td>
+                      </Tr>
+                    ))
+                  )}
+                </TBody>
+              </Table>
+            </div>
 
             <div className="af-grid-3">
               <AfCard>
@@ -365,53 +369,55 @@ export function ShiprocketOpsIndex(): ReactElement {
             title={t('shiprocketShiprocketOpsIndex.recentParcels')}
             note={t('shiprocketShiprocketOpsIndex.theTwentyMostRecentShiprocket')}
           >
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>{t('shiprocketShiprocketOpsIndex.parcel')}</Th>
-                  <Th>{t('shiprocketShiprocketOpsIndex.waybill')}</Th>
-                  <Th>{t('shiprocketShiprocketOpsIndex.carrier')}</Th>
-                  <Th>{t('shiprocketShiprocketOpsIndex.status')}</Th>
-                  <Th>{t('shiprocketShiprocketOpsIndex.booked')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {d?.recentBookings.length === 0 ? (
-                  <TableEmpty colSpan={5}>
-                    {t('shiprocketShiprocketOpsIndex.noShiprocketParcelsYet')}
-                  </TableEmpty>
-                ) : (
-                  d?.recentBookings.map((b) => (
-                    <Tr key={b.shipmentId}>
-                      <Td>
-                        <span className="sk-ident af-small">{b.shipmentNumber}</span>
-                      </Td>
-                      <Td>
-                        {b.awbNumber === null ? (
-                          <span className="af-small af-bad">none</span>
-                        ) : (
-                          <span className="sk-ident af-small">{b.awbNumber}</span>
-                        )}
-                      </Td>
-                      {/* WHICH carrier their ranking gave us. Blank on a
-                          parcel booked before we recorded it — their
-                          reply is not stored, so it cannot be filled in. */}
-                      <Td>
-                        <span className="af-small">{b.carrierName ?? '—'}</span>
-                      </Td>
-                      <Td>
-                        <span className="af-small">
-                          <Code value={b.status} />
-                        </span>
-                      </Td>
-                      <Td>
-                        <span className="af-faint sk-figure">{when(b.bookedAt)}</span>
-                      </Td>
-                    </Tr>
-                  ))
-                )}
-              </TBody>
-            </Table>
+            <div className="ez-wrap ez-cards">
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>{t('shiprocketShiprocketOpsIndex.parcel')}</Th>
+                    <Th>{t('shiprocketShiprocketOpsIndex.waybill')}</Th>
+                    <Th>{t('shiprocketShiprocketOpsIndex.carrier')}</Th>
+                    <Th>{t('shiprocketShiprocketOpsIndex.status')}</Th>
+                    <Th>{t('shiprocketShiprocketOpsIndex.booked')}</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {d?.recentBookings.length === 0 ? (
+                    <TableEmpty colSpan={5}>
+                      {t('shiprocketShiprocketOpsIndex.noShiprocketParcelsYet')}
+                    </TableEmpty>
+                  ) : (
+                    d?.recentBookings.map((b) => (
+                      <Tr key={b.shipmentId}>
+                        <Td>
+                          <span className="sk-ident af-small">{b.shipmentNumber}</span>
+                        </Td>
+                        <Td>
+                          {b.awbNumber === null ? (
+                            <span className="af-small af-bad">none</span>
+                          ) : (
+                            <span className="sk-ident af-small">{b.awbNumber}</span>
+                          )}
+                        </Td>
+                        {/* WHICH carrier their ranking gave us. Blank on a
+                            parcel booked before we recorded it — their
+                            reply is not stored, so it cannot be filled in. */}
+                        <Td>
+                          <span className="af-small">{b.carrierName ?? '—'}</span>
+                        </Td>
+                        <Td>
+                          <span className="af-small">
+                            <Code value={b.status} />
+                          </span>
+                        </Td>
+                        <Td>
+                          <span className="af-faint sk-figure">{when(b.bookedAt)}</span>
+                        </Td>
+                      </Tr>
+                    ))
+                  )}
+                </TBody>
+              </Table>
+            </div>
           </AfSection>
         </>
       )}

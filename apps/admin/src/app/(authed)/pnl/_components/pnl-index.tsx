@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useMemo, useState, type ReactElement } from 'react';
 import { AlertTriangle, CheckCircle2, LineChart } from 'lucide-react';
 import { Money } from '@skydrop/ui/components';
@@ -51,7 +52,8 @@ export function PnlIndex(): ReactElement {
   const pnl = usePnl(params);
 
   return (
-    <div className="mo-page ez-touch">
+    <div className="mo-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -379,46 +381,48 @@ function LineItems({
       <p className="pl-rows__head">
         {t('pnlPnlIndex.everyRow', { itemsLength: q.data.items.length })}
       </p>
-      <Table maxHeight="20rem">
-        <THead>
-          <Tr>
-            <Th>{t('pnlPnlIndex.reference')}</Th>
-            <Th>{t('pnlPnlIndex.date')}</Th>
-            <Th align="right">{t('pnlPnlIndex.revenue')}</Th>
-            <Th align="right">{t('pnlPnlIndex.cost')}</Th>
-          </Tr>
-        </THead>
-        <TBody>
-          {q.data.items.map((it, i) => (
-            <Tr key={`${it.ref}-${i}`}>
-              <Td>
-                <span className="sk-ident">{it.ref}</span>
-                {it.subRef !== null && <div className="mo-faint">{it.subRef}</div>}
-              </Td>
-              <Td className="mo-nowrap">
-                {/* The IST day, as the window is — not the browser's. */}
-                {istDateLabel(it.at)}
-              </Td>
-              <Td align="right">
-                {it.revenueInr === null ? (
-                  <span className="mo-faint">—</span>
-                ) : (
-                  <Money amount={it.revenueInr} currency="INR" convert={false} />
-                )}
-              </Td>
-              <Td align="right">
-                {it.costInr === null ? (
-                  // NOT a zero. "Nobody recorded it" and "it cost
-                  // nothing" are opposite facts.
-                  <span className="mo-warn">{t('pnlPnlIndex.notRecorded')}</span>
-                ) : (
-                  <Money amount={it.costInr} currency="INR" convert={false} />
-                )}
-              </Td>
+      <div className="ez-wrap ez-cards">
+        <Table maxHeight="20rem">
+          <THead>
+            <Tr>
+              <Th>{t('pnlPnlIndex.reference')}</Th>
+              <Th>{t('pnlPnlIndex.date')}</Th>
+              <Th align="right">{t('pnlPnlIndex.revenue')}</Th>
+              <Th align="right">{t('pnlPnlIndex.cost')}</Th>
             </Tr>
-          ))}
-        </TBody>
-      </Table>
+          </THead>
+          <TBody>
+            {q.data.items.map((it, i) => (
+              <Tr key={`${it.ref}-${i}`}>
+                <Td>
+                  <span className="sk-ident">{it.ref}</span>
+                  {it.subRef !== null && <div className="mo-faint">{it.subRef}</div>}
+                </Td>
+                <Td className="mo-nowrap">
+                  {/* The IST day, as the window is — not the browser's. */}
+                  {istDateLabel(it.at)}
+                </Td>
+                <Td align="right">
+                  {it.revenueInr === null ? (
+                    <span className="mo-faint">—</span>
+                  ) : (
+                    <Money amount={it.revenueInr} currency="INR" convert={false} />
+                  )}
+                </Td>
+                <Td align="right">
+                  {it.costInr === null ? (
+                    // NOT a zero. "Nobody recorded it" and "it cost
+                    // nothing" are opposite facts.
+                    <span className="mo-warn">{t('pnlPnlIndex.notRecorded')}</span>
+                  ) : (
+                    <Money amount={it.costInr} currency="INR" convert={false} />
+                  )}
+                </Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
+      </div>
       {q.data.truncated && (
         <p className="pl-state" data-tone="warn">
           {t('pnlPnlIndex.onlyTheFirstRowsAre', { itemsLength: q.data.items.length })}

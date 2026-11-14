@@ -49,74 +49,78 @@ export function CatalogueTerms({ storeId }: { storeId: string }): ReactElement {
       );
     }
     return (
-      <Table caption={t('resellerStoresStoreIdCatalogueTerms.catalogueTerms')}>
-        <THead>
-          <Tr>
-            <Th>{t('resellerStoresStoreIdCatalogueTerms.product')}</Th>
-            <Th>{t('resellerStoresStoreIdCatalogueTerms.sold')}</Th>
-            <Th align="right">{t('resellerStoresStoreIdCatalogueTerms.transferPrice')}</Th>
-            <Th>{t('resellerStoresStoreIdCatalogueTerms.stock')}</Th>
-            <Th align="right">{t('resellerStoresStoreIdCatalogueTerms.availableReal')}</Th>
-            <Th align="right">{t('resellerStoresStoreIdCatalogueTerms.storeSees')}</Th>
-          </Tr>
-        </THead>
-        <TBody>
-          {rows.map((r) => (
-            <Tr key={r.variantId}>
-              <Td>
-                <div className="ac-inline">
-                  <ProductThumb src={r.thumbnailUrl} size={32} alt={r.productName} />
-                  <div>
-                    <span className="ac-cell-main">{r.overlayTitle ?? r.productName}</span>
-                    <span className="ac-cell-sub sk-ident">{r.skuCode}</span>
-                  </div>
-                </div>
-              </Td>
-              <Td>
-                <StatusChip
-                  kind={r.sellable ? 'delivered' : 'neutral'}
-                  label={
-                    r.sellable
-                      ? t('resellerStoresStoreIdCatalogueTerms.yes')
-                      : REASON_WORDS(t)[r.notSellableReason ?? 'NOT_ENABLED']
-                  }
-                  size="sm"
-                />
-              </Td>
-              <Td align="right">
-                {r.effective === null ? (
-                  '—'
-                ) : (
-                  <span>
-                    <Money amount={r.effective.transferPriceInr} convert={false} />
-                    <span className="ac-cell-sub">
-                      {r.priceSource === 'OVERRIDE'
-                        ? t('resellerStoresStoreIdCatalogueTerms.storeSOwn')
-                        : ' (default)'}
-                    </span>
-                  </span>
-                )}
-              </Td>
-              <Td>
-                {r.stockMode === 'SET_ASIDE'
-                  ? t('resellerStoresStoreIdCatalogueTerms.setAside', { value: r.setAsideQty ?? 0 })
-                  : t('resellerStoresStoreIdCatalogueTerms.shared')}
-                {r.hiddenPercent > 0
-                  ? t('resellerStoresStoreIdCatalogueTerms.hidden', {
-                      hiddenPercent: r.hiddenPercent,
-                    })
-                  : ''}
-              </Td>
-              <Td align="right">
-                <Num value={r.realAvailable} />
-              </Td>
-              <Td align="right">
-                <Num value={r.visibleQty} />
-              </Td>
+      <div className="ez-wrap ez-cards">
+        <Table caption={t('resellerStoresStoreIdCatalogueTerms.catalogueTerms')}>
+          <THead>
+            <Tr>
+              <Th>{t('resellerStoresStoreIdCatalogueTerms.product')}</Th>
+              <Th>{t('resellerStoresStoreIdCatalogueTerms.sold')}</Th>
+              <Th align="right">{t('resellerStoresStoreIdCatalogueTerms.transferPrice')}</Th>
+              <Th>{t('resellerStoresStoreIdCatalogueTerms.stock')}</Th>
+              <Th align="right">{t('resellerStoresStoreIdCatalogueTerms.availableReal')}</Th>
+              <Th align="right">{t('resellerStoresStoreIdCatalogueTerms.storeSees')}</Th>
             </Tr>
-          ))}
-        </TBody>
-      </Table>
+          </THead>
+          <TBody>
+            {rows.map((r) => (
+              <Tr key={r.variantId}>
+                <Td>
+                  <div className="ac-inline">
+                    <ProductThumb src={r.thumbnailUrl} size={32} alt={r.productName} />
+                    <div>
+                      <span className="ac-cell-main">{r.overlayTitle ?? r.productName}</span>
+                      <span className="ac-cell-sub sk-ident">{r.skuCode}</span>
+                    </div>
+                  </div>
+                </Td>
+                <Td>
+                  <StatusChip
+                    kind={r.sellable ? 'delivered' : 'neutral'}
+                    label={
+                      r.sellable
+                        ? t('resellerStoresStoreIdCatalogueTerms.yes')
+                        : REASON_WORDS(t)[r.notSellableReason ?? 'NOT_ENABLED']
+                    }
+                    size="sm"
+                  />
+                </Td>
+                <Td align="right">
+                  {r.effective === null ? (
+                    '—'
+                  ) : (
+                    <span>
+                      <Money amount={r.effective.transferPriceInr} convert={false} />
+                      <span className="ac-cell-sub">
+                        {r.priceSource === 'OVERRIDE'
+                          ? t('resellerStoresStoreIdCatalogueTerms.storeSOwn')
+                          : ' (default)'}
+                      </span>
+                    </span>
+                  )}
+                </Td>
+                <Td>
+                  {r.stockMode === 'SET_ASIDE'
+                    ? t('resellerStoresStoreIdCatalogueTerms.setAside', {
+                        value: r.setAsideQty ?? 0,
+                      })
+                    : t('resellerStoresStoreIdCatalogueTerms.shared')}
+                  {r.hiddenPercent > 0
+                    ? t('resellerStoresStoreIdCatalogueTerms.hidden', {
+                        hiddenPercent: r.hiddenPercent,
+                      })
+                    : ''}
+                </Td>
+                <Td align="right">
+                  <Num value={r.realAvailable} />
+                </Td>
+                <Td align="right">
+                  <Num value={r.visibleQty} />
+                </Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
+      </div>
     );
   })();
   return (

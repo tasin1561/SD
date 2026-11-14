@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useMemo, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Building2, Store } from 'lucide-react';
@@ -75,7 +76,8 @@ export function InstantPayAdvances({
   const filtered = sellerId !== '' || courierAccountId !== '';
 
   return (
-    <div className="mo-page ez-touch">
+    <div className="mo-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -170,120 +172,122 @@ export function InstantPayAdvances({
                 </Select>
               </FilterField>
             </FilterBar>
-            <Table
-              caption={t('liabilitiesInstantPayInstantPayAdvances.instantPayAdvancesAwaitingThe')}
-            >
-              <THead>
-                <Tr>
-                  <Th>{t('liabilitiesInstantPayInstantPayAdvances.order')}</Th>
-                  <Th>{t('liabilitiesInstantPayInstantPayAdvances.client')}</Th>
-                  <Th>{t('liabilitiesInstantPayInstantPayAdvances.owedBy')}</Th>
-                  <SortableTh
-                    label={t('liabilitiesInstantPayInstantPayAdvances.age')}
-                    columnKey="age"
-                    activeKey={sortKey}
-                    direction={dir}
-                    onSort={onSort}
-                    align="right"
-                  />
-                  <SortableTh
-                    label="COD"
-                    columnKey="cod"
-                    activeKey={sortKey}
-                    direction={dir}
-                    onSort={onSort}
-                    align="right"
-                  />
-                  <Th align="right">{t('liabilitiesInstantPayInstantPayAdvances.credited')}</Th>
-                  <SortableTh
-                    label={t('liabilitiesInstantPayInstantPayAdvances.fronted')}
-                    columnKey="fronted"
-                    activeKey={sortKey}
-                    direction={dir}
-                    onSort={onSort}
-                    align="right"
-                  />
-                  <Th>{t('liabilitiesInstantPayInstantPayAdvances.frontedFrom')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {rows.length === 0 ? (
-                  <TableEmpty colSpan={8}>
-                    {filtered ? (
-                      <>
-                        {t(
-                          'liabilitiesInstantPayInstantPayAdvances.nothingOutstandingForThisFilter',
-                        )}{' '}
-                        <button
-                          type="button"
-                          className="mo-link li-inline-btn"
-                          onClick={() => {
-                            setSellerId('');
-                            setCourierAccountId('');
-                          }}
-                        >
-                          {t('liabilitiesInstantPayInstantPayAdvances.showAll')}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        {t('liabilitiesInstantPayInstantPayAdvances.everyInstantPayCreditHas')}{' '}
-                        <Link href="/settlements" className="mo-link">
-                          {t('liabilitiesInstantPayInstantPayAdvances.seeCourierPayouts')}
-                        </Link>
-                      </>
-                    )}
-                  </TableEmpty>
-                ) : (
-                  rows.map((r) => (
-                    <Tr key={r.orderId}>
-                      <Td>
-                        <Link href={`/orders/${r.orderId}`} className="mo-link sk-ident">
-                          {r.orderNumber}
-                        </Link>
-                        <span className="mo-sub">
-                          {t('liabilitiesInstantPayInstantPayAdvances.delivered', {
-                            value: new Date(r.deliveredAt ?? r.creditedAt).toLocaleDateString(
-                              'en-IN',
-                            ),
-                          })}
-                        </span>
-                      </Td>
-                      <Td>
-                        <Link href={`/seller-wallets/${r.sellerId}`} className="mo-link">
-                          {r.sellerName}
-                        </Link>
-                      </Td>
-                      <Td>
-                        <span className="mo-muted">
-                          {r.courierAccountLabel ?? r.courierCode ?? '—'}
-                        </span>
-                        {r.courierAccountLabel !== null && r.courierCode !== null && (
-                          <span className="mo-sub">{r.courierCode}</span>
-                        )}
-                      </Td>
-                      <Td align="right">
-                        <AgeChip>
-                          {r.ageDays} {r.ageDays === 1 ? 'day' : 'days'}
-                        </AgeChip>
-                      </Td>
-                      <Td align="right">
-                        <Money amount={r.codInr} currency="INR" convert={false} />
-                      </Td>
-                      <Td align="right">
-                        <Money amount={r.netCreditedInr} currency="INR" convert={false} />
-                      </Td>
-                      <Td align="right">
-                        <Money amount={r.frontedInr} currency="INR" convert={false} />
-                      </Td>
-                      <Td>
-                        <span className="mo-muted">{r.frontAccountLabel ?? '—'}</span>
-                      </Td>
-                    </Tr>
-                  ))
-                )}
-              </TBody>
-            </Table>
+            <div className="ez-wrap ez-cards">
+              <Table
+                caption={t('liabilitiesInstantPayInstantPayAdvances.instantPayAdvancesAwaitingThe')}
+              >
+                <THead>
+                  <Tr>
+                    <Th>{t('liabilitiesInstantPayInstantPayAdvances.order')}</Th>
+                    <Th>{t('liabilitiesInstantPayInstantPayAdvances.client')}</Th>
+                    <Th>{t('liabilitiesInstantPayInstantPayAdvances.owedBy')}</Th>
+                    <SortableTh
+                      label={t('liabilitiesInstantPayInstantPayAdvances.age')}
+                      columnKey="age"
+                      activeKey={sortKey}
+                      direction={dir}
+                      onSort={onSort}
+                      align="right"
+                    />
+                    <SortableTh
+                      label="COD"
+                      columnKey="cod"
+                      activeKey={sortKey}
+                      direction={dir}
+                      onSort={onSort}
+                      align="right"
+                    />
+                    <Th align="right">{t('liabilitiesInstantPayInstantPayAdvances.credited')}</Th>
+                    <SortableTh
+                      label={t('liabilitiesInstantPayInstantPayAdvances.fronted')}
+                      columnKey="fronted"
+                      activeKey={sortKey}
+                      direction={dir}
+                      onSort={onSort}
+                      align="right"
+                    />
+                    <Th>{t('liabilitiesInstantPayInstantPayAdvances.frontedFrom')}</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {rows.length === 0 ? (
+                    <TableEmpty colSpan={8}>
+                      {filtered ? (
+                        <>
+                          {t(
+                            'liabilitiesInstantPayInstantPayAdvances.nothingOutstandingForThisFilter',
+                          )}{' '}
+                          <button
+                            type="button"
+                            className="mo-link li-inline-btn"
+                            onClick={() => {
+                              setSellerId('');
+                              setCourierAccountId('');
+                            }}
+                          >
+                            {t('liabilitiesInstantPayInstantPayAdvances.showAll')}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          {t('liabilitiesInstantPayInstantPayAdvances.everyInstantPayCreditHas')}{' '}
+                          <Link href="/settlements" className="mo-link">
+                            {t('liabilitiesInstantPayInstantPayAdvances.seeCourierPayouts')}
+                          </Link>
+                        </>
+                      )}
+                    </TableEmpty>
+                  ) : (
+                    rows.map((r) => (
+                      <Tr key={r.orderId}>
+                        <Td>
+                          <Link href={`/orders/${r.orderId}`} className="mo-link sk-ident">
+                            {r.orderNumber}
+                          </Link>
+                          <span className="mo-sub">
+                            {t('liabilitiesInstantPayInstantPayAdvances.delivered', {
+                              value: new Date(r.deliveredAt ?? r.creditedAt).toLocaleDateString(
+                                'en-IN',
+                              ),
+                            })}
+                          </span>
+                        </Td>
+                        <Td>
+                          <Link href={`/seller-wallets/${r.sellerId}`} className="mo-link">
+                            {r.sellerName}
+                          </Link>
+                        </Td>
+                        <Td>
+                          <span className="mo-muted">
+                            {r.courierAccountLabel ?? r.courierCode ?? '—'}
+                          </span>
+                          {r.courierAccountLabel !== null && r.courierCode !== null && (
+                            <span className="mo-sub">{r.courierCode}</span>
+                          )}
+                        </Td>
+                        <Td align="right">
+                          <AgeChip>
+                            {r.ageDays} {r.ageDays === 1 ? 'day' : 'days'}
+                          </AgeChip>
+                        </Td>
+                        <Td align="right">
+                          <Money amount={r.codInr} currency="INR" convert={false} />
+                        </Td>
+                        <Td align="right">
+                          <Money amount={r.netCreditedInr} currency="INR" convert={false} />
+                        </Td>
+                        <Td align="right">
+                          <Money amount={r.frontedInr} currency="INR" convert={false} />
+                        </Td>
+                        <Td>
+                          <span className="mo-muted">{r.frontAccountLabel ?? '—'}</span>
+                        </Td>
+                      </Tr>
+                    ))
+                  )}
+                </TBody>
+              </Table>
+            </div>
           </div>
         </>
       )}

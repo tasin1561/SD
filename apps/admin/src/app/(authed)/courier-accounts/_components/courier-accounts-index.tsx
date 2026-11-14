@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
@@ -50,7 +51,8 @@ export function CourierAccountsIndex(): ReactElement {
   const list = useCourierAccounts();
 
   return (
-    <div className="af-page ez-touch">
+    <div className="af-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         breadcrumbs={[
           { label: t('courierAccountsCourierAccountsIndex.network') },
@@ -120,23 +122,25 @@ export function CourierAccountsIndex(): ReactElement {
           }
         />
       ) : (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>{t('courierAccountsCourierAccountsIndex.label')}</Th>
-              <Th>{t('courierAccountsCourierAccountsIndex.courier')}</Th>
-              <Th>{t('courierAccountsCourierAccountsIndex.environment')}</Th>
-              <Th>{t('courierAccountsCourierAccountsIndex.pickupLocation')}</Th>
-              <Th>{t('courierAccountsCourierAccountsIndex.state')}</Th>
-              <Th align="right">{t('courierAccountsCourierAccountsIndex.actions')}</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {list.data?.map((account) => (
-              <AccountRow key={account.id} account={account} />
-            ))}
-          </TBody>
-        </Table>
+        <div className="ez-wrap ez-cards">
+          <Table>
+            <THead>
+              <Tr>
+                <Th>{t('courierAccountsCourierAccountsIndex.label')}</Th>
+                <Th>{t('courierAccountsCourierAccountsIndex.courier')}</Th>
+                <Th>{t('courierAccountsCourierAccountsIndex.environment')}</Th>
+                <Th>{t('courierAccountsCourierAccountsIndex.pickupLocation')}</Th>
+                <Th>{t('courierAccountsCourierAccountsIndex.state')}</Th>
+                <Th align="right">{t('courierAccountsCourierAccountsIndex.actions')}</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {list.data?.map((account) => (
+                <AccountRow key={account.id} account={account} />
+              ))}
+            </TBody>
+          </Table>
+        </div>
       )}
 
       <CreateCourierAccountModal open={creating} onOpenChange={setCreating} />

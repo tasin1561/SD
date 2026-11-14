@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Banknote, Plus } from 'lucide-react';
@@ -57,7 +58,8 @@ export function RemittancesIndex(): ReactElement {
   const owedItems = owed.data?.items ?? [];
 
   return (
-    <div className="mk-page ez-touch">
+    <div className="mk-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -86,97 +88,99 @@ export function RemittancesIndex(): ReactElement {
         <MkSection>
           <SectionHeading title={t('remittancesRemittancesIndex.approvedWaitingToBePaid')} />
           <MkCard flush>
-            <Table caption={t('remittancesRemittancesIndex.approvedWaitingToBePaid')}>
-              <THead>
-                <Tr>
-                  <Th>{t('remittancesRemittancesIndex.client')}</Th>
-                  <Th align="right">{t('remittancesRemittancesIndex.amount')}</Th>
-                  <Th align="right">{t('remittancesRemittancesIndex.theyReceive')}</Th>
-                  <Th align="right">{t('remittancesRemittancesIndex.walletBalance')}</Th>
-                  <Th>{t('remittancesRemittancesIndex.waiting')}</Th>
-                  <Th align="right" />
-                </Tr>
-              </THead>
-              <TBody>
-                {owedItems.map((w) => (
-                  <Tr key={w.id}>
-                    <Td>
-                      <Link href={`/sellers/${w.sellerId}`} className="mk-name">
-                        {w.sellerName ?? <Ident value={`${w.sellerId.slice(0, 8)}…`} />}
-                      </Link>
-                    </Td>
-                    <Td align="right">
-                      <Money amount={w.amountRequested} currency={w.currency} />
-                    </Td>
-                    {/* What this is worth in the currency they are paid
-                        in, at the rate frozen WHEN THEY ASKED. Not
-                        today's: the FX table is editable, and a request
-                        sitting here for two days would otherwise read as
-                        a different amount each morning. A request with
-                        no snapshot shows nothing rather than a figure
-                        nobody quoted. */}
-                    <Td align="right">
-                      {w.amountInHomeCurrency === null || w.homeCurrency === null ? (
-                        <span className="mk-faint">—</span>
-                      ) : (
-                        <span
-                          title={t('remittancesRemittancesIndex.atTheRateWhenRequested', {
-                            currency: w.currency,
-                            value: w.fxRateSnapshot ?? '?',
-                            homeCurrency: w.homeCurrency,
-                          })}
-                        >
-                          <Money
-                            amount={w.amountInHomeCurrency}
-                            currency={w.homeCurrency}
-                            convert={false}
-                          />
-                        </span>
-                      )}
-                    </Td>
-                    {/* The balance this payment comes out of. Five
-                        headers had only four cells, so this column had
-                        no cell at all: the waiting time rendered under
-                        "Wallet balance" and every value sat one column
-                        left of its own name. */}
-                    <Td align="right">
-                      {w.sellerBalanceInr === null ? (
-                        <span className="mk-faint">—</span>
-                      ) : (
-                        <Money amount={w.sellerBalanceInr} currency="INR" />
-                      )}
-                    </Td>
-                    <Td
-                      className="mk-text mk-small sk-figure"
-                      data-tone={w.slaBreached ? 'critical' : undefined}
-                    >
-                      {w.waitingHours ?? 0}h
-                    </Td>
-                    <Td align="right">
-                      {/* Prefills the seller; the amount stays typed,
-                          because what leaves the bank is the operator's
-                          fact and a remittance can legitimately differ
-                          from the request. Linking it back to the
-                          request is still done on Withdrawals. */}
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        icon={<Banknote size={14} />}
-                        onClick={() =>
-                          setPaying({
-                            sellerId: w.sellerId,
-                            requestId: w.id,
-                            amountInr: w.amountRequested,
-                          })
-                        }
-                      >
-                        {t('remittancesRemittancesIndex.pay')}
-                      </Button>
-                    </Td>
+            <div className="ez-wrap ez-cards ez-then-2">
+              <Table caption={t('remittancesRemittancesIndex.approvedWaitingToBePaid')}>
+                <THead>
+                  <Tr>
+                    <Th>{t('remittancesRemittancesIndex.client')}</Th>
+                    <Th align="right">{t('remittancesRemittancesIndex.amount')}</Th>
+                    <Th align="right">{t('remittancesRemittancesIndex.theyReceive')}</Th>
+                    <Th align="right">{t('remittancesRemittancesIndex.walletBalance')}</Th>
+                    <Th>{t('remittancesRemittancesIndex.waiting')}</Th>
+                    <Th align="right" />
                   </Tr>
-                ))}
-              </TBody>
-            </Table>
+                </THead>
+                <TBody>
+                  {owedItems.map((w) => (
+                    <Tr key={w.id}>
+                      <Td>
+                        <Link href={`/sellers/${w.sellerId}`} className="mk-name">
+                          {w.sellerName ?? <Ident value={`${w.sellerId.slice(0, 8)}…`} />}
+                        </Link>
+                      </Td>
+                      <Td align="right">
+                        <Money amount={w.amountRequested} currency={w.currency} />
+                      </Td>
+                      {/* What this is worth in the currency they are paid
+                          in, at the rate frozen WHEN THEY ASKED. Not
+                          today's: the FX table is editable, and a request
+                          sitting here for two days would otherwise read as
+                          a different amount each morning. A request with
+                          no snapshot shows nothing rather than a figure
+                          nobody quoted. */}
+                      <Td align="right">
+                        {w.amountInHomeCurrency === null || w.homeCurrency === null ? (
+                          <span className="mk-faint">—</span>
+                        ) : (
+                          <span
+                            title={t('remittancesRemittancesIndex.atTheRateWhenRequested', {
+                              currency: w.currency,
+                              value: w.fxRateSnapshot ?? '?',
+                              homeCurrency: w.homeCurrency,
+                            })}
+                          >
+                            <Money
+                              amount={w.amountInHomeCurrency}
+                              currency={w.homeCurrency}
+                              convert={false}
+                            />
+                          </span>
+                        )}
+                      </Td>
+                      {/* The balance this payment comes out of. Five
+                          headers had only four cells, so this column had
+                          no cell at all: the waiting time rendered under
+                          "Wallet balance" and every value sat one column
+                          left of its own name. */}
+                      <Td align="right">
+                        {w.sellerBalanceInr === null ? (
+                          <span className="mk-faint">—</span>
+                        ) : (
+                          <Money amount={w.sellerBalanceInr} currency="INR" />
+                        )}
+                      </Td>
+                      <Td
+                        className="mk-text mk-small sk-figure"
+                        data-tone={w.slaBreached ? 'critical' : undefined}
+                      >
+                        {w.waitingHours ?? 0}h
+                      </Td>
+                      <Td align="right">
+                        {/* Prefills the seller; the amount stays typed,
+                            because what leaves the bank is the operator's
+                            fact and a remittance can legitimately differ
+                            from the request. Linking it back to the
+                            request is still done on Withdrawals. */}
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={<Banknote size={14} />}
+                          onClick={() =>
+                            setPaying({
+                              sellerId: w.sellerId,
+                              requestId: w.id,
+                              amountInr: w.amountRequested,
+                            })
+                          }
+                        >
+                          {t('remittancesRemittancesIndex.pay')}
+                        </Button>
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
           </MkCard>
         </MkSection>
       )}
@@ -206,81 +210,83 @@ export function RemittancesIndex(): ReactElement {
         />
       ) : (
         <MkCard flush>
-          <Table caption={t('remittancesRemittancesIndex.recordedRemittances')}>
-            <THead>
-              <Tr>
-                <Th>{t('remittancesRemittancesIndex.paidAt')}</Th>
-                <Th>{t('remittancesRemittancesIndex.client')}</Th>
-                <Th align="right">{t('remittancesRemittancesIndex.source')}</Th>
-                <Th align="right">{t('remittancesRemittancesIndex.destination')}</Th>
-                <Th>{t('remittancesRemittancesIndex.paidFrom')}</Th>
-                <Th>{t('remittancesRemittancesIndex.bankRef')}</Th>
-                <Th align="right">FX</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {list.data.items.map((r) => (
-                <Tr key={r.id}>
-                  <Td className="mk-when sk-figure">
-                    <When iso={r.paidAt} time />
-                  </Td>
-                  <Td>
-                    <Link href={`/sellers/${r.sellerId}`} className="mk-name">
-                      {r.sellerName ?? <Ident value={`${r.sellerId.slice(0, 8)}…`} />}
-                    </Link>
-                  </Td>
-                  <Td align="right">
-                    {/* The seller's wallet is debited by this leg — sign AND
-                        colour say so, never colour alone. */}
-                    <Money
-                      amount={r.sourceAmount}
-                      currency={r.sourceCurrency === 'BDT' ? 'BDT' : 'INR'}
-                      direction="debit"
-                    />
-                  </Td>
-                  <Td align="right">
-                    <Money
-                      amount={r.amount}
-                      currency={r.currency === 'BDT' ? 'BDT' : 'INR'}
-                      direction="credit"
-                    />
-                  </Td>
-                  <Td>
-                    {/* Without this a payout says money went out and not
-                        where from, which is the one thing needed to
-                        match it against a statement. */}
-                    {r.paidFromLabel === null ? (
-                      <span className="mk-faint">
-                        {t('remittancesRemittancesIndex.notRecorded')}
-                      </span>
-                    ) : (
-                      <div className="mk-cell mk-small">
-                        <span className="mk-body">{r.paidFromLabel}</span>
-                        {r.paidFromBank !== null && (
-                          <span className="mk-faint">{r.paidFromBank}</span>
+          <div className="ez-wrap ez-cards ez-lead-2 ez-then-4">
+            <Table caption={t('remittancesRemittancesIndex.recordedRemittances')}>
+              <THead>
+                <Tr>
+                  <Th>{t('remittancesRemittancesIndex.paidAt')}</Th>
+                  <Th>{t('remittancesRemittancesIndex.client')}</Th>
+                  <Th align="right">{t('remittancesRemittancesIndex.source')}</Th>
+                  <Th align="right">{t('remittancesRemittancesIndex.destination')}</Th>
+                  <Th>{t('remittancesRemittancesIndex.paidFrom')}</Th>
+                  <Th>{t('remittancesRemittancesIndex.bankRef')}</Th>
+                  <Th align="right">FX</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {list.data.items.map((r) => (
+                  <Tr key={r.id}>
+                    <Td className="mk-when sk-figure">
+                      <When iso={r.paidAt} time />
+                    </Td>
+                    <Td>
+                      <Link href={`/sellers/${r.sellerId}`} className="mk-name">
+                        {r.sellerName ?? <Ident value={`${r.sellerId.slice(0, 8)}…`} />}
+                      </Link>
+                    </Td>
+                    <Td align="right">
+                      {/* The seller's wallet is debited by this leg — sign AND
+                          colour say so, never colour alone. */}
+                      <Money
+                        amount={r.sourceAmount}
+                        currency={r.sourceCurrency === 'BDT' ? 'BDT' : 'INR'}
+                        direction="debit"
+                      />
+                    </Td>
+                    <Td align="right">
+                      <Money
+                        amount={r.amount}
+                        currency={r.currency === 'BDT' ? 'BDT' : 'INR'}
+                        direction="credit"
+                      />
+                    </Td>
+                    <Td>
+                      {/* Without this a payout says money went out and not
+                          where from, which is the one thing needed to
+                          match it against a statement. */}
+                      {r.paidFromLabel === null ? (
+                        <span className="mk-faint">
+                          {t('remittancesRemittancesIndex.notRecorded')}
+                        </span>
+                      ) : (
+                        <div className="mk-cell mk-small">
+                          <span className="mk-body">{r.paidFromLabel}</span>
+                          {r.paidFromBank !== null && (
+                            <span className="mk-faint">{r.paidFromBank}</span>
+                          )}
+                        </div>
+                      )}
+                    </Td>
+                    <Td>
+                      <div className="mk-cell">
+                        <Ident value={r.bankReference} />
+                        {r.recordedByName !== null && (
+                          <span className="mk-faint">
+                            {t('remittancesRemittancesIndex.by', {
+                              recordedByName: r.recordedByName,
+                            })}
+                          </span>
                         )}
                       </div>
-                    )}
-                  </Td>
-                  <Td>
-                    <div className="mk-cell">
-                      <Ident value={r.bankReference} />
-                      {r.recordedByName !== null && (
-                        <span className="mk-faint">
-                          {t('remittancesRemittancesIndex.by', {
-                            recordedByName: r.recordedByName,
-                          })}
-                        </span>
-                      )}
-                    </div>
-                  </Td>
-                  <Td align="right" className="mk-small sk-figure">
-                    {r.sourceCurrency === r.currency ? '—' : Number(r.fxRateSnapshot).toFixed(4)}
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
+                    </Td>
+                    <Td align="right" className="mk-small sk-figure">
+                      {r.sourceCurrency === r.currency ? '—' : Number(r.fxRateSnapshot).toFixed(4)}
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
         </MkCard>
       )}
 

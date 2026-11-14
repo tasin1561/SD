@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { History, Landmark, Plus } from 'lucide-react';
 
 import { useState, type ReactElement } from 'react';
@@ -182,7 +183,8 @@ export function BankAccountsPanel(): ReactElement | null {
   const busy = create.isPending || update.isPending;
 
   return (
-    <div className="mo-page ez-touch">
+    <div className="mo-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -250,76 +252,78 @@ export function BankAccountsPanel(): ReactElement | null {
             />
           </div>
         ) : (
-          <Table caption={t('bankAccountsBankAccountsPanel.bankAccountsOfferedToClients')}>
-            <THead>
-              <Tr>
-                <Th>{t('bankAccountsBankAccountsPanel.label')}</Th>
-                <Th>{t('bankAccountsBankAccountsPanel.bank')}</Th>
-                <Th>{t('bankAccountsBankAccountsPanel.account')}</Th>
-                <Th>{t('bankAccountsBankAccountsPanel.currency')}</Th>
-                <Th>{t('bankAccountsBankAccountsPanel.offered')}</Th>
-                {mayManage && <Th align="right">{t('bankAccountsBankAccountsPanel.actions')}</Th>}
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.length === 0 ? (
-                <TableEmpty colSpan={mayManage ? 6 : 5}>
-                  <EmptyState
-                    bare
-                    title={t('bankAccountsBankAccountsPanel.noBankAccounts')}
-                    description={t('bankAccountsBankAccountsPanel.untilOneExistsAClient')}
-                  />
-                </TableEmpty>
-              ) : (
-                rows.map((a) => (
-                  <Tr key={a.id}>
-                    <Td className="mo-strong">{a.label}</Td>
-                    <Td>{a.bankName}</Td>
-                    <Td>
-                      <span className="sk-ident">{a.accountNumber}</span>
-                      {a.branchCode !== null && (
-                        <span className="sk-ident ba-code">{a.branchCode}</span>
-                      )}
-                      {(a.branchName !== null || a.routingNumber !== null) && (
-                        <span className="mo-sub">
-                          {[a.branchName, a.district].filter(Boolean).join(' · ')}
-                          {a.routingNumber === null ? '' : ` · ${a.routingNumber}`}
-                        </span>
-                      )}
-                    </Td>
-                    <Td>{a.currency}</Td>
-                    <Td>
-                      <StatusChip
-                        kind={a.isActive ? 'confirmed' : 'cancelled'}
-                        label={a.isActive ? 'offered' : 'hidden'}
-                        size="sm"
-                      />
-                    </Td>
-                    {mayManage && (
-                      <Td align="right">
-                        <div className="mo-row mo-row--end">
-                          <Button variant="ghost" size="sm" onClick={() => openEdit(a)}>
-                            {t('bankAccountsBankAccountsPanel.edit')}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={retire.isPending}
-                            onClick={() => {
-                              setError(null);
-                              setRetiring(a);
-                            }}
-                          >
-                            {t('bankAccountsBankAccountsPanel.retire')}
-                          </Button>
-                        </div>
+          <div className="ez-wrap ez-cards">
+            <Table caption={t('bankAccountsBankAccountsPanel.bankAccountsOfferedToClients')}>
+              <THead>
+                <Tr>
+                  <Th>{t('bankAccountsBankAccountsPanel.label')}</Th>
+                  <Th>{t('bankAccountsBankAccountsPanel.bank')}</Th>
+                  <Th>{t('bankAccountsBankAccountsPanel.account')}</Th>
+                  <Th>{t('bankAccountsBankAccountsPanel.currency')}</Th>
+                  <Th>{t('bankAccountsBankAccountsPanel.offered')}</Th>
+                  {mayManage && <Th align="right">{t('bankAccountsBankAccountsPanel.actions')}</Th>}
+                </Tr>
+              </THead>
+              <TBody>
+                {rows.length === 0 ? (
+                  <TableEmpty colSpan={mayManage ? 6 : 5}>
+                    <EmptyState
+                      bare
+                      title={t('bankAccountsBankAccountsPanel.noBankAccounts')}
+                      description={t('bankAccountsBankAccountsPanel.untilOneExistsAClient')}
+                    />
+                  </TableEmpty>
+                ) : (
+                  rows.map((a) => (
+                    <Tr key={a.id}>
+                      <Td className="mo-strong">{a.label}</Td>
+                      <Td>{a.bankName}</Td>
+                      <Td>
+                        <span className="sk-ident">{a.accountNumber}</span>
+                        {a.branchCode !== null && (
+                          <span className="sk-ident ba-code">{a.branchCode}</span>
+                        )}
+                        {(a.branchName !== null || a.routingNumber !== null) && (
+                          <span className="mo-sub">
+                            {[a.branchName, a.district].filter(Boolean).join(' · ')}
+                            {a.routingNumber === null ? '' : ` · ${a.routingNumber}`}
+                          </span>
+                        )}
                       </Td>
-                    )}
-                  </Tr>
-                ))
-              )}
-            </TBody>
-          </Table>
+                      <Td>{a.currency}</Td>
+                      <Td>
+                        <StatusChip
+                          kind={a.isActive ? 'confirmed' : 'cancelled'}
+                          label={a.isActive ? 'offered' : 'hidden'}
+                          size="sm"
+                        />
+                      </Td>
+                      {mayManage && (
+                        <Td align="right">
+                          <div className="mo-row mo-row--end">
+                            <Button variant="ghost" size="sm" onClick={() => openEdit(a)}>
+                              {t('bankAccountsBankAccountsPanel.edit')}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={retire.isPending}
+                              onClick={() => {
+                                setError(null);
+                                setRetiring(a);
+                              }}
+                            >
+                              {t('bankAccountsBankAccountsPanel.retire')}
+                            </Button>
+                          </div>
+                        </Td>
+                      )}
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </Table>
+          </div>
         )}
       </MoSection>
 

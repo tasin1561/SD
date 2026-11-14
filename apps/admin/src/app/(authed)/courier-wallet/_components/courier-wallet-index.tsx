@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useState, type ReactElement } from 'react';
 import { AlertTriangle, ArrowDownRight, Wallet } from 'lucide-react';
 import { Money } from '@skydrop/ui/components';
@@ -96,7 +97,8 @@ export function CourierWalletIndex(): ReactElement {
 
   if (accounts.isLoading) {
     return (
-      <div className="mo-page ez-touch">
+      <div className="mo-page ez-touch ez-phone">
+        <TidyCards />
         <div className="mo-kpis">
           <Skeleton height={112} rounded="md" />
           <Skeleton height={112} rounded="md" />
@@ -193,94 +195,98 @@ export function CourierWalletIndex(): ReactElement {
           tone="critical"
           flush
         >
-          <Table caption={tr('courierWalletCourierWalletIndex.moneyThatLeftOurBank')}>
-            <THead>
-              <Tr>
-                <Th>{tr('courierWalletCourierWalletIndex.paidFrom')}</Th>
-                <Th>{tr('courierWalletCourierWalletIndex.reference')}</Th>
-                <Th>{tr('courierWalletCourierWalletIndex.when')}</Th>
-                <Th align="right">{tr('courierWalletCourierWalletIndex.amount')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {neverArrived.map((p) => (
-                <Tr key={p.bankEntryId}>
-                  <Td>
-                    <span className="cw-name" data-tone="bad">
-                      <AlertTriangle size={16} aria-hidden />
-                      {p.accountLabel}
-                    </span>
-                    {p.note === null ? null : <span className="cw-note">{p.note}</span>}
-                  </Td>
-                  <Td>
-                    <span className="sk-ident cw-ident">{p.reference ?? '—'}</span>
-                  </Td>
-                  <Td>
-                    <When iso={p.occurredAt} />
-                  </Td>
-                  <Td align="right">
-                    <Money amount={p.amountInr} currency="INR" convert={false} />
-                  </Td>
+          <div className="ez-wrap ez-cards ez-then-4">
+            <Table caption={tr('courierWalletCourierWalletIndex.moneyThatLeftOurBank')}>
+              <THead>
+                <Tr>
+                  <Th>{tr('courierWalletCourierWalletIndex.paidFrom')}</Th>
+                  <Th>{tr('courierWalletCourierWalletIndex.reference')}</Th>
+                  <Th>{tr('courierWalletCourierWalletIndex.when')}</Th>
+                  <Th align="right">{tr('courierWalletCourierWalletIndex.amount')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {neverArrived.map((p) => (
+                  <Tr key={p.bankEntryId}>
+                    <Td>
+                      <span className="cw-name" data-tone="bad">
+                        <AlertTriangle size={16} aria-hidden />
+                        {p.accountLabel}
+                      </span>
+                      {p.note === null ? null : <span className="cw-note">{p.note}</span>}
+                    </Td>
+                    <Td>
+                      <span className="sk-ident cw-ident">{p.reference ?? '—'}</span>
+                    </Td>
+                    <Td>
+                      <When iso={p.occurredAt} />
+                    </Td>
+                    <Td align="right">
+                      <Money amount={p.amountInr} currency="INR" convert={false} />
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
         </MoSection>
       ) : null}
 
       <MoSection title={tr('courierWalletCourierWalletIndex.wallets')} flush>
-        <Table caption={tr('courierWalletCourierWalletIndex.courierWallets')}>
-          <THead>
-            <Tr>
-              <Th>{tr('courierWalletCourierWalletIndex.account')}</Th>
-              <Th align="right">{tr('courierWalletCourierWalletIndex.balance')}</Th>
-              <Th>{tr('courierWalletCourierWalletIndex.lastRead')}</Th>
-              <Th align="right">{tr('courierWalletCourierWalletIndex.unreconciled')}</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {rows.length === 0 ? (
-              <TableEmpty colSpan={4}>
-                {tr('courierWalletCourierWalletIndex.noCourierAccountsYet')}
-              </TableEmpty>
-            ) : (
-              rows.map((a) => (
-                <Tr key={a.courierAccountId}>
-                  <Td>
-                    <span className="cw-name">
-                      <Wallet size={16} aria-hidden />
-                      {a.label}
-                    </span>
-                    <span className="mo-sub">{a.courierCode}</span>
-                  </Td>
-                  <Td align="right">
-                    {/* Never read is not the same as empty, and only
-                        one of the two should worry anybody. */}
-                    {a.balanceInr === null ? (
-                      <span className="mo-muted">
-                        {tr('courierWalletCourierWalletIndex.neverRead')}
+        <div className="ez-wrap ez-cards ez-then-2">
+          <Table caption={tr('courierWalletCourierWalletIndex.courierWallets')}>
+            <THead>
+              <Tr>
+                <Th>{tr('courierWalletCourierWalletIndex.account')}</Th>
+                <Th align="right">{tr('courierWalletCourierWalletIndex.balance')}</Th>
+                <Th>{tr('courierWalletCourierWalletIndex.lastRead')}</Th>
+                <Th align="right">{tr('courierWalletCourierWalletIndex.unreconciled')}</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {rows.length === 0 ? (
+                <TableEmpty colSpan={4}>
+                  {tr('courierWalletCourierWalletIndex.noCourierAccountsYet')}
+                </TableEmpty>
+              ) : (
+                rows.map((a) => (
+                  <Tr key={a.courierAccountId}>
+                    <Td>
+                      <span className="cw-name">
+                        <Wallet size={16} aria-hidden />
+                        {a.label}
                       </span>
-                    ) : (
-                      <Money amount={a.balanceInr} currency="INR" convert={false} />
-                    )}
-                  </Td>
-                  <Td>
-                    <span className="mo-muted">
-                      {a.capturedAt === null ? '—' : <When iso={a.capturedAt} time />}
-                    </span>
-                  </Td>
-                  <Td align="right" className="mo-num">
-                    {a.unrecordedCount + a.mismatchCount === 0 ? (
-                      <span className="mo-muted">—</span>
-                    ) : (
-                      <span className="mo-bad">{a.unrecordedCount + a.mismatchCount}</span>
-                    )}
-                  </Td>
-                </Tr>
-              ))
-            )}
-          </TBody>
-        </Table>
+                      <span className="mo-sub">{a.courierCode}</span>
+                    </Td>
+                    <Td align="right">
+                      {/* Never read is not the same as empty, and only
+                          one of the two should worry anybody. */}
+                      {a.balanceInr === null ? (
+                        <span className="mo-muted">
+                          {tr('courierWalletCourierWalletIndex.neverRead')}
+                        </span>
+                      ) : (
+                        <Money amount={a.balanceInr} currency="INR" convert={false} />
+                      )}
+                    </Td>
+                    <Td>
+                      <span className="mo-muted">
+                        {a.capturedAt === null ? '—' : <When iso={a.capturedAt} time />}
+                      </span>
+                    </Td>
+                    <Td align="right" className="mo-num">
+                      {a.unrecordedCount + a.mismatchCount === 0 ? (
+                        <span className="mo-muted">—</span>
+                      ) : (
+                        <span className="mo-bad">{a.unrecordedCount + a.mismatchCount}</span>
+                      )}
+                    </Td>
+                  </Tr>
+                ))
+              )}
+            </TBody>
+          </Table>
+        </div>
       </MoSection>
 
       <MoSection
@@ -316,73 +322,79 @@ export function CourierWalletIndex(): ReactElement {
         {recharges.isLoading ? (
           <SkeletonRows rows={4} cols={6} />
         ) : (
-          <Table caption={tr('courierWalletCourierWalletIndex.rechargesAtTheCourier')}>
-            <THead>
-              <Tr>
-                <Th>{tr('courierWalletCourierWalletIndex.theirRecharge')}</Th>
-                <Th>{tr('courierWalletCourierWalletIndex.bankReference')}</Th>
-                <Th>{tr('courierWalletCourierWalletIndex.when')}</Th>
-                <Th align="right">{tr('courierWalletCourierWalletIndex.amount')}</Th>
-                <Th>{tr('courierWalletCourierWalletIndex.state')}</Th>
-                <Th />
-              </Tr>
-            </THead>
-            <TBody>
-              {(recharges.data?.recharges ?? []).length === 0 ? (
-                <TableEmpty colSpan={6}>
-                  {filter === 'UNRECORDED'
-                    ? tr('courierWalletCourierWalletIndex.everyRechargeHereIsAccounted')
-                    : tr('courierWalletCourierWalletIndex.nothingInThisState')}
-                </TableEmpty>
-              ) : (
-                (recharges.data?.recharges ?? []).map((r) => {
-                  const tone = matchTone(tr, r.matchState);
-                  return (
-                    <Tr key={r.id}>
-                      <Td>
-                        <span className="sk-ident cw-ident">{r.externalTxnId}</span>
-                        <span className="mo-sub">{r.accountLabel}</span>
-                      </Td>
-                      <Td>
-                        <span className="sk-ident cw-ident">{r.bankTxnRef ?? '—'}</span>
-                      </Td>
-                      <Td>
-                        <When iso={r.occurredAt} />
-                      </Td>
-                      <Td align="right">
-                        <Money amount={r.amountInr} currency="INR" convert={false} />
-                        {r.bankAmountInr !== null && r.bankAmountInr !== r.amountInr ? (
-                          <span className="mo-sub mo-bad">
-                            ours <Money amount={r.bankAmountInr} currency="INR" convert={false} />
-                          </span>
-                        ) : null}
-                      </Td>
-                      <Td>
-                        <StatusChip kind={tone.kind} label={tone.label} size="sm" />
-                        {r.resolutionNote === null ? null : (
-                          <span className="cw-note">{r.resolutionNote}</span>
-                        )}
-                      </Td>
-                      <Td align="right">
-                        {r.matchState === 'UNRECORDED' && mayRecord ? (
-                          <div className="cw-actions">
-                            <Button size="sm" variant="primary" onClick={() => setRecording(r)}>
-                              {tr('courierWalletCourierWalletIndex.recordPayment')}
-                            </Button>
-                            <Button size="sm" variant="secondary" onClick={() => setExplaining(r)}>
-                              {tr('courierWalletCourierWalletIndex.notOurs')}
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="mo-muted">{r.bankAccountLabel ?? ''}</span>
-                        )}
-                      </Td>
-                    </Tr>
-                  );
-                })
-              )}
-            </TBody>
-          </Table>
+          <div className="ez-wrap ez-cards ez-then-4">
+            <Table caption={tr('courierWalletCourierWalletIndex.rechargesAtTheCourier')}>
+              <THead>
+                <Tr>
+                  <Th>{tr('courierWalletCourierWalletIndex.theirRecharge')}</Th>
+                  <Th>{tr('courierWalletCourierWalletIndex.bankReference')}</Th>
+                  <Th>{tr('courierWalletCourierWalletIndex.when')}</Th>
+                  <Th align="right">{tr('courierWalletCourierWalletIndex.amount')}</Th>
+                  <Th>{tr('courierWalletCourierWalletIndex.state')}</Th>
+                  <Th />
+                </Tr>
+              </THead>
+              <TBody>
+                {(recharges.data?.recharges ?? []).length === 0 ? (
+                  <TableEmpty colSpan={6}>
+                    {filter === 'UNRECORDED'
+                      ? tr('courierWalletCourierWalletIndex.everyRechargeHereIsAccounted')
+                      : tr('courierWalletCourierWalletIndex.nothingInThisState')}
+                  </TableEmpty>
+                ) : (
+                  (recharges.data?.recharges ?? []).map((r) => {
+                    const tone = matchTone(tr, r.matchState);
+                    return (
+                      <Tr key={r.id}>
+                        <Td>
+                          <span className="sk-ident cw-ident">{r.externalTxnId}</span>
+                          <span className="mo-sub">{r.accountLabel}</span>
+                        </Td>
+                        <Td>
+                          <span className="sk-ident cw-ident">{r.bankTxnRef ?? '—'}</span>
+                        </Td>
+                        <Td>
+                          <When iso={r.occurredAt} />
+                        </Td>
+                        <Td align="right">
+                          <Money amount={r.amountInr} currency="INR" convert={false} />
+                          {r.bankAmountInr !== null && r.bankAmountInr !== r.amountInr ? (
+                            <span className="mo-sub mo-bad">
+                              ours <Money amount={r.bankAmountInr} currency="INR" convert={false} />
+                            </span>
+                          ) : null}
+                        </Td>
+                        <Td>
+                          <StatusChip kind={tone.kind} label={tone.label} size="sm" />
+                          {r.resolutionNote === null ? null : (
+                            <span className="cw-note">{r.resolutionNote}</span>
+                          )}
+                        </Td>
+                        <Td align="right">
+                          {r.matchState === 'UNRECORDED' && mayRecord ? (
+                            <div className="cw-actions">
+                              <Button size="sm" variant="primary" onClick={() => setRecording(r)}>
+                                {tr('courierWalletCourierWalletIndex.recordPayment')}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => setExplaining(r)}
+                              >
+                                {tr('courierWalletCourierWalletIndex.notOurs')}
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="mo-muted">{r.bankAccountLabel ?? ''}</span>
+                          )}
+                        </Td>
+                      </Tr>
+                    );
+                  })
+                )}
+              </TBody>
+            </Table>
+          </div>
         )}
       </MoSection>
 

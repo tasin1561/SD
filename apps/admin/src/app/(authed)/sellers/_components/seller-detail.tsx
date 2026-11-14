@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { When } from '@/components/easy/when';
 import '@/components/easy/easy.css';
 import Link from 'next/link';
@@ -85,7 +86,8 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
   const d = detail.data;
 
   return (
-    <div className="ez-touch ez-wrap">
+    <div className="ez-touch ez-wrap ez-phone">
+      <TidyCards />
       <AcPage>
         <AcHeader
           crumbs={[...CRUMBS(t), { label: d.companyName }]}

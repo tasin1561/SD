@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useCodeLabel } from '@/components/easy/code-label';
 import { When } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
@@ -44,7 +45,8 @@ export function SellersIndex(): ReactElement {
   });
 
   return (
-    <div className="ez-touch ez-wrap">
+    <div className="ez-touch ez-wrap ez-phone">
+      <TidyCards />
       <AcPage>
         <AcHeader
           title={
@@ -114,57 +116,59 @@ export function SellersIndex(): ReactElement {
           />
         ) : (
           <AcCard flush>
-            <Table caption={t('sellersSellersIndex.clients')}>
-              <THead>
-                <Tr>
-                  <Th>{t('sellersSellersIndex.company')}</Th>
-                  <Th>{t('sellersSellersIndex.code')}</Th>
-                  <Th>{t('sellersSellersIndex.contact')}</Th>
-                  <Th>{t('sellersSellersIndex.email')}</Th>
-                  <Th>{t('sellersSellersIndex.status')}</Th>
-                  <Th>{t('sellersSellersIndex.approved')}</Th>
-                  <Th>{t('sellersSellersIndex.created')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {list.data.items.map((s) => (
-                  <Tr key={s.id} onActivate={() => router.push(`/sellers/${s.id}`)}>
-                    <Td>
-                      <Link href={`/sellers/${s.id}`} className="ac-link ac-cell-main">
-                        {s.companyName}
-                      </Link>
-                    </Td>
-                    <Td>
-                      <span className="sk-ident">{s.initials ?? '—'}</span>
-                    </Td>
-                    <Td>{s.contactPersonName}</Td>
-                    <Td>
-                      <span className="ac-code">{s.email}</span>
-                    </Td>
-                    <Td>
-                      <SellerStatusChip status={s.status} />
-                    </Td>
-                    <Td>
-                      <span className="sk-figure ac-faint">
-                        {s.approvedAt ? <When iso={s.approvedAt} /> : '—'}
-                      </span>
-                    </Td>
-                    <Td>
-                      <span className="sk-figure ac-faint">
-                        <When iso={s.createdAt} />
-                      </span>
-                    </Td>
+            <div className="ez-wrap ez-cards">
+              <Table caption={t('sellersSellersIndex.clients')}>
+                <THead>
+                  <Tr>
+                    <Th>{t('sellersSellersIndex.company')}</Th>
+                    <Th>{t('sellersSellersIndex.code')}</Th>
+                    <Th>{t('sellersSellersIndex.contact')}</Th>
+                    <Th>{t('sellersSellersIndex.email')}</Th>
+                    <Th>{t('sellersSellersIndex.status')}</Th>
+                    <Th>{t('sellersSellersIndex.approved')}</Th>
+                    <Th>{t('sellersSellersIndex.created')}</Th>
                   </Tr>
-                ))}
-              </TBody>
-              {list.data.total === 0 && (
+                </THead>
                 <TBody>
-                  <TableEmpty colSpan={6}>
-                    {t('sellersSellersIndex.noClientsMatchThisFilter')}
-                  </TableEmpty>
+                  {list.data.items.map((s) => (
+                    <Tr key={s.id} onActivate={() => router.push(`/sellers/${s.id}`)}>
+                      <Td>
+                        <Link href={`/sellers/${s.id}`} className="ac-link ac-cell-main">
+                          {s.companyName}
+                        </Link>
+                      </Td>
+                      <Td>
+                        <span className="sk-ident">{s.initials ?? '—'}</span>
+                      </Td>
+                      <Td>{s.contactPersonName}</Td>
+                      <Td>
+                        <span className="ac-code">{s.email}</span>
+                      </Td>
+                      <Td>
+                        <SellerStatusChip status={s.status} />
+                      </Td>
+                      <Td>
+                        <span className="sk-figure ac-faint">
+                          {s.approvedAt ? <When iso={s.approvedAt} /> : '—'}
+                        </span>
+                      </Td>
+                      <Td>
+                        <span className="sk-figure ac-faint">
+                          <When iso={s.createdAt} />
+                        </span>
+                      </Td>
+                    </Tr>
+                  ))}
                 </TBody>
-              )}
-            </Table>
+                {list.data.total === 0 && (
+                  <TBody>
+                    <TableEmpty colSpan={6}>
+                      {t('sellersSellersIndex.noClientsMatchThisFilter')}
+                    </TableEmpty>
+                  </TBody>
+                )}
+              </Table>
+            </div>
             <div className="ac-pad">
               <Pagination
                 page={page}

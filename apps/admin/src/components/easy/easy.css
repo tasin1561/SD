@@ -639,3 +639,132 @@ button.ez-pick__change {
     transition: none;
   }
 }
+
+/* ── Phone cards for money, client and courier lists ────────────────────
+   Opt in with `ez-cards` on the page wrapper. On a phone every table row
+   is already a card; this gives the card a shape a person can scan:
+
+     1. a HEAD line  — who or what the row is (first column, or the column
+                       named by `ez-lead-N`), with no label in front of it
+     2. a KEY figure — the amount that matters (`ez-then-N`), larger
+     3. the facts    — the rest, in their usual order, minus empty lines
+                       (see tidy-cards.tsx)
+     4. the actions  — on their own line at the foot
+
+   Only the phone layout changes. The table on a wide screen, the columns,
+   the values and the order a screen reader reads are the same. */
+@media (max-width: 767.98px) {
+  .ez-cards .sd-table-cards tbody > tr {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: var(--sp-3);
+    padding: 0 0 var(--sp-1);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+  }
+  .ez-cards .sd-table-cards tbody > tr > td[data-ez-empty] {
+    display: none;
+  }
+  .ez-cards:not(.ez-lead-2, .ez-lead-3, .ez-lead-4, .ez-lead-5, .ez-lead-6)
+    .sd-table-cards
+    tbody
+    > tr
+    > td:first-child,
+  .ez-cards.ez-lead-2 .sd-table-cards tbody > tr > td:nth-child(2):not([colspan]),
+  .ez-cards.ez-lead-3 .sd-table-cards tbody > tr > td:nth-child(3):not([colspan]),
+  .ez-cards.ez-lead-4 .sd-table-cards tbody > tr > td:nth-child(4):not([colspan]),
+  .ez-cards.ez-lead-5 .sd-table-cards tbody > tr > td:nth-child(5):not([colspan]),
+  .ez-cards.ez-lead-6 .sd-table-cards tbody > tr > td:nth-child(6):not([colspan]) {
+    order: -2;
+    justify-content: flex-start;
+    margin-bottom: var(--sp-1);
+    padding: var(--sp-3);
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--fg-strong);
+    font-weight: var(--fw-semibold);
+    text-align: left;
+  }
+  .ez-cards:not(.ez-lead-2, .ez-lead-3, .ez-lead-4, .ez-lead-5, .ez-lead-6)
+    .sd-table-cards
+    tbody
+    > tr
+    > td:first-child::before,
+  .ez-cards.ez-lead-2 .sd-table-cards tbody > tr > td:nth-child(2):not([colspan])::before,
+  .ez-cards.ez-lead-3 .sd-table-cards tbody > tr > td:nth-child(3):not([colspan])::before,
+  .ez-cards.ez-lead-4 .sd-table-cards tbody > tr > td:nth-child(4):not([colspan])::before,
+  .ez-cards.ez-lead-5 .sd-table-cards tbody > tr > td:nth-child(5):not([colspan])::before,
+  .ez-cards.ez-lead-6 .sd-table-cards tbody > tr > td:nth-child(6):not([colspan])::before {
+    content: none;
+  }
+  .ez-cards.ez-then-2 .sd-table-cards tbody > tr > td:nth-child(2):not([colspan]),
+  .ez-cards.ez-then-3 .sd-table-cards tbody > tr > td:nth-child(3):not([colspan]),
+  .ez-cards.ez-then-4 .sd-table-cards tbody > tr > td:nth-child(4):not([colspan]),
+  .ez-cards.ez-then-5 .sd-table-cards tbody > tr > td:nth-child(5):not([colspan]),
+  .ez-cards.ez-then-6 .sd-table-cards tbody > tr > td:nth-child(6):not([colspan]),
+  .ez-cards.ez-then-7 .sd-table-cards tbody > tr > td:nth-child(7):not([colspan]) {
+    order: -1;
+    color: var(--fg-strong);
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-semibold);
+  }
+  /* The actions: a line of their own at the foot of the card. */
+  .ez-cards .sd-table-cards tbody > tr > td:last-child:has(button, a.sk-btn) {
+    order: 99;
+    justify-content: flex-end;
+    margin-top: var(--sp-1);
+    padding-top: var(--sp-2);
+    border-top: 1px solid var(--line);
+  }
+  .ez-cards .sd-table-cards tbody > tr > td:last-child:has(button, a.sk-btn)::before {
+    content: none;
+  }
+  .ez-cards .sd-table-cards tbody > tr > td:last-child:has(button, a.sk-btn) > :first-child {
+    margin-left: auto;
+  }
+}
+
+/* The headline numbers: two to a row on a phone, so the list they sit
+   above starts on the first screen instead of the third. */
+@media (max-width: 559.98px) {
+  .ez-phone .mk-kpis,
+  .ez-phone .mo-kpis,
+  .ez-phone .af-kpis,
+  .ez-phone .ac-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-2);
+  }
+  .ez-phone .mk-kpis > :last-child:nth-child(odd),
+  .ez-phone .mo-kpis > :last-child:nth-child(odd),
+  .ez-phone .af-kpis > :last-child:nth-child(odd),
+  .ez-phone .ac-kpis > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  .ez-phone .sk-kpi {
+    padding: var(--sp-3);
+    gap: var(--sp-2);
+  }
+  .ez-phone .sk-kpi__icon {
+    display: none;
+  }
+  .ez-phone .sk-kpi__figure {
+    font-size: var(--fs-lg);
+  }
+  .ez-phone .sk-kpi__hint,
+  .ez-phone .sk-kpi__secondary,
+  .ez-phone .sk-kpi__foot {
+    font-size: var(--fs-xs);
+  }
+}
+
+/* A table at tablet width: the client column holds text that may break
+   anywhere (an email, an id), so the other columns could squeeze it to a
+   single letter per line. It keeps a readable width, and the table
+   scrolls sideways inside its own frame if the screen is too narrow. */
+@media (min-width: 768px) {
+  .ez-touch td .mk-seller,
+  .ez-touch td .ac-cell-stack,
+  .ez-touch td .mk-cell {
+    min-width: min(220px, 40vw);
+  }
+}

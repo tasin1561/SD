@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { When } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
@@ -83,7 +84,8 @@ function ResellerStoresIndex(): ReactElement {
   const sellerKnown = sellerId === '' || sellerOptions.some((o) => o.id === sellerId);
 
   return (
-    <div className="ez-touch ez-wrap">
+    <div className="ez-touch ez-wrap ez-phone">
+      <TidyCards />
       <AcPage>
         <AcHeader
           title={
@@ -154,62 +156,64 @@ function ResellerStoresIndex(): ReactElement {
           />
         ) : (
           <AcCard flush>
-            <Table caption={t('resellerStoresPage.memberStores')}>
-              <THead>
-                <Tr>
-                  <Th>{t('resellerStoresPage.store')}</Th>
-                  <Th>{t('resellerStoresPage.client')}</Th>
-                  <Th>{t('resellerStoresPage.status')}</Th>
-                  <Th>{t('resellerStoresPage.openedBy')}</Th>
-                  <Th>{t('resellerStoresPage.wallet')}</Th>
-                  <Th>{t('resellerStoresPage.team')}</Th>
-                  <Th>{t('resellerStoresPage.created')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {stores.data.map((s) => (
-                  <Tr key={s.id}>
-                    <Td>
-                      <Link href={`/reseller-stores/${s.id}`} className="ac-link ac-cell-main">
-                        {s.name}
-                      </Link>
-                    </Td>
-                    <Td>
-                      <Link
-                        href={`/reseller-stores?sellerId=${s.sellerId}`}
-                        className="ac-link"
-                        title={t('resellerStoresPage.onlyThisClientSStores')}
-                      >
-                        {s.sellerCompanyName}
-                      </Link>
-                    </Td>
-                    <Td>
-                      <StatusChip
-                        kind={resellerStoreStatusKind(s.status)}
-                        label={resellerStoreStatusLabel(s.status)}
-                        size="sm"
-                      />
-                    </Td>
-                    <Td>
-                      {s.origin === 'ADMIN'
-                        ? t('resellerStoresPage.skydrop')
-                        : t('resellerStoresPage.client')}
-                    </Td>
-                    <Td>
-                      {s.walletManagedBy === 'SKYDROP'
-                        ? t('resellerStoresPage.skydrop')
-                        : t('resellerStoresPage.client')}
-                    </Td>
-                    <Td>
-                      <span className="sk-figure">{s.memberCount}</span>
-                    </Td>
-                    <Td>
-                      <span className="sk-figure ac-faint">{<When iso={s.createdAt} />}</span>
-                    </Td>
+            <div className="ez-wrap ez-cards">
+              <Table caption={t('resellerStoresPage.memberStores')}>
+                <THead>
+                  <Tr>
+                    <Th>{t('resellerStoresPage.store')}</Th>
+                    <Th>{t('resellerStoresPage.client')}</Th>
+                    <Th>{t('resellerStoresPage.status')}</Th>
+                    <Th>{t('resellerStoresPage.openedBy')}</Th>
+                    <Th>{t('resellerStoresPage.wallet')}</Th>
+                    <Th>{t('resellerStoresPage.team')}</Th>
+                    <Th>{t('resellerStoresPage.created')}</Th>
                   </Tr>
-                ))}
-              </TBody>
-            </Table>
+                </THead>
+                <TBody>
+                  {stores.data.map((s) => (
+                    <Tr key={s.id}>
+                      <Td>
+                        <Link href={`/reseller-stores/${s.id}`} className="ac-link ac-cell-main">
+                          {s.name}
+                        </Link>
+                      </Td>
+                      <Td>
+                        <Link
+                          href={`/reseller-stores?sellerId=${s.sellerId}`}
+                          className="ac-link"
+                          title={t('resellerStoresPage.onlyThisClientSStores')}
+                        >
+                          {s.sellerCompanyName}
+                        </Link>
+                      </Td>
+                      <Td>
+                        <StatusChip
+                          kind={resellerStoreStatusKind(s.status)}
+                          label={resellerStoreStatusLabel(s.status)}
+                          size="sm"
+                        />
+                      </Td>
+                      <Td>
+                        {s.origin === 'ADMIN'
+                          ? t('resellerStoresPage.skydrop')
+                          : t('resellerStoresPage.client')}
+                      </Td>
+                      <Td>
+                        {s.walletManagedBy === 'SKYDROP'
+                          ? t('resellerStoresPage.skydrop')
+                          : t('resellerStoresPage.client')}
+                      </Td>
+                      <Td>
+                        <span className="sk-figure">{s.memberCount}</span>
+                      </Td>
+                      <Td>
+                        <span className="sk-figure ac-faint">{<When iso={s.createdAt} />}</span>
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
           </AcCard>
         )}
         {mayCreate ? <CreateModal open={creating} onOpenChange={setCreating} /> : null}

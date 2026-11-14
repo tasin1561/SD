@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useState, type ReactElement } from 'react';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { PageHeader } from '@skydrop/ui/app/page-header';
@@ -48,7 +49,8 @@ export function ExpenseCategoriesIndex(): ReactElement {
   const categories = useExpenseCategories(showInactive);
 
   return (
-    <div className="mo-page ez-touch">
+    <div className="mo-page ez-touch ez-phone">
+      <TidyCards />
       <div className="mo-stack mo-stack--tight">
         <BackLink href="/expenses" icon={<ArrowLeft size={14} aria-hidden />}>
           {t('expensesCategoriesExpenseCategoriesIndex.backToSpending')}
@@ -100,65 +102,67 @@ export function ExpenseCategoriesIndex(): ReactElement {
             />
           </MoCard>
 
-          <Table>
-            <THead>
-              <Tr>
-                <Th>{t('expensesCategoriesExpenseCategoriesIndex.code')}</Th>
-                <Th>{t('expensesCategoriesExpenseCategoriesIndex.name')}</Th>
-                <Th>{t('expensesCategoriesExpenseCategoriesIndex.whatGoesHere')}</Th>
-                <Th>{t('expensesCategoriesExpenseCategoriesIndex.state')}</Th>
-                {canWrite && (
-                  <Th align="right">{t('expensesCategoriesExpenseCategoriesIndex.actions')}</Th>
-                )}
-              </Tr>
-            </THead>
-            <TBody>
-              {categories.data.length === 0 ? (
-                <TableEmpty colSpan={canWrite ? 5 : 4}>
-                  <EmptyState
-                    bare
-                    title={t('expensesCategoriesExpenseCategoriesIndex.noCategoriesYet')}
-                    description={t(
-                      'expensesCategoriesExpenseCategoriesIndex.addOneBeforeRecordingAn',
-                    )}
-                  />
-                </TableEmpty>
-              ) : (
-                categories.data.map((c) => (
-                  <Tr key={c.id}>
-                    <Td className="sk-ident">{c.code}</Td>
-                    <Td>{c.name}</Td>
-                    <Td className="mo-muted">{c.hint ?? '—'}</Td>
-                    <Td>
-                      <StatusChip
-                        size="sm"
-                        kind={c.isActive ? 'confirmed' : 'cancelled'}
-                        label={
-                          c.isActive
-                            ? t('expensesCategoriesExpenseCategoriesIndex.active')
-                            : t('expensesCategoriesExpenseCategoriesIndex.retired')
-                        }
-                      />
-                    </Td>
-                    {canWrite && (
-                      <Td align="right">
-                        <div className="mo-row mo-row--end">
-                          <Button size="sm" variant="ghost" onClick={() => setEditing(c)}>
-                            {t('expensesCategoriesExpenseCategoriesIndex.edit')}
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setToggling(c)}>
-                            {c.isActive
-                              ? t('expensesCategoriesExpenseCategoriesIndex.retire')
-                              : t('expensesCategoriesExpenseCategoriesIndex.restore')}
-                          </Button>
-                        </div>
+          <div className="ez-wrap ez-cards ez-lead-2">
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>{t('expensesCategoriesExpenseCategoriesIndex.code')}</Th>
+                  <Th>{t('expensesCategoriesExpenseCategoriesIndex.name')}</Th>
+                  <Th>{t('expensesCategoriesExpenseCategoriesIndex.whatGoesHere')}</Th>
+                  <Th>{t('expensesCategoriesExpenseCategoriesIndex.state')}</Th>
+                  {canWrite && (
+                    <Th align="right">{t('expensesCategoriesExpenseCategoriesIndex.actions')}</Th>
+                  )}
+                </Tr>
+              </THead>
+              <TBody>
+                {categories.data.length === 0 ? (
+                  <TableEmpty colSpan={canWrite ? 5 : 4}>
+                    <EmptyState
+                      bare
+                      title={t('expensesCategoriesExpenseCategoriesIndex.noCategoriesYet')}
+                      description={t(
+                        'expensesCategoriesExpenseCategoriesIndex.addOneBeforeRecordingAn',
+                      )}
+                    />
+                  </TableEmpty>
+                ) : (
+                  categories.data.map((c) => (
+                    <Tr key={c.id}>
+                      <Td className="sk-ident">{c.code}</Td>
+                      <Td>{c.name}</Td>
+                      <Td className="mo-muted">{c.hint ?? '—'}</Td>
+                      <Td>
+                        <StatusChip
+                          size="sm"
+                          kind={c.isActive ? 'confirmed' : 'cancelled'}
+                          label={
+                            c.isActive
+                              ? t('expensesCategoriesExpenseCategoriesIndex.active')
+                              : t('expensesCategoriesExpenseCategoriesIndex.retired')
+                          }
+                        />
                       </Td>
-                    )}
-                  </Tr>
-                ))
-              )}
-            </TBody>
-          </Table>
+                      {canWrite && (
+                        <Td align="right">
+                          <div className="mo-row mo-row--end">
+                            <Button size="sm" variant="ghost" onClick={() => setEditing(c)}>
+                              {t('expensesCategoriesExpenseCategoriesIndex.edit')}
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setToggling(c)}>
+                              {c.isActive
+                                ? t('expensesCategoriesExpenseCategoriesIndex.retire')
+                                : t('expensesCategoriesExpenseCategoriesIndex.restore')}
+                            </Button>
+                          </div>
+                        </Td>
+                      )}
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </Table>
+          </div>
         </>
       )}
 

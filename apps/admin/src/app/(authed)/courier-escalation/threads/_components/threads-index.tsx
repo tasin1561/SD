@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { Code } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import { When } from '@/components/easy/when';
@@ -60,7 +61,8 @@ export function CourierThreadsIndex(): ReactElement {
   const rows = list.data ?? [];
 
   return (
-    <div className="af-page ez-touch">
+    <div className="af-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         breadcrumbs={[
           { label: t('courierEscalationThreadsThreadsIndex.network') },
@@ -95,89 +97,93 @@ export function CourierThreadsIndex(): ReactElement {
           description={t('courierEscalationThreadsThreadsIndex.oneOpensWhenATicket')}
         />
       ) : (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>{t('courierEscalationThreadsThreadsIndex.client')}</Th>
-              <Th>AWB</Th>
-              <Th>{t('courierEscalationThreadsThreadsIndex.theirTicket')}</Th>
-              <Th>{t('courierEscalationThreadsThreadsIndex.state')}</Th>
-              <Th align="right">{t('courierEscalationThreadsThreadsIndex.messages')}</Th>
-              <Th>{t('courierEscalationThreadsThreadsIndex.lastHeard')}</Th>
-              <Th> </Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {rows.map((r) => (
-              <Tr key={r.id} selected={selected === r.id}>
-                <Td>
-                  <div className="af-stack af-stack--tight">
-                    <span>{r.sellerName ?? <span className="af-faint">—</span>}</span>
-                    <span className="af-small">{r.courierName}</span>
-                  </div>
-                </Td>
-                <Td>
-                  {r.awbNumber === null ? (
-                    <span className="af-faint">—</span>
-                  ) : (
-                    <Ident value={r.awbNumber} />
-                  )}
-                </Td>
-                <Td>
-                  {r.externalTicketId === null ? (
-                    // No courier ticket id means nothing has been
-                    // delivered to them yet, or the operator marked an
-                    // item sent without pasting one back.
-                    <span className="af-faint">
-                      {t('courierEscalationThreadsThreadsIndex.notYetRaised')}
-                    </span>
-                  ) : (
-                    <Ident value={r.externalTicketId} />
-                  )}
-                </Td>
-                <Td>
-                  <div className="af-row">
-                    {r.state === null ? (
+        <div className="ez-wrap ez-cards">
+          <Table>
+            <THead>
+              <Tr>
+                <Th>{t('courierEscalationThreadsThreadsIndex.client')}</Th>
+                <Th>AWB</Th>
+                <Th>{t('courierEscalationThreadsThreadsIndex.theirTicket')}</Th>
+                <Th>{t('courierEscalationThreadsThreadsIndex.state')}</Th>
+                <Th align="right">{t('courierEscalationThreadsThreadsIndex.messages')}</Th>
+                <Th>{t('courierEscalationThreadsThreadsIndex.lastHeard')}</Th>
+                <Th> </Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {rows.map((r) => (
+                <Tr key={r.id} selected={selected === r.id}>
+                  <Td>
+                    <div className="af-stack af-stack--tight">
+                      <span>{r.sellerName ?? <span className="af-faint">—</span>}</span>
+                      <span className="af-small">{r.courierName}</span>
+                    </div>
+                  </Td>
+                  <Td>
+                    {r.awbNumber === null ? (
                       <span className="af-faint">—</span>
                     ) : (
-                      <StatusChip size="sm" kind={stateKind(r.state)} label={humanise(r.state)} />
+                      <Ident value={r.awbNumber} />
                     )}
-                    {r.needsReviewAt !== null ? (
-                      <span
-                        className="ce-review"
-                        title={t('courierEscalationThreadsThreadsIndex.aMessageHereWasClassified')}
-                      >
-                        <AlertTriangle size={12} aria-hidden /> review
+                  </Td>
+                  <Td>
+                    {r.externalTicketId === null ? (
+                      // No courier ticket id means nothing has been
+                      // delivered to them yet, or the operator marked an
+                      // item sent without pasting one back.
+                      <span className="af-faint">
+                        {t('courierEscalationThreadsThreadsIndex.notYetRaised')}
                       </span>
-                    ) : null}
-                  </div>
-                </Td>
-                <Td align="right">
-                  <span className="sk-figure">{r.messageCount}</span>
-                </Td>
-                <Td>
-                  <span className="af-small af-nowrap">
-                    {r.lastMessageAt === null
-                      ? '—'
-                      : new Date(r.lastMessageAt).toLocaleString('en-IN')}
-                  </span>
-                </Td>
-                <Td>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-expanded={selected === r.id}
-                    onClick={() => setSelected(selected === r.id ? null : r.id)}
-                  >
-                    {selected === r.id
-                      ? t('courierEscalationThreadsThreadsIndex.close')
-                      : t('courierEscalationThreadsThreadsIndex.open')}
-                  </Button>
-                </Td>
-              </Tr>
-            ))}
-          </TBody>
-        </Table>
+                    ) : (
+                      <Ident value={r.externalTicketId} />
+                    )}
+                  </Td>
+                  <Td>
+                    <div className="af-row">
+                      {r.state === null ? (
+                        <span className="af-faint">—</span>
+                      ) : (
+                        <StatusChip size="sm" kind={stateKind(r.state)} label={humanise(r.state)} />
+                      )}
+                      {r.needsReviewAt !== null ? (
+                        <span
+                          className="ce-review"
+                          title={t(
+                            'courierEscalationThreadsThreadsIndex.aMessageHereWasClassified',
+                          )}
+                        >
+                          <AlertTriangle size={12} aria-hidden /> review
+                        </span>
+                      ) : null}
+                    </div>
+                  </Td>
+                  <Td align="right">
+                    <span className="sk-figure">{r.messageCount}</span>
+                  </Td>
+                  <Td>
+                    <span className="af-small af-nowrap">
+                      {r.lastMessageAt === null
+                        ? '—'
+                        : new Date(r.lastMessageAt).toLocaleString('en-IN')}
+                    </span>
+                  </Td>
+                  <Td>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-expanded={selected === r.id}
+                      onClick={() => setSelected(selected === r.id ? null : r.id)}
+                    >
+                      {selected === r.id
+                        ? t('courierEscalationThreadsThreadsIndex.close')
+                        : t('courierEscalationThreadsThreadsIndex.open')}
+                    </Button>
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </div>
       )}
 
       {selected !== null ? <ThreadPanel escalationId={selected} /> : null}

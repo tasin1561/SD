@@ -205,55 +205,57 @@ function InvoiceAccountBlock({ a }: { readonly a: ShiprocketInvoiceAccountView }
       </div>
       {res !== null && (
         <>
-          <Table>
-            <THead>
-              <Tr>
-                <Th>{t('costSyncShiprocketCostSection.invoice')}</Th>
-                <Th>{t('costSyncShiprocketCostSection.type')}</Th>
-                <Th>{t('costSyncShiprocketCostSection.date')}</Th>
-                <Th>{t('costSyncShiprocketCostSection.amount')}</Th>
-                <Th>{t('costSyncShiprocketCostSection.againstTheWallet')}</Th>
-                <Th>{t('costSyncShiprocketCostSection.disputeBy')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.length === 0 ? (
-                <TableEmpty colSpan={6}>
-                  {t('costSyncShiprocketCostSection.noInvoicesInTheWindow')}
-                </TableEmpty>
-              ) : (
-                rows.map((r) => (
-                  <Tr key={r.invoiceId}>
-                    <Td>
-                      <span className="sk-ident">{r.invoiceId}</span>
-                    </Td>
-                    <Td>{r.serviceType}</Td>
-                    <Td>{r.invoiceDate}</Td>
-                    <Td>
-                      <Money amount={r.totalInr} />
-                    </Td>
-                    <Td>
-                      <InvoiceResult r={r} />
-                      {r.beforeRecords > 0 && (
-                        <span className="af-small cs-block">
-                          {t('costSyncShiprocketCostSection.lineSOlderThanOur', {
-                            beforeRecords: r.beforeRecords,
-                          })}
-                        </span>
-                      )}
-                    </Td>
-                    <Td>
-                      {r.status === 'DIFFERS' && r.disputeOpen ? (
-                        <span className="af-bad af-strong">{r.disputeBy}</span>
-                      ) : (
-                        <span className="af-small">{r.disputeBy}</span>
-                      )}
-                    </Td>
-                  </Tr>
-                ))
-              )}
-            </TBody>
-          </Table>
+          <div className="ez-wrap ez-cards ez-then-4">
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>{t('costSyncShiprocketCostSection.invoice')}</Th>
+                  <Th>{t('costSyncShiprocketCostSection.type')}</Th>
+                  <Th>{t('costSyncShiprocketCostSection.date')}</Th>
+                  <Th>{t('costSyncShiprocketCostSection.amount')}</Th>
+                  <Th>{t('costSyncShiprocketCostSection.againstTheWallet')}</Th>
+                  <Th>{t('costSyncShiprocketCostSection.disputeBy')}</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {rows.length === 0 ? (
+                  <TableEmpty colSpan={6}>
+                    {t('costSyncShiprocketCostSection.noInvoicesInTheWindow')}
+                  </TableEmpty>
+                ) : (
+                  rows.map((r) => (
+                    <Tr key={r.invoiceId}>
+                      <Td>
+                        <span className="sk-ident">{r.invoiceId}</span>
+                      </Td>
+                      <Td>{r.serviceType}</Td>
+                      <Td>{r.invoiceDate}</Td>
+                      <Td>
+                        <Money amount={r.totalInr} />
+                      </Td>
+                      <Td>
+                        <InvoiceResult r={r} />
+                        {r.beforeRecords > 0 && (
+                          <span className="af-small cs-block">
+                            {t('costSyncShiprocketCostSection.lineSOlderThanOur', {
+                              beforeRecords: r.beforeRecords,
+                            })}
+                          </span>
+                        )}
+                      </Td>
+                      <Td>
+                        {r.status === 'DIFFERS' && r.disputeOpen ? (
+                          <span className="af-bad af-strong">{r.disputeBy}</span>
+                        ) : (
+                          <span className="af-small">{r.disputeBy}</span>
+                        )}
+                      </Td>
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </Table>
+          </div>
           <p className="af-small">
             {t('costSyncShiprocketCostSection.vasChargedButNeverInvoiced')}{' '}
             {res.vasUninvoiced.count === 0 ? (
@@ -673,92 +675,95 @@ export function ShiprocketCostSection(): ReactElement {
               title={t('costSyncShiprocketCostSection.ourShiprocketParcels')}
               as="h3"
             />
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>{t('costSyncShiprocketCostSection.order')}</Th>
-                  <Th>AWB</Th>
-                  <Th>{t('costSyncShiprocketCostSection.theirStatus')}</Th>
-                  <Th>{t('costSyncShiprocketCostSection.chargedSoFarEstimate')}</Th>
-                  <Th>{t('costSyncShiprocketCostSection.finalBill')}</Th>
-                  <Th>{t('costSyncShiprocketCostSection.recordedCostWallet')}</Th>
-                  <Th>{t('costSyncShiprocketCostSection.lastRead')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {d.parcels.length === 0 ? (
-                  <TableEmpty colSpan={7}>
-                    <div className="af-stack af-stack--tight cs-empty">
-                      <span className="af-strong">
-                        {t('costSyncShiprocketCostSection.noShiprocketParcelsReadYet')}
-                      </span>
-                      <span className="af-small">
-                        {t('costSyncShiprocketCostSection.parcelsAppearHereAfterThe')}
-                      </span>
-                    </div>
-                  </TableEmpty>
-                ) : (
-                  d.parcels.map((p) => {
-                    const fwd = p.recordedForwardInr === null ? null : Number(p.recordedForwardInr);
-                    const rto = p.recordedRtoInr === null ? null : Number(p.recordedRtoInr);
-                    const cost = fwd === null && rto === null ? null : (fwd ?? 0) + (rto ?? 0);
-                    const differs =
-                      cost !== null &&
-                      p.billedInr !== null &&
-                      Math.abs(cost - Number(p.billedInr)) > 0.004;
-                    return (
-                      <Tr key={p.shipmentId}>
-                        <Td>
-                          <span className="sk-ident">{p.orderNumber ?? '—'}</span>
-                        </Td>
-                        <Td>
-                          <span className="sk-ident">{p.awbNumber ?? '—'}</span>
-                        </Td>
-                        <Td>{p.theirStatus}</Td>
-                        <Td>
-                          {p.provisionalInr === null ? '—' : <Money amount={p.provisionalInr} />}
-                        </Td>
-                        <Td>
-                          {p.billedInr === null ? (
-                            <span className="af-small">
-                              {t('costSyncShiprocketCostSection.notBilledYet')}
-                            </span>
-                          ) : (
-                            <Money amount={p.billedInr} />
-                          )}
-                        </Td>
-                        <Td>
-                          {cost === null ? (
-                            <span className="af-small">uncovered</span>
-                          ) : (
+            <div className="ez-wrap ez-cards">
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>{t('costSyncShiprocketCostSection.order')}</Th>
+                    <Th>AWB</Th>
+                    <Th>{t('costSyncShiprocketCostSection.theirStatus')}</Th>
+                    <Th>{t('costSyncShiprocketCostSection.chargedSoFarEstimate')}</Th>
+                    <Th>{t('costSyncShiprocketCostSection.finalBill')}</Th>
+                    <Th>{t('costSyncShiprocketCostSection.recordedCostWallet')}</Th>
+                    <Th>{t('costSyncShiprocketCostSection.lastRead')}</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {d.parcels.length === 0 ? (
+                    <TableEmpty colSpan={7}>
+                      <div className="af-stack af-stack--tight cs-empty">
+                        <span className="af-strong">
+                          {t('costSyncShiprocketCostSection.noShiprocketParcelsReadYet')}
+                        </span>
+                        <span className="af-small">
+                          {t('costSyncShiprocketCostSection.parcelsAppearHereAfterThe')}
+                        </span>
+                      </div>
+                    </TableEmpty>
+                  ) : (
+                    d.parcels.map((p) => {
+                      const fwd =
+                        p.recordedForwardInr === null ? null : Number(p.recordedForwardInr);
+                      const rto = p.recordedRtoInr === null ? null : Number(p.recordedRtoInr);
+                      const cost = fwd === null && rto === null ? null : (fwd ?? 0) + (rto ?? 0);
+                      const differs =
+                        cost !== null &&
+                        p.billedInr !== null &&
+                        Math.abs(cost - Number(p.billedInr)) > 0.004;
+                      return (
+                        <Tr key={p.shipmentId}>
+                          <Td>
+                            <span className="sk-ident">{p.orderNumber ?? '—'}</span>
+                          </Td>
+                          <Td>
+                            <span className="sk-ident">{p.awbNumber ?? '—'}</span>
+                          </Td>
+                          <Td>{p.theirStatus}</Td>
+                          <Td>
+                            {p.provisionalInr === null ? '—' : <Money amount={p.provisionalInr} />}
+                          </Td>
+                          <Td>
+                            {p.billedInr === null ? (
+                              <span className="af-small">
+                                {t('costSyncShiprocketCostSection.notBilledYet')}
+                              </span>
+                            ) : (
+                              <Money amount={p.billedInr} />
+                            )}
+                          </Td>
+                          <Td>
+                            {cost === null ? (
+                              <span className="af-small">uncovered</span>
+                            ) : (
+                              <span className="af-stack af-stack--tight">
+                                <Money amount={cost.toFixed(2)} />
+                                {differs && (
+                                  <span className="af-small af-bad">
+                                    {t('costSyncShiprocketCostSection.differsFromTheirBill')}
+                                  </span>
+                                )}
+                              </span>
+                            )}
+                          </Td>
+                          <Td>
                             <span className="af-stack af-stack--tight">
-                              <Money amount={cost.toFixed(2)} />
-                              {differs && (
-                                <span className="af-small af-bad">
-                                  {t('costSyncShiprocketCostSection.differsFromTheirBill')}
+                              <span className="af-small af-nowrap">{fmtWhen(p.readAt)}</span>
+                              {p.readings > 1 && (
+                                <span className="af-small">
+                                  {t('costSyncShiprocketCostSection.readingsItMoved', {
+                                    readings: p.readings,
+                                  })}
                                 </span>
                               )}
                             </span>
-                          )}
-                        </Td>
-                        <Td>
-                          <span className="af-stack af-stack--tight">
-                            <span className="af-small af-nowrap">{fmtWhen(p.readAt)}</span>
-                            {p.readings > 1 && (
-                              <span className="af-small">
-                                {t('costSyncShiprocketCostSection.readingsItMoved', {
-                                  readings: p.readings,
-                                })}
-                              </span>
-                            )}
-                          </span>
-                        </Td>
-                      </Tr>
-                    );
-                  })
-                )}
-              </TBody>
-            </Table>
+                          </Td>
+                        </Tr>
+                      );
+                    })
+                  )}
+                </TBody>
+              </Table>
+            </div>
           </div>
         </>
       )}

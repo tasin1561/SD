@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import type { ReactElement } from 'react';
 import { ArrowLeft, Info } from 'lucide-react';
 import { PageHeader } from '@skydrop/ui/app/page-header';
@@ -109,7 +110,8 @@ export function BankAccountHistoryIndex(): ReactElement {
   const history = useBankAccountHistory(usePermission('money.view'));
 
   return (
-    <div className="mo-page ez-touch">
+    <div className="mo-page ez-touch ez-phone">
+      <TidyCards />
       <BackLink href="/bank-accounts" icon={<ArrowLeft size={14} aria-hidden />}>
         {t('bankAccountsHistoryBankAccountHistoryIndex.backToBankAccounts')}
       </BackLink>
@@ -146,60 +148,62 @@ export function BankAccountHistoryIndex(): ReactElement {
           </Notice>
 
           <MoCard flush>
-            <Table caption={t('bankAccountsHistoryBankAccountHistoryIndex.bankAccountChanges')}>
-              <THead>
-                <Tr>
-                  <Th>{t('bankAccountsHistoryBankAccountHistoryIndex.when')}</Th>
-                  <Th>{t('bankAccountsHistoryBankAccountHistoryIndex.what')}</Th>
-                  <Th>{t('bankAccountsHistoryBankAccountHistoryIndex.changed')}</Th>
-                  <Th>{t('bankAccountsHistoryBankAccountHistoryIndex.by')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {history.data.length === 0 ? (
-                  <TableEmpty colSpan={4}>
-                    <EmptyState
-                      bare
-                      title={t('bankAccountsHistoryBankAccountHistoryIndex.nothingRecordedYet')}
-                      description={t(
-                        'bankAccountsHistoryBankAccountHistoryIndex.everyAddEditAndRetirement',
-                      )}
-                    />
-                  </TableEmpty>
-                ) : (
-                  history.data.map((r) => (
-                    <Tr key={r.id}>
-                      <Td className="mo-nowrap mo-muted">
-                        <When iso={r.at} time />
-                      </Td>
-                      <Td>
-                        <StatusChip
-                          // An account-number change is the one that
-                          // redirects money, and it is audited CRITICAL —
-                          // shown here as a failure tone so it does not
-                          // read like an ordinary edit.
-                          kind={
-                            r.severity === 'CRITICAL'
-                              ? 'failed'
-                              : r.action.endsWith('.retired')
-                                ? 'cancelled'
-                                : 'confirmed'
-                          }
-                          label={actionLabel(t, r.action)}
-                          size="sm"
-                        />
-                      </Td>
-                      <Td>
-                        <ChangeSummary row={r} />
-                      </Td>
-                      <Td className="mo-muted">
-                        {r.byName ?? t('bankAccountsHistoryBankAccountHistoryIndex.system')}
-                      </Td>
-                    </Tr>
-                  ))
-                )}
-              </TBody>
-            </Table>
+            <div className="ez-wrap ez-cards ez-lead-2">
+              <Table caption={t('bankAccountsHistoryBankAccountHistoryIndex.bankAccountChanges')}>
+                <THead>
+                  <Tr>
+                    <Th>{t('bankAccountsHistoryBankAccountHistoryIndex.when')}</Th>
+                    <Th>{t('bankAccountsHistoryBankAccountHistoryIndex.what')}</Th>
+                    <Th>{t('bankAccountsHistoryBankAccountHistoryIndex.changed')}</Th>
+                    <Th>{t('bankAccountsHistoryBankAccountHistoryIndex.by')}</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {history.data.length === 0 ? (
+                    <TableEmpty colSpan={4}>
+                      <EmptyState
+                        bare
+                        title={t('bankAccountsHistoryBankAccountHistoryIndex.nothingRecordedYet')}
+                        description={t(
+                          'bankAccountsHistoryBankAccountHistoryIndex.everyAddEditAndRetirement',
+                        )}
+                      />
+                    </TableEmpty>
+                  ) : (
+                    history.data.map((r) => (
+                      <Tr key={r.id}>
+                        <Td className="mo-nowrap mo-muted">
+                          <When iso={r.at} time />
+                        </Td>
+                        <Td>
+                          <StatusChip
+                            // An account-number change is the one that
+                            // redirects money, and it is audited CRITICAL —
+                            // shown here as a failure tone so it does not
+                            // read like an ordinary edit.
+                            kind={
+                              r.severity === 'CRITICAL'
+                                ? 'failed'
+                                : r.action.endsWith('.retired')
+                                  ? 'cancelled'
+                                  : 'confirmed'
+                            }
+                            label={actionLabel(t, r.action)}
+                            size="sm"
+                          />
+                        </Td>
+                        <Td>
+                          <ChangeSummary row={r} />
+                        </Td>
+                        <Td className="mo-muted">
+                          {r.byName ?? t('bankAccountsHistoryBankAccountHistoryIndex.system')}
+                        </Td>
+                      </Tr>
+                    ))
+                  )}
+                </TBody>
+              </Table>
+            </div>
           </MoCard>
         </>
       )}

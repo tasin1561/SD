@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import Link from 'next/link';
 
 import { useState, type ReactElement } from 'react';
@@ -119,7 +120,8 @@ export function TopupsIndex(): ReactElement {
   const rows = list.data ?? [];
 
   return (
-    <div className="mk-page ez-touch ez-lead-2 ez-then-4">
+    <div className="mk-page ez-touch ez-lead-2 ez-then-4 ez-phone ez-cards">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">

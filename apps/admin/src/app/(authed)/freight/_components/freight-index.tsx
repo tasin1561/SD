@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import Link from 'next/link';
 
 import { Fragment, useMemo, useState, type CSSProperties, type ReactElement } from 'react';
@@ -70,7 +71,8 @@ export function FreightIndex(): ReactElement {
     .reduce((sum, r) => sum + Number(r.totalInr), 0);
 
   return (
-    <div className="mk-page ez-touch">
+    <div className="mk-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -156,31 +158,33 @@ export function FreightIndex(): ReactElement {
         />
       ) : (
         <MkCard flush>
-          <Table caption={tr('freightFreightIndex.freightBills')}>
-            <THead>
-              <Tr>
-                <Th>{tr('freightFreightIndex.consignment')}</Th>
-                <Th>{tr('freightFreightIndex.mode')}</Th>
-                <Th align="right">{tr('freightFreightIndex.bill')}</Th>
-                <Th align="right">{tr('freightFreightIndex.ourCost')}</Th>
-                <Th align="right">{tr('freightFreightIndex.recovered')}</Th>
-                <Th align="right">{tr('freightFreightIndex.outstanding')}</Th>
-                <Th>{tr('freightFreightIndex.units')}</Th>
-                <Th>{tr('freightFreightIndex.status')}</Th>
-                <Th align="right">{tr('freightFreightIndex.actions')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.map((row) => (
-                <FreightRow
-                  key={row.id}
-                  row={row}
-                  open={openId === row.id}
-                  onToggle={() => setOpenId(openId === row.id ? null : row.id)}
-                />
-              ))}
-            </TBody>
-          </Table>
+          <div className="ez-wrap ez-cards ez-then-6">
+            <Table caption={tr('freightFreightIndex.freightBills')}>
+              <THead>
+                <Tr>
+                  <Th>{tr('freightFreightIndex.consignment')}</Th>
+                  <Th>{tr('freightFreightIndex.mode')}</Th>
+                  <Th align="right">{tr('freightFreightIndex.bill')}</Th>
+                  <Th align="right">{tr('freightFreightIndex.ourCost')}</Th>
+                  <Th align="right">{tr('freightFreightIndex.recovered')}</Th>
+                  <Th align="right">{tr('freightFreightIndex.outstanding')}</Th>
+                  <Th>{tr('freightFreightIndex.units')}</Th>
+                  <Th>{tr('freightFreightIndex.status')}</Th>
+                  <Th align="right">{tr('freightFreightIndex.actions')}</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {rows.map((row) => (
+                  <FreightRow
+                    key={row.id}
+                    row={row}
+                    open={openId === row.id}
+                    onToggle={() => setOpenId(openId === row.id ? null : row.id)}
+                  />
+                ))}
+              </TBody>
+            </Table>
+          </div>
         </MkCard>
       )}
 
@@ -358,72 +362,76 @@ function CostBreakdown({
         {d.lines.length === 0 ? (
           <p className="mk-faint">{tr('freightFreightIndex.noAllocationLinesThisBill')}</p>
         ) : (
-          <Table caption={tr('freightFreightIndex.freightSplitByLine')}>
-            <THead>
-              <Tr>
-                <Th>{tr('freightFreightIndex.product')}</Th>
-                <Th align="right">{tr('freightFreightIndex.units')}</Th>
-                <Th align="right">{tr('freightFreightIndex.weight')}</Th>
-                <Th align="right">
-                  {tr('freightFreightIndex.rate', { value: agreed === null ? '' : ` (${agreed})` })}
-                </Th>
-                <Th align="right">{tr('freightFreightIndex.perUnit')}</Th>
-                <Th align="right">{tr('freightFreightIndex.line')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {d.lines.map((l, i) => (
-                <Tr key={`${l.skuCode ?? i}`}>
-                  <Td>
-                    <div>{l.productName ?? '—'}</div>
-                    <div className="mk-faint sk-ident">{l.skuCode ?? ''}</div>
+          <div className="ez-wrap ez-cards">
+            <Table caption={tr('freightFreightIndex.freightSplitByLine')}>
+              <THead>
+                <Tr>
+                  <Th>{tr('freightFreightIndex.product')}</Th>
+                  <Th align="right">{tr('freightFreightIndex.units')}</Th>
+                  <Th align="right">{tr('freightFreightIndex.weight')}</Th>
+                  <Th align="right">
+                    {tr('freightFreightIndex.rate', {
+                      value: agreed === null ? '' : ` (${agreed})`,
+                    })}
+                  </Th>
+                  <Th align="right">{tr('freightFreightIndex.perUnit')}</Th>
+                  <Th align="right">{tr('freightFreightIndex.line')}</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {d.lines.map((l, i) => (
+                  <Tr key={`${l.skuCode ?? i}`}>
+                    <Td>
+                      <div>{l.productName ?? '—'}</div>
+                      <div className="mk-faint sk-ident">{l.skuCode ?? ''}</div>
+                    </Td>
+                    <Td align="right">
+                      <span className="sk-figure">
+                        {l.unitsSettled}/{l.units}
+                      </span>
+                    </Td>
+                    <Td align="right">
+                      {/* The number the split was made ON. Freight is
+                          priced by weight, so a line with no weight fell
+                          back to a count share — worth seeing. */}
+                      <span className="mk-small sk-figure">
+                        {l.chargeableWeightKg === null ? '—' : `${l.chargeableWeightKg} kg`}
+                      </span>
+                    </Td>
+                    <Td align="right">
+                      <Money amount={l.rate} currency={agreed ?? 'INR'} convert={false} />
+                    </Td>
+                    <Td align="right">
+                      <Money amount={l.perUnitInr} />
+                    </Td>
+                    <Td align="right">
+                      <Money amount={l.lineTotalInr} />
+                      {agreed !== null && (
+                        <div className="mk-faint">
+                          <Money
+                            amount={l.lineTotalAgreed}
+                            currency={d.agreedCurrency}
+                            convert={false}
+                          />{' '}
+                          agreed
+                        </div>
+                      )}
+                    </Td>
+                  </Tr>
+                ))}
+                <Tr>
+                  <Td colSpan={5}>
+                    <span className="mk-strong">{tr('freightFreightIndex.linesAddUpTo')}</span>
                   </Td>
                   <Td align="right">
-                    <span className="sk-figure">
-                      {l.unitsSettled}/{l.units}
+                    <span className="mk-strong">
+                      <Money amount={splitTotal.toFixed(2)} />
                     </span>
-                  </Td>
-                  <Td align="right">
-                    {/* The number the split was made ON. Freight is
-                        priced by weight, so a line with no weight fell
-                        back to a count share — worth seeing. */}
-                    <span className="mk-small sk-figure">
-                      {l.chargeableWeightKg === null ? '—' : `${l.chargeableWeightKg} kg`}
-                    </span>
-                  </Td>
-                  <Td align="right">
-                    <Money amount={l.rate} currency={agreed ?? 'INR'} convert={false} />
-                  </Td>
-                  <Td align="right">
-                    <Money amount={l.perUnitInr} />
-                  </Td>
-                  <Td align="right">
-                    <Money amount={l.lineTotalInr} />
-                    {agreed !== null && (
-                      <div className="mk-faint">
-                        <Money
-                          amount={l.lineTotalAgreed}
-                          currency={d.agreedCurrency}
-                          convert={false}
-                        />{' '}
-                        agreed
-                      </div>
-                    )}
                   </Td>
                 </Tr>
-              ))}
-              <Tr>
-                <Td colSpan={5}>
-                  <span className="mk-strong">{tr('freightFreightIndex.linesAddUpTo')}</span>
-                </Td>
-                <Td align="right">
-                  <span className="mk-strong">
-                    <Money amount={splitTotal.toFixed(2)} />
-                  </span>
-                </Td>
-              </Tr>
-            </TBody>
-          </Table>
+              </TBody>
+            </Table>
+          </div>
         )}
         {/* Said out loud rather than left to be noticed: if the split
             does not reach the bill, some of it is charged to nothing. */}

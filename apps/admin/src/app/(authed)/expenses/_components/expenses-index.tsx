@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useState, type ReactElement } from 'react';
 import { PiggyBank, Receipt, Tags } from 'lucide-react';
 import { Money } from '@skydrop/ui/components';
@@ -78,7 +79,8 @@ export function ExpensesIndex(): ReactElement {
   const [returningTo, setReturningTo] = useState<string | null>(null);
 
   return (
-    <div className="mo-page ez-touch">
+    <div className="mo-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -260,94 +262,96 @@ function SpendingTab({
             </span>
           </div>
 
-          <Table>
-            <THead>
-              <Tr>
-                <Th>{tr('expensesExpensesIndex.whenItMoved')}</Th>
-                <Th>{tr('expensesExpensesIndex.category')}</Th>
-                <Th>{tr('expensesExpensesIndex.paidFrom')}</Th>
-                <Th align="right">{tr('expensesExpensesIndex.amount')}</Th>
-                <Th>{tr('expensesExpensesIndex.reference')}</Th>
-                <Th>{tr('expensesExpensesIndex.recordedBy')}</Th>
-                <Th align="right">{tr('expensesExpensesIndex.consignment')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {items.length === 0 ? (
-                <TableEmpty colSpan={7}>
-                  {categoryId === '' ? (
-                    <EmptyState
-                      bare
-                      title={tr('expensesExpensesIndex.nothingRecordedYet')}
-                      description={tr('expensesExpensesIndex.everyExpensePaidFromOne')}
-                    />
-                  ) : (
-                    <EmptyState
-                      bare
-                      title={tr('expensesExpensesIndex.nothingFiledUnderThisCategory')}
-                    />
-                  )}
-                </TableEmpty>
-              ) : (
-                items.map((e) => (
-                  <Tr key={e.id}>
-                    <Td className="mo-nowrap sk-figure">
-                      <When iso={e.occurredAt} />
-                      {e.note !== null && <span className="ex-note">{e.note}</span>}
-                    </Td>
-                    <Td>
-                      {e.categoryName === null ? (
-                        // Not "—": an uncategorised cost is a real gap in
-                        // the breakdown and should look like one.
-                        <StatusChip
-                          size="sm"
-                          kind="pending"
-                          label={tr('expensesExpensesIndex.uncategorised')}
-                        />
-                      ) : (
-                        <span>{e.categoryName}</span>
-                      )}
-                    </Td>
-                    <Td className="mo-muted">{e.accountLabel}</Td>
-                    <Td align="right">
-                      <Money
-                        amount={Math.abs(Number(e.signedAmount)).toFixed(2)}
-                        currency={e.currency}
-                        convert={false}
-                        direction="debit"
+          <div className="ez-wrap ez-cards ez-lead-2 ez-then-4">
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>{tr('expensesExpensesIndex.whenItMoved')}</Th>
+                  <Th>{tr('expensesExpensesIndex.category')}</Th>
+                  <Th>{tr('expensesExpensesIndex.paidFrom')}</Th>
+                  <Th align="right">{tr('expensesExpensesIndex.amount')}</Th>
+                  <Th>{tr('expensesExpensesIndex.reference')}</Th>
+                  <Th>{tr('expensesExpensesIndex.recordedBy')}</Th>
+                  <Th align="right">{tr('expensesExpensesIndex.consignment')}</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {items.length === 0 ? (
+                  <TableEmpty colSpan={7}>
+                    {categoryId === '' ? (
+                      <EmptyState
+                        bare
+                        title={tr('expensesExpensesIndex.nothingRecordedYet')}
+                        description={tr('expensesExpensesIndex.everyExpensePaidFromOne')}
                       />
-                    </Td>
-                    <Td className="ex-ref sk-ident">{e.reference ?? '—'}</Td>
-                    <Td className="mo-muted">
-                      {/* "System" rather than blank: a flow writing an
-                          entry and nobody recording it are different
-                          facts, and only one of them is a gap. */}
-                      {e.recordedByName ?? tr('expensesExpensesIndex.system')}
-                      <span className="mo-sub sk-figure">
-                        <When iso={e.recordedAt} />
-                      </span>
-                    </Td>
-                    <Td align="right">
-                      {e.inboundFreightChargeId !== null ? (
-                        <span className="ex-attributed">
-                          {tr('expensesExpensesIndex.attributed')}
+                    ) : (
+                      <EmptyState
+                        bare
+                        title={tr('expensesExpensesIndex.nothingFiledUnderThisCategory')}
+                      />
+                    )}
+                  </TableEmpty>
+                ) : (
+                  items.map((e) => (
+                    <Tr key={e.id}>
+                      <Td className="mo-nowrap sk-figure">
+                        <When iso={e.occurredAt} />
+                        {e.note !== null && <span className="ex-note">{e.note}</span>}
+                      </Td>
+                      <Td>
+                        {e.categoryName === null ? (
+                          // Not "—": an uncategorised cost is a real gap in
+                          // the breakdown and should look like one.
+                          <StatusChip
+                            size="sm"
+                            kind="pending"
+                            label={tr('expensesExpensesIndex.uncategorised')}
+                          />
+                        ) : (
+                          <span>{e.categoryName}</span>
+                        )}
+                      </Td>
+                      <Td className="mo-muted">{e.accountLabel}</Td>
+                      <Td align="right">
+                        <Money
+                          amount={Math.abs(Number(e.signedAmount)).toFixed(2)}
+                          currency={e.currency}
+                          convert={false}
+                          direction="debit"
+                        />
+                      </Td>
+                      <Td className="ex-ref sk-ident">{e.reference ?? '—'}</Td>
+                      <Td className="mo-muted">
+                        {/* "System" rather than blank: a flow writing an
+                            entry and nobody recording it are different
+                            facts, and only one of them is a gap. */}
+                        {e.recordedByName ?? tr('expensesExpensesIndex.system')}
+                        <span className="mo-sub sk-figure">
+                          <When iso={e.recordedAt} />
                         </span>
-                      ) : LEG_CATEGORIES.has(e.categoryCode ?? '') && canWrite ? (
-                        // Offered only on the categories where leaving
-                        // it unattached is an actual double count. On
-                        // rent or software there is no leg to attach to.
-                        <Button variant="ghost" size="sm" onClick={() => onAttribute(e)}>
-                          {tr('expensesExpensesIndex.attribute')}
-                        </Button>
-                      ) : (
-                        <span className="mo-faint">—</span>
-                      )}
-                    </Td>
-                  </Tr>
-                ))
-              )}
-            </TBody>
-          </Table>
+                      </Td>
+                      <Td align="right">
+                        {e.inboundFreightChargeId !== null ? (
+                          <span className="ex-attributed">
+                            {tr('expensesExpensesIndex.attributed')}
+                          </span>
+                        ) : LEG_CATEGORIES.has(e.categoryCode ?? '') && canWrite ? (
+                          // Offered only on the categories where leaving
+                          // it unattached is an actual double count. On
+                          // rent or software there is no leg to attach to.
+                          <Button variant="ghost" size="sm" onClick={() => onAttribute(e)}>
+                            {tr('expensesExpensesIndex.attribute')}
+                          </Button>
+                        ) : (
+                          <span className="mo-faint">—</span>
+                        )}
+                      </Td>
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </Table>
+          </div>
         </>
       )}
 
@@ -545,71 +549,73 @@ function InvestmentsTab({
           />
         </div>
       ) : (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>{tr('expensesExpensesIndex.what')}</Th>
-              <Th>{tr('expensesExpensesIndex.with')}</Th>
-              <Th align="right">{tr('expensesExpensesIndex.placed')}</Th>
-              <Th align="right">{tr('expensesExpensesIndex.returned')}</Th>
-              <Th align="right">{tr('expensesExpensesIndex.net')}</Th>
-              <Th>{tr('expensesExpensesIndex.state')}</Th>
-              <Th align="right">{tr('expensesExpensesIndex.actions')}</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {investments.data.length === 0 ? (
-              <TableEmpty colSpan={7}>
-                <EmptyState
-                  bare
-                  title={tr('expensesExpensesIndex.nothingPlaced')}
-                  description={tr('expensesExpensesIndex.aFixedDepositOrA')}
-                />
-              </TableEmpty>
-            ) : (
-              investments.data.map((i) => (
-                <Tr key={i.id}>
-                  <Td>{i.label}</Td>
-                  <Td className="mo-muted">{i.counterparty}</Td>
-                  <Td align="right">
-                    <Money amount={i.placed} currency={i.currency} convert={false} />
-                  </Td>
-                  <Td align="right">
-                    <Money amount={i.returned} currency={i.currency} convert={false} />
-                  </Td>
-                  <Td align="right">
-                    <Money
-                      amount={i.net}
-                      currency={i.currency}
-                      convert={false}
-                      direction={Number(i.net) < 0 ? 'debit' : 'credit'}
-                    />
-                  </Td>
-                  <Td>
-                    <StatusChip
-                      size="sm"
-                      kind={i.closedAt === null ? 'in-transit' : 'delivered'}
-                      label={
-                        i.closedAt === null
-                          ? tr('expensesExpensesIndex.out')
-                          : tr('expensesExpensesIndex.closed')
-                      }
-                    />
-                  </Td>
-                  <Td align="right">
-                    {canWrite && i.closedAt === null ? (
-                      <Button variant="ghost" size="sm" onClick={() => onRecordReturn(i.id)}>
-                        {tr('expensesExpensesIndex.recordReturn')}
-                      </Button>
-                    ) : (
-                      <span className="mo-faint">—</span>
-                    )}
-                  </Td>
-                </Tr>
-              ))
-            )}
-          </TBody>
-        </Table>
+        <div className="ez-wrap ez-cards ez-then-5">
+          <Table>
+            <THead>
+              <Tr>
+                <Th>{tr('expensesExpensesIndex.what')}</Th>
+                <Th>{tr('expensesExpensesIndex.with')}</Th>
+                <Th align="right">{tr('expensesExpensesIndex.placed')}</Th>
+                <Th align="right">{tr('expensesExpensesIndex.returned')}</Th>
+                <Th align="right">{tr('expensesExpensesIndex.net')}</Th>
+                <Th>{tr('expensesExpensesIndex.state')}</Th>
+                <Th align="right">{tr('expensesExpensesIndex.actions')}</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {investments.data.length === 0 ? (
+                <TableEmpty colSpan={7}>
+                  <EmptyState
+                    bare
+                    title={tr('expensesExpensesIndex.nothingPlaced')}
+                    description={tr('expensesExpensesIndex.aFixedDepositOrA')}
+                  />
+                </TableEmpty>
+              ) : (
+                investments.data.map((i) => (
+                  <Tr key={i.id}>
+                    <Td>{i.label}</Td>
+                    <Td className="mo-muted">{i.counterparty}</Td>
+                    <Td align="right">
+                      <Money amount={i.placed} currency={i.currency} convert={false} />
+                    </Td>
+                    <Td align="right">
+                      <Money amount={i.returned} currency={i.currency} convert={false} />
+                    </Td>
+                    <Td align="right">
+                      <Money
+                        amount={i.net}
+                        currency={i.currency}
+                        convert={false}
+                        direction={Number(i.net) < 0 ? 'debit' : 'credit'}
+                      />
+                    </Td>
+                    <Td>
+                      <StatusChip
+                        size="sm"
+                        kind={i.closedAt === null ? 'in-transit' : 'delivered'}
+                        label={
+                          i.closedAt === null
+                            ? tr('expensesExpensesIndex.out')
+                            : tr('expensesExpensesIndex.closed')
+                        }
+                      />
+                    </Td>
+                    <Td align="right">
+                      {canWrite && i.closedAt === null ? (
+                        <Button variant="ghost" size="sm" onClick={() => onRecordReturn(i.id)}>
+                          {tr('expensesExpensesIndex.recordReturn')}
+                        </Button>
+                      ) : (
+                        <span className="mo-faint">—</span>
+                      )}
+                    </Td>
+                  </Tr>
+                ))
+              )}
+            </TBody>
+          </Table>
+        </div>
       )}
     </MoSection>
   );

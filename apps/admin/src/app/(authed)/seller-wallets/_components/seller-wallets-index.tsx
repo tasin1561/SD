@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useMemo, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import {
@@ -174,7 +175,8 @@ export function SellerWalletsIndex(): ReactElement {
   }
 
   return (
-    <div className="mk-page ez-touch">
+    <div className="mk-page ez-touch ez-phone ez-cards ez-then-2">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">

@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
@@ -80,7 +81,8 @@ export function SellerStoresIndex(): ReactElement {
   });
 
   return (
-    <div className="ez-touch ez-wrap">
+    <div className="ez-touch ez-wrap ez-phone">
+      <TidyCards />
       <AcPage>
         <AcHeader
           title={
@@ -139,126 +141,132 @@ export function SellerStoresIndex(): ReactElement {
                   }
                   flush
                 >
-                  <Table
-                    caption={t('storesSellerStoresIndex.storesFor', { companyName: g.companyName })}
-                  >
-                    <THead>
-                      <Tr>
-                        <Th>{t('storesSellerStoresIndex.shop')}</Th>
-                        <Th align="right">{t('storesSellerStoresIndex.orders')}</Th>
-                        <Th>{t('storesSellerStoresIndex.state')}</Th>
-                        <Th align="right">{t('storesSellerStoresIndex.actions')}</Th>
-                      </Tr>
-                    </THead>
-                    <TBody>
-                      {g.stores.length === 0 ? (
-                        // Not a blank. A seller with no store has nowhere
-                        // for their orders to be filed, which cannot
-                        // happen for a company created after stores
-                        // shipped — so seeing it is a finding.
-                        <TableEmpty colSpan={4}>
-                          {t('storesSellerStoresIndex.noStoresTheirOrdersHave')}
-                        </TableEmpty>
-                      ) : (
-                        g.stores.map((s) => (
-                          <Tr key={s.id}>
-                            <Td>
-                              <span className="ac-cell-main">{s.name}</span>
-                              {s.note !== null && <span className="ac-cell-sub">{s.note}</span>}
-                            </Td>
-                            <Td align="right">
-                              <span className="sk-figure">{s.orderCount}</span>
-                            </Td>
-                            <Td>
-                              <span className="ac-inline">
-                                {s.isDefault && (
+                  <div className="ez-wrap ez-cards">
+                    <Table
+                      caption={t('storesSellerStoresIndex.storesFor', {
+                        companyName: g.companyName,
+                      })}
+                    >
+                      <THead>
+                        <Tr>
+                          <Th>{t('storesSellerStoresIndex.shop')}</Th>
+                          <Th align="right">{t('storesSellerStoresIndex.orders')}</Th>
+                          <Th>{t('storesSellerStoresIndex.state')}</Th>
+                          <Th align="right">{t('storesSellerStoresIndex.actions')}</Th>
+                        </Tr>
+                      </THead>
+                      <TBody>
+                        {g.stores.length === 0 ? (
+                          // Not a blank. A seller with no store has nowhere
+                          // for their orders to be filed, which cannot
+                          // happen for a company created after stores
+                          // shipped — so seeing it is a finding.
+                          <TableEmpty colSpan={4}>
+                            {t('storesSellerStoresIndex.noStoresTheirOrdersHave')}
+                          </TableEmpty>
+                        ) : (
+                          g.stores.map((s) => (
+                            <Tr key={s.id}>
+                              <Td>
+                                <span className="ac-cell-main">{s.name}</span>
+                                {s.note !== null && <span className="ac-cell-sub">{s.note}</span>}
+                              </Td>
+                              <Td align="right">
+                                <span className="sk-figure">{s.orderCount}</span>
+                              </Td>
+                              <Td>
+                                <span className="ac-inline">
+                                  {s.isDefault && (
+                                    <StatusChip
+                                      kind="confirmed"
+                                      label={t('storesSellerStoresIndex.default')}
+                                      size="sm"
+                                    />
+                                  )}
                                   <StatusChip
-                                    kind="confirmed"
-                                    label={t('storesSellerStoresIndex.default')}
+                                    kind={s.isActive ? 'delivered' : 'cancelled'}
+                                    label={
+                                      s.isActive
+                                        ? t('storesSellerStoresIndex.open')
+                                        : t('storesSellerStoresIndex.closed')
+                                    }
                                     size="sm"
                                   />
+                                </span>
+                              </Td>
+                              <Td align="right">
+                                {canManage ? (
+                                  <div className="ac-buttons">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      icon={<PencilLine size={14} />}
+                                      onClick={() => setEditing({ seller: g, store: s })}
+                                    >
+                                      {t('storesSellerStoresIndex.rename')}
+                                    </Button>
+                                    {!s.isDefault && s.isActive && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        icon={<Star size={14} />}
+                                        disabled={makeDefault.isPending}
+                                        onClick={() =>
+                                          void run(
+                                            () =>
+                                              makeDefault.mutateAsync({
+                                                sellerId: g.sellerId,
+                                                storeId: s.id,
+                                              }),
+                                            t('storesSellerStoresIndex.newOrdersForWillBe', {
+                                              companyName: g.companyName,
+                                              name: s.name,
+                                            }),
+                                          )
+                                        }
+                                      >
+                                        {t('storesSellerStoresIndex.makeDefault')}
+                                      </Button>
+                                    )}
+                                    {!s.isDefault && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled={setActive.isPending}
+                                        onClick={() =>
+                                          void run(
+                                            () =>
+                                              setActive.mutateAsync({
+                                                sellerId: g.sellerId,
+                                                storeId: s.id,
+                                                isActive: !s.isActive,
+                                              }),
+                                            s.isActive
+                                              ? t('storesSellerStoresIndex.isClosed', {
+                                                  name: s.name,
+                                                })
+                                              : t('storesSellerStoresIndex.isOpen', {
+                                                  name: s.name,
+                                                }),
+                                          )
+                                        }
+                                      >
+                                        {s.isActive
+                                          ? t('storesSellerStoresIndex.close')
+                                          : t('storesSellerStoresIndex.reopen')}
+                                      </Button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="ac-faint">—</span>
                                 )}
-                                <StatusChip
-                                  kind={s.isActive ? 'delivered' : 'cancelled'}
-                                  label={
-                                    s.isActive
-                                      ? t('storesSellerStoresIndex.open')
-                                      : t('storesSellerStoresIndex.closed')
-                                  }
-                                  size="sm"
-                                />
-                              </span>
-                            </Td>
-                            <Td align="right">
-                              {canManage ? (
-                                <div className="ac-buttons">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    icon={<PencilLine size={14} />}
-                                    onClick={() => setEditing({ seller: g, store: s })}
-                                  >
-                                    {t('storesSellerStoresIndex.rename')}
-                                  </Button>
-                                  {!s.isDefault && s.isActive && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      icon={<Star size={14} />}
-                                      disabled={makeDefault.isPending}
-                                      onClick={() =>
-                                        void run(
-                                          () =>
-                                            makeDefault.mutateAsync({
-                                              sellerId: g.sellerId,
-                                              storeId: s.id,
-                                            }),
-                                          t('storesSellerStoresIndex.newOrdersForWillBe', {
-                                            companyName: g.companyName,
-                                            name: s.name,
-                                          }),
-                                        )
-                                      }
-                                    >
-                                      {t('storesSellerStoresIndex.makeDefault')}
-                                    </Button>
-                                  )}
-                                  {!s.isDefault && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      disabled={setActive.isPending}
-                                      onClick={() =>
-                                        void run(
-                                          () =>
-                                            setActive.mutateAsync({
-                                              sellerId: g.sellerId,
-                                              storeId: s.id,
-                                              isActive: !s.isActive,
-                                            }),
-                                          s.isActive
-                                            ? t('storesSellerStoresIndex.isClosed', {
-                                                name: s.name,
-                                              })
-                                            : t('storesSellerStoresIndex.isOpen', { name: s.name }),
-                                        )
-                                      }
-                                    >
-                                      {s.isActive
-                                        ? t('storesSellerStoresIndex.close')
-                                        : t('storesSellerStoresIndex.reopen')}
-                                    </Button>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="ac-faint">—</span>
-                              )}
-                            </Td>
-                          </Tr>
-                        ))
-                      )}
-                    </TBody>
-                  </Table>
+                              </Td>
+                            </Tr>
+                          ))
+                        )}
+                      </TBody>
+                    </Table>
+                  </div>
                 </AcSection>
               ))
             )}

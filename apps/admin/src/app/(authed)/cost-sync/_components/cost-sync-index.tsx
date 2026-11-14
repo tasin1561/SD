@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { pageDateTag } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
@@ -436,7 +437,8 @@ export function CostSyncIndex(): ReactElement {
   const forwardGap = d === undefined ? 0 : d.cost.dispatched - d.cost.withForwardCost;
 
   return (
-    <div className="af-page ez-touch">
+    <div className="af-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         breadcrumbs={[
           { label: t('costSyncCostSyncIndex.network') },
@@ -540,31 +542,35 @@ export function CostSyncIndex(): ReactElement {
           {d.last !== null && <LastRun run={d.last} />}
 
           <AfSection title={t('costSyncCostSyncIndex.recentRuns')}>
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>{t('costSyncCostSyncIndex.when')}</Th>
-                  <Th>{t('costSyncCostSyncIndex.result')}</Th>
-                  <Th>{t('costSyncCostSyncIndex.window')}</Th>
-                  <Th>{t('costSyncCostSyncIndex.costsWritten')}</Th>
-                  <Th>{t('costSyncCostSyncIndex.exportTotal')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {d.history.length === 0 ? (
-                  <TableEmpty colSpan={5}>
-                    <div className="af-stack af-stack--tight cs-empty">
-                      <span className="af-strong">{t('costSyncCostSyncIndex.noRunsRecorded')}</span>
-                      <span className="af-small">
-                        {t('costSyncCostSyncIndex.eitherItHasNeverRun')}
-                      </span>
-                    </div>
-                  </TableEmpty>
-                ) : (
-                  d.history.map((r) => <HistoryRow key={r.at} run={r} />)
-                )}
-              </TBody>
-            </Table>
+            <div className="ez-wrap ez-cards ez-lead-2">
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>{t('costSyncCostSyncIndex.when')}</Th>
+                    <Th>{t('costSyncCostSyncIndex.result')}</Th>
+                    <Th>{t('costSyncCostSyncIndex.window')}</Th>
+                    <Th>{t('costSyncCostSyncIndex.costsWritten')}</Th>
+                    <Th>{t('costSyncCostSyncIndex.exportTotal')}</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {d.history.length === 0 ? (
+                    <TableEmpty colSpan={5}>
+                      <div className="af-stack af-stack--tight cs-empty">
+                        <span className="af-strong">
+                          {t('costSyncCostSyncIndex.noRunsRecorded')}
+                        </span>
+                        <span className="af-small">
+                          {t('costSyncCostSyncIndex.eitherItHasNeverRun')}
+                        </span>
+                      </div>
+                    </TableEmpty>
+                  ) : (
+                    d.history.map((r) => <HistoryRow key={r.at} run={r} />)
+                  )}
+                </TBody>
+              </Table>
+            </div>
           </AfSection>
         </>
       )}

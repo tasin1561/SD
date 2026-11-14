@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
@@ -66,7 +67,8 @@ export function CourierTemplatesIndex(): ReactElement {
   const reviewed = (candidates.data ?? []).filter((c) => c.status !== 'PENDING');
 
   return (
-    <div className="af-page ez-touch">
+    <div className="af-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         breadcrumbs={[
           { label: tr('courierEscalationTemplatesTemplatesIndex.network') },
@@ -133,48 +135,50 @@ export function CourierTemplatesIndex(): ReactElement {
             retry={() => void templates.refetch()}
           />
         ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th align="right">{tr('courierEscalationTemplatesTemplatesIndex.order')}</Th>
-                <Th>{tr('courierEscalationTemplatesTemplatesIndex.code')}</Th>
-                <Th>{tr('courierEscalationTemplatesTemplatesIndex.pattern')}</Th>
-                <Th>{tr('courierEscalationTemplatesTemplatesIndex.means')}</Th>
-                <Th>{tr('courierEscalationTemplatesTemplatesIndex.action')}</Th>
-                <Th>{tr('courierEscalationTemplatesTemplatesIndex.live')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {(templates.data ?? []).map((t) => (
-                <Tr key={t.id}>
-                  <Td align="right">
-                    <span className="sk-figure">{t.priority}</span>
-                  </Td>
-                  <Td>
-                    <span className="af-strong sk-ident af-nowrap">{t.code}</span>
-                  </Td>
-                  <Td>
-                    <code className="af-code">{t.pattern}</code>
-                  </Td>
-                  <Td>
-                    <span className="af-nowrap">{humanise(t.state)}</span>
-                  </Td>
-                  <Td>
-                    <span className="af-small af-nowrap">
-                      {t.action === null ? '—' : humanise(t.action)}
-                    </span>
-                  </Td>
-                  <Td>
-                    <StatusChip
-                      size="sm"
-                      kind={t.isActive ? 'delivered' : 'draft'}
-                      label={t.isActive ? 'active' : 'off'}
-                    />
-                  </Td>
+          <div className="ez-wrap ez-cards ez-lead-2">
+            <Table>
+              <THead>
+                <Tr>
+                  <Th align="right">{tr('courierEscalationTemplatesTemplatesIndex.order')}</Th>
+                  <Th>{tr('courierEscalationTemplatesTemplatesIndex.code')}</Th>
+                  <Th>{tr('courierEscalationTemplatesTemplatesIndex.pattern')}</Th>
+                  <Th>{tr('courierEscalationTemplatesTemplatesIndex.means')}</Th>
+                  <Th>{tr('courierEscalationTemplatesTemplatesIndex.action')}</Th>
+                  <Th>{tr('courierEscalationTemplatesTemplatesIndex.live')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {(templates.data ?? []).map((t) => (
+                  <Tr key={t.id}>
+                    <Td align="right">
+                      <span className="sk-figure">{t.priority}</span>
+                    </Td>
+                    <Td>
+                      <span className="af-strong sk-ident af-nowrap">{t.code}</span>
+                    </Td>
+                    <Td>
+                      <code className="af-code">{t.pattern}</code>
+                    </Td>
+                    <Td>
+                      <span className="af-nowrap">{humanise(t.state)}</span>
+                    </Td>
+                    <Td>
+                      <span className="af-small af-nowrap">
+                        {t.action === null ? '—' : humanise(t.action)}
+                      </span>
+                    </Td>
+                    <Td>
+                      <StatusChip
+                        size="sm"
+                        kind={t.isActive ? 'delivered' : 'draft'}
+                        label={t.isActive ? 'active' : 'off'}
+                      />
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
         )}
       </AfSection>
 
@@ -183,36 +187,38 @@ export function CourierTemplatesIndex(): ReactElement {
           title={tr('courierEscalationTemplatesTemplatesIndex.alreadyDecided')}
           note={tr('courierEscalationTemplatesTemplatesIndex.keptRatherThanDeletedThe')}
         >
-          <Table>
-            <THead>
-              <Tr>
-                <Th>{tr('courierEscalationTemplatesTemplatesIndex.message')}</Th>
-                <Th align="right">{tr('courierEscalationTemplatesTemplatesIndex.seen')}</Th>
-                <Th>{tr('courierEscalationTemplatesTemplatesIndex.outcome')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {reviewed.map((c) => (
-                <Tr key={c.id}>
-                  <Td>
-                    <span className="af-clip af-small" title={c.body}>
-                      {c.body}
-                    </span>
-                  </Td>
-                  <Td align="right">
-                    <span className="sk-figure">{c.seenCount}</span>
-                  </Td>
-                  <Td>
-                    <StatusChip
-                      size="sm"
-                      kind={c.status === 'PROMOTED' ? 'delivered' : 'cancelled'}
-                      label={code(c.status)}
-                    />
-                  </Td>
+          <div className="ez-wrap ez-cards">
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>{tr('courierEscalationTemplatesTemplatesIndex.message')}</Th>
+                  <Th align="right">{tr('courierEscalationTemplatesTemplatesIndex.seen')}</Th>
+                  <Th>{tr('courierEscalationTemplatesTemplatesIndex.outcome')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {reviewed.map((c) => (
+                  <Tr key={c.id}>
+                    <Td>
+                      <span className="af-clip af-small" title={c.body}>
+                        {c.body}
+                      </span>
+                    </Td>
+                    <Td align="right">
+                      <span className="sk-figure">{c.seenCount}</span>
+                    </Td>
+                    <Td>
+                      <StatusChip
+                        size="sm"
+                        kind={c.status === 'PROMOTED' ? 'delivered' : 'cancelled'}
+                        label={code(c.status)}
+                      />
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
         </AfSection>
       ) : null}
     </div>

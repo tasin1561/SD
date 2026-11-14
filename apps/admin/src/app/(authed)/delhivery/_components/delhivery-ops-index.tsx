@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import { useState, type ReactElement } from 'react';
@@ -67,7 +68,8 @@ export function DelhiveryOpsIndex(): ReactElement {
   }
 
   return (
-    <div className="af-page ez-touch">
+    <div className="af-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         breadcrumbs={[
           { label: t('delhiveryDelhiveryOpsIndex.network') },
@@ -212,52 +214,54 @@ export function DelhiveryOpsIndex(): ReactElement {
             title={t('delhiveryDelhiveryOpsIndex.rateBudget')}
             note={t('delhiveryDelhiveryOpsIndex.budgetedTo80OfDelhivery')}
           >
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>{t('delhiveryDelhiveryOpsIndex.endpoint')}</Th>
-                  <Th align="right">{t('delhiveryDelhiveryOpsIndex.remaining')}</Th>
-                  <Th align="right">{t('delhiveryDelhiveryOpsIndex.budget')}</Th>
-                  <Th>{t('delhiveryDelhiveryOpsIndex.headroom')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {status.data?.rateBudgets.map((b) => {
-                  const pct = b.budget <= 0 ? 0 : Math.round((b.remaining / b.budget) * 100);
-                  return (
-                    <Tr key={b.endpoint}>
-                      <Td>
-                        <span className="af-stack af-stack--tight">
-                          <span>{b.endpoint.replaceAll('_', ' ')}</span>
-                          {b.endpoint === 'waybill_bulk' && (
-                            <span className="af-faint">
-                              {t('delhiveryDelhiveryOpsIndex.fivePerFiveMinutesThe')}
-                            </span>
-                          )}
-                        </span>
-                      </Td>
-                      <Td align="right">
-                        <Num value={b.remaining} />
-                      </Td>
-                      <Td align="right">
-                        <span className="af-small">
-                          <Num value={b.budget} />
-                        </span>
-                      </Td>
-                      <Td>
-                        <span className="dl-headroom">
-                          <Meter
-                            value={pct / 100}
-                            tone={pct < 20 ? 'bad' : pct < 50 ? 'warn' : 'good'}
-                          />
-                          <span className="af-small sk-figure">{pct}%</span>
-                        </span>
-                      </Td>
-                    </Tr>
-                  );
-                })}
-              </TBody>
-            </Table>
+            <div className="ez-wrap ez-cards">
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>{t('delhiveryDelhiveryOpsIndex.endpoint')}</Th>
+                    <Th align="right">{t('delhiveryDelhiveryOpsIndex.remaining')}</Th>
+                    <Th align="right">{t('delhiveryDelhiveryOpsIndex.budget')}</Th>
+                    <Th>{t('delhiveryDelhiveryOpsIndex.headroom')}</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {status.data?.rateBudgets.map((b) => {
+                    const pct = b.budget <= 0 ? 0 : Math.round((b.remaining / b.budget) * 100);
+                    return (
+                      <Tr key={b.endpoint}>
+                        <Td>
+                          <span className="af-stack af-stack--tight">
+                            <span>{b.endpoint.replaceAll('_', ' ')}</span>
+                            {b.endpoint === 'waybill_bulk' && (
+                              <span className="af-faint">
+                                {t('delhiveryDelhiveryOpsIndex.fivePerFiveMinutesThe')}
+                              </span>
+                            )}
+                          </span>
+                        </Td>
+                        <Td align="right">
+                          <Num value={b.remaining} />
+                        </Td>
+                        <Td align="right">
+                          <span className="af-small">
+                            <Num value={b.budget} />
+                          </span>
+                        </Td>
+                        <Td>
+                          <span className="dl-headroom">
+                            <Meter
+                              value={pct / 100}
+                              tone={pct < 20 ? 'bad' : pct < 50 ? 'warn' : 'good'}
+                            />
+                            <span className="af-small sk-figure">{pct}%</span>
+                          </span>
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </TBody>
+              </Table>
+            </div>
           </AfSection>
         </>
       )}

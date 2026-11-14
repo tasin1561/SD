@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import Link from 'next/link';
@@ -45,7 +46,8 @@ export default function ResellerAnalysisPage(): ReactElement {
   const [pausing, setPausing] = useState<FraudFlag | null>(null);
 
   return (
-    <div className="ez-touch ez-wrap">
+    <div className="ez-touch ez-wrap ez-phone">
+      <TidyCards />
       <AcPage>
         <AcHeader
           crumbs={[
@@ -100,56 +102,58 @@ export default function ResellerAnalysisPage(): ReactElement {
                 title={tr('resellerStoresAnalysisPage.noStoreIsOverA')}
               />
             ) : (
-              <Table caption={tr('resellerStoresAnalysisPage.fraudFlags')}>
-                <THead>
-                  <Tr>
-                    <Th>{tr('resellerStoresAnalysisPage.store')}</Th>
-                    <Th>{tr('resellerStoresAnalysisPage.signal')}</Th>
-                    <Th>{tr('resellerStoresAnalysisPage.why')}</Th>
-                    <Th align="right">{tr('resellerStoresAnalysisPage.actions')}</Th>
-                  </Tr>
-                </THead>
-                <TBody>
-                  {fraud.data.flags.map((f) => (
-                    <Tr key={`${f.rule}-${f.storeId}`}>
-                      <Td>
-                        <Link
-                          href={`/reseller-stores/${f.storeId}`}
-                          className="ac-link ac-cell-main"
-                        >
-                          {f.storeName}
-                        </Link>
-                        <span className="ac-cell-sub">{f.sellerName}</span>
-                      </Td>
-                      <Td>
-                        <span className="ac-inline">
-                          <StatusChip
-                            kind={f.severity === 'HIGH' ? 'failed' : 'pending'}
-                            label={f.severity}
-                            size="sm"
-                          />
-                          <span className="sk-figure">
-                            {f.value} <span className="ac-faint">/ {f.threshold}</span>
-                          </span>
-                        </span>
-                      </Td>
-                      <Td>{f.reason}</Td>
-                      <Td align="right">
-                        {mayPause && (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            icon={<PauseCircle size={14} />}
-                            onClick={() => setPausing(f)}
-                          >
-                            {tr('resellerStoresAnalysisPage.pauseStore')}
-                          </Button>
-                        )}
-                      </Td>
+              <div className="ez-wrap ez-cards">
+                <Table caption={tr('resellerStoresAnalysisPage.fraudFlags')}>
+                  <THead>
+                    <Tr>
+                      <Th>{tr('resellerStoresAnalysisPage.store')}</Th>
+                      <Th>{tr('resellerStoresAnalysisPage.signal')}</Th>
+                      <Th>{tr('resellerStoresAnalysisPage.why')}</Th>
+                      <Th align="right">{tr('resellerStoresAnalysisPage.actions')}</Th>
                     </Tr>
-                  ))}
-                </TBody>
-              </Table>
+                  </THead>
+                  <TBody>
+                    {fraud.data.flags.map((f) => (
+                      <Tr key={`${f.rule}-${f.storeId}`}>
+                        <Td>
+                          <Link
+                            href={`/reseller-stores/${f.storeId}`}
+                            className="ac-link ac-cell-main"
+                          >
+                            {f.storeName}
+                          </Link>
+                          <span className="ac-cell-sub">{f.sellerName}</span>
+                        </Td>
+                        <Td>
+                          <span className="ac-inline">
+                            <StatusChip
+                              kind={f.severity === 'HIGH' ? 'failed' : 'pending'}
+                              label={f.severity}
+                              size="sm"
+                            />
+                            <span className="sk-figure">
+                              {f.value} <span className="ac-faint">/ {f.threshold}</span>
+                            </span>
+                          </span>
+                        </Td>
+                        <Td>{f.reason}</Td>
+                        <Td align="right">
+                          {mayPause && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              icon={<PauseCircle size={14} />}
+                              onClick={() => setPausing(f)}
+                            >
+                              {tr('resellerStoresAnalysisPage.pauseStore')}
+                            </Button>
+                          )}
+                        </Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+              </div>
             ))}
         </AcSection>
 
@@ -199,58 +203,62 @@ export default function ResellerAnalysisPage(): ReactElement {
                 />
               ) : (
                 <AcCard flush>
-                  <Table caption={tr('resellerStoresAnalysisPage.openDisputes')}>
-                    <THead>
-                      <Tr>
-                        <Th>{tr('resellerStoresAnalysisPage.ticket')}</Th>
-                        <Th>{tr('resellerStoresAnalysisPage.store')}</Th>
-                        <Th>{tr('resellerStoresAnalysisPage.order')}</Th>
-                        <Th>{tr('resellerStoresAnalysisPage.status')}</Th>
-                        <Th>{tr('resellerStoresAnalysisPage.opened')}</Th>
-                      </Tr>
-                    </THead>
-                    <TBody>
-                      {disputes.data.openTickets.map((t) => (
-                        <Tr key={t.id}>
-                          <Td>
-                            <Link href={`/tickets/${t.id}`} className="ac-link sk-ident">
-                              {t.ticketNumber}
-                            </Link>
-                            <span className="ac-cell-sub">{t.subject}</span>
-                          </Td>
-                          <Td>
-                            {t.storeId !== null ? (
-                              <Link href={`/reseller-stores/${t.storeId}`} className="ac-link">
-                                {t.storeName}
-                              </Link>
-                            ) : (
-                              t.storeName
-                            )}
-                            <span className="ac-cell-sub">{t.sellerName}</span>
-                          </Td>
-                          <Td>
-                            {t.orderId !== null ? (
-                              <Link href={`/orders/${t.orderId}`} className="ac-link sk-ident">
-                                {t.orderNumber}
-                              </Link>
-                            ) : (
-                              <span className="sk-ident">{t.orderNumber || '—'}</span>
-                            )}
-                          </Td>
-                          <Td>
-                            <StatusChip
-                              kind={ticketStatusKind(t.status as TicketStatus)}
-                              label={ticketStatusLabel(t.status as TicketStatus, locale)}
-                              size="sm"
-                            />
-                          </Td>
-                          <Td>
-                            <span className="sk-figure ac-faint">{istDateLabel(t.createdAt)}</span>
-                          </Td>
+                  <div className="ez-wrap ez-cards">
+                    <Table caption={tr('resellerStoresAnalysisPage.openDisputes')}>
+                      <THead>
+                        <Tr>
+                          <Th>{tr('resellerStoresAnalysisPage.ticket')}</Th>
+                          <Th>{tr('resellerStoresAnalysisPage.store')}</Th>
+                          <Th>{tr('resellerStoresAnalysisPage.order')}</Th>
+                          <Th>{tr('resellerStoresAnalysisPage.status')}</Th>
+                          <Th>{tr('resellerStoresAnalysisPage.opened')}</Th>
                         </Tr>
-                      ))}
-                    </TBody>
-                  </Table>
+                      </THead>
+                      <TBody>
+                        {disputes.data.openTickets.map((t) => (
+                          <Tr key={t.id}>
+                            <Td>
+                              <Link href={`/tickets/${t.id}`} className="ac-link sk-ident">
+                                {t.ticketNumber}
+                              </Link>
+                              <span className="ac-cell-sub">{t.subject}</span>
+                            </Td>
+                            <Td>
+                              {t.storeId !== null ? (
+                                <Link href={`/reseller-stores/${t.storeId}`} className="ac-link">
+                                  {t.storeName}
+                                </Link>
+                              ) : (
+                                t.storeName
+                              )}
+                              <span className="ac-cell-sub">{t.sellerName}</span>
+                            </Td>
+                            <Td>
+                              {t.orderId !== null ? (
+                                <Link href={`/orders/${t.orderId}`} className="ac-link sk-ident">
+                                  {t.orderNumber}
+                                </Link>
+                              ) : (
+                                <span className="sk-ident">{t.orderNumber || '—'}</span>
+                              )}
+                            </Td>
+                            <Td>
+                              <StatusChip
+                                kind={ticketStatusKind(t.status as TicketStatus)}
+                                label={ticketStatusLabel(t.status as TicketStatus, locale)}
+                                size="sm"
+                              />
+                            </Td>
+                            <Td>
+                              <span className="sk-figure ac-faint">
+                                {istDateLabel(t.createdAt)}
+                              </span>
+                            </Td>
+                          </Tr>
+                        ))}
+                      </TBody>
+                    </Table>
+                  </div>
                 </AcCard>
               )}
             </>
@@ -302,83 +310,87 @@ export default function ResellerAnalysisPage(): ReactElement {
                   />
                 </div>
                 <AcCard flush>
-                  <Table caption={tr('resellerStoresAnalysisPage.floatByClientAndStore')}>
-                    <THead>
-                      <Tr>
-                        <Th>{tr('resellerStoresAnalysisPage.clientStore')}</Th>
-                        <Th align="right">{tr('resellerStoresAnalysisPage.wallet')}</Th>
-                        <Th align="right">
-                          {tr('resellerStoresAnalysisPage.creditedBeforePayout')}
-                        </Th>
-                        <Th align="right">{tr('resellerStoresAnalysisPage.instantPayAdvanced')}</Th>
-                      </Tr>
-                    </THead>
-                    <TBody>
-                      {float.data.sellers.flatMap((s) => [
-                        <Tr key={s.sellerId}>
-                          <Td>
-                            <span className="ac-strong">{s.sellerName}</span>
-                            <span className="ac-cell-sub">
-                              {richMessage(tr('resellerStoresAnalysisPage.ownGroup'), {
-                                money: <Money amount={s.sellerWalletInr} />,
-                                money2: <Money amount={s.groupInr} />,
-                              })}
-                            </span>
-                          </Td>
-                          <Td align="right">
-                            <Money amount={s.storesWalletInr} />
-                          </Td>
-                          <Td />
-                          <Td align="right">
-                            <Money amount={s.instantPayAdvanceInr} />
-                            <span className="ac-cell-sub">
-                              {richMessage(tr('resellerStoresAnalysisPage.orders'), {
-                                span: (
-                                  <span className="sk-figure">{s.instantPayAdvanceOrders}</span>
-                                ),
-                              })}
-                            </span>
-                          </Td>
-                        </Tr>,
-                        ...s.stores.map((st) => (
-                          <Tr key={st.storeId}>
+                  <div className="ez-wrap ez-cards ez-then-2">
+                    <Table caption={tr('resellerStoresAnalysisPage.floatByClientAndStore')}>
+                      <THead>
+                        <Tr>
+                          <Th>{tr('resellerStoresAnalysisPage.clientStore')}</Th>
+                          <Th align="right">{tr('resellerStoresAnalysisPage.wallet')}</Th>
+                          <Th align="right">
+                            {tr('resellerStoresAnalysisPage.creditedBeforePayout')}
+                          </Th>
+                          <Th align="right">
+                            {tr('resellerStoresAnalysisPage.instantPayAdvanced')}
+                          </Th>
+                        </Tr>
+                      </THead>
+                      <TBody>
+                        {float.data.sellers.flatMap((s) => [
+                          <Tr key={s.sellerId}>
                             <Td>
-                              <span className="ac-indent">
-                                <Link href={`/reseller-stores/${st.storeId}`} className="ac-link">
-                                  {st.storeName}
-                                </Link>
-                              </span>
-                              <span className="ac-cell-sub ac-indent">
-                                {tr('resellerStoresAnalysisPage.mayGoBelowZeroBy', {
-                                  value:
-                                    st.status === null
-                                      ? ''
-                                      : `${resellerStoreStatusLabel(st.status as ResellerStoreStatus)} · `,
-                                })}{' '}
-                                <Money amount={st.negativeLimitInr} convert={false} />
+                              <span className="ac-strong">{s.sellerName}</span>
+                              <span className="ac-cell-sub">
+                                {richMessage(tr('resellerStoresAnalysisPage.ownGroup'), {
+                                  money: <Money amount={s.sellerWalletInr} />,
+                                  money2: <Money amount={s.groupInr} />,
+                                })}
                               </span>
                             </Td>
                             <Td align="right">
-                              <Money amount={st.balanceInr} />
+                              <Money amount={s.storesWalletInr} />
                             </Td>
+                            <Td />
                             <Td align="right">
-                              <Money amount={st.creditedBeforePayoutInr} />
+                              <Money amount={s.instantPayAdvanceInr} />
                               <span className="ac-cell-sub">
                                 {richMessage(tr('resellerStoresAnalysisPage.orders'), {
                                   span: (
-                                    <span className="sk-figure">
-                                      {st.creditedBeforePayoutOrders}
-                                    </span>
+                                    <span className="sk-figure">{s.instantPayAdvanceOrders}</span>
                                   ),
                                 })}
                               </span>
                             </Td>
-                            <Td />
-                          </Tr>
-                        )),
-                      ])}
-                    </TBody>
-                  </Table>
+                          </Tr>,
+                          ...s.stores.map((st) => (
+                            <Tr key={st.storeId}>
+                              <Td>
+                                <span className="ac-indent">
+                                  <Link href={`/reseller-stores/${st.storeId}`} className="ac-link">
+                                    {st.storeName}
+                                  </Link>
+                                </span>
+                                <span className="ac-cell-sub ac-indent">
+                                  {tr('resellerStoresAnalysisPage.mayGoBelowZeroBy', {
+                                    value:
+                                      st.status === null
+                                        ? ''
+                                        : `${resellerStoreStatusLabel(st.status as ResellerStoreStatus)} · `,
+                                  })}{' '}
+                                  <Money amount={st.negativeLimitInr} convert={false} />
+                                </span>
+                              </Td>
+                              <Td align="right">
+                                <Money amount={st.balanceInr} />
+                              </Td>
+                              <Td align="right">
+                                <Money amount={st.creditedBeforePayoutInr} />
+                                <span className="ac-cell-sub">
+                                  {richMessage(tr('resellerStoresAnalysisPage.orders'), {
+                                    span: (
+                                      <span className="sk-figure">
+                                        {st.creditedBeforePayoutOrders}
+                                      </span>
+                                    ),
+                                  })}
+                                </span>
+                              </Td>
+                              <Td />
+                            </Tr>
+                          )),
+                        ])}
+                      </TBody>
+                    </Table>
+                  </div>
                 </AcCard>
               </>
             )}

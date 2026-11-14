@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useCodeLabel } from '@/components/easy/code-label';
 import { useState, type ReactElement } from 'react';
 import { ArrowLeftRight, CircleCheck, Search, Send, Wallet } from 'lucide-react';
@@ -52,7 +53,8 @@ export function WalletTransfersIndex({
   const t = useT();
   const [sellerId, setSellerId] = useState<string | null>(initialSellerId);
   return (
-    <div className="mk-page ez-touch">
+    <div className="mk-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -496,34 +498,36 @@ function PreviewCard({ preview }: { readonly preview: WalletTransferPreviewView 
       />
       {preview.accounts.length > 0 && (
         <div className="mk-scroll">
-          <Table caption={t('walletTransfersWalletTransfersIndex.whereTheCashMoves')}>
-            <THead>
-              <Tr>
-                <Th>{t('walletTransfersWalletTransfersIndex.account')}</Th>
-                <Th>{t('walletTransfersWalletTransfersIndex.moving')}</Th>
-                <Th>{t('walletTransfersWalletTransfersIndex.theirsBeforeAfter')}</Th>
-                <Th>{t('walletTransfersWalletTransfersIndex.oursBeforeAfter')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {preview.accounts.map((a) => (
-                <Tr key={a.accountId}>
-                  <Td>{a.label}</Td>
-                  <Td>
-                    <Money amount={a.units} currency={a.currency} convert={false} />
-                  </Td>
-                  <Td>
-                    <Money amount={a.sellerBefore} currency={a.currency} convert={false} /> →{' '}
-                    <Money amount={a.sellerAfter} currency={a.currency} convert={false} />
-                  </Td>
-                  <Td>
-                    <Money amount={a.capitalBefore} currency={a.currency} convert={false} /> →{' '}
-                    <Money amount={a.capitalAfter} currency={a.currency} convert={false} />
-                  </Td>
+          <div className="ez-wrap ez-cards">
+            <Table caption={t('walletTransfersWalletTransfersIndex.whereTheCashMoves')}>
+              <THead>
+                <Tr>
+                  <Th>{t('walletTransfersWalletTransfersIndex.account')}</Th>
+                  <Th>{t('walletTransfersWalletTransfersIndex.moving')}</Th>
+                  <Th>{t('walletTransfersWalletTransfersIndex.theirsBeforeAfter')}</Th>
+                  <Th>{t('walletTransfersWalletTransfersIndex.oursBeforeAfter')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {preview.accounts.map((a) => (
+                  <Tr key={a.accountId}>
+                    <Td>{a.label}</Td>
+                    <Td>
+                      <Money amount={a.units} currency={a.currency} convert={false} />
+                    </Td>
+                    <Td>
+                      <Money amount={a.sellerBefore} currency={a.currency} convert={false} /> →{' '}
+                      <Money amount={a.sellerAfter} currency={a.currency} convert={false} />
+                    </Td>
+                    <Td>
+                      <Money amount={a.capitalBefore} currency={a.currency} convert={false} /> →{' '}
+                      <Money amount={a.capitalAfter} currency={a.currency} convert={false} />
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
         </div>
       )}
     </MkCard>
@@ -563,48 +567,50 @@ function TransferHistory({ sellerId }: { readonly sellerId: string | null }): Re
   }
   return (
     <MkCard flush>
-      <Table caption={t('walletTransfersWalletTransfersIndex.staffWalletTransfers')}>
-        <THead>
-          <Tr>
-            <Th>{t('walletTransfersWalletTransfersIndex.when')}</Th>
-            <Th>{t('walletTransfersWalletTransfersIndex.client')}</Th>
-            <Th>{t('walletTransfersWalletTransfersIndex.amount')}</Th>
-            <Th>{t('walletTransfersWalletTransfersIndex.walletAfter')}</Th>
-            <Th>{t('walletTransfersWalletTransfersIndex.reasonClientSees')}</Th>
-            <Th>{t('walletTransfersWalletTransfersIndex.internalNote')}</Th>
-            <Th>{t('walletTransfersWalletTransfersIndex.by')}</Th>
-            <Th>{t('walletTransfersWalletTransfersIndex.cash')}</Th>
-          </Tr>
-        </THead>
-        <TBody>
-          {items.map((r) => (
-            <Tr key={r.id}>
-              <Td className="mk-when sk-figure">
-                <When iso={r.createdAt} time />
-              </Td>
-              <Td className="mk-strong">{r.companyName}</Td>
-              <Td>
-                <Money
-                  amount={r.direction === 'DEBIT' ? `-${r.amountInr}` : r.amountInr}
-                  direction={r.direction === 'DEBIT' ? 'debit' : 'credit'}
-                  convert={false}
-                />
-              </Td>
-              <Td>
-                <Money amount={r.walletAfterInr} convert={false} />
-              </Td>
-              <Td className="mk-small mk-body">{r.reason ?? '—'}</Td>
-              <Td className="mk-small">{r.internalNote ?? '—'}</Td>
-              <Td className="mk-small">{r.staff ?? '—'}</Td>
-              <Td className="mk-small">
-                {r.accounts.length === 0
-                  ? t('walletTransfersWalletTransfersIndex.noCashMoved')
-                  : r.accounts.map((a) => `${a.label} ${a.amount}`).join(', ')}
-              </Td>
+      <div className="ez-wrap ez-cards ez-lead-2 ez-then-3">
+        <Table caption={t('walletTransfersWalletTransfersIndex.staffWalletTransfers')}>
+          <THead>
+            <Tr>
+              <Th>{t('walletTransfersWalletTransfersIndex.when')}</Th>
+              <Th>{t('walletTransfersWalletTransfersIndex.client')}</Th>
+              <Th>{t('walletTransfersWalletTransfersIndex.amount')}</Th>
+              <Th>{t('walletTransfersWalletTransfersIndex.walletAfter')}</Th>
+              <Th>{t('walletTransfersWalletTransfersIndex.reasonClientSees')}</Th>
+              <Th>{t('walletTransfersWalletTransfersIndex.internalNote')}</Th>
+              <Th>{t('walletTransfersWalletTransfersIndex.by')}</Th>
+              <Th>{t('walletTransfersWalletTransfersIndex.cash')}</Th>
             </Tr>
-          ))}
-        </TBody>
-      </Table>
+          </THead>
+          <TBody>
+            {items.map((r) => (
+              <Tr key={r.id}>
+                <Td className="mk-when sk-figure">
+                  <When iso={r.createdAt} time />
+                </Td>
+                <Td className="mk-strong">{r.companyName}</Td>
+                <Td>
+                  <Money
+                    amount={r.direction === 'DEBIT' ? `-${r.amountInr}` : r.amountInr}
+                    direction={r.direction === 'DEBIT' ? 'debit' : 'credit'}
+                    convert={false}
+                  />
+                </Td>
+                <Td>
+                  <Money amount={r.walletAfterInr} convert={false} />
+                </Td>
+                <Td className="mk-small mk-body">{r.reason ?? '—'}</Td>
+                <Td className="mk-small">{r.internalNote ?? '—'}</Td>
+                <Td className="mk-small">{r.staff ?? '—'}</Td>
+                <Td className="mk-small">
+                  {r.accounts.length === 0
+                    ? t('walletTransfersWalletTransfersIndex.noCashMoved')
+                    : r.accounts.map((a) => `${a.label} ${a.amount}`).join(', ')}
+                </Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
+      </div>
     </MkCard>
   );
 }

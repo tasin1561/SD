@@ -134,39 +134,41 @@ export function TrackingLookupPanel(): ReactElement | null {
             )}
           </div>
           {r.scans.length > 0 && (
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>{t('delhiveryTrackingLookupPanel.courierTimeTheirs')}</Th>
-                  <Th>{t('delhiveryTrackingLookupPanel.storedAsUtc')}</Th>
-                  <Th>{t('delhiveryTrackingLookupPanel.leg')}</Th>
-                  <Th>{t('delhiveryTrackingLookupPanel.status')}</Th>
-                  <Th>NSL</Th>
-                  <Th>{t('delhiveryTrackingLookupPanel.weReadItAs')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {r.scans.map((s, i) => (
-                  <Tr key={`${s.eventAtIso}-${i}`}>
-                    {/* Both times, side by side: their unzoned IST and
-                        the instant we store. A 5h30m gap between them
-                        is the timezone bug, visible without a query. */}
-                    <Td>
-                      <span className="af-small sk-figure af-nowrap">{s.courierTimestamp}</span>
-                    </Td>
-                    <Td>
-                      <span className="af-small sk-figure af-nowrap">{s.eventAtIso}</span>
-                    </Td>
-                    <Td>{s.statusType ?? '—'}</Td>
-                    <Td>{s.rawStatus}</Td>
-                    <Td>
-                      <span className="sk-ident">{s.nslCode ?? '—'}</span>
-                    </Td>
-                    <Td>{s.normalisedTo}</Td>
+            <div className="ez-wrap ez-cards">
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>{t('delhiveryTrackingLookupPanel.courierTimeTheirs')}</Th>
+                    <Th>{t('delhiveryTrackingLookupPanel.storedAsUtc')}</Th>
+                    <Th>{t('delhiveryTrackingLookupPanel.leg')}</Th>
+                    <Th>{t('delhiveryTrackingLookupPanel.status')}</Th>
+                    <Th>NSL</Th>
+                    <Th>{t('delhiveryTrackingLookupPanel.weReadItAs')}</Th>
                   </Tr>
-                ))}
-              </TBody>
-            </Table>
+                </THead>
+                <TBody>
+                  {r.scans.map((s, i) => (
+                    <Tr key={`${s.eventAtIso}-${i}`}>
+                      {/* Both times, side by side: their unzoned IST and
+                          the instant we store. A 5h30m gap between them
+                          is the timezone bug, visible without a query. */}
+                      <Td>
+                        <span className="af-small sk-figure af-nowrap">{s.courierTimestamp}</span>
+                      </Td>
+                      <Td>
+                        <span className="af-small sk-figure af-nowrap">{s.eventAtIso}</span>
+                      </Td>
+                      <Td>{s.statusType ?? '—'}</Td>
+                      <Td>{s.rawStatus}</Td>
+                      <Td>
+                        <span className="sk-ident">{s.nslCode ?? '—'}</span>
+                      </Td>
+                      <Td>{s.normalisedTo}</Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
           )}
         </AfCard>
       ))}

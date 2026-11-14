@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
 import { When } from '@/components/easy/when';
@@ -64,7 +65,8 @@ export function CourierPortalIndex(): ReactElement {
   const failures = rows.filter((r) => r.outcome === 'FAILED' || r.outcome === 'CHALLENGED').length;
 
   return (
-    <div className="af-page ez-touch">
+    <div className="af-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         breadcrumbs={[
           { label: t('courierEscalationPortalPortalIndex.network') },
@@ -140,52 +142,54 @@ export function CourierPortalIndex(): ReactElement {
             description={t('courierEscalationPortalPortalIndex.expectedItIsDeployedInert')}
           />
         ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>{t('courierEscalationPortalPortalIndex.when')}</Th>
-                <Th>{t('courierEscalationPortalPortalIndex.doing')}</Th>
-                <Th>{t('courierEscalationPortalPortalIndex.mode')}</Th>
-                <Th>{t('courierEscalationPortalPortalIndex.outcome')}</Th>
-                <Th>{t('courierEscalationPortalPortalIndex.detail')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.map((r) => (
-                <Tr key={r.id}>
-                  <Td>
-                    <span className="af-small af-nowrap">
-                      <When iso={r.startedAt} time />
-                    </span>
-                  </Td>
-                  <Td>
-                    <span className="af-nowrap">{humanise(r.kind)}</span>
-                  </Td>
-                  <Td>
-                    <StatusChip
-                      size="sm"
-                      kind={r.mode === 'LIVE' ? 'in-transit' : 'draft'}
-                      label={code(r.mode)}
-                    />
-                  </Td>
-                  <Td>
-                    <StatusChip
-                      size="sm"
-                      kind={outcomeKind(r.outcome)}
-                      label={humanise(r.outcome)}
-                    />
-                  </Td>
-                  <Td>
-                    {/* Verbatim, wrapped: a truncated failure detail is a
-                        failure nobody can diagnose. */}
-                    <pre className="af-pre ce-message" data-dense="1">
-                      {r.detail ?? '—'}
-                    </pre>
-                  </Td>
+          <div className="ez-wrap ez-cards ez-lead-2">
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>{t('courierEscalationPortalPortalIndex.when')}</Th>
+                  <Th>{t('courierEscalationPortalPortalIndex.doing')}</Th>
+                  <Th>{t('courierEscalationPortalPortalIndex.mode')}</Th>
+                  <Th>{t('courierEscalationPortalPortalIndex.outcome')}</Th>
+                  <Th>{t('courierEscalationPortalPortalIndex.detail')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {rows.map((r) => (
+                  <Tr key={r.id}>
+                    <Td>
+                      <span className="af-small af-nowrap">
+                        <When iso={r.startedAt} time />
+                      </span>
+                    </Td>
+                    <Td>
+                      <span className="af-nowrap">{humanise(r.kind)}</span>
+                    </Td>
+                    <Td>
+                      <StatusChip
+                        size="sm"
+                        kind={r.mode === 'LIVE' ? 'in-transit' : 'draft'}
+                        label={code(r.mode)}
+                      />
+                    </Td>
+                    <Td>
+                      <StatusChip
+                        size="sm"
+                        kind={outcomeKind(r.outcome)}
+                        label={humanise(r.outcome)}
+                      />
+                    </Td>
+                    <Td>
+                      {/* Verbatim, wrapped: a truncated failure detail is a
+                          failure nobody can diagnose. */}
+                      <pre className="af-pre ce-message" data-dense="1">
+                        {r.detail ?? '—'}
+                      </pre>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
         )}
       </AfSection>
 
@@ -211,43 +215,45 @@ export function CourierPortalIndex(): ReactElement {
             <p>{t('courierEscalationPortalPortalIndex.thisIsWhyUnattendedAction')}</p>
           </Notice>
         ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>{t('courierEscalationPortalPortalIndex.theirId')}</Th>
-                <Th>{t('courierEscalationPortalPortalIndex.category')}</Th>
-                <Th>{t('courierEscalationPortalPortalIndex.unattended')}</Th>
-                <Th>{t('courierEscalationPortalPortalIndex.lastSeen')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {cats.map((c) => (
-                <Tr key={c.externalId}>
-                  <Td>
-                    <span className="sk-ident af-nowrap">{c.externalId}</span>
-                  </Td>
-                  <Td>{c.label}</Td>
-                  <Td>
-                    {c.isHumanOnly ? (
-                      <span className="ce-lock-chip">
-                        <Lock size={12} aria-hidden />{' '}
-                        {t('courierEscalationPortalPortalIndex.humanOnly')}
-                      </span>
-                    ) : (
-                      <span className="af-small">
-                        {t('courierEscalationPortalPortalIndex.allowedIfListed')}
-                      </span>
-                    )}
-                  </Td>
-                  <Td>
-                    <span className="af-small af-nowrap">
-                      <When iso={c.lastSeenAt} />
-                    </span>
-                  </Td>
+          <div className="ez-wrap ez-cards">
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>{t('courierEscalationPortalPortalIndex.theirId')}</Th>
+                  <Th>{t('courierEscalationPortalPortalIndex.category')}</Th>
+                  <Th>{t('courierEscalationPortalPortalIndex.unattended')}</Th>
+                  <Th>{t('courierEscalationPortalPortalIndex.lastSeen')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {cats.map((c) => (
+                  <Tr key={c.externalId}>
+                    <Td>
+                      <span className="sk-ident af-nowrap">{c.externalId}</span>
+                    </Td>
+                    <Td>{c.label}</Td>
+                    <Td>
+                      {c.isHumanOnly ? (
+                        <span className="ce-lock-chip">
+                          <Lock size={12} aria-hidden />{' '}
+                          {t('courierEscalationPortalPortalIndex.humanOnly')}
+                        </span>
+                      ) : (
+                        <span className="af-small">
+                          {t('courierEscalationPortalPortalIndex.allowedIfListed')}
+                        </span>
+                      )}
+                    </Td>
+                    <Td>
+                      <span className="af-small af-nowrap">
+                        <When iso={c.lastSeenAt} />
+                      </span>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
         )}
       </AfSection>
     </div>

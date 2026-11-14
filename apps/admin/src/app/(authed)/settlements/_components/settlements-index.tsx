@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
@@ -48,7 +49,8 @@ export function SettlementsIndex(): ReactElement {
   const shortPaid = recon.data?.shortPaidOrders ?? [];
 
   return (
-    <div className="mk-page ez-touch">
+    <div className="mk-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -217,72 +219,74 @@ export function SettlementsIndex(): ReactElement {
           />
         ) : (
           <MkCard flush>
-            <Table caption={t('settlementsSettlementsIndex.recordedPayouts')}>
-              <THead>
-                <Tr>
-                  <Th>{t('settlementsSettlementsIndex.reference')}</Th>
-                  <Th>{t('settlementsSettlementsIndex.received')}</Th>
-                  <Th align="right">{t('settlementsSettlementsIndex.amount')}</Th>
-                  <Th align="right">{t('settlementsSettlementsIndex.allocated')}</Th>
-                  <Th align="right">{t('settlementsSettlementsIndex.unallocated')}</Th>
-                  <Th align="right">{t('settlementsSettlementsIndex.orders')}</Th>
-                  <Th />
-                </Tr>
-              </THead>
-              <TBody>
-                {list.data?.map((s) => {
-                  const unallocated = Number(s.unallocatedInr);
-                  return (
-                    <Tr key={s.id}>
-                      <Td>
-                        <div className="mk-cell">
-                          <Ident value={s.reference} />
-                          {s.note !== null && s.note !== '' && (
-                            <span className="mk-faint">{s.note}</span>
+            <div className="ez-wrap ez-cards ez-then-3">
+              <Table caption={t('settlementsSettlementsIndex.recordedPayouts')}>
+                <THead>
+                  <Tr>
+                    <Th>{t('settlementsSettlementsIndex.reference')}</Th>
+                    <Th>{t('settlementsSettlementsIndex.received')}</Th>
+                    <Th align="right">{t('settlementsSettlementsIndex.amount')}</Th>
+                    <Th align="right">{t('settlementsSettlementsIndex.allocated')}</Th>
+                    <Th align="right">{t('settlementsSettlementsIndex.unallocated')}</Th>
+                    <Th align="right">{t('settlementsSettlementsIndex.orders')}</Th>
+                    <Th />
+                  </Tr>
+                </THead>
+                <TBody>
+                  {list.data?.map((s) => {
+                    const unallocated = Number(s.unallocatedInr);
+                    return (
+                      <Tr key={s.id}>
+                        <Td>
+                          <div className="mk-cell">
+                            <Ident value={s.reference} />
+                            {s.note !== null && s.note !== '' && (
+                              <span className="mk-faint">{s.note}</span>
+                            )}
+                          </div>
+                        </Td>
+                        <Td className="mk-when sk-figure">
+                          <When iso={s.receivedAt} />
+                        </Td>
+                        <Td align="right">
+                          <Money amount={s.amountInr} />
+                        </Td>
+                        <Td align="right">
+                          <Money amount={s.allocatedInr} />
+                        </Td>
+                        <Td align="right">
+                          {unallocated === 0 ? (
+                            <span className="mk-faint">—</span>
+                          ) : (
+                            <span
+                              className="mk-text"
+                              data-tone="critical"
+                              title={t('settlementsSettlementsIndex.thisPartOfThePayout')}
+                            >
+                              <Money amount={s.unallocatedInr} />
+                            </span>
                           )}
-                        </div>
-                      </Td>
-                      <Td className="mk-when sk-figure">
-                        <When iso={s.receivedAt} />
-                      </Td>
-                      <Td align="right">
-                        <Money amount={s.amountInr} />
-                      </Td>
-                      <Td align="right">
-                        <Money amount={s.allocatedInr} />
-                      </Td>
-                      <Td align="right">
-                        {unallocated === 0 ? (
-                          <span className="mk-faint">—</span>
-                        ) : (
-                          <span
-                            className="mk-text"
-                            data-tone="critical"
-                            title={t('settlementsSettlementsIndex.thisPartOfThePayout')}
-                          >
-                            <Money amount={s.unallocatedInr} />
-                          </span>
-                        )}
-                      </Td>
-                      <Td align="right">
-                        <Num value={s.lines.length} />
-                      </Td>
-                      <Td align="right">
-                        {/* Only where there is money left to explain. An
-                            always-on action would invite allocating a
-                            fully-explained payout, which the server
-                            refuses anyway. */}
-                        {unallocated !== 0 && canWrite && (
-                          <Button variant="ghost" size="sm" onClick={() => setAllocating(s)}>
-                            {t('settlementsSettlementsIndex.allocateMore')}
-                          </Button>
-                        )}
-                      </Td>
-                    </Tr>
-                  );
-                })}
-              </TBody>
-            </Table>
+                        </Td>
+                        <Td align="right">
+                          <Num value={s.lines.length} />
+                        </Td>
+                        <Td align="right">
+                          {/* Only where there is money left to explain. An
+                              always-on action would invite allocating a
+                              fully-explained payout, which the server
+                              refuses anyway. */}
+                          {unallocated !== 0 && canWrite && (
+                            <Button variant="ghost" size="sm" onClick={() => setAllocating(s)}>
+                              {t('settlementsSettlementsIndex.allocateMore')}
+                            </Button>
+                          )}
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </TBody>
+              </Table>
+            </div>
           </MkCard>
         )}
       </MkSection>
@@ -322,44 +326,46 @@ function UnsettledTable({
   const router = useRouter();
   return (
     <MkCard flush>
-      <Table caption={caption}>
-        <THead>
-          <Tr>
-            <Th>{t('settlementsSettlementsIndex.order')}</Th>
-            <Th>{t('settlementsSettlementsIndex.delivered')}</Th>
-            <Th align="right">{t('settlementsSettlementsIndex.age')}</Th>
-            <Th align="right">{t('settlementsSettlementsIndex.expected')}</Th>
-            <Th align="right">{t('settlementsSettlementsIndex.settled')}</Th>
-            <Th align="right">{t('settlementsSettlementsIndex.shortfall')}</Th>
-          </Tr>
-        </THead>
-        <TBody>
-          {rows.map((r) => (
-            <Tr key={r.orderId} onActivate={() => router.push(`/orders/${r.orderId}`)}>
-              <Td>
-                <Link href={`/orders/${r.orderId}`} className="mk-inline-link">
-                  <Ident value={r.orderNumber} />
-                </Link>
-              </Td>
-              <Td className="mk-when sk-figure">
-                {r.deliveredAt === null ? '—' : <When iso={r.deliveredAt} />}
-              </Td>
-              <Td align="right">
-                <Num value={r.ageDays} suffix="d" />
-              </Td>
-              <Td align="right">
-                <Money amount={r.expectedInr} />
-              </Td>
-              <Td align="right">
-                <Money amount={r.settledInr} />
-              </Td>
-              <Td align="right">
-                <Money amount={r.shortfallInr} direction="debit" />
-              </Td>
+      <div className="ez-wrap ez-cards ez-then-6">
+        <Table caption={caption}>
+          <THead>
+            <Tr>
+              <Th>{t('settlementsSettlementsIndex.order')}</Th>
+              <Th>{t('settlementsSettlementsIndex.delivered')}</Th>
+              <Th align="right">{t('settlementsSettlementsIndex.age')}</Th>
+              <Th align="right">{t('settlementsSettlementsIndex.expected')}</Th>
+              <Th align="right">{t('settlementsSettlementsIndex.settled')}</Th>
+              <Th align="right">{t('settlementsSettlementsIndex.shortfall')}</Th>
             </Tr>
-          ))}
-        </TBody>
-      </Table>
+          </THead>
+          <TBody>
+            {rows.map((r) => (
+              <Tr key={r.orderId} onActivate={() => router.push(`/orders/${r.orderId}`)}>
+                <Td>
+                  <Link href={`/orders/${r.orderId}`} className="mk-inline-link">
+                    <Ident value={r.orderNumber} />
+                  </Link>
+                </Td>
+                <Td className="mk-when sk-figure">
+                  {r.deliveredAt === null ? '—' : <When iso={r.deliveredAt} />}
+                </Td>
+                <Td align="right">
+                  <Num value={r.ageDays} suffix="d" />
+                </Td>
+                <Td align="right">
+                  <Money amount={r.expectedInr} />
+                </Td>
+                <Td align="right">
+                  <Money amount={r.settledInr} />
+                </Td>
+                <Td align="right">
+                  <Money amount={r.shortfallInr} direction="debit" />
+                </Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
+      </div>
     </MkCard>
   );
 }

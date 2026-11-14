@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Play } from 'lucide-react';
@@ -63,7 +64,8 @@ export function MarginIndex(): ReactElement {
   const unpriced = stored.data?.skipped.length ?? 0;
 
   return (
-    <div className="mo-page ez-touch">
+    <div className="mo-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -176,56 +178,58 @@ export function MarginIndex(): ReactElement {
               description={t('marginMarginIndex.everyShipmentInTheWindow')}
             />
           ) : (
-            <Table caption={t('marginMarginIndex.laneMarginByShipment')}>
-              <THead>
-                <Tr>
-                  <Th>{t('marginMarginIndex.shipment')}</Th>
-                  <Th>{t('marginMarginIndex.lane')}</Th>
-                  <Th align="right">{t('marginMarginIndex.billed')}</Th>
-                  <Th align="right">{t('marginMarginIndex.actualCost')}</Th>
-                  <Th align="right">{t('marginMarginIndex.margin')}</Th>
-                  <Th align="right">{t('marginMarginIndex.cardDrift')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {data.rows.map((r) => (
-                  <Tr key={r.shipmentId} onActivate={() => router.push(`/orders/${r.orderId}`)}>
-                    <Td>
-                      <span className="mg-ship">
-                        {r.orderId === null ? (
-                          <Ident value={r.shipmentNumber} />
-                        ) : (
-                          <Link href={`/orders/${r.orderId}`} className="mo-link">
-                            <Ident value={r.shipmentNumber} />
-                          </Link>
-                        )}
-                        {r.lossMaking && <StatusChip kind="failed" label="loss" size="sm" />}
-                      </span>
-                    </Td>
-                    <Td className="mo-muted mo-nowrap">{r.lane}</Td>
-                    <Td align="right">
-                      <Money amount={r.billedToSellerInr} />
-                    </Td>
-                    <Td align="right">
-                      <Money amount={r.actualCourierCostInr} />
-                    </Td>
-                    <Td align="right">
-                      <Money
-                        amount={r.marginInr}
-                        direction={Number(r.marginInr) < 0 ? 'debit' : 'credit'}
-                      />
-                    </Td>
-                    <Td align="right" className="mo-muted">
-                      {r.assumptionDriftInr === null ? (
-                        <span className="mo-faint">—</span>
-                      ) : (
-                        <Num value={r.assumptionDriftInr} />
-                      )}
-                    </Td>
+            <div className="ez-wrap ez-cards ez-then-5">
+              <Table caption={t('marginMarginIndex.laneMarginByShipment')}>
+                <THead>
+                  <Tr>
+                    <Th>{t('marginMarginIndex.shipment')}</Th>
+                    <Th>{t('marginMarginIndex.lane')}</Th>
+                    <Th align="right">{t('marginMarginIndex.billed')}</Th>
+                    <Th align="right">{t('marginMarginIndex.actualCost')}</Th>
+                    <Th align="right">{t('marginMarginIndex.margin')}</Th>
+                    <Th align="right">{t('marginMarginIndex.cardDrift')}</Th>
                   </Tr>
-                ))}
-              </TBody>
-            </Table>
+                </THead>
+                <TBody>
+                  {data.rows.map((r) => (
+                    <Tr key={r.shipmentId} onActivate={() => router.push(`/orders/${r.orderId}`)}>
+                      <Td>
+                        <span className="mg-ship">
+                          {r.orderId === null ? (
+                            <Ident value={r.shipmentNumber} />
+                          ) : (
+                            <Link href={`/orders/${r.orderId}`} className="mo-link">
+                              <Ident value={r.shipmentNumber} />
+                            </Link>
+                          )}
+                          {r.lossMaking && <StatusChip kind="failed" label="loss" size="sm" />}
+                        </span>
+                      </Td>
+                      <Td className="mo-muted mo-nowrap">{r.lane}</Td>
+                      <Td align="right">
+                        <Money amount={r.billedToSellerInr} />
+                      </Td>
+                      <Td align="right">
+                        <Money amount={r.actualCourierCostInr} />
+                      </Td>
+                      <Td align="right">
+                        <Money
+                          amount={r.marginInr}
+                          direction={Number(r.marginInr) < 0 ? 'debit' : 'credit'}
+                        />
+                      </Td>
+                      <Td align="right" className="mo-muted">
+                        {r.assumptionDriftInr === null ? (
+                          <span className="mo-faint">—</span>
+                        ) : (
+                          <Num value={r.assumptionDriftInr} />
+                        )}
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
           )}
 
           {data.skipped.length > 0 && (

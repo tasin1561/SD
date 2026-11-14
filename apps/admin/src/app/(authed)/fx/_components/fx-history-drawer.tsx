@@ -45,63 +45,65 @@ export function FxHistoryDrawer({
           description={t('fxFxHistoryDrawer.theFirstChangeYouMake')}
         />
       ) : (
-        <Table caption={t('fxFxHistoryDrawer.rateHistoryForTo', { fromCurrency, toCurrency })}>
-          <THead>
-            <Tr>
-              <Th>{t('fxFxHistoryDrawer.when')}</Th>
-              <Th align="right">{t('fxFxHistoryDrawer.rate')}</Th>
-              <Th align="right">{t('fxFxHistoryDrawer.previous')}</Th>
-              <Th>{t('fxFxHistoryDrawer.source')}</Th>
-              <Th>{t('fxFxHistoryDrawer.reason')}</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {history.data.map((h) => {
-              const change =
-                h.previousRate !== null ? Number(h.rate) - Number(h.previousRate) : null;
-              return (
-                <Tr key={h.id}>
-                  <Td className="mk-when sk-figure">
-                    <When iso={h.recordedAt} time />
-                  </Td>
-                  <Td align="right" className="mk-strong sk-figure">
-                    {Number(h.rate).toFixed(6)}
-                  </Td>
-                  <Td align="right" className="mk-small sk-figure">
-                    {h.previousRate === null ? (
-                      '—'
-                    ) : (
-                      <>
-                        {Number(h.previousRate).toFixed(6)}
-                        {change !== null && (
-                          <span
-                            className="mk-text"
-                            data-tone={change > 0 ? 'good' : change < 0 ? 'critical' : undefined}
-                          >
-                            {' '}
-                            {change > 0 ? '↑' : change < 0 ? '↓' : '='}
-                            {Math.abs(change).toFixed(6)}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </Td>
-                  <Td className="mk-small mk-body">
-                    {h.source}
-                    {h.isManualOverride && (
-                      <span className="mk-tag">{t('fxFxHistoryDrawer.manual')}</span>
-                    )}
-                  </Td>
-                  <Td className="mk-small">
-                    <span className="mk-clip" title={h.changeReason ?? undefined}>
-                      {h.changeReason ?? '—'}
-                    </span>
-                  </Td>
-                </Tr>
-              );
-            })}
-          </TBody>
-        </Table>
+        <div className="ez-wrap ez-cards ez-then-2">
+          <Table caption={t('fxFxHistoryDrawer.rateHistoryForTo', { fromCurrency, toCurrency })}>
+            <THead>
+              <Tr>
+                <Th>{t('fxFxHistoryDrawer.when')}</Th>
+                <Th align="right">{t('fxFxHistoryDrawer.rate')}</Th>
+                <Th align="right">{t('fxFxHistoryDrawer.previous')}</Th>
+                <Th>{t('fxFxHistoryDrawer.source')}</Th>
+                <Th>{t('fxFxHistoryDrawer.reason')}</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {history.data.map((h) => {
+                const change =
+                  h.previousRate !== null ? Number(h.rate) - Number(h.previousRate) : null;
+                return (
+                  <Tr key={h.id}>
+                    <Td className="mk-when sk-figure">
+                      <When iso={h.recordedAt} time />
+                    </Td>
+                    <Td align="right" className="mk-strong sk-figure">
+                      {Number(h.rate).toFixed(6)}
+                    </Td>
+                    <Td align="right" className="mk-small sk-figure">
+                      {h.previousRate === null ? (
+                        '—'
+                      ) : (
+                        <>
+                          {Number(h.previousRate).toFixed(6)}
+                          {change !== null && (
+                            <span
+                              className="mk-text"
+                              data-tone={change > 0 ? 'good' : change < 0 ? 'critical' : undefined}
+                            >
+                              {' '}
+                              {change > 0 ? '↑' : change < 0 ? '↓' : '='}
+                              {Math.abs(change).toFixed(6)}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </Td>
+                    <Td className="mk-small mk-body">
+                      {h.source}
+                      {h.isManualOverride && (
+                        <span className="mk-tag">{t('fxFxHistoryDrawer.manual')}</span>
+                      )}
+                    </Td>
+                    <Td className="mk-small">
+                      <span className="mk-clip" title={h.changeReason ?? undefined}>
+                        {h.changeReason ?? '—'}
+                      </span>
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </TBody>
+          </Table>
+        </div>
       )}
     </Dialog>
   );

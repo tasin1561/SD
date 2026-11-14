@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { Code } from '@/components/easy/code-label';
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
@@ -119,7 +120,8 @@ export function TreasuryIndex(): ReactElement {
   }
 
   return (
-    <div className="mo-page ez-touch">
+    <div className="mo-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -273,121 +275,123 @@ export function TreasuryIndex(): ReactElement {
             }
             flush
           >
-            <Table caption={t('treasuryTreasuryIndex.ourBankAccounts')}>
-              <THead>
-                <Tr>
-                  <Th>{t('treasuryTreasuryIndex.account')}</Th>
-                  <Th>{t('treasuryTreasuryIndex.purpose')}</Th>
-                  <Th>{t('treasuryTreasuryIndex.settlesFrom')}</Th>
-                  <Th align="right">{t('treasuryTreasuryIndex.ours')}</Th>
-                  <Th align="right">{t('treasuryTreasuryIndex.heldForClients')}</Th>
-                  <Th align="right">{t('treasuryTreasuryIndex.total')}</Th>
-                  <Th align="right">{t('treasuryTreasuryIndex.actions')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {overview.data.accounts.length === 0 ? (
-                  <TableEmpty colSpan={7}>
-                    <EmptyState
-                      bare
-                      title={t('treasuryTreasuryIndex.noBankAccountsYet')}
-                      description={t('treasuryTreasuryIndex.addOneOnTheBank')}
-                    />
-                  </TableEmpty>
-                ) : (
-                  overview.data.accounts.map((a) => (
-                    <Tr key={a.accountId}>
-                      <Td>
-                        <button
-                          type="button"
-                          className="tr-account"
-                          aria-expanded={openAccount === a.accountId}
-                          onClick={() =>
-                            setOpenAccount(openAccount === a.accountId ? null : a.accountId)
-                          }
-                        >
-                          <ChevronRight size={14} aria-hidden className="tr-account__chev" />
-                          <span>
-                            <span className="tr-account__name">{a.label}</span>
-                            <span className="tr-account__sub">
-                              {a.bankName} · {a.currency}
+            <div className="ez-wrap ez-cards ez-then-6">
+              <Table caption={t('treasuryTreasuryIndex.ourBankAccounts')}>
+                <THead>
+                  <Tr>
+                    <Th>{t('treasuryTreasuryIndex.account')}</Th>
+                    <Th>{t('treasuryTreasuryIndex.purpose')}</Th>
+                    <Th>{t('treasuryTreasuryIndex.settlesFrom')}</Th>
+                    <Th align="right">{t('treasuryTreasuryIndex.ours')}</Th>
+                    <Th align="right">{t('treasuryTreasuryIndex.heldForClients')}</Th>
+                    <Th align="right">{t('treasuryTreasuryIndex.total')}</Th>
+                    <Th align="right">{t('treasuryTreasuryIndex.actions')}</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {overview.data.accounts.length === 0 ? (
+                    <TableEmpty colSpan={7}>
+                      <EmptyState
+                        bare
+                        title={t('treasuryTreasuryIndex.noBankAccountsYet')}
+                        description={t('treasuryTreasuryIndex.addOneOnTheBank')}
+                      />
+                    </TableEmpty>
+                  ) : (
+                    overview.data.accounts.map((a) => (
+                      <Tr key={a.accountId}>
+                        <Td>
+                          <button
+                            type="button"
+                            className="tr-account"
+                            aria-expanded={openAccount === a.accountId}
+                            onClick={() =>
+                              setOpenAccount(openAccount === a.accountId ? null : a.accountId)
+                            }
+                          >
+                            <ChevronRight size={14} aria-hidden className="tr-account__chev" />
+                            <span>
+                              <span className="tr-account__name">{a.label}</span>
+                              <span className="tr-account__sub">
+                                {a.bankName} · {a.currency}
+                              </span>
                             </span>
-                          </span>
-                        </button>
-                        {openAccount === a.accountId &&
-                          (a.bySeller.length === 0 ? (
-                            <p className="mo-faint tr-holders">
-                              {t('treasuryTreasuryIndex.nothingInHereBelongsTo')}
-                            </p>
+                          </button>
+                          {openAccount === a.accountId &&
+                            (a.bySeller.length === 0 ? (
+                              <p className="mo-faint tr-holders">
+                                {t('treasuryTreasuryIndex.nothingInHereBelongsTo')}
+                              </p>
+                            ) : (
+                              <dl className="tr-holders">
+                                {a.bySeller.map((s) => (
+                                  <div key={s.sellerId} className="tr-holders__row">
+                                    <dt>{s.companyName}</dt>
+                                    <dd>
+                                      <Money
+                                        amount={s.amount}
+                                        currency={a.currency}
+                                        convert={false}
+                                      />
+                                    </dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            ))}
+                        </Td>
+                        <Td className="mo-muted">{a.purpose ?? '—'}</Td>
+                        <Td className="mo-muted">{a.courierAccountLabel ?? '—'}</Td>
+                        <Td align="right">
+                          <Money amount={a.capital} currency={a.currency} convert={false} />
+                        </Td>
+                        <Td align="right">
+                          <Money amount={a.sellerHeld} currency={a.currency} convert={false} />
+                        </Td>
+                        <Td align="right">
+                          <Money amount={a.total} currency={a.currency} convert={false} />
+                        </Td>
+                        <Td align="right">
+                          {canManage ? (
+                            <div className="tr-actions">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setOwnerMoney({
+                                    id: a.accountId,
+                                    label: a.label,
+                                    currency: a.currency,
+                                  })
+                                }
+                              >
+                                {t('treasuryTreasuryIndex.ownerMoney')}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setReconciling({
+                                    id: a.accountId,
+                                    label: a.label,
+                                    currency: a.currency,
+                                    capital: a.capital,
+                                    bySeller: a.bySeller,
+                                  })
+                                }
+                              >
+                                {t('treasuryTreasuryIndex.reconcile')}
+                              </Button>
+                            </div>
                           ) : (
-                            <dl className="tr-holders">
-                              {a.bySeller.map((s) => (
-                                <div key={s.sellerId} className="tr-holders__row">
-                                  <dt>{s.companyName}</dt>
-                                  <dd>
-                                    <Money
-                                      amount={s.amount}
-                                      currency={a.currency}
-                                      convert={false}
-                                    />
-                                  </dd>
-                                </div>
-                              ))}
-                            </dl>
-                          ))}
-                      </Td>
-                      <Td className="mo-muted">{a.purpose ?? '—'}</Td>
-                      <Td className="mo-muted">{a.courierAccountLabel ?? '—'}</Td>
-                      <Td align="right">
-                        <Money amount={a.capital} currency={a.currency} convert={false} />
-                      </Td>
-                      <Td align="right">
-                        <Money amount={a.sellerHeld} currency={a.currency} convert={false} />
-                      </Td>
-                      <Td align="right">
-                        <Money amount={a.total} currency={a.currency} convert={false} />
-                      </Td>
-                      <Td align="right">
-                        {canManage ? (
-                          <div className="tr-actions">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                setOwnerMoney({
-                                  id: a.accountId,
-                                  label: a.label,
-                                  currency: a.currency,
-                                })
-                              }
-                            >
-                              {t('treasuryTreasuryIndex.ownerMoney')}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                setReconciling({
-                                  id: a.accountId,
-                                  label: a.label,
-                                  currency: a.currency,
-                                  capital: a.capital,
-                                  bySeller: a.bySeller,
-                                })
-                              }
-                            >
-                              {t('treasuryTreasuryIndex.reconcile')}
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="mo-faint">—</span>
-                        )}
-                      </Td>
-                    </Tr>
-                  ))
-                )}
-              </TBody>
-            </Table>
+                            <span className="mo-faint">—</span>
+                          )}
+                        </Td>
+                      </Tr>
+                    ))
+                  )}
+                </TBody>
+              </Table>
+            </div>
           </MoSection>
 
           <MoSection
@@ -420,84 +424,86 @@ export function TreasuryIndex(): ReactElement {
                 />
               </div>
             ) : (
-              <Table caption={t('treasuryTreasuryIndex.recentBankMovements')}>
-                <THead>
-                  <Tr>
-                    <Th>{t('treasuryTreasuryIndex.when')}</Th>
-                    <Th>{t('treasuryTreasuryIndex.account')}</Th>
-                    <Th>{t('treasuryTreasuryIndex.what')}</Th>
-                    <Th>{t('treasuryTreasuryIndex.whose')}</Th>
-                    <Th align="right">{t('treasuryTreasuryIndex.amount')}</Th>
-                    <Th align="right">{t('treasuryTreasuryIndex.openingBalance')}</Th>
-                  </Tr>
-                </THead>
-                <TBody>
-                  {(entries.data?.items ?? []).length === 0 ? (
-                    <TableEmpty colSpan={6}>
-                      <EmptyState
-                        bare
-                        title={t('treasuryTreasuryIndex.nothingRecordedYet')}
-                        description={t('treasuryTreasuryIndex.settlementsTopUpsAndPayouts')}
-                      />
-                    </TableEmpty>
-                  ) : (
-                    (entries.data?.items ?? []).map((e) => (
-                      <Tr key={e.id}>
-                        <Td className="mo-muted mo-nowrap">
-                          <When iso={e.occurredAt} time />
-                        </Td>
-                        <Td>{e.accountLabel}</Td>
-                        <Td>
-                          <Code value={e.type} />
-                          {e.categoryName !== null && (
-                            <span className="mo-faint"> · {e.categoryName}</span>
-                          )}
-                        </Td>
-                        <Td className="mo-muted">
-                          {e.ownerKind === 'CAPITAL'
-                            ? t('treasuryTreasuryIndex.ours')
-                            : (e.sellerName ?? t('treasuryTreasuryIndex.aClient'))}
-                        </Td>
-                        <Td align="right">
-                          {/* Sign carries the direction, so a debit and a
-                              credit cannot be told apart by colour alone. */}
-                          <Money amount={e.signedAmount} currency={e.currency} convert={false} />
-                        </Td>
-                        <Td align="right">
-                          {e.isOpeningBalance ? (
-                            <StatusChip
-                              kind="confirmed"
-                              label={t('treasuryTreasuryIndex.openingBalance')}
-                              size="sm"
-                            />
-                          ) : canManage &&
-                            e.ownerKind === 'CAPITAL' &&
-                            (e.type === 'RECONCILIATION_ADJUSTMENT' ||
-                              e.type === 'OPENING_BALANCE') ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              icon={<BookMarked size={14} />}
-                              disabled={markOpening.isPending}
-                              onClick={() =>
-                                askToMark({
-                                  id: e.id,
-                                  accountLabel: e.accountLabel,
-                                  signedAmount: e.signedAmount,
-                                  currency: e.currency,
-                                  occurredAt: e.occurredAt,
-                                })
-                              }
-                            >
-                              {t('treasuryTreasuryIndex.markAsOpeningBalance')}
-                            </Button>
-                          ) : null}
-                        </Td>
-                      </Tr>
-                    ))
-                  )}
-                </TBody>
-              </Table>
+              <div className="ez-wrap ez-cards ez-lead-3 ez-then-5">
+                <Table caption={t('treasuryTreasuryIndex.recentBankMovements')}>
+                  <THead>
+                    <Tr>
+                      <Th>{t('treasuryTreasuryIndex.when')}</Th>
+                      <Th>{t('treasuryTreasuryIndex.account')}</Th>
+                      <Th>{t('treasuryTreasuryIndex.what')}</Th>
+                      <Th>{t('treasuryTreasuryIndex.whose')}</Th>
+                      <Th align="right">{t('treasuryTreasuryIndex.amount')}</Th>
+                      <Th align="right">{t('treasuryTreasuryIndex.openingBalance')}</Th>
+                    </Tr>
+                  </THead>
+                  <TBody>
+                    {(entries.data?.items ?? []).length === 0 ? (
+                      <TableEmpty colSpan={6}>
+                        <EmptyState
+                          bare
+                          title={t('treasuryTreasuryIndex.nothingRecordedYet')}
+                          description={t('treasuryTreasuryIndex.settlementsTopUpsAndPayouts')}
+                        />
+                      </TableEmpty>
+                    ) : (
+                      (entries.data?.items ?? []).map((e) => (
+                        <Tr key={e.id}>
+                          <Td className="mo-muted mo-nowrap">
+                            <When iso={e.occurredAt} time />
+                          </Td>
+                          <Td>{e.accountLabel}</Td>
+                          <Td>
+                            <Code value={e.type} />
+                            {e.categoryName !== null && (
+                              <span className="mo-faint"> · {e.categoryName}</span>
+                            )}
+                          </Td>
+                          <Td className="mo-muted">
+                            {e.ownerKind === 'CAPITAL'
+                              ? t('treasuryTreasuryIndex.ours')
+                              : (e.sellerName ?? t('treasuryTreasuryIndex.aClient'))}
+                          </Td>
+                          <Td align="right">
+                            {/* Sign carries the direction, so a debit and a
+                                credit cannot be told apart by colour alone. */}
+                            <Money amount={e.signedAmount} currency={e.currency} convert={false} />
+                          </Td>
+                          <Td align="right">
+                            {e.isOpeningBalance ? (
+                              <StatusChip
+                                kind="confirmed"
+                                label={t('treasuryTreasuryIndex.openingBalance')}
+                                size="sm"
+                              />
+                            ) : canManage &&
+                              e.ownerKind === 'CAPITAL' &&
+                              (e.type === 'RECONCILIATION_ADJUSTMENT' ||
+                                e.type === 'OPENING_BALANCE') ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                icon={<BookMarked size={14} />}
+                                disabled={markOpening.isPending}
+                                onClick={() =>
+                                  askToMark({
+                                    id: e.id,
+                                    accountLabel: e.accountLabel,
+                                    signedAmount: e.signedAmount,
+                                    currency: e.currency,
+                                    occurredAt: e.occurredAt,
+                                  })
+                                }
+                              >
+                                {t('treasuryTreasuryIndex.markAsOpeningBalance')}
+                              </Button>
+                            ) : null}
+                          </Td>
+                        </Tr>
+                      ))
+                    )}
+                  </TBody>
+                </Table>
+              </div>
             )}
           </MoSection>
 

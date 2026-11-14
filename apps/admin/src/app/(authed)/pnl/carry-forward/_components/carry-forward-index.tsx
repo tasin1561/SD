@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { pageDateTag } from '@/components/easy/when';
 import { Code } from '@/components/easy/code-label';
 import Link from 'next/link';
@@ -74,7 +75,8 @@ export function CarryForwardIndex(): ReactElement {
   const month = picked ?? periods.data?.currentMonth ?? null;
 
   return (
-    <div className="mo-page ez-touch">
+    <div className="mo-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -404,59 +406,61 @@ function MonthView({
 
       {closed && v.versions.length > 0 && (
         <MoSection title={t('pnlCarryForwardCarryForwardIndex.lockedVersions')} flush>
-          <Table>
-            <THead>
-              <Tr>
-                <Th>{t('pnlCarryForwardCarryForwardIndex.version')}</Th>
-                <Th>{t('pnlCarryForwardCarryForwardIndex.how')}</Th>
-                <Th>{t('pnlCarryForwardCarryForwardIndex.when')}</Th>
-                <Th>{t('pnlCarryForwardCarryForwardIndex.who')}</Th>
-                <Th>{t('pnlCarryForwardCarryForwardIndex.reason')}</Th>
-                <Th align="right">{t('pnlCarryForwardCarryForwardIndex.netBeforeAfter')}</Th>
-                <Th />
-              </Tr>
-            </THead>
-            <TBody>
-              {v.versions.map((x) => (
-                <Tr key={x.version}>
-                  <Td className="sk-figure">
-                    v{x.version}
-                    {x.current ? ' (current)' : ''}
-                  </Td>
-                  <Td>
-                    {versionKindLabel(t, x.kind)}
-                    <div className="mo-faint">
-                      {x.lockState === 'PROVISIONAL' ? 'provisional' : 'final'}
-                    </div>
-                  </Td>
-                  <Td className="mo-nowrap">{istDateTime(x.createdAt)}</Td>
-                  <Td>{x.by ?? t('pnlCarryForwardCarryForwardIndex.theScheduledClose')}</Td>
-                  <Td className="mo-muted">{x.reason ?? '—'}</Td>
-                  <Td align="right" className="mo-nowrap">
-                    {x.netBeforeInr === null ? (
-                      '—'
-                    ) : (
-                      <Money amount={x.netBeforeInr} currency="INR" convert={false} />
-                    )}{' '}
-                    → <Money amount={x.netInr} currency="INR" convert={false} />
-                  </Td>
-                  <Td>
-                    {x.version === v.shownVersion ? (
-                      <span className="mo-faint">shown</span>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setVersion(x.current ? null : x.version)}
-                      >
-                        {t('pnlCarryForwardCarryForwardIndex.open')}
-                      </Button>
-                    )}
-                  </Td>
+          <div className="ez-wrap ez-cards">
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>{t('pnlCarryForwardCarryForwardIndex.version')}</Th>
+                  <Th>{t('pnlCarryForwardCarryForwardIndex.how')}</Th>
+                  <Th>{t('pnlCarryForwardCarryForwardIndex.when')}</Th>
+                  <Th>{t('pnlCarryForwardCarryForwardIndex.who')}</Th>
+                  <Th>{t('pnlCarryForwardCarryForwardIndex.reason')}</Th>
+                  <Th align="right">{t('pnlCarryForwardCarryForwardIndex.netBeforeAfter')}</Th>
+                  <Th />
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {v.versions.map((x) => (
+                  <Tr key={x.version}>
+                    <Td className="sk-figure">
+                      v{x.version}
+                      {x.current ? ' (current)' : ''}
+                    </Td>
+                    <Td>
+                      {versionKindLabel(t, x.kind)}
+                      <div className="mo-faint">
+                        {x.lockState === 'PROVISIONAL' ? 'provisional' : 'final'}
+                      </div>
+                    </Td>
+                    <Td className="mo-nowrap">{istDateTime(x.createdAt)}</Td>
+                    <Td>{x.by ?? t('pnlCarryForwardCarryForwardIndex.theScheduledClose')}</Td>
+                    <Td className="mo-muted">{x.reason ?? '—'}</Td>
+                    <Td align="right" className="mo-nowrap">
+                      {x.netBeforeInr === null ? (
+                        '—'
+                      ) : (
+                        <Money amount={x.netBeforeInr} currency="INR" convert={false} />
+                      )}{' '}
+                      → <Money amount={x.netInr} currency="INR" convert={false} />
+                    </Td>
+                    <Td>
+                      {x.version === v.shownVersion ? (
+                        <span className="mo-faint">shown</span>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setVersion(x.current ? null : x.version)}
+                        >
+                          {t('pnlCarryForwardCarryForwardIndex.open')}
+                        </Button>
+                      )}
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
         </MoSection>
       )}
 
@@ -986,43 +990,45 @@ function RowsTable({
   }
   return (
     <div className="pl-drill">
-      <Table maxHeight="20rem">
-        <THead>
-          <Tr>
-            <Th>{t('pnlCarryForwardCarryForwardIndex.reference')}</Th>
-            <Th>{t('pnlCarryForwardCarryForwardIndex.date')}</Th>
-            <Th align="right">{t('pnlCarryForwardCarryForwardIndex.revenue')}</Th>
-            <Th align="right">{t('pnlCarryForwardCarryForwardIndex.cost')}</Th>
-          </Tr>
-        </THead>
-        <TBody>
-          {rows.map((r) => (
-            <Tr key={r.key}>
-              <Td>
-                <span className="sk-ident">{r.ref}</span>
-                {r.subRef !== null && <div className="mo-faint">{r.subRef}</div>}
-              </Td>
-              <Td className="mo-nowrap">{r.at === '' ? '—' : istDateLabel(r.at)}</Td>
-              <Td align="right">
-                {r.revenueInr === null ? (
-                  <span className="mo-faint">—</span>
-                ) : (
-                  <Money amount={r.revenueInr} currency="INR" convert={false} />
-                )}
-              </Td>
-              <Td align="right">
-                {r.costInr === null ? (
-                  <span className="mo-warn">
-                    {t('pnlCarryForwardCarryForwardIndex.notRecorded')}
-                  </span>
-                ) : (
-                  <Money amount={r.costInr} currency="INR" convert={false} />
-                )}
-              </Td>
+      <div className="ez-wrap ez-cards">
+        <Table maxHeight="20rem">
+          <THead>
+            <Tr>
+              <Th>{t('pnlCarryForwardCarryForwardIndex.reference')}</Th>
+              <Th>{t('pnlCarryForwardCarryForwardIndex.date')}</Th>
+              <Th align="right">{t('pnlCarryForwardCarryForwardIndex.revenue')}</Th>
+              <Th align="right">{t('pnlCarryForwardCarryForwardIndex.cost')}</Th>
             </Tr>
-          ))}
-        </TBody>
-      </Table>
+          </THead>
+          <TBody>
+            {rows.map((r) => (
+              <Tr key={r.key}>
+                <Td>
+                  <span className="sk-ident">{r.ref}</span>
+                  {r.subRef !== null && <div className="mo-faint">{r.subRef}</div>}
+                </Td>
+                <Td className="mo-nowrap">{r.at === '' ? '—' : istDateLabel(r.at)}</Td>
+                <Td align="right">
+                  {r.revenueInr === null ? (
+                    <span className="mo-faint">—</span>
+                  ) : (
+                    <Money amount={r.revenueInr} currency="INR" convert={false} />
+                  )}
+                </Td>
+                <Td align="right">
+                  {r.costInr === null ? (
+                    <span className="mo-warn">
+                      {t('pnlCarryForwardCarryForwardIndex.notRecorded')}
+                    </span>
+                  ) : (
+                    <Money amount={r.costInr} currency="INR" convert={false} />
+                  )}
+                </Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
+      </div>
       {truncated && (
         <p className="pl-state" data-tone="warn">
           {t('pnlCarryForwardCarryForwardIndex.onlyTheFirstRowsAre', { length: rows.length })}
@@ -1184,39 +1190,41 @@ function CarriedRows({ filter }: { readonly filter: CarryForwardFilter }): React
   }
   return (
     <div className="pl-drill">
-      <Table maxHeight="24rem">
-        <THead>
-          <Tr>
-            <Th>{t('pnlCarryForwardCarryForwardIndex.record')}</Th>
-            <Th>{t('pnlCarryForwardCarryForwardIndex.whatChanged')}</Th>
-            <Th>{t('pnlCarryForwardCarryForwardIndex.found')}</Th>
-            <Th align="right">{t('pnlCarryForwardCarryForwardIndex.revenue')}</Th>
-            <Th align="right">{t('pnlCarryForwardCarryForwardIndex.cost')}</Th>
-            <Th align="right">{t('pnlCarryForwardCarryForwardIndex.net')}</Th>
-          </Tr>
-        </THead>
-        <TBody>
-          {q.data.rows.map((r) => (
-            <Tr key={r.id}>
-              <Td>
-                <span className="sk-ident">{r.ref}</span>
-                {r.subRef !== null && <div className="mo-faint">{r.subRef}</div>}
-              </Td>
-              <Td>{r.reason}</Td>
-              <Td className="mo-nowrap">{istDateLabel(r.detectedAt)}</Td>
-              <Td align="right">
-                <Money amount={r.revenueDeltaInr} currency="INR" convert={false} />
-              </Td>
-              <Td align="right">
-                <Money amount={r.costDeltaInr} currency="INR" convert={false} />
-              </Td>
-              <Td align="right">
-                <Delta amount={r.netInr} />
-              </Td>
+      <div className="ez-wrap ez-cards ez-then-6">
+        <Table maxHeight="24rem">
+          <THead>
+            <Tr>
+              <Th>{t('pnlCarryForwardCarryForwardIndex.record')}</Th>
+              <Th>{t('pnlCarryForwardCarryForwardIndex.whatChanged')}</Th>
+              <Th>{t('pnlCarryForwardCarryForwardIndex.found')}</Th>
+              <Th align="right">{t('pnlCarryForwardCarryForwardIndex.revenue')}</Th>
+              <Th align="right">{t('pnlCarryForwardCarryForwardIndex.cost')}</Th>
+              <Th align="right">{t('pnlCarryForwardCarryForwardIndex.net')}</Th>
             </Tr>
-          ))}
-        </TBody>
-      </Table>
+          </THead>
+          <TBody>
+            {q.data.rows.map((r) => (
+              <Tr key={r.id}>
+                <Td>
+                  <span className="sk-ident">{r.ref}</span>
+                  {r.subRef !== null && <div className="mo-faint">{r.subRef}</div>}
+                </Td>
+                <Td>{r.reason}</Td>
+                <Td className="mo-nowrap">{istDateLabel(r.detectedAt)}</Td>
+                <Td align="right">
+                  <Money amount={r.revenueDeltaInr} currency="INR" convert={false} />
+                </Td>
+                <Td align="right">
+                  <Money amount={r.costDeltaInr} currency="INR" convert={false} />
+                </Td>
+                <Td align="right">
+                  <Delta amount={r.netInr} />
+                </Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
+      </div>
       {q.data.truncated && (
         <p className="pl-state" data-tone="warn">
           {t('pnlCarryForwardCarryForwardIndex.onlyTheFirstChangesAre', {
@@ -1304,44 +1312,46 @@ function BackfillPanel(): ReactElement {
       )}
       {result !== null && (
         <>
-          <Table>
-            <THead>
-              <Tr>
-                <Th>{t('pnlCarryForwardCarryForwardIndex.month')}</Th>
-                <Th>
-                  {result.dryRun
-                    ? t('pnlCarryForwardCarryForwardIndex.would')
-                    : t('pnlCarryForwardCarryForwardIndex.result')}
-                </Th>
-                <Th align="right">{t('pnlCarryForwardCarryForwardIndex.net')}</Th>
-                <Th>{t('pnlCarryForwardCarryForwardIndex.note')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {result.months.length === 0 ? (
-                <TableEmpty colSpan={4}>
-                  {t('pnlCarryForwardCarryForwardIndex.noMonthHasAnythingOn')}
-                </TableEmpty>
-              ) : (
-                result.months.map((m) => (
-                  <Tr key={m.month}>
-                    <Td className="sk-ident">{m.month}</Td>
-                    <Td>
-                      <Code value={m.action} />
-                    </Td>
-                    <Td align="right">
-                      {m.netInr === null ? (
-                        '—'
-                      ) : (
-                        <Money amount={m.netInr} currency="INR" convert={false} />
-                      )}
-                    </Td>
-                    <Td className="mo-muted">{m.note ?? ''}</Td>
-                  </Tr>
-                ))
-              )}
-            </TBody>
-          </Table>
+          <div className="ez-wrap ez-cards ez-then-3">
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>{t('pnlCarryForwardCarryForwardIndex.month')}</Th>
+                  <Th>
+                    {result.dryRun
+                      ? t('pnlCarryForwardCarryForwardIndex.would')
+                      : t('pnlCarryForwardCarryForwardIndex.result')}
+                  </Th>
+                  <Th align="right">{t('pnlCarryForwardCarryForwardIndex.net')}</Th>
+                  <Th>{t('pnlCarryForwardCarryForwardIndex.note')}</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {result.months.length === 0 ? (
+                  <TableEmpty colSpan={4}>
+                    {t('pnlCarryForwardCarryForwardIndex.noMonthHasAnythingOn')}
+                  </TableEmpty>
+                ) : (
+                  result.months.map((m) => (
+                    <Tr key={m.month}>
+                      <Td className="sk-ident">{m.month}</Td>
+                      <Td>
+                        <Code value={m.action} />
+                      </Td>
+                      <Td align="right">
+                        {m.netInr === null ? (
+                          '—'
+                        ) : (
+                          <Money amount={m.netInr} currency="INR" convert={false} />
+                        )}
+                      </Td>
+                      <Td className="mo-muted">{m.note ?? ''}</Td>
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </Table>
+          </div>
           {result.dryRun && result.months.some((m) => m.action === 'WOULD_CLOSE') && (
             <div className="mo-fields">
               <TextArea

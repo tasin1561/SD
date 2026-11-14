@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { useCodeLabel } from '@/components/easy/code-label';
 import { pageDateTag } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
@@ -120,43 +121,45 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
               <AcAlert message={t.needsRevision} />
             </div>
           ) : null}
-          <Table caption={tr('resellerStoresStoreIdPage.feeShares')}>
-            <THead>
-              <Tr>
-                <Th>{tr('resellerStoresStoreIdPage.fee')}</Th>
-                <Th align="right">{tr('resellerStoresStoreIdPage.storePays')}</Th>
-                <Th align="right">{tr('resellerStoresStoreIdPage.clientPays')}</Th>
-                <Th>{tr('resellerStoresStoreIdPage.example')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {c.shares.map((sh) => {
-                const ex = t.examples.find((e) => e.feeType === sh.feeType);
-                return (
-                  <Tr key={sh.feeType}>
-                    <Td>{sh.label}</Td>
-                    <Td align="right">
-                      <span className="sk-figure">{Number(sh.storePercent)}%</span>
-                    </Td>
-                    <Td align="right">
-                      <span className="sk-figure">{Number(sh.sellerPercent)}%</span>
-                    </Td>
-                    <Td>
-                      {ex === undefined ? (
-                        '—'
-                      ) : (
-                        <>
-                          <Money amount={ex.feeInr} convert={false} /> →{' '}
-                          <Money amount={ex.storeInr} convert={false} /> /{' '}
-                          <Money amount={ex.sellerInr} convert={false} />
-                        </>
-                      )}
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
+          <div className="ez-wrap ez-cards">
+            <Table caption={tr('resellerStoresStoreIdPage.feeShares')}>
+              <THead>
+                <Tr>
+                  <Th>{tr('resellerStoresStoreIdPage.fee')}</Th>
+                  <Th align="right">{tr('resellerStoresStoreIdPage.storePays')}</Th>
+                  <Th align="right">{tr('resellerStoresStoreIdPage.clientPays')}</Th>
+                  <Th>{tr('resellerStoresStoreIdPage.example')}</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {c.shares.map((sh) => {
+                  const ex = t.examples.find((e) => e.feeType === sh.feeType);
+                  return (
+                    <Tr key={sh.feeType}>
+                      <Td>{sh.label}</Td>
+                      <Td align="right">
+                        <span className="sk-figure">{Number(sh.storePercent)}%</span>
+                      </Td>
+                      <Td align="right">
+                        <span className="sk-figure">{Number(sh.sellerPercent)}%</span>
+                      </Td>
+                      <Td>
+                        {ex === undefined ? (
+                          '—'
+                        ) : (
+                          <>
+                            <Money amount={ex.feeInr} convert={false} /> →{' '}
+                            <Money amount={ex.storeInr} convert={false} /> /{' '}
+                            <Money amount={ex.sellerInr} convert={false} />
+                          </>
+                        )}
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </TBody>
+            </Table>
+          </div>
           <div className="ac-pad">
             <ul className="ac-list">
               <li>{c.storeCredit.words}</li>
@@ -168,34 +171,36 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
       )}
       {t.history.length > 1 ? (
         <AcCard flush title={tr('resellerStoresStoreIdPage.earlierVersions')}>
-          <Table caption={tr('resellerStoresStoreIdPage.termsVersions')}>
-            <THead>
-              <Tr>
-                <Th>{tr('resellerStoresStoreIdPage.version')}</Th>
-                <Th>{tr('resellerStoresStoreIdPage.published')}</Th>
-                <Th>{tr('resellerStoresStoreIdPage.accepted')}</Th>
-                <Th>{tr('resellerStoresStoreIdPage.note')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {t.history.map((v) => (
-                <Tr key={v.id}>
-                  <Td>
-                    <span className="sk-figure">{v.version}</span>
-                  </Td>
-                  <Td>{when(v.publishedAt)}</Td>
-                  <Td>
-                    {v.acceptance === null
-                      ? '—'
-                      : `${v.acceptance.acceptedByName}, ${when(v.acceptance.acceptedAt)}${
-                          v.acceptance.ipAddress === null ? '' : ` (${v.acceptance.ipAddress})`
-                        }`}
-                  </Td>
-                  <Td>{v.note ?? '—'}</Td>
+          <div className="ez-wrap ez-cards">
+            <Table caption={tr('resellerStoresStoreIdPage.termsVersions')}>
+              <THead>
+                <Tr>
+                  <Th>{tr('resellerStoresStoreIdPage.version')}</Th>
+                  <Th>{tr('resellerStoresStoreIdPage.published')}</Th>
+                  <Th>{tr('resellerStoresStoreIdPage.accepted')}</Th>
+                  <Th>{tr('resellerStoresStoreIdPage.note')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {t.history.map((v) => (
+                  <Tr key={v.id}>
+                    <Td>
+                      <span className="sk-figure">{v.version}</span>
+                    </Td>
+                    <Td>{when(v.publishedAt)}</Td>
+                    <Td>
+                      {v.acceptance === null
+                        ? '—'
+                        : `${v.acceptance.acceptedByName}, ${when(v.acceptance.acceptedAt)}${
+                            v.acceptance.ipAddress === null ? '' : ` (${v.acceptance.ipAddress})`
+                          }`}
+                    </Td>
+                    <Td>{v.note ?? '—'}</Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
         </AcCard>
       ) : null}
     </AcSection>
@@ -223,7 +228,8 @@ export default function AdminResellerStorePage(): ReactElement {
   // fails, so a slow or refused read never leaves a blank page.
   if (store.isPending || store.isError) {
     return (
-      <div className="ez-touch ez-wrap">
+      <div className="ez-touch ez-wrap ez-phone">
+        <TidyCards />
         <AcPage>
           <AcHeader
             crumbs={[...crumbs, { label: tr('resellerStoresStoreIdPage.memberStore') }]}
@@ -412,42 +418,48 @@ export default function AdminResellerStorePage(): ReactElement {
               description={tr('resellerStoresStoreIdPage.theClientInvitesTheStore')}
             />
           ) : (
-            <Table caption={tr('resellerStoresStoreIdPage.storeTeam')}>
-              <THead>
-                <Tr>
-                  <Th>{tr('resellerStoresStoreIdPage.name')}</Th>
-                  <Th>{tr('resellerStoresStoreIdPage.email')}</Th>
-                  <Th>{tr('resellerStoresStoreIdPage.role')}</Th>
-                  <Th>{tr('resellerStoresStoreIdPage.state')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {s.team.members.map((m) => (
-                  <Tr key={m.id}>
-                    <Td>
-                      <span className="ac-cell-main">{m.fullName}</span>
-                    </Td>
-                    <Td>{m.email}</Td>
-                    <Td>{m.roleName}</Td>
-                    <Td>
-                      {tr('resellerStoresStoreIdPage.lastSignedIn', { value: when(m.lastLoginAt) })}
-                    </Td>
+            <div className="ez-wrap ez-cards">
+              <Table caption={tr('resellerStoresStoreIdPage.storeTeam')}>
+                <THead>
+                  <Tr>
+                    <Th>{tr('resellerStoresStoreIdPage.name')}</Th>
+                    <Th>{tr('resellerStoresStoreIdPage.email')}</Th>
+                    <Th>{tr('resellerStoresStoreIdPage.role')}</Th>
+                    <Th>{tr('resellerStoresStoreIdPage.state')}</Th>
                   </Tr>
-                ))}
-                {s.team.invitations.map((i) => (
-                  <Tr key={i.id}>
-                    <Td>
-                      <span className="ac-cell-main">{i.fullName}</span>
-                    </Td>
-                    <Td>{i.email}</Td>
-                    <Td>{i.roleName}</Td>
-                    <Td>
-                      {tr('resellerStoresStoreIdPage.invitedExpires', { value: when(i.expiresAt) })}
-                    </Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
+                </THead>
+                <TBody>
+                  {s.team.members.map((m) => (
+                    <Tr key={m.id}>
+                      <Td>
+                        <span className="ac-cell-main">{m.fullName}</span>
+                      </Td>
+                      <Td>{m.email}</Td>
+                      <Td>{m.roleName}</Td>
+                      <Td>
+                        {tr('resellerStoresStoreIdPage.lastSignedIn', {
+                          value: when(m.lastLoginAt),
+                        })}
+                      </Td>
+                    </Tr>
+                  ))}
+                  {s.team.invitations.map((i) => (
+                    <Tr key={i.id}>
+                      <Td>
+                        <span className="ac-cell-main">{i.fullName}</span>
+                      </Td>
+                      <Td>{i.email}</Td>
+                      <Td>{i.roleName}</Td>
+                      <Td>
+                        {tr('resellerStoresStoreIdPage.invitedExpires', {
+                          value: when(i.expiresAt),
+                        })}
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
           )}
         </AcSection>
       </AcPage>

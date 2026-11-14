@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import Link from 'next/link';
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { Check, Landmark, X } from 'lucide-react';
@@ -151,7 +152,8 @@ export function BankChangesIndex(): ReactElement {
   const requests = list.data ?? [];
 
   return (
-    <div className="mk-page ez-touch">
+    <div className="mk-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         title={
           <span className="ez-titled">
@@ -243,37 +245,45 @@ export function BankChangesIndex(): ReactElement {
                   ) : undefined
                 }
               >
-                <Table
-                  caption={t('bankChangesBankChangesIndex.bankDetailsFor', {
-                    companyName: req.companyName,
-                  })}
-                >
-                  <THead>
-                    <Tr>
-                      <Th>{t('bankChangesBankChangesIndex.field')}</Th>
-                      <Th>{t('bankChangesBankChangesIndex.onFileNow')}</Th>
-                      <Th>{t('bankChangesBankChangesIndex.proposed')}</Th>
-                    </Tr>
-                  </THead>
-                  <TBody>
-                    {FIELDS.map(([key, labelKey, mono]) => {
-                      const label = t(labelKey);
-                      const isChanged = changed.has(key);
-                      return (
-                        <Tr key={key} className="mk-diff-row" data-changed={isChanged ? '1' : '0'}>
-                          <Td>{label}</Td>
-                          <Td>{renderValue(req.current[key], mono)}</Td>
-                          <Td>
-                            <span className="mk-balances">
-                              {renderValue(req.proposed[key], mono)}
-                              {isChanged && <StatusChip kind="pending" label="changed" size="sm" />}
-                            </span>
-                          </Td>
-                        </Tr>
-                      );
+                <div className="ez-wrap ez-cards">
+                  <Table
+                    caption={t('bankChangesBankChangesIndex.bankDetailsFor', {
+                      companyName: req.companyName,
                     })}
-                  </TBody>
-                </Table>
+                  >
+                    <THead>
+                      <Tr>
+                        <Th>{t('bankChangesBankChangesIndex.field')}</Th>
+                        <Th>{t('bankChangesBankChangesIndex.onFileNow')}</Th>
+                        <Th>{t('bankChangesBankChangesIndex.proposed')}</Th>
+                      </Tr>
+                    </THead>
+                    <TBody>
+                      {FIELDS.map(([key, labelKey, mono]) => {
+                        const label = t(labelKey);
+                        const isChanged = changed.has(key);
+                        return (
+                          <Tr
+                            key={key}
+                            className="mk-diff-row"
+                            data-changed={isChanged ? '1' : '0'}
+                          >
+                            <Td>{label}</Td>
+                            <Td>{renderValue(req.current[key], mono)}</Td>
+                            <Td>
+                              <span className="mk-balances">
+                                {renderValue(req.proposed[key], mono)}
+                                {isChanged && (
+                                  <StatusChip kind="pending" label="changed" size="sm" />
+                                )}
+                              </span>
+                            </Td>
+                          </Tr>
+                        );
+                      })}
+                    </TBody>
+                  </Table>
+                </div>
                 {accountNumberUnchanged && (
                   <div className="mk-card__foot">
                     {t('bankChangesBankChangesIndex.theAccountNumberIsUnchanged')}

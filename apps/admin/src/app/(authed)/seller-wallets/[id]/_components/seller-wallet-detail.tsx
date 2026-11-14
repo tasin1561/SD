@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import { startTransition, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Landmark, Scale } from 'lucide-react';
@@ -83,7 +84,8 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
   const d = detail.data;
 
   return (
-    <div className="mk-page ez-touch">
+    <div className="mk-page ez-touch ez-phone">
+      <TidyCards />
       <PageHeader
         breadcrumb={
           <Link href="/seller-wallets" className="mk-link">
@@ -263,89 +265,91 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
                 title={t('sellerWalletsIdSellerWalletDetail.ledger')}
                 subtitle={t('sellerWalletsIdSellerWalletDetail.everyEntryNewestFirstOnly')}
               >
-                <Table caption={t('sellerWalletsIdSellerWalletDetail.ledger')}>
-                  <THead>
-                    <Tr>
-                      <Th>{t('sellerWalletsIdSellerWalletDetail.when')}</Th>
-                      <Th>{t('sellerWalletsIdSellerWalletDetail.type')}</Th>
-                      <Th>{t('sellerWalletsIdSellerWalletDetail.linked')}</Th>
-                      <Th align="right">{t('sellerWalletsIdSellerWalletDetail.amount')}</Th>
-                      <Th align="right">{t('sellerWalletsIdSellerWalletDetail.balanceAfter')}</Th>
-                    </Tr>
-                  </THead>
-                  <TBody>
-                    {(entries.data?.items ?? []).length === 0 ? (
-                      <TableEmpty colSpan={5}>
-                        {t('sellerWalletsIdSellerWalletDetail.noEntriesYet')}
-                      </TableEmpty>
-                    ) : (
-                      (entries.data?.items ?? []).map((e: AdminWalletEntry) => (
-                        <Tr key={e.id}>
-                          <Td className="mk-when sk-figure">
-                            <When iso={e.createdAt} time />
-                          </Td>
-                          <Td>
-                            {/* The raw enum was on screen: ORDER_CHARGES,
-                                INSTANT_PAY_FEE. Staff answering "why is my
-                                balance this" were reading the column name
-                                out of the database. */}
-                            <div className="mk-cell">
-                              <span className="mk-body">
-                                {walletDirectionLabel(e.direction as WalletEntryDirection)}
-                              </span>
-                              {e.note !== null && <span className="mk-faint">{e.note}</span>}
-                            </div>
-                          </Td>
-                          {/* Staff reading a disputed balance had no route
-                              from an entry to what it charged for: the id was
-                              in the payload and nothing rendered it. */}
-                          <Td>
-                            {e.linkedOrderId !== null ? (
-                              <Link
-                                href={`/orders/${e.linkedOrderId}`}
-                                className="mk-inline-link sk-ident mk-small"
-                              >
-                                {e.linkedOrderNumber ??
-                                  t('sellerWalletsIdSellerWalletDetail.order')}{' '}
-                                →
-                              </Link>
-                            ) : e.linkedConsignmentId !== null ? (
-                              <Link
-                                href={`/warehouse/consignments/${e.linkedConsignmentId}`}
-                                className="mk-inline-link sk-ident mk-small"
-                              >
-                                {e.linkedConsignmentNumber ??
-                                  t('sellerWalletsIdSellerWalletDetail.consignment')}{' '}
-                                →
-                              </Link>
-                            ) : (
-                              <span className="mk-faint">—</span>
-                            )}
-                          </Td>
-                          <Td align="right">
-                            {/* Without a direction every figure rendered the
-                                same, so a refund and a charge were
-                                indistinguishable on a money screen. The sign
-                                carries it as well as the colour — colour
-                                alone is not a difference everybody can see. */}
-                            <Money
-                              amount={e.amount}
-                              currency="INR"
-                              direction={
-                                isWalletCredit(e.direction as WalletEntryDirection)
-                                  ? 'credit'
-                                  : 'debit'
-                              }
-                            />
-                          </Td>
-                          <Td align="right">
-                            <Money amount={e.runningBalanceAfter} currency="INR" />
-                          </Td>
-                        </Tr>
-                      ))
-                    )}
-                  </TBody>
-                </Table>
+                <div className="ez-wrap ez-cards ez-lead-2 ez-then-4">
+                  <Table caption={t('sellerWalletsIdSellerWalletDetail.ledger')}>
+                    <THead>
+                      <Tr>
+                        <Th>{t('sellerWalletsIdSellerWalletDetail.when')}</Th>
+                        <Th>{t('sellerWalletsIdSellerWalletDetail.type')}</Th>
+                        <Th>{t('sellerWalletsIdSellerWalletDetail.linked')}</Th>
+                        <Th align="right">{t('sellerWalletsIdSellerWalletDetail.amount')}</Th>
+                        <Th align="right">{t('sellerWalletsIdSellerWalletDetail.balanceAfter')}</Th>
+                      </Tr>
+                    </THead>
+                    <TBody>
+                      {(entries.data?.items ?? []).length === 0 ? (
+                        <TableEmpty colSpan={5}>
+                          {t('sellerWalletsIdSellerWalletDetail.noEntriesYet')}
+                        </TableEmpty>
+                      ) : (
+                        (entries.data?.items ?? []).map((e: AdminWalletEntry) => (
+                          <Tr key={e.id}>
+                            <Td className="mk-when sk-figure">
+                              <When iso={e.createdAt} time />
+                            </Td>
+                            <Td>
+                              {/* The raw enum was on screen: ORDER_CHARGES,
+                                  INSTANT_PAY_FEE. Staff answering "why is my
+                                  balance this" were reading the column name
+                                  out of the database. */}
+                              <div className="mk-cell">
+                                <span className="mk-body">
+                                  {walletDirectionLabel(e.direction as WalletEntryDirection)}
+                                </span>
+                                {e.note !== null && <span className="mk-faint">{e.note}</span>}
+                              </div>
+                            </Td>
+                            {/* Staff reading a disputed balance had no route
+                                from an entry to what it charged for: the id was
+                                in the payload and nothing rendered it. */}
+                            <Td>
+                              {e.linkedOrderId !== null ? (
+                                <Link
+                                  href={`/orders/${e.linkedOrderId}`}
+                                  className="mk-inline-link sk-ident mk-small"
+                                >
+                                  {e.linkedOrderNumber ??
+                                    t('sellerWalletsIdSellerWalletDetail.order')}{' '}
+                                  →
+                                </Link>
+                              ) : e.linkedConsignmentId !== null ? (
+                                <Link
+                                  href={`/warehouse/consignments/${e.linkedConsignmentId}`}
+                                  className="mk-inline-link sk-ident mk-small"
+                                >
+                                  {e.linkedConsignmentNumber ??
+                                    t('sellerWalletsIdSellerWalletDetail.consignment')}{' '}
+                                  →
+                                </Link>
+                              ) : (
+                                <span className="mk-faint">—</span>
+                              )}
+                            </Td>
+                            <Td align="right">
+                              {/* Without a direction every figure rendered the
+                                  same, so a refund and a charge were
+                                  indistinguishable on a money screen. The sign
+                                  carries it as well as the colour — colour
+                                  alone is not a difference everybody can see. */}
+                              <Money
+                                amount={e.amount}
+                                currency="INR"
+                                direction={
+                                  isWalletCredit(e.direction as WalletEntryDirection)
+                                    ? 'credit'
+                                    : 'debit'
+                                }
+                              />
+                            </Td>
+                            <Td align="right">
+                              <Money amount={e.runningBalanceAfter} currency="INR" />
+                            </Td>
+                          </Tr>
+                        ))
+                      )}
+                    </TBody>
+                  </Table>
+                </div>
               </MkCard>
             ),
           },
@@ -410,45 +414,47 @@ function RawList({
     );
   }
   return (
-    <Table>
-      <THead>
-        <Tr>
-          <Th>{t('sellerWalletsIdSellerWalletDetail.when')}</Th>
-          <Th align="right">{t('sellerWalletsIdSellerWalletDetail.amount')}</Th>
-          <Th>{t('sellerWalletsIdSellerWalletDetail.status')}</Th>
-          <Th>{t('sellerWalletsIdSellerWalletDetail.note')}</Th>
-        </Tr>
-      </THead>
-      <TBody>
-        {rows.map((raw, i) => {
-          const r = raw as {
-            id?: string;
-            createdAt?: string;
-            amount?: string;
-            amountRequested?: string;
-            currency?: string;
-            status?: string;
-            reviewNote?: string | null;
-            note?: string | null;
-          };
-          return (
-            <Tr key={r.id ?? String(i)}>
-              <Td className="mk-when sk-figure">
-                {r.createdAt === undefined ? '—' : <When iso={r.createdAt} time />}
-              </Td>
-              <Td align="right">
-                <Money
-                  amount={r.amount ?? r.amountRequested ?? '0'}
-                  currency={r.currency === 'BDT' ? 'BDT' : 'INR'}
-                  convert={false}
-                />
-              </Td>
-              <Td className="mk-small mk-body">{r.status ?? '—'}</Td>
-              <Td className="mk-faint">{r.reviewNote ?? r.note ?? '—'}</Td>
-            </Tr>
-          );
-        })}
-      </TBody>
-    </Table>
+    <div className="ez-wrap ez-cards ez-then-2">
+      <Table>
+        <THead>
+          <Tr>
+            <Th>{t('sellerWalletsIdSellerWalletDetail.when')}</Th>
+            <Th align="right">{t('sellerWalletsIdSellerWalletDetail.amount')}</Th>
+            <Th>{t('sellerWalletsIdSellerWalletDetail.status')}</Th>
+            <Th>{t('sellerWalletsIdSellerWalletDetail.note')}</Th>
+          </Tr>
+        </THead>
+        <TBody>
+          {rows.map((raw, i) => {
+            const r = raw as {
+              id?: string;
+              createdAt?: string;
+              amount?: string;
+              amountRequested?: string;
+              currency?: string;
+              status?: string;
+              reviewNote?: string | null;
+              note?: string | null;
+            };
+            return (
+              <Tr key={r.id ?? String(i)}>
+                <Td className="mk-when sk-figure">
+                  {r.createdAt === undefined ? '—' : <When iso={r.createdAt} time />}
+                </Td>
+                <Td align="right">
+                  <Money
+                    amount={r.amount ?? r.amountRequested ?? '0'}
+                    currency={r.currency === 'BDT' ? 'BDT' : 'INR'}
+                    convert={false}
+                  />
+                </Td>
+                <Td className="mk-small mk-body">{r.status ?? '—'}</Td>
+                <Td className="mk-faint">{r.reviewNote ?? r.note ?? '—'}</Td>
+              </Tr>
+            );
+          })}
+        </TBody>
+      </Table>
+    </div>
   );
 }

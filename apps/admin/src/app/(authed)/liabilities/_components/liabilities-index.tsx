@@ -1,5 +1,6 @@
 'use client';
 
+import { TidyCards } from '@/components/easy/tidy-cards';
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ArrowRight, ShieldCheck } from 'lucide-react';
@@ -40,59 +41,61 @@ function LineTable({
 }): ReactElement {
   const t = useT();
   return (
-    <Table>
-      <THead>
-        <Tr>
-          <Th>{t('liabilitiesLiabilitiesIndex.what')}</Th>
-          <Th align="right">{t('liabilitiesLiabilitiesIndex.amount')}</Th>
-          <Th align="right">{t('liabilitiesLiabilitiesIndex.items')}</Th>
-        </Tr>
-      </THead>
-      <TBody>
-        {lines.length === 0 ? (
-          <TableEmpty colSpan={3}>{emptyText}</TableEmpty>
-        ) : (
-          lines.flatMap((l) => [
-            <Tr key={l.key}>
-              <Td>
-                <span className="li-label">{l.label}</span>
-                <span className="mo-sub">{l.meaning}</span>
-              </Td>
-              <Td align="right">
-                <Money amount={l.amountInr} currency="INR" convert={false} />
-              </Td>
-              <Td align="right" className="mo-num">
-                {l.count}
-              </Td>
-            </Tr>,
-            // The halves of a line that need different responses. They add
-            // up to the line above and are already inside its total.
-            ...(l.parts ?? []).map((p) => (
-              <Tr key={p.key} className="li-part-row">
+    <div className="ez-wrap ez-cards ez-then-2">
+      <Table>
+        <THead>
+          <Tr>
+            <Th>{t('liabilitiesLiabilitiesIndex.what')}</Th>
+            <Th align="right">{t('liabilitiesLiabilitiesIndex.amount')}</Th>
+            <Th align="right">{t('liabilitiesLiabilitiesIndex.items')}</Th>
+          </Tr>
+        </THead>
+        <TBody>
+          {lines.length === 0 ? (
+            <TableEmpty colSpan={3}>{emptyText}</TableEmpty>
+          ) : (
+            lines.flatMap((l) => [
+              <Tr key={l.key}>
                 <Td>
-                  <span className="li-part">
-                    {p.key === 'courier_float_instant_pay' ? (
-                      <Link href="/liabilities/instant-pay" className="mo-link">
-                        {p.label} <ArrowRight size={13} aria-hidden />
-                      </Link>
-                    ) : (
-                      p.label
-                    )}
-                    <span className="mo-sub">{p.meaning}</span>
-                  </span>
+                  <span className="li-label">{l.label}</span>
+                  <span className="mo-sub">{l.meaning}</span>
                 </Td>
                 <Td align="right">
-                  <Money amount={p.amountInr} currency="INR" convert={false} />
+                  <Money amount={l.amountInr} currency="INR" convert={false} />
                 </Td>
                 <Td align="right" className="mo-num">
-                  {p.count}
+                  {l.count}
                 </Td>
-              </Tr>
-            )),
-          ])
-        )}
-      </TBody>
-    </Table>
+              </Tr>,
+              // The halves of a line that need different responses. They add
+              // up to the line above and are already inside its total.
+              ...(l.parts ?? []).map((p) => (
+                <Tr key={p.key} className="li-part-row">
+                  <Td>
+                    <span className="li-part">
+                      {p.key === 'courier_float_instant_pay' ? (
+                        <Link href="/liabilities/instant-pay" className="mo-link">
+                          {p.label} <ArrowRight size={13} aria-hidden />
+                        </Link>
+                      ) : (
+                        p.label
+                      )}
+                      <span className="mo-sub">{p.meaning}</span>
+                    </span>
+                  </Td>
+                  <Td align="right">
+                    <Money amount={p.amountInr} currency="INR" convert={false} />
+                  </Td>
+                  <Td align="right" className="mo-num">
+                    {p.count}
+                  </Td>
+                </Tr>
+              )),
+            ])
+          )}
+        </TBody>
+      </Table>
+    </div>
   );
 }
 
@@ -132,7 +135,8 @@ export function LiabilitiesIndex(): ReactElement {
 
   if (q.isLoading) {
     return (
-      <div className="mo-page ez-touch">
+      <div className="mo-page ez-touch ez-phone">
+        <TidyCards />
         <div className="mo-kpis">
           <Skeleton height={112} rounded="md" />
           <Skeleton height={112} rounded="md" />
@@ -224,88 +228,95 @@ export function LiabilitiesIndex(): ReactElement {
                 </p>
               </Notice>
             )}
-            <Table caption={t('liabilitiesLiabilitiesIndex.clientsInTheRed')}>
-              <THead>
-                <Tr>
-                  <Th>{t('liabilitiesLiabilitiesIndex.client')}</Th>
-                  <Th align="right">{t('liabilitiesLiabilitiesIndex.owes')}</Th>
-                  <Th>{t('liabilitiesLiabilitiesIndex.whatFor')}</Th>
-                  <Th align="right">{t('liabilitiesLiabilitiesIndex.stockHeldAtCost')}</Th>
-                  <Th>{t('liabilitiesLiabilitiesIndex.cover')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {d.sellerDebts.map((s) => (
-                  <Tr key={s.sellerId}>
-                    <Td>
-                      <Link href={`/seller-wallets/${s.sellerId}`} className="mo-link">
-                        {s.companyName}
-                      </Link>
-                    </Td>
-                    <Td align="right">
-                      <Money amount={s.owedInr} currency="INR" convert={false} direction="debit" />
-                    </Td>
-                    <Td>
-                      {/* A total says they owe ₹9,000; this says it is
-                          freight on stock that has not sold, which
-                          clears itself, or delivery fees on delivered
-                          orders, which do not. */}
-                      {s.causes.length === 0 ? (
-                        <span className="mo-faint">—</span>
-                      ) : (
-                        <ul className="li-causes">
-                          {s.causes.map((c) => (
-                            <li key={c.direction}>
-                              <span className="mo-muted">{humanCause(t, c.direction)}</span>{' '}
-                              <Money amount={c.amountInr} currency="INR" convert={false} />
-                            </li>
-                          ))}
-                          {/* Without this the charges can add up to more
-                              than the balance and read as an error. They
-                              are not netted off any one cause — a top-up
-                              does not pay the freight rather than the
-                              fees — but the reader has to see that money
-                              came in. */}
-                          {(Number(s.paidSinceInr) > 0 || Number(s.openingBalanceInr) > 0) && (
-                            <li className="li-causes__paid">
-                              {Number(s.openingBalanceInr) > 0 && (
-                                <div>
-                                  {t('liabilitiesLiabilitiesIndex.startedWith')}{' '}
-                                  <Money
-                                    amount={s.openingBalanceInr}
-                                    currency="INR"
-                                    convert={false}
-                                  />
-                                </div>
-                              )}
-                              {Number(s.paidSinceInr) > 0 && (
-                                <div>
-                                  {t('liabilitiesLiabilitiesIndex.paidSince')}{' '}
-                                  <Money amount={s.paidSinceInr} currency="INR" convert={false} />
-                                </div>
-                              )}
-                            </li>
-                          )}
-                        </ul>
-                      )}
-                    </Td>
-                    <Td align="right">
-                      <Money amount={s.stockValueInr} currency="INR" convert={false} />
-                    </Td>
-                    <Td>
-                      <StatusChip
-                        kind={s.covered ? 'confirmed' : 'failed'}
-                        label={
-                          s.covered
-                            ? t('liabilitiesLiabilitiesIndex.coveredByStock')
-                            : t('liabilitiesLiabilitiesIndex.uncovered')
-                        }
-                      />
-                    </Td>
+            <div className="ez-wrap ez-cards ez-then-2">
+              <Table caption={t('liabilitiesLiabilitiesIndex.clientsInTheRed')}>
+                <THead>
+                  <Tr>
+                    <Th>{t('liabilitiesLiabilitiesIndex.client')}</Th>
+                    <Th align="right">{t('liabilitiesLiabilitiesIndex.owes')}</Th>
+                    <Th>{t('liabilitiesLiabilitiesIndex.whatFor')}</Th>
+                    <Th align="right">{t('liabilitiesLiabilitiesIndex.stockHeldAtCost')}</Th>
+                    <Th>{t('liabilitiesLiabilitiesIndex.cover')}</Th>
                   </Tr>
-                ))}
-              </TBody>
-            </Table>
+                </THead>
+                <TBody>
+                  {d.sellerDebts.map((s) => (
+                    <Tr key={s.sellerId}>
+                      <Td>
+                        <Link href={`/seller-wallets/${s.sellerId}`} className="mo-link">
+                          {s.companyName}
+                        </Link>
+                      </Td>
+                      <Td align="right">
+                        <Money
+                          amount={s.owedInr}
+                          currency="INR"
+                          convert={false}
+                          direction="debit"
+                        />
+                      </Td>
+                      <Td>
+                        {/* A total says they owe ₹9,000; this says it is
+                            freight on stock that has not sold, which
+                            clears itself, or delivery fees on delivered
+                            orders, which do not. */}
+                        {s.causes.length === 0 ? (
+                          <span className="mo-faint">—</span>
+                        ) : (
+                          <ul className="li-causes">
+                            {s.causes.map((c) => (
+                              <li key={c.direction}>
+                                <span className="mo-muted">{humanCause(t, c.direction)}</span>{' '}
+                                <Money amount={c.amountInr} currency="INR" convert={false} />
+                              </li>
+                            ))}
+                            {/* Without this the charges can add up to more
+                                than the balance and read as an error. They
+                                are not netted off any one cause — a top-up
+                                does not pay the freight rather than the
+                                fees — but the reader has to see that money
+                                came in. */}
+                            {(Number(s.paidSinceInr) > 0 || Number(s.openingBalanceInr) > 0) && (
+                              <li className="li-causes__paid">
+                                {Number(s.openingBalanceInr) > 0 && (
+                                  <div>
+                                    {t('liabilitiesLiabilitiesIndex.startedWith')}{' '}
+                                    <Money
+                                      amount={s.openingBalanceInr}
+                                      currency="INR"
+                                      convert={false}
+                                    />
+                                  </div>
+                                )}
+                                {Number(s.paidSinceInr) > 0 && (
+                                  <div>
+                                    {t('liabilitiesLiabilitiesIndex.paidSince')}{' '}
+                                    <Money amount={s.paidSinceInr} currency="INR" convert={false} />
+                                  </div>
+                                )}
+                              </li>
+                            )}
+                          </ul>
+                        )}
+                      </Td>
+                      <Td align="right">
+                        <Money amount={s.stockValueInr} currency="INR" convert={false} />
+                      </Td>
+                      <Td>
+                        <StatusChip
+                          kind={s.covered ? 'confirmed' : 'failed'}
+                          label={
+                            s.covered
+                              ? t('liabilitiesLiabilitiesIndex.coveredByStock')
+                              : t('liabilitiesLiabilitiesIndex.uncovered')
+                          }
+                        />
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
           </>
         )}
       </section>

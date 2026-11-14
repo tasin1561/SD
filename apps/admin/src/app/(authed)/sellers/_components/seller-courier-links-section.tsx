@@ -113,32 +113,36 @@ export function SellerCourierLinksSection({
           }
         />
       ) : (
-        <Table caption={tr('sellersSellerCourierLinksSection.courierAccountsForThisClient')}>
-          <THead>
-            <Tr>
-              <Th>{tr('sellersSellerCourierLinksSection.account')}</Th>
-              <Th>{tr('sellersSellerCourierLinksSection.courier')}</Th>
-              <Th align="right">{tr('sellersSellerCourierLinksSection.weight')}</Th>
-              <Th align="right">{tr('sellersSellerCourierLinksSection.share')}</Th>
-              <Th>{tr('sellersSellerCourierLinksSection.state')}</Th>
-              {canManage && <Th align="right">{tr('sellersSellerCourierLinksSection.actions')}</Th>}
-            </Tr>
-          </THead>
-          <TBody>
-            {rows.map((link) => (
-              <LinkRow
-                key={link.id}
-                sellerId={sellerId}
-                link={link}
-                account={byId.get(link.courierAccountId) ?? null}
-                activeWeight={activeWeight}
-                canManage={canManage}
-                onReweigh={() => setReweighing(link)}
-                onUnlink={() => setUnlinking(link)}
-              />
-            ))}
-          </TBody>
-        </Table>
+        <div className="ez-wrap ez-cards">
+          <Table caption={tr('sellersSellerCourierLinksSection.courierAccountsForThisClient')}>
+            <THead>
+              <Tr>
+                <Th>{tr('sellersSellerCourierLinksSection.account')}</Th>
+                <Th>{tr('sellersSellerCourierLinksSection.courier')}</Th>
+                <Th align="right">{tr('sellersSellerCourierLinksSection.weight')}</Th>
+                <Th align="right">{tr('sellersSellerCourierLinksSection.share')}</Th>
+                <Th>{tr('sellersSellerCourierLinksSection.state')}</Th>
+                {canManage && (
+                  <Th align="right">{tr('sellersSellerCourierLinksSection.actions')}</Th>
+                )}
+              </Tr>
+            </THead>
+            <TBody>
+              {rows.map((link) => (
+                <LinkRow
+                  key={link.id}
+                  sellerId={sellerId}
+                  link={link}
+                  account={byId.get(link.courierAccountId) ?? null}
+                  activeWeight={activeWeight}
+                  canManage={canManage}
+                  onReweigh={() => setReweighing(link)}
+                  onUnlink={() => setUnlinking(link)}
+                />
+              ))}
+            </TBody>
+          </Table>
+        </div>
       )}
 
       {adding && (
