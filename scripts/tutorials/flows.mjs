@@ -16,7 +16,12 @@
 import path from 'node:path';
 import { GENERATED_DIR, TUTORIALS_DIR } from './lib/paths.mjs';
 import { readFixture } from './lib/fixture.mjs';
-import { assertOrderFormV2, codCard, waitForAddressScore } from './lib/order-pages.mjs';
+import {
+  assertOrderFormV2,
+  codCard,
+  stepperRegion,
+  waitForAddressScore,
+} from './lib/order-pages.mjs';
 
 /**
  * The CSV the bulk-import video uploads. A COMMITTED fixture rather than
@@ -417,7 +422,11 @@ async function pendingRow(page) {
 
 /** The header's Cancel — exact, so "Cancel this order" is not it. */
 function cancelButton(page) {
-  return page.getByRole('button', { name: 'Cancel', exact: true });
+  // "Cancel order" in the "Order actions" group under the order number
+  // (`order-header.tsx:121,180`); it was "Cancel" on the old page.
+  return page
+    .getByRole('group', { name: 'Order actions' })
+    .getByRole('button', { name: 'Cancel order', exact: true });
 }
 
 /**
@@ -4493,37 +4502,35 @@ export const FLOWS = {
       },
 
       async tracker({ page, stage }) {
-        const tracker = page.locator('.ord-section').filter({ hasText: 'Order tracker' }).first();
-        await tracker.waitFor({ state: 'visible', timeout: 25_000 });
-        await tracker.scrollIntoViewIfNeeded();
-        await page.waitForTimeout(900);
-        await stage.dwellOn(tracker, 3600);
+        // The progress row under "In short" (`order-stepper.tsx:76`,
+        // `aria-label="Order progress"`), which replaced the old "Order
+        // tracker" section.
+        await stage.dwellOn(await stepperRegion(page), 3600);
       },
 
       async panel({ page, stage }) {
-        const panel = page
-          .locator('.ord-section')
-          .filter({ hasText: 'Delivery did not succeed' })
-          .first();
-        // The panel renders only while the parcel is in trouble, so its
-        // absence means the seeding did not leave this order failed —
-        // which a dwell on a missing element reports as a timeout rather
-        // than filming a page that quietly does not say this.
-        await panel.waitFor({ state: 'visible', timeout: 25_000 });
-        await panel.scrollIntoViewIfNeeded();
-        await page.waitForTimeout(900);
+        // `section#trouble` (`delivery-trouble-panel.tsx:219`). The card
+        // renders only while the parcel is in trouble, so its absence means
+        // the seeding did not leave this order failed — which a dwell on a
+        // missing element reports as a timeout rather than filming a page
+        // that quietly does not say this.
+        const panel = await codCard(page, 'trouble');
         await stage.dwellOn(panel.locator('.ord-notice, [class*="notice"]').first(), 3000);
       },
 
       async history({ page, stage }) {
-        const panel = page
-          .locator('.ord-section')
-          .filter({ hasText: 'Delivery did not succeed' })
-          .first();
-        const calls = panel.locator('.ord-callcard').first();
+        // "What we discussed with your customer": `ul.cod-calls` of
+        // `li.cod-call` rows (`delivery-trouble-panel.tsx:238,419`). The old
+        // `.ord-callcard` is now only the "What you asked for" list. A row
+        // with notes is a button (`.cod-call__head`, :421) that opens to what
+        // the customer said, so the first one is opened for the camera.
+        const panel = await codCard(page, 'trouble');
+        const calls = panel.locator('ul.cod-calls').first();
         await calls.waitFor({ state: 'visible', timeout: 25_000 });
-        await calls.scrollIntoViewIfNeeded();
+        await calls.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
         await page.waitForTimeout(800);
+        const opener = calls.locator('button.cod-call__head[aria-expanded="false"]').first();
+        if (await opener.count()) await stage.clickIt(opener, { after: 900 });
         await stage.dwellOn(calls, 3400);
       },
 
@@ -4585,10 +4592,7 @@ export const FLOWS = {
           after: 1400,
         });
         await dialog.waitFor({ state: 'hidden', timeout: 25_000 });
-        const panel = page
-          .locator('.ord-section')
-          .filter({ hasText: 'Delivery did not succeed' })
-          .first();
+        const panel = page.locator('section#trouble.cod-card').first();
         // The CARD, not the dialog closing: the request is only real once
         // it is on the order, and a closed dialog says nothing about that.
         await panel
@@ -4597,19 +4601,13 @@ export const FLOWS = {
           .waitFor({ state: 'visible', timeout: 25_000 });
         const asked = panel.locator('.ord-callcard').last();
         await asked.waitFor({ state: 'visible', timeout: 25_000 });
-        await asked.scrollIntoViewIfNeeded();
+        await asked.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
         await page.waitForTimeout(1200);
         await stage.dwellOn(asked, 3400);
       },
 
       async outro({ page, stage }) {
-        const panel = page
-          .locator('.ord-section')
-          .filter({ hasText: 'Delivery did not succeed' })
-          .first();
-        await panel.scrollIntoViewIfNeeded();
-        await page.waitForTimeout(800);
-        await stage.dwellOn(panel, 3200);
+        await stage.dwellOn(await codCard(page, 'trouble'), 3200);
       },
     },
   },
@@ -5635,17 +5633,16 @@ export const FLOWS = {
         // else. What IS true the moment this returns is that the request
         // was carried out — so that is what the scene shows and what the
         // narration says.
-        const panel = page
-          .locator('.ord-section')
-          .filter({ hasText: 'What you asked for' })
-          .first();
+        // `section#trouble` (`delivery-trouble-panel.tsx:219`) holds the
+        // "What you asked for" list; the old `.ord-section` is gone.
+        const panel = page.locator('section#trouble.cod-card').first();
         await panel.waitFor({ state: 'visible', timeout: 40_000 });
         const asked = panel.locator('.ord-callcard').last();
         await asked
           .getByText(/Executed/i)
           .first()
           .waitFor({ state: 'visible', timeout: 40_000 });
-        await asked.scrollIntoViewIfNeeded();
+        await asked.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
         await page.waitForTimeout(1200);
         await stage.dwellOn(asked, 3400);
       },
@@ -5665,7 +5662,9 @@ export const FLOWS = {
         await page.waitForURL(/\/orders\/[0-9a-f-]+$/, { timeout: 30_000 });
         await page.waitForLoadState('networkidle').catch(() => {});
         await page.waitForTimeout(1400);
-        await stage.dwellOn(page.locator('.ord-kpis').first(), 2600);
+        // "In short" (`order-detail.tsx:408`, `.cod-summary`): where the
+        // parcel is, the cash, what is in it. Replaced the four-facts tiles.
+        await stage.dwellOn(page.getByLabel('In short'), 2600);
       },
 
       async 'request-return'({ page, stage }) {
@@ -5713,13 +5712,13 @@ export const FLOWS = {
         await toast.waitFor({ state: 'visible', timeout: 30_000 });
         await page.waitForTimeout(500);
         await stage.dwellOn(toast, 2400);
-        await stage.dwellOn(page.locator('.ord-kpis').first(), 2600);
+        await stage.dwellOn(page.getByLabel('In short'), 2600);
       },
 
       async outro({ page, stage }) {
         await page.waitForLoadState('networkidle').catch(() => {});
         await page.waitForTimeout(1000);
-        await stage.dwellOn(page.locator('.ord-kpis').first(), 3400);
+        await stage.dwellOn(page.getByLabel('In short'), 3400);
       },
     },
   },
@@ -6781,16 +6780,24 @@ export const FLOWS = {
         });
         await page.waitForURL(/\/orders$/, { timeout: 30_000 });
         await page.waitForLoadState('networkidle').catch(() => {});
-        // The header's own facts render only once the status summary has
-        // answered, so this proves the page has its numbers.
-        const meta = page.locator('.ord-meta').first();
-        await meta.waitFor({ state: 'visible', timeout: 25_000 });
+        // The list header (`orders-index.tsx:368-373`): title and a count
+        // pill that reads "—" until the status summary has answered, so a
+        // digit in it proves the page has its numbers. Replaced `.ord-meta`.
+        const lead = page.locator('.ord-head__lead').first();
+        await lead.waitFor({ state: 'visible', timeout: 25_000 });
+        await page
+          .locator('.ord-head__pill')
+          .filter({ hasText: /\d/ })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
         await page.waitForTimeout(900);
-        await stage.dwellOn(meta, 2600);
+        await stage.dwellOn(lead, 2600);
       },
 
       async tiles({ page, stage }) {
-        await stage.dwellOn(page.locator('.ord-kpis').first(), 3600);
+        // One bar of five buttons (`orders-list-parts.tsx:81`,
+        // `.ord-kpibar`, group "Order summary"). Replaced `.ord-kpis`.
+        await stage.dwellOn(page.locator('.ord-kpibar').first(), 3600);
       },
 
       async 'search-what'({ page, stage }) {
@@ -6827,11 +6834,12 @@ export const FLOWS = {
       async reset({ page, stage }) {
         await stage.clickIt(page.getByRole('button', { name: 'Reset' }).first(), { after: 1600 });
         await page.waitForLoadState('networkidle').catch(() => {});
-        // "None active" comes back only when every filter is off.
-        const none = page.getByText('None active').first();
-        await none.waitFor({ state: 'visible', timeout: 25_000 });
+        // Reset (`orders-index.tsx:511`) renders only while a filter is on,
+        // so it going away is what proves every filter is off. The old
+        // "None active" text no longer exists.
+        await page.locator('.ord-filters__reset').waitFor({ state: 'detached', timeout: 25_000 });
         await page.waitForTimeout(800);
-        await stage.dwellOn(none, 2800);
+        await stage.dwellOn(page.locator('.ord-filters').first(), 2800);
       },
 
       async chips({ page, stage }) {
@@ -7219,7 +7227,9 @@ export const FLOWS = {
       },
 
       async buttons({ page, stage }) {
-        await stage.dwellOn(cancelButton(page), 2800);
+        const actions = page.getByRole('group', { name: 'Order actions' });
+        await actions.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(actions, 2800);
       },
 
       async dialog({ page, stage }) {
@@ -7252,7 +7262,8 @@ export const FLOWS = {
       },
 
       async history({ page, stage }) {
-        await stage.dwellOn(await ordSection(page, 'Full history'), 3600);
+        // The Activity card opens on "Full history" (`order-activity.tsx:68`).
+        await stage.dwellOn(await codCard(page, 'activity'), 3600);
       },
 
       async 'open-confirmed'({ page, stage }) {
@@ -7261,7 +7272,7 @@ export const FLOWS = {
       },
 
       async tracker({ page, stage }) {
-        const tracker = await ordSection(page, 'Order tracker');
+        const tracker = await stepperRegion(page);
         // The claim is "the warehouse steps are still to come". Before
         // 2026-09-30 they were not: the rung below them fell back to
         // `shipments.awbGeneratedAt`, which CUR-2b sets at CONFIRMATION,
@@ -7314,8 +7325,8 @@ export const FLOWS = {
               'Is the parcel still out for delivery?',
           );
         }
-        // The whole action row, which is where Cancel would have been.
-        await stage.dwellOn(raise.locator('..'), 3200);
+        // The whole "Order actions" row, which is where Cancel would have been.
+        await stage.dwellOn(page.getByRole('group', { name: 'Order actions' }), 3200);
       },
 
       async outro({ page, stage }) {

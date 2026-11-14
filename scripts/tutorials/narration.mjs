@@ -986,19 +986,19 @@ export const VIDEOS = [
       },
       {
         id: 'open-order',
-        say: 'A failed delivery is an ordinary order in your list, with its own tab. Open it, and the first thing to read is the tracker.',
+        say: 'A failed delivery is an ordinary order in your list, with its own tab. Open it, and the first thing to read is the progress row under the heading.',
       },
       {
         id: 'tracker',
-        say: 'This is the whole journey in one column. Picked, packed, handed to the courier, carried, taken out for delivery — and then it stopped, which is where you come in.',
+        say: 'This is the whole journey in one row. Confirmed, picked, packed, handed to the courier, taken out for delivery — and then it stopped before Delivered, which is where you come in.',
       },
       {
         id: 'panel',
-        say: 'Further down, we say what happened and what we are already doing about it: a call to your customer is queued, so somebody finds out why before you spend anything.',
+        say: 'Further down, a card called Delivery did not succeed says what happened. We have already queued a call to your customer, so somebody finds out why before you spend anything.',
       },
       {
         id: 'history',
-        say: 'Beside it is every call we have made to them and what the agent was told. Read this first — nobody answered and they have moved house lead to opposite decisions.',
+        say: 'Under it is every call we have made to them. Open one to read what the agent was told. Read this first — nobody answered and they have moved house lead to opposite decisions.',
       },
       {
         id: 'ask-open',
@@ -1386,7 +1386,7 @@ export const VIDEOS = [
       },
       {
         id: 'on-order',
-        say: 'This is the panel for a parcel in trouble, and it renders while one is. The button that matters sits at the top, next to the order number, where you look for something to do.',
+        say: 'This parcel is out for delivery, and nobody has signed for it yet. The button that matters is in the row under the order number, where you look for something to do.',
       },
       {
         id: 'ask-open',
@@ -1410,7 +1410,7 @@ export const VIDEOS = [
       },
       {
         id: 'sent',
-        say: 'Done, and the card underneath is the proof: asked for, and carried out. The order still reads out for delivery, because its status follows the courier\u2019s own scans and changes when they make the next one.',
+        say: 'Done, and the card further down is the proof. It lists what you asked for, and it says carried out. The order still reads out for delivery, because its status follows the courier\u2019s own scans and changes when they make the next one.',
       },
       {
         id: 'open-delivered',
@@ -1847,11 +1847,11 @@ export const VIDEOS = [
       },
       {
         id: 'open-orders',
-        say: 'Orders is everything you have ever sent us. Two facts before the list: how many you have placed altogether, and how many are on the road right now.',
+        say: 'Orders is everything you have ever sent us. The number beside the title is how many you have placed altogether.',
       },
       {
         id: 'tiles',
-        say: 'Four figures, and each carries a second line that is the useful half — the cash placed, how many are waiting on the call, what is still to collect, and how many are coming back.',
+        say: 'Five figures in one bar, and each has a second line that is the useful half: the cash placed, how many wait on the call, what is still to collect, what is collected, and what is coming back. Press one and the list follows.',
       },
       {
         id: 'search-what',
@@ -1867,7 +1867,7 @@ export const VIDEOS = [
       },
       {
         id: 'reset',
-        say: 'Reset clears everything at once, and the marker beside the word Filters tells you whether anything is narrowing the list before you wonder why an order is missing.',
+        say: 'Reset clears every filter at once. It only shows while something is narrowing the list, so if it is there, that may be why an order is missing.',
       },
       {
         id: 'chips',
@@ -2040,7 +2040,7 @@ export const VIDEOS = [
       },
       {
         id: 'buttons',
-        say: 'Three actions along the top of an order this early — raise an issue about it, edit it, or call it off. Cancel is the last of them.',
+        say: 'Three actions in the row under the order number. Raise an issue about it, edit it, or call it off. Cancel order is the last of them.',
       },
       {
         id: 'dialog',
@@ -2056,11 +2056,11 @@ export const VIDEOS = [
       },
       {
         id: 'confirm',
-        say: 'And that is it. The order is cancelled, the actions on it have gone, and it stays in your list as a record rather than disappearing out of it.',
+        say: 'And that is it. The order is cancelled, the Cancel button has gone, and the order stays in your list as a record rather than disappearing out of it.',
       },
       {
         id: 'history',
-        say: 'The history carries the whole thing — when it happened and the words you typed. Like every line on this page, it is written once and never edited.',
+        say: 'The Activity card carries the whole thing: when it happened and the words you typed. Like every line on this page, it is written once and never edited.',
       },
       {
         id: 'open-confirmed',
@@ -2068,7 +2068,7 @@ export const VIDEOS = [
       },
       {
         id: 'tracker',
-        say: 'The tracker says exactly that. Confirmed by phone, and the warehouse steps still to come — nothing has been picked and no box has been packed.',
+        say: 'The progress row says exactly that. Confirmed by phone is done, and the warehouse steps are still to come. Nothing has been picked and no box has been packed.',
       },
       {
         id: 'cancel-confirmed',
