@@ -1,4 +1,5 @@
 import { ResellerStoreActionMode, StoreOrderScope } from '@skydrop/db';
+import type { ShipmentProvisionService } from '../../src/modules/shipment-provision/services/shipment-provision.service';
 import { StoreOrdersService } from '../../src/modules/reseller-order/services/store-orders.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { CatalogReadService } from '../../src/modules/catalog-read/services/catalog-read.service';
@@ -26,6 +27,7 @@ function make(mode: ResellerStoreActionMode, order: { id: string; sellerId: stri
     orderWrite as unknown as OrderWriteService,
     policies as unknown as ResellerStoreActionPolicyService,
     requests as unknown as StoreOrderRequestService,
+    { summariesForOrders: jest.fn(async () => new Map()) } as unknown as ShipmentProvisionService,
   );
   // The post-cancel read is not what this spec is about.
   jest.spyOn(svc, 'detail').mockResolvedValue({ id: 'order-1' } as never);

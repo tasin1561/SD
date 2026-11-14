@@ -27,6 +27,7 @@ import { Money } from '@skydrop/ui/components';
 import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
 import { KpiCard } from '@skydrop/ui/app/kpi-card';
 import { PageHeader } from '@skydrop/ui/app/page-header';
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { ListRow, ListRows } from '@skydrop/ui/app/list-row';
@@ -396,6 +397,11 @@ export function DashboardView(): ReactElement {
                       <Link href={`/orders/${o.id}`} className="db-order-link sk-ident">
                         {o.orderNumber}
                       </Link>
+                      {o.shipment?.awbNumber != null && o.shipment.awbNumber !== '' && (
+                        <div className="db-recipient-place">
+                          <AwbCopy awb={o.shipment.awbNumber} />
+                        </div>
+                      )}
                     </Td>
                     <Td>
                       <div className="db-recipient">{o.recipientName}</div>

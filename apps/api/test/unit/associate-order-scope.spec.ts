@@ -8,6 +8,7 @@ import {
   SellerStatus,
   StoreOrderScope,
 } from '@skydrop/db';
+import type { ShipmentProvisionService } from '../../src/modules/shipment-provision/services/shipment-provision.service';
 import { storeOrderScope } from '../../src/common/auth/store-order-scope';
 import { ResellerOrderService } from '../../src/modules/order/services/reseller-order.service';
 import {
@@ -377,6 +378,7 @@ function makeStoreOrders(opts: { order?: { id: string; sellerId: string } | null
       forStore: jest.fn(async () => ({ cancel: ResellerStoreActionMode.DIRECT })),
     } as unknown as ResellerStoreActionPolicyService,
     { hold: jest.fn() } as unknown as StoreOrderRequestService,
+    { summariesForOrders: jest.fn(async () => new Map()) } as unknown as ShipmentProvisionService,
   );
   jest.spyOn(svc, 'detail').mockResolvedValue({ id: 'order-1' } as never);
   return { svc, findFirst, findMany, count, orderWrite, prismaOrderFindFirst: findFirst };

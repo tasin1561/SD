@@ -16,6 +16,7 @@ import { storeOrderOwnerFilter } from '../../../common/auth/store-order-scope';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { OrderReadService } from '../../order/services/order-read.service';
+import { ShipmentProvisionService } from '../../shipment-provision/services/shipment-provision.service';
 import {
   OrderWriteService,
   SELLER_CANCELLABLE_STATES,
@@ -31,6 +32,8 @@ import {
 
 /** One of a reseller store's orders in its list. The store sees its own customers in full. */
 export interface StoreOrderListItem {
+  /** The order's current parcel's AWB; null until one is booked. */
+  readonly awbNumber: string | null;
   readonly id: string;
   readonly orderNumber: string;
   readonly sellerOrderRef: string | null;
@@ -274,6 +277,8 @@ export class StoreOrdersService {
     private readonly orderWrite: OrderWriteService,
     private readonly policies: ResellerStoreActionPolicyService,
     private readonly requests: StoreOrderRequestService,
+    // The list's AWB: shipments are read only through this (WMS-1).
+    private readonly shipments: ShipmentProvisionService,
   ) {}
 
   async list(
@@ -323,8 +328,12 @@ export class StoreOrdersService {
       }),
       this.prisma.client.order.count({ where }),
     ]);
+    // One query for the page, over ids the scoped `where` above already
+    // returned — another store's parcel can never be asked for.
+    const parcels = await this.shipments.summariesForOrders(rows.map((r) => r.id));
     return {
       items: rows.map((r) => ({
+        awbNumber: parcels.get(r.id)?.awbNumber ?? null,
         id: r.id,
         orderNumber: r.orderNumber,
         sellerOrderRef: r.sellerOrderRef,

@@ -8,6 +8,7 @@ import { useStoreIdentity } from '@skydrop/auth/client';
 import { looksLikeOrderId } from '@/lib/order-id';
 import { Money, ProductThumb } from '@skydrop/ui/components';
 import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
+import { AwbCopy, AwbTitle } from '@skydrop/ui/app/awb-copy';
 import { PageHeader } from '@skydrop/ui/app/page-header';
 import { Button } from '@skydrop/ui/app/button';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
@@ -126,8 +127,13 @@ export default function OrderDetailPage(): ReactElement {
         {t('nav.myOrders')}
       </BackLink>
       <PageHeader
-        title={o.orderNumber}
-        subtitle={t('order.placed', { when: when(o.placedAt) })}
+        title={<AwbTitle awbs={o.shipments.map((s) => s.awbNumber)} />}
+        subtitle={
+          <span>
+            <AwbCopy awb={o.orderNumber} kind="order" />{' '}
+            {t('order.placed', { when: when(o.placedAt) })}
+          </span>
+        }
         action={
           <div className="as-row">
             <LinkButton

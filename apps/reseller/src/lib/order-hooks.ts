@@ -18,6 +18,8 @@ import { useApiClient } from '@skydrop/auth/client';
  */
 
 export interface StoreOrderListItem {
+  /** The order's current parcel's AWB; null until one is booked. */
+  readonly awbNumber: string | null;
   readonly id: string;
   readonly orderNumber: string;
   readonly sellerOrderRef: string | null;

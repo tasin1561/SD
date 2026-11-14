@@ -28,6 +28,7 @@ import {
   storeOrderRequestStatusLabel,
   type StatusKind,
 } from '@skydrop/ui/status';
+import { AwbCopy, AwbTitle } from '@skydrop/ui/app/awb-copy';
 import { PageHeader } from '@skydrop/ui/app/page-header';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
@@ -143,17 +144,16 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
   return (
     <>
       <PageHeader
-        title={<span className="sk-ident">{o.orderNumber}</span>}
+        title={<AwbTitle awbs={o.shipments.map((s) => s.awbNumber)} />}
         subtitle={
-          o.sellerOrderRef === null ? (
-            t('ordd.placed', { when: when(o.placedAt) })
-          ) : (
-            <span>
-              {richMessage(t('ordd.placedRef', { when: when(o.placedAt) }), {
-                ref: <span className="sk-ident">{o.sellerOrderRef}</span>,
-              })}
-            </span>
-          )
+          <span>
+            <AwbCopy awb={o.orderNumber} kind="order" />{' '}
+            {o.sellerOrderRef === null
+              ? t('ordd.placed', { when: when(o.placedAt) })
+              : richMessage(t('ordd.placedRef', { when: when(o.placedAt) }), {
+                  ref: <span className="sk-ident">{o.sellerOrderRef}</span>,
+                })}
+          </span>
         }
         meta={<StatusChip kind={orderStatusKind(o.status)} label={statusLabel(o.status, locale)} />}
         action={
