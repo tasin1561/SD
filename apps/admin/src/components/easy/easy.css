@@ -825,3 +825,34 @@ a.ez-jump__link:focus-visible {
     transition: none;
   }
 }
+
+/* ── A long list on a phone: six cards, then "Show all N" (phone-fold.tsx) ── */
+.ez-fold__more {
+  display: none;
+}
+@media (max-width: 767.98px) {
+  .ez-fold:not([data-open]) .sd-table-cards > tbody > tr:nth-child(n + 7) {
+    display: none;
+  }
+  button.ez-fold__more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 44px;
+    margin-top: var(--sp-2);
+    padding: 0 var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    background: var(--surface);
+    color: var(--fg-strong);
+    font: inherit;
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    cursor: pointer;
+  }
+  button.ez-fold__more:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+}

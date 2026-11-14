@@ -1,5 +1,6 @@
 'use client';
 
+import { PhoneFold } from '@/components/easy/phone-fold';
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { pageDateTag } from '@/components/easy/when';
 import { InfoButton } from '@/components/easy/info-button';
@@ -542,7 +543,7 @@ export function CostSyncIndex(): ReactElement {
           {d.last !== null && <LastRun run={d.last} />}
 
           <AfSection title={t('costSyncCostSyncIndex.recentRuns')}>
-            <div className="ez-wrap ez-cards ez-lead-2">
+            <PhoneFold className="ez-wrap ez-cards ez-lead-2">
               <Table>
                 <THead>
                   <Tr>
@@ -570,7 +571,7 @@ export function CostSyncIndex(): ReactElement {
                   )}
                 </TBody>
               </Table>
-            </div>
+            </PhoneFold>
           </AfSection>
         </>
       )}

@@ -1,5 +1,6 @@
 'use client';
 
+import { PhoneFold } from '@/components/easy/phone-fold';
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { Code } from '@/components/easy/code-label';
 import Link from 'next/link';
@@ -424,7 +425,7 @@ export function TreasuryIndex(): ReactElement {
                 />
               </div>
             ) : (
-              <div className="ez-wrap ez-cards ez-lead-3 ez-then-5">
+              <PhoneFold className="ez-wrap ez-cards ez-lead-3 ez-then-5">
                 <Table caption={t('treasuryTreasuryIndex.recentBankMovements')}>
                   <THead>
                     <Tr>
@@ -503,7 +504,7 @@ export function TreasuryIndex(): ReactElement {
                     )}
                   </TBody>
                 </Table>
-              </div>
+              </PhoneFold>
             )}
           </MoSection>
 

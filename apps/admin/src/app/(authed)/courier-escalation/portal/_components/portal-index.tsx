@@ -1,5 +1,6 @@
 'use client';
 
+import { PhoneFold } from '@/components/easy/phone-fold';
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { useCodeLabel } from '@/components/easy/code-label';
 import { InfoButton } from '@/components/easy/info-button';
@@ -142,7 +143,7 @@ export function CourierPortalIndex(): ReactElement {
             description={t('courierEscalationPortalPortalIndex.expectedItIsDeployedInert')}
           />
         ) : (
-          <div className="ez-wrap ez-cards ez-lead-2">
+          <PhoneFold className="ez-wrap ez-cards ez-lead-2">
             <Table>
               <THead>
                 <Tr>
@@ -189,7 +190,7 @@ export function CourierPortalIndex(): ReactElement {
                 ))}
               </TBody>
             </Table>
-          </div>
+          </PhoneFold>
         )}
       </AfSection>
 
@@ -215,7 +216,7 @@ export function CourierPortalIndex(): ReactElement {
             <p>{t('courierEscalationPortalPortalIndex.thisIsWhyUnattendedAction')}</p>
           </Notice>
         ) : (
-          <div className="ez-wrap ez-cards ez-lead-2">
+          <PhoneFold className="ez-wrap ez-cards ez-lead-2">
             <Table>
               <THead>
                 <Tr>
@@ -253,7 +254,7 @@ export function CourierPortalIndex(): ReactElement {
                 ))}
               </TBody>
             </Table>
-          </div>
+          </PhoneFold>
         )}
       </AfSection>
     </div>

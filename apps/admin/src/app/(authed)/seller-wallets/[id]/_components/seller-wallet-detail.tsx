@@ -1,5 +1,6 @@
 'use client';
 
+import { PhoneFold } from '@/components/easy/phone-fold';
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { startTransition, useState, type ReactElement } from 'react';
 import Link from 'next/link';
@@ -265,7 +266,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
                 title={t('sellerWalletsIdSellerWalletDetail.ledger')}
                 subtitle={t('sellerWalletsIdSellerWalletDetail.everyEntryNewestFirstOnly')}
               >
-                <div className="ez-wrap ez-cards ez-lead-2 ez-then-4">
+                <PhoneFold className="ez-wrap ez-cards ez-lead-2 ez-then-4">
                   <Table caption={t('sellerWalletsIdSellerWalletDetail.ledger')}>
                     <THead>
                       <Tr>
@@ -349,7 +350,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
                       )}
                     </TBody>
                   </Table>
-                </div>
+                </PhoneFold>
               </MkCard>
             ),
           },

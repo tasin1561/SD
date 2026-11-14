@@ -1,5 +1,6 @@
 'use client';
 
+import { PhoneFold } from '@/components/easy/phone-fold';
 import { pageDateTag } from '@/components/easy/when';
 import { useState, type ReactElement } from 'react';
 import { CheckCircle2, PauseCircle, RefreshCw } from 'lucide-react';
@@ -675,7 +676,7 @@ export function ShiprocketCostSection(): ReactElement {
               title={t('costSyncShiprocketCostSection.ourShiprocketParcels')}
               as="h3"
             />
-            <div className="ez-wrap ez-cards">
+            <PhoneFold className="ez-wrap ez-cards">
               <Table>
                 <THead>
                   <Tr>
@@ -763,7 +764,7 @@ export function ShiprocketCostSection(): ReactElement {
                   )}
                 </TBody>
               </Table>
-            </div>
+            </PhoneFold>
           </div>
         </>
       )}

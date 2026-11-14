@@ -1,5 +1,6 @@
 'use client';
 
+import { PhoneFold } from '@/components/easy/phone-fold';
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { useState, type ReactElement } from 'react';
 import { AlertTriangle, ArrowDownRight, Wallet } from 'lucide-react';
@@ -195,7 +196,7 @@ export function CourierWalletIndex(): ReactElement {
           tone="critical"
           flush
         >
-          <div className="ez-wrap ez-cards ez-then-4">
+          <PhoneFold className="ez-wrap ez-cards ez-then-4">
             <Table caption={tr('courierWalletCourierWalletIndex.moneyThatLeftOurBank')}>
               <THead>
                 <Tr>
@@ -228,7 +229,7 @@ export function CourierWalletIndex(): ReactElement {
                 ))}
               </TBody>
             </Table>
-          </div>
+          </PhoneFold>
         </MoSection>
       ) : null}
 
@@ -322,7 +323,7 @@ export function CourierWalletIndex(): ReactElement {
         {recharges.isLoading ? (
           <SkeletonRows rows={4} cols={6} />
         ) : (
-          <div className="ez-wrap ez-cards ez-then-4">
+          <PhoneFold className="ez-wrap ez-cards ez-then-4">
             <Table caption={tr('courierWalletCourierWalletIndex.rechargesAtTheCourier')}>
               <THead>
                 <Tr>
@@ -394,7 +395,7 @@ export function CourierWalletIndex(): ReactElement {
                 )}
               </TBody>
             </Table>
-          </div>
+          </PhoneFold>
         )}
       </MoSection>
 
