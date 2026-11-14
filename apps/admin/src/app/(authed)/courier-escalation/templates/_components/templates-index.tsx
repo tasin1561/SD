@@ -135,7 +135,7 @@ export function CourierTemplatesIndex(): ReactElement {
             retry={() => void templates.refetch()}
           />
         ) : (
-          <div className="ez-wrap ez-cards ez-lead-2">
+          <div className="ez-wrap ez-cards ez-lead-4">
             <Table>
               <THead>
                 <Tr>

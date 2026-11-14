@@ -23,6 +23,15 @@ type Row = readonly [en: string, bn: string, hi: string];
 const CODES: Readonly<Record<string, Row>> = {
   // ── shared states ──
   NEW: ['New', 'নতুন', 'नया'],
+  // ── couriers and bank book actions ──
+  DELHIVERY: ['Delhivery', 'Delhivery', 'Delhivery'],
+  SHIPROCKET: ['Shiprocket', 'Shiprocket', 'Shiprocket'],
+  RECONCILED: ['Reconciled', 'মিলিয়ে দেখা হয়েছে', 'मिलान किया गया'],
+  SELLER_CASH_RECLASSIFIED: [
+    'Client cash reclassified',
+    'ক্লায়েন্টের টাকা পুনঃশ্রেণীবদ্ধ',
+    'क्लाइंट की रकम पुनर्वर्गीकृत',
+  ],
   // ── leads ──
   CONTACTED: ['Contacted', 'যোগাযোগ হয়েছে', 'संपर्क किया गया'],
   QUALIFIED: ['Qualified', 'যোগ্য', 'योग्य'],

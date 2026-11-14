@@ -14,6 +14,7 @@ import { BackLink, MoCard, Notice } from '../../../treasury/_components/money-pa
 import './bank-account-history.css';
 import { useT } from '@/i18n/client';
 import { InfoButton } from '@/components/easy/info-button';
+import { useCodeLabel } from '@/components/easy/code-label';
 import { When } from '@/components/easy/when';
 import '@/components/easy/easy.css';
 import type { Translate } from '@skydrop/ui/app/i18n';
@@ -106,6 +107,7 @@ function ChangeSummary({ row }: { readonly row: BankAccountChangeView }): ReactE
 
 export function BankAccountHistoryIndex(): ReactElement {
   const t = useT();
+  const code = useCodeLabel();
 
   const history = useBankAccountHistory(usePermission('money.view'));
 
@@ -188,7 +190,13 @@ export function BankAccountHistoryIndex(): ReactElement {
                                   ? 'cancelled'
                                   : 'confirmed'
                             }
-                            label={actionLabel(t, r.action)}
+                            label={
+                              // An action with no wording of its own is shown as
+                              // plain words, not as the stored code.
+                              actionLabel(t, r.action) === r.action
+                                ? code((r.action.split('.').pop() ?? r.action).toUpperCase())
+                                : actionLabel(t, r.action)
+                            }
                             size="sm"
                           />
                         </Td>

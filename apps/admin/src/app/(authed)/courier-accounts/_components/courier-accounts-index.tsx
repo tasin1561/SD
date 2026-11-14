@@ -1,5 +1,6 @@
 'use client';
 
+import { Code } from '@/components/easy/code-label';
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
@@ -193,7 +194,7 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
         </span>
       </Td>
       <Td>
-        <span className="sk-ident">{account.courierCode}</span>
+        <Code value={account.courierCode.toUpperCase()} />
       </Td>
       <Td>
         {account.environment === 'PRODUCTION' ? (

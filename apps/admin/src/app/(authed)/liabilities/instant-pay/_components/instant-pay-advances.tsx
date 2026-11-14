@@ -1,5 +1,6 @@
 'use client';
 
+import { pageDateTag } from '@/components/easy/when';
 import { TidyCards } from '@/components/easy/tidy-cards';
 import { useMemo, useState, type ReactElement } from 'react';
 import Link from 'next/link';
@@ -247,7 +248,8 @@ export function InstantPayAdvances({
                           <span className="mo-sub">
                             {t('liabilitiesInstantPayInstantPayAdvances.delivered', {
                               value: new Date(r.deliveredAt ?? r.creditedAt).toLocaleDateString(
-                                'en-IN',
+                                pageDateTag(),
+                                { day: 'numeric', month: 'short', year: 'numeric' },
                               ),
                             })}
                           </span>

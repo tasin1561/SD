@@ -215,7 +215,7 @@ export function CourierPortalIndex(): ReactElement {
             <p>{t('courierEscalationPortalPortalIndex.thisIsWhyUnattendedAction')}</p>
           </Notice>
         ) : (
-          <div className="ez-wrap ez-cards">
+          <div className="ez-wrap ez-cards ez-lead-2">
             <Table>
               <THead>
                 <Tr>
