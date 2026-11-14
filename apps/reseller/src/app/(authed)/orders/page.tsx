@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, type ReactElement } from 'react';
 import { Package, Search, Upload } from 'lucide-react';
@@ -252,6 +253,11 @@ function OrdersList(): ReactElement {
                           })}
                         </span>
                       ) : null}
+                      {o.awbNumber !== null && o.awbNumber !== '' && (
+                        <span className="ro-sub">
+                          <AwbCopy awb={o.awbNumber} />
+                        </span>
+                      )}
                     </Td>
                     <Td>
                       <div>{o.recipientName}</div>

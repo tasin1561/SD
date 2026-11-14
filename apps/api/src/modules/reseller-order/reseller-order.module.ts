@@ -19,6 +19,7 @@ import { SellerAddressChangeDecisionService } from './services/seller-address-ch
 import { StoreAddressChangeService } from './services/store-address-change.service';
 import { StoreOrderEditService } from './services/store-order-edit.service';
 import { ResellerStoreModule } from '../reseller-store/reseller-store.module';
+import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
 import { StoreOrderRequestModule } from '../store-order-request/store-order-request.module';
 import { ResellerOrderReadService } from './services/reseller-order-read.service';
 import { StoreApiKeyService } from './services/store-api-key.service';
@@ -54,6 +55,8 @@ import { StoreWebhookService } from './services/store-webhook.service';
     // 2026-09-17 — a store's cancel held for seller staff (ASK_SELLER).
     // An R3 primitive: it imports nothing order-shaped.
     StoreOrderRequestModule,
+    // The order list's AWB, read through the module that owns shipments.
+    ShipmentProvisionModule,
     // A HELD address correction has to tell both sides: the seller
     // in-app that somebody is waiting on them, the store by email when
     // they answer (a reseller store has no inbox). Deliberately NOT by

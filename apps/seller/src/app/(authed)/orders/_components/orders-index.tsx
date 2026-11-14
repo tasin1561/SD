@@ -14,6 +14,7 @@ import { Select } from '@skydrop/ui/app/select';
 import { Tabs, type TabItem } from '@skydrop/ui/app/tabs';
 import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { Pagination } from '@skydrop/ui/app/pagination';
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { chipWords, StatusChip } from '@skydrop/ui/app/status-chip';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
@@ -611,6 +612,11 @@ export function OrdersIndex(): ReactElement {
                         {o.sellerOrderRef !== null && o.sellerOrderRef !== '' && (
                           <span className="ord-sub">
                             ref <span className="sk-ident">{o.sellerOrderRef}</span>
+                          </span>
+                        )}
+                        {o.shipment?.awbNumber != null && o.shipment.awbNumber !== '' && (
+                          <span className="ord-sub">
+                            <AwbCopy awb={o.shipment.awbNumber} />
                           </span>
                         )}
                         {/* RS-5: which reseller store placed it. */}

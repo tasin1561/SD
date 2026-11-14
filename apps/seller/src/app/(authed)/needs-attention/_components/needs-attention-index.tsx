@@ -2,8 +2,9 @@
 
 import type { ReactElement, ReactNode } from 'react';
 import Link from 'next/link';
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { PhoneOff, Truck } from 'lucide-react';
-import { Ident, Money } from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
 import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
 import { KpiCard } from '@skydrop/ui/app/kpi-card';
 import { ListRow, ListRows, type ListRowSeverity } from '@skydrop/ui/app/list-row';
@@ -356,7 +357,7 @@ export function NeedsAttentionIndex(): ReactElement {
                     </span>
                     {r.awbNumber !== null && (
                       <span className="nat-line nat-faint">
-                        <Ident value={r.awbNumber} /> · {r.courierCode}
+                        <AwbCopy awb={r.awbNumber} /> · {r.courierCode}
                       </span>
                     )}
                     {r.acknowledgedAt === null ? (

@@ -258,6 +258,10 @@ const en = {
     'Please explain these and tell me what to do first: {summary}',
   'ui.assistant.photos.title': 'Photos sent with this ticket',
   'ui.assistant.photos.open': 'Open {name}',
+  'ui.awb.copy': 'Copy AWB {awb}',
+  'ui.awb.copied': 'Copied',
+  'ui.order.copy': 'Copy order number {value}',
+  'ui.awb.none': 'not assigned yet',
 } as const;
 
 export type UiMessageKey = keyof typeof en;
@@ -504,6 +508,10 @@ const bn: Record<UiMessageKey, string> = {
   'ui.assistant.greet.explainQuestion': 'এগুলো বুঝিয়ে বলুন এবং আগে কী করব জানান: {summary}',
   'ui.assistant.photos.title': 'এই টিকিটের সাথে পাঠানো ছবি',
   'ui.assistant.photos.open': '{name} খুলুন',
+  'ui.awb.copy': 'AWB {awb} কপি করুন',
+  'ui.awb.copied': 'কপি হয়েছে',
+  'ui.order.copy': 'অর্ডার নম্বর {value} কপি করুন',
+  'ui.awb.none': 'এখনও দেওয়া হয়নি',
 };
 
 /**
@@ -765,6 +773,10 @@ const hi: Partial<Record<UiMessageKey, string>> = {
   'ui.assistant.greet.explainQuestion': 'इन्हें समझाइए और बताइए पहले क्या करूँ: {summary}',
   'ui.assistant.photos.title': 'इस टिकट के साथ भेजी गई तस्वीरें',
   'ui.assistant.photos.open': '{name} खोलें',
+  'ui.awb.copy': 'AWB {awb} कॉपी करें',
+  'ui.awb.copied': 'कॉपी हो गया',
+  'ui.order.copy': 'ऑर्डर नंबर {value} कॉपी करें',
+  'ui.awb.none': 'अभी तक नहीं मिला',
 };
 
 export const UI_MESSAGES = { en, bn, hi } as const;

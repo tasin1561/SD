@@ -2,6 +2,7 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
+import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { ChevronDown, PackageSearch, PackageX, RotateCcw, Search, Truck } from 'lucide-react';
 import { Ident } from '@skydrop/ui/components';
 import { courierLabel, shipmentStatusKind, statusLabel } from '@skydrop/ui/status';
@@ -213,7 +214,11 @@ export function TrackingIndex(): ReactElement {
                   rows.map((r) => (
                     <Tr key={r.shipmentId} selected={open === r.shipmentId}>
                       <Td>
-                        <Ident value={r.awbNumber ?? r.shipmentNumber} />
+                        {r.awbNumber !== null && r.awbNumber !== '' ? (
+                          <AwbCopy awb={r.awbNumber} />
+                        ) : (
+                          <Ident value={r.shipmentNumber} />
+                        )}
                         <span className="ord-sub">
                           <Link href={`/orders/${r.orderId}`} className="ord-link sk-ident">
                             {r.orderNumber}
