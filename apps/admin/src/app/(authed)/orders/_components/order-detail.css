@@ -102,6 +102,17 @@
   color: var(--fg-strong);
   white-space: nowrap;
 }
+.od-header__lead {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+/* No AWB yet: the label and a blank line, quieter than a real number. */
+.od-header__no--empty {
+  color: var(--fg-muted);
+  font-weight: var(--fw-medium);
+}
 .od-header__ref {
   /* Never shrinks (owner: the client ref never hides). It is shown only
      here, while the facts beside it are repeated lower down — ETA in the

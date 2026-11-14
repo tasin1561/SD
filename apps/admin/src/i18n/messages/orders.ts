@@ -119,6 +119,7 @@ export const orders = defineMessages({
   // ── order detail redesign (2026-11-12) ─────────────────────────────
   // Owner-supplied wording first; the block marked REVIEW is ours.
   'orderDetail.header.back': ['Back to Orders', 'অর্ডারে ফিরে যান', 'ऑर्डर पर वापस जाएँ'],
+  'orderDetail.header.awbLabel': ['AWB', 'AWB', 'AWB'],
   'orderDetail.header.more': ['More', 'আরও', 'और'],
   'orderDetail.header.placed': ['Placed {date}', 'অর্ডার {date}', 'ऑर्डर {date}'],
   'orderDetail.header.updated': ['Updated {date}', 'হালনাগাদ {date}', 'अपडेट {date}'],

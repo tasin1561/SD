@@ -9,6 +9,7 @@ import { defineMessages } from '../define';
 export const orderPage = defineMessages({
   // ── header ────────────────────────────────────────────────────────────
   'orderPage.back': ['Back to Orders', 'অর্ডারের তালিকায় ফিরে যান'],
+  'orderPage.awbLabel': ['AWB', 'AWB'],
   'orderPage.copyNumber': ['Copy number', 'নম্বর কপি করুন'],
   'orderPage.copyLink': ['Copy link', 'লিংক কপি করুন'],
   'orderPage.copied': ['Copied', 'কপি হয়েছে'],
