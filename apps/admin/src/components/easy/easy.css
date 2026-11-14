@@ -459,9 +459,23 @@ button.ez-guide__pick:hover {
   .ez-touch td a.mo-link,
   .ez-touch td button.mk-inline-link,
   .ez-touch td a.oo-link,
-  .ez-touch a.nsa-call {
+  .ez-touch a.nsa-call,
+  .ez-touch h2 a.ac-link,
+  .ez-touch a.mk-link,
+  .ez-touch a.mo-back,
+  .ez-touch a.sk-tabs__tab {
     display: inline-flex;
     align-items: center;
+    min-height: 44px;
+  }
+  /* The pager sizes its buttons and its sliding marker from one variable. */
+  .ez-touch .sk-pg {
+    --tap: 44px;
+  }
+  /* The client picker and a row's "show more" are tapped as often as any button. */
+  .ez-touch button.mk-pick,
+  .ez-touch button.mk-toggle {
+    min-width: 44px;
     min-height: 44px;
   }
   /* The tick box keeps its drawn size; its touch area grows around it. */
