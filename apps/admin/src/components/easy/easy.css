@@ -495,3 +495,23 @@ button.ez-guide__pick:hover {
     min-height: 24px;
   }
 }
+
+/* ── Phone cards: who and how much first ──────────────────────────────
+   A table becomes one card per row on a phone, top to bottom in column
+   order. On a queue of requests the first column is the date, but the
+   person deciding looks for WHO is asking and HOW MUCH. These move those
+   two lines to the top of the card. The table on a wide screen, and the
+   order a screen reader reads, are unchanged. */
+@media (max-width: 767.98px) {
+  .ez-lead-2 .sd-table-cards tbody > tr {
+    display: flex;
+    flex-direction: column;
+  }
+  .ez-lead-2 .sd-table-cards tbody > tr > td:nth-child(2) {
+    order: -2;
+  }
+  .ez-then-3 .sd-table-cards tbody > tr > td:nth-child(3),
+  .ez-then-4 .sd-table-cards tbody > tr > td:nth-child(4) {
+    order: -1;
+  }
+}

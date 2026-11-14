@@ -94,7 +94,7 @@ export function WithdrawalsIndex(): ReactElement {
   }
 
   return (
-    <div className="mk-page ez-touch">
+    <div className="mk-page ez-touch ez-lead-2 ez-then-3">
       <PageHeader
         title={
           <span className="ez-titled">

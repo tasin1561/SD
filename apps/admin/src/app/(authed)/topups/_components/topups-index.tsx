@@ -119,7 +119,7 @@ export function TopupsIndex(): ReactElement {
   const rows = list.data ?? [];
 
   return (
-    <div className="mk-page ez-touch">
+    <div className="mk-page ez-touch ez-lead-2 ez-then-4">
       <PageHeader
         title={
           <span className="ez-titled">

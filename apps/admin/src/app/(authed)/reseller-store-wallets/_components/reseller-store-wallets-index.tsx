@@ -88,7 +88,7 @@ export function ResellerStoreWalletsIndex(): ReactElement {
   const storeId = raw !== null && UUID_RE.test(raw) ? raw : null;
   const scoped = useAdminStoreWallet(storeId ?? '', storeId !== null);
   return (
-    <div className="mk-page ez-touch">
+    <div className="mk-page ez-touch ez-lead-2 ez-then-4">
       <PageHeader
         title={
           <span className="ez-titled">
