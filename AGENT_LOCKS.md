@@ -37,12 +37,6 @@ Admin "easy pages" redesign (owner's list of 31 admin pages, 2026-11-13): light 
 
 ## Claimed by Claude Code
 
-- Cancel-request feature (cancel button → ticket "Cancel order / delivery / pickup" once direct cancel is closed) — 2026-11-15: `apps/api/src/modules/{ticket,order,reseller-order}/**` (additive endpoints/fields), `apps/seller/src/app/(authed)/orders/[id]/**` + `orders/_components/{order-detail.tsx,detail/order-header.tsx,cancel-order-dialog.tsx}`, `apps/{reseller,associate}/src/app/(authed)/orders/[id]/**`, i18n message files of those apps (additive), `packages/db/prisma/delhivery-issue-taxonomy.ts`
-- Clone order — 2026-11-15: `apps/admin/src/app/(authed)/orders/_components/{order-header.tsx,order-more-menu.tsx,order-detail.tsx}` + admin order-create form, `apps/seller/src/app/(authed)/orders/{new-v2/**,_components/orders-index.tsx}`, `apps/{reseller,associate}/src/app/(authed)/orders/{new-v2/**,new/**,page.tsx}`, additive read endpoints for a clone prefill in `apps/api/src/modules/{order,reseller-order}/**`
-- UAT recipient-name-prefix toggle — 2026-11-15: `apps/api/src/modules/{order/services/order.service.ts,uat-settings/**}`, `packages/ui/src/app/uat-fields/index.tsx`, `apps/seller/src/app/(authed)/orders/{new,new-v2,[id]/edit}/_components/*order-form.tsx` (3-line surgical edit each), `apps/admin/src/lib/system-setting-guide.ts`, `packages/db/prisma/{seed.ts,migrations/20261115100000_uat_recipient_name_prefix}` (branch `feat/uat-name-prefix-toggle`)
-- Delhivery WhatsApp/NDR conversation (investigation first) — 2026-11-15: `apps/api/src/modules/{courier-delhivery,courier-portal,order-journey}/**` (additive)
-
-- Remove the "Ready to dispatch" milestone — 2026-11-15: `apps/api/src/modules/order-journey/services/order-journey.service.ts` + its spec, `apps/seller/src/app/(authed)/orders/_components/detail/{summary.ts,milestone-words.ts}`, `apps/seller/src/i18n/messages/orderPage.ts`, `apps/seller/src/app/dev/order-detail/fixtures.dev.ts`, `apps/seller/src/tests/order-page-summary.test.ts` (merging now; claim removed once live)
 - `apps/api/src/modules/assistant/**` — 2026-11-13 — assistant Phase D (privacy e2e, raise-a-ticket, 80% budget alert; branch `feat/assistant-phase-d`), then 2.5× billing, AI control panel, monitor
 - `apps/api/test/unit/assistant-*.spec.ts`, `apps/api/test/e2e/assistant-*.e2e-spec.ts`, `apps/api/test/helpers/assistant-fixtures.ts` — 2026-11-13 — same
 - `packages/ui/src/app/assistant/**` — 2026-11-13 — same (chat window)
@@ -53,7 +47,6 @@ Admin "easy pages" redesign (owner's list of 31 admin pages, 2026-11-13): light 
 - `apps/seller/src/app/(authed)/tickets/[id]/**`, `apps/reseller/src/app/(authed)/tickets/[id]/**` — show a ticket's photos (additive) — 2026-11-13 — assistant Batch A
 - `apps/api/src/modules/**/services/*-assistant-read.service.ts` (NEW files, plus `order-assistant-read.service.ts`), and additive `exports:` lines in those modules' `*.module.ts` — 2026-11-13 — assistant Batch B (read-only lookups for charges, stock, consignments, failed deliveries, tickets, ops metrics)
 - `apps/track/src/app/[awb]/**`, `apps/track/src/app/_components/parcel-assistant*`, `apps/track/src/lib/**` (additive), `apps/track/src/middleware.ts` (CSP lines only), `apps/track/src/app/dev/**` — 2026-11-13 — assistant Batch C: public "Ask about this parcel" helper on the tracking page
-- `scripts/tutorials/**` — 2026-11-14 — re-film the client, member-store and associate tutorials changed by the order-page and order-form redesigns (admin videos later)
 - `apps/admin/src/app/(authed)/ai/**`, `apps/admin/src/i18n/messages/ai.ts`, `apps/admin/src/app/dev/ai/**` — 2026-11-13 — NEW: AI control panel (billing, dashboard, conversations, controls)
 - `apps/api/src/common/auth/permissions.ts`, `apps/api/src/common/auth/staff-role-presets.ts` — `assistant.*` permission keys ONLY (add, never rename) — 2026-11-13 — same
 - `apps/admin/src/app/(authed)/_components/authed-shell.tsx`, `apps/admin/src/lib/page-access.ts`, `apps/admin/src/i18n/catalog.ts` — ONE added nav entry / page rule / catalogue import for /ai — 2026-11-13 — same
