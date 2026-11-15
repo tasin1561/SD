@@ -12,6 +12,7 @@ import { TooltipCard } from '@skydrop/ui/app/tooltip-card';
 import { useLocale, useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { LinkButton } from '../orders-parts';
+import { CancelRequestButton } from '../cancel-request';
 import { useOrderJourney } from '@/lib/api-hooks';
 import { CopyButton } from './copy-button';
 import { fmtFull, fmtWhen } from './format';
@@ -32,6 +33,11 @@ export interface HeaderActions {
   readonly reattempt: { readonly label: string; readonly onClick: () => void } | null;
   readonly requestReturn: (() => void) | null;
   readonly cancel: (() => void) | null;
+  /** 2026-11-15 — past the direct-cancel window: asks Skydrop by ticket; disabled while one is open. */
+  readonly cancelRequest?: {
+    readonly openTicket: { readonly id: string; readonly number: string } | null;
+    readonly onClick: () => void;
+  } | null;
 }
 
 /**
@@ -211,6 +217,12 @@ export function OrderHeader({
             >
               {t('orderPage.cancelOrder')}
             </Button>
+          )}
+          {actions.cancel === null && actions.cancelRequest != null && (
+            <CancelRequestButton
+              openTicket={actions.cancelRequest.openTicket}
+              onClick={actions.cancelRequest.onClick}
+            />
           )}
         </div>
       </div>

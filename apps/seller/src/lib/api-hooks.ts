@@ -22,6 +22,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import type {
   CustomerDeliveryFeeView,
   ApiClient,
+  CancelRequestResult,
   CreateSellerProductRequest,
   CreateSellerVariantRequest,
   ListSellerOrdersQuery,
@@ -492,6 +493,26 @@ export function useCancelOrder(
       // The refund lands in the same moment — a stale balance beside a
       // cancelled order reads as the money not having come back.
       void queryClient.invalidateQueries({ queryKey: ['seller-wallet'] });
+    },
+  });
+}
+
+/** 2026-11-15 — "Cancel order" past the packing window: opens a ticket with Skydrop.
+ *  One ticket while it is open; asking again returns that ticket (`created: false`). */
+export function useRaiseCancelRequest(
+  orderId: string,
+): UseMutationResult<CancelRequestResult, Error, { note?: string }> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<CancelRequestResult>(`/api/seller/orders/${orderId}/cancel-request`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-orders'] });
+      void queryClient.invalidateQueries({ queryKey: ['seller-tickets'] });
     },
   });
 }

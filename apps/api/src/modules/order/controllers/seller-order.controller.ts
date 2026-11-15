@@ -55,6 +55,8 @@ import {
   type SendCallResult,
 } from '../services/awaiting-confirmation.service';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
+import { CancelRequestReadService } from '../../cancel-request/cancel-request-read.service';
+import type { CancelRequestView } from '../../cancel-request/cancel-request.rules';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -76,6 +78,7 @@ export class SellerOrderController {
     private readonly reputation: CustomerReputationService,
     private readonly reads: OrderReadService,
     private readonly awaiting: AwaitingConfirmationService,
+    private readonly cancelRequests: CancelRequestReadService,
   ) {}
 
   private actor(seller: AuthenticatedSeller): { type: ActorType; id: string } {
@@ -244,11 +247,14 @@ export class SellerOrderController {
   @SellerAuthAllowSuspended()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get one order (with items)' })
-  get(
+  async get(
     @CurrentSeller() seller: AuthenticatedSeller,
     @Param('id', uuid()) id: string,
-  ): Promise<OrderDisplayView> {
-    return this.svc.loadOwnedForDisplay(seller.id, id);
+  ): Promise<OrderDisplayView & { cancelRequest: CancelRequestView }> {
+    const order = await this.svc.loadOwnedForDisplay(seller.id, id);
+    // Past the direct-cancel window the button asks Skydrop by ticket
+    // (2026-11-15); `openTicket` keeps it disabled until that ticket closes.
+    return { ...order, cancelRequest: await this.cancelRequests.viewFor(order) };
   }
 
   @Get(':id/events')

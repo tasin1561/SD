@@ -8,7 +8,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import type { OrderStatus } from '@skydrop/db';
-import type { ResellerOrderMoneyView } from '@skydrop/api-client';
+import type { CancelRequestView, ResellerOrderMoneyView } from '@skydrop/api-client';
 import { useApiClient } from '@skydrop/auth/client';
 
 /**
@@ -84,6 +84,8 @@ export interface StoreOrderView {
     readonly deliveryActions: boolean;
     readonly addressCorrection: boolean;
   };
+  /** Past the packing window: ask Skydrop by ticket (2026-11-15). Absent on older servers. */
+  readonly cancelRequest?: CancelRequestView;
   readonly source: string;
   readonly placedAt: string;
   readonly confirmedAt: string | null;

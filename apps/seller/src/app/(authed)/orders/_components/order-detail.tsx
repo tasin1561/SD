@@ -39,6 +39,7 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { DeliveryTroublePanel } from '../[id]/_components/delivery-trouble-panel';
 import { CancelOrderDialog } from './cancel-order-dialog';
+import { CancelRequestDialog } from './cancel-request';
 import { RequestReturnDialog } from './request-return-dialog';
 import { ReattemptRequestDialog } from './reattempt-request-dialog';
 import { OrderChargesSection } from './order-charges';
@@ -144,6 +145,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
   const lastDecided = requests.find((r) => r.status !== 'PENDING') ?? null;
   const identity = useSellerIdentity();
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelRequestOpen, setCancelRequestOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [reattemptOpen, setReattemptOpen] = useState(false);
   // The two actions promoted to the header. `useDeliveryActions` is the
@@ -221,6 +223,18 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
     cancel:
       CANCELLABLE.has(order.status) && identity !== null && can(identity, 'orders.cancel')
         ? () => setCancelOpen(true)
+        : null,
+    // Past the packing window (2026-11-15): still shown, but it asks Skydrop
+    // by ticket, and is disabled while that ticket is open. The server's
+    // `cancelRequest` decides; this only adds the permission the POST wants.
+    cancelRequest:
+      detail.data.cancelRequest?.available === true &&
+      identity !== null &&
+      can(identity, 'orders.cancel')
+        ? {
+            openTicket: detail.data.cancelRequest.openTicket,
+            onClick: () => setCancelRequestOpen(true),
+          }
         : null,
   };
 
@@ -332,6 +346,12 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
         status={order.status}
         chargedInr={detail.data.chargedInr ?? null}
         onOpenChange={setCancelOpen}
+      />
+      <CancelRequestDialog
+        open={cancelRequestOpen}
+        orderId={orderId}
+        orderNumber={order.orderNumber}
+        onOpenChange={setCancelRequestOpen}
       />
     </div>
   );

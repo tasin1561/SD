@@ -18,6 +18,7 @@ import { OrderRecipientCorrectionService } from './services/order-recipient-corr
 import { OrderAssistantReadService } from './services/order-assistant-read.service';
 import { AwaitingConfirmationService } from './services/awaiting-confirmation.service';
 import { CallQueueModule } from '../call-queue/call-queue.module';
+import { CancelRequestModule } from '../cancel-request/cancel-request.module';
 import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-policy.module';
 
 /**
@@ -80,6 +81,8 @@ import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-po
     // Both primitives are dependency-free R3 modules (CC-1), so no cycle.
     CallQueueModule,
     ConfirmationPolicyModule,
+    // The client's cancel button past the packing window (2026-11-15): read-only R3 primitive.
+    CancelRequestModule,
   ],
   controllers: [
     SellerOrderController,

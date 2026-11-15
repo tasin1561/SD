@@ -130,6 +130,18 @@ export interface OrderCsvExtras {
   readonly omitted?: number;
 }
 
+/** A cancel request to Skydrop: whether it can be raised, and the ticket still open for it. */
+export interface CancelRequestView {
+  readonly available: boolean;
+  readonly openTicket: { readonly id: string; readonly number: string } | null;
+}
+
+/** What raising it returns. `created: false` means one was already open. */
+export interface CancelRequestResult {
+  readonly created: boolean;
+  readonly ticket: { readonly id: string; readonly number: string };
+}
+
 export interface OrderView {
   readonly id: string;
   readonly orderNumber: string;
@@ -221,6 +233,14 @@ export interface OrderView {
     optional.
   */
   readonly chargedInr?: string | null;
+
+  /*
+    2026-11-15 — the "Cancel order" button past the direct-cancel window:
+    `available` when the order is in flight and the caller may ask Skydrop
+    by ticket; `openTicket` while that ticket is still open (the button
+    stays disabled). Seller's own detail read only; optional elsewhere.
+  */
+  readonly cancelRequest?: CancelRequestView;
 
   // Children
   readonly items: readonly OrderItemView[];

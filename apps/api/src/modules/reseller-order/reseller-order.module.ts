@@ -7,6 +7,7 @@ import { NotificationAudienceModule } from '../notification-audience/notificatio
 import { NotificationLedgerModule } from '../notification-ledger/notification-ledger.module';
 import { OrderCoreModule } from '../order/order-core.module';
 import { OrderModule } from '../order/order.module';
+import { CancelRequestModule } from '../cancel-request/cancel-request.module';
 import { StoreApiKeyController } from './controllers/store-api-key.controller';
 import { StoreApiOrderController } from './controllers/store-api-order.controller';
 import { SellerAddressChangeController } from './controllers/seller-address-change.controller';
@@ -55,6 +56,8 @@ import { StoreWebhookService } from './services/store-webhook.service';
     // 2026-09-17 — a store's cancel held for seller staff (ASK_SELLER).
     // An R3 primitive: it imports nothing order-shaped.
     StoreOrderRequestModule,
+    // 2026-11-15 — the cancel button past the packing window: a read-only R3 primitive.
+    CancelRequestModule,
     // The order list's AWB, read through the module that owns shipments.
     ShipmentProvisionModule,
     // A HELD address correction has to tell both sides: the seller

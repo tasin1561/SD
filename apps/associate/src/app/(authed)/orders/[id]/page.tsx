@@ -24,6 +24,7 @@ import { verdict } from '@/i18n/verdict';
 import { useCancelOrder, useMyOrder, useMyOrderEvents } from '@/lib/order-hooks';
 import { cloneHref } from '@/lib/clone-order';
 import { BackLink, Facts, LinkButton, Notice, Section } from '../../_components/parts';
+import { CancelRequestAction } from './_components/cancel-request';
 import { Reattempt } from './_components/reattempt';
 import { OrderAddressCheckPanel } from './_components/address-check-panel';
 import '../../_components/as.css';
@@ -158,6 +159,18 @@ export default function OrderDetailPage(): ReactElement {
               >
                 {t('order.cancel')}
               </Button>
+            ) : null}
+            {/* Past the packing window (2026-11-15): asks Skydrop by ticket,
+                disabled while that ticket is open. Server decides `available`. */}
+            {!mayCancel &&
+            !o.terminal &&
+            can(me, 'orders.cancel') &&
+            o.cancelRequest?.available === true ? (
+              <CancelRequestAction
+                orderId={o.id}
+                orderNumber={o.orderNumber}
+                openTicket={o.cancelRequest.openTicket}
+              />
             ) : null}
           </div>
         }

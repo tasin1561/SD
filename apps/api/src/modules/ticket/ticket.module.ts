@@ -18,6 +18,9 @@ import { StoreJwtGuard } from '../../common/guards/store-jwt.guard';
 import { StoreTicketController } from './controllers/store-ticket.controller';
 import { StoreIssueController } from './controllers/store-issue.controller';
 import { StoreIssueService } from './services/store-issue.service';
+import { CancelRequestService } from './services/cancel-request.service';
+import { SellerCancelRequestController } from './controllers/seller-cancel-request.controller';
+import { StoreCancelRequestController } from './controllers/store-cancel-request.controller';
 import { TicketAssistantReadService } from './services/ticket-assistant-read.service';
 import { ResellerStoreModule } from '../reseller-store/reseller-store.module';
 import { StoreOrderRequestModule } from '../store-order-request/store-order-request.module';
@@ -62,12 +65,16 @@ import { StoreOrderRequestModule } from '../store-order-request/store-order-requ
     AdminTicketController,
     StoreTicketController,
     StoreIssueController,
+    // 2026-11-15 — "Cancel order" past the direct-cancel window raises a ticket.
+    SellerCancelRequestController,
+    StoreCancelRequestController,
   ],
   providers: [
     TicketService,
     TicketStateMachineService,
     TicketNotifier,
     StoreIssueService,
+    CancelRequestService,
     TicketAssistantReadService,
     SellerJwtGuard,
     StaffJwtGuard,
