@@ -107,24 +107,50 @@ export function toNationalPhone(e164: string): string {
 }
 
 /**
- * What goes in Delhivery's `order` key — the reference their 4R label
- * captions the SECOND barcode with.
+ * What goes in Delhivery's `order` key — the "Order ID" their panel shows
+ * and their 4R label captions the SECOND barcode with.
  *
- * The seller's own reference when the order has one, our shipment
- * number when it does not. Sanitised FIRST and re-checked after, because
- * a reference made entirely of their rejected characters (`"###"`)
- * sanitises to an empty string, and an empty `order` is a barcode with
- * no caption at all — strictly worse than the shipment number.
+ * Owner, 2026-11-15: "send the order id given by the client, associate and
+ * member not the SD. and send the full name as fallback if the order id is
+ * not given ... but never send the skydrop order id SD..... as the order
+ * id". So: the client's own reference, else the recipient's full name —
+ * never our SD order number nor our SH shipment number. Sanitised FIRST and
+ * re-checked after, because a value made entirely of their rejected
+ * characters sanitises to '', and an empty `order` is a caption-less
+ * barcode; the last resort is the plain word "Parcel".
  *
  * Exported so the fallback can be pinned without going through a live
  * create.
  */
 export function labelReference(req: {
   readonly sellerOrderRef?: string;
-  readonly shipmentNumber: string;
+  readonly recipientName: string;
 }): string {
   const sellerRef = sanitiseForDelhivery(req.sellerOrderRef ?? '');
-  return sellerRef !== '' ? sellerRef : sanitiseForDelhivery(req.shipmentNumber);
+  if (sellerRef !== '') return sellerRef.slice(0, MAX_ORDER_REF);
+  const name = sanitiseForDelhivery(req.recipientName);
+  return (name !== '' ? name : 'Parcel').slice(0, MAX_ORDER_REF);
+}
+
+/** Room for a "-NN" suffix within a conservative length. */
+const MAX_ORDER_REF = 45;
+/** How many suffixed retries ("-2" … "-6") a duplicate gets before we give up. */
+export const MAX_DUPLICATE_ORDER_RETRIES = 5;
+
+/**
+ * Delhivery refuses an `order` value this account has used before, and a
+ * cancelled booking does NOT release it (docs/delhivery-go-live-test.md).
+ * The client's reference is unique only per (client, store) and a name is
+ * not unique at all, while every client books under our one account — so a
+ * repeat is expected, and is retried as "<value>-2", "-3" … (owner chose
+ * this, 2026-11-15). Never with SD/SH.
+ */
+export function isDuplicateOrderRefusal(message: string | undefined): boolean {
+  return message !== undefined && /duplicate\s*order\s*id/i.test(message);
+}
+
+export function suffixedOrderRef(base: string, attempt: number): string {
+  return attempt <= 1 ? base : `${base}-${attempt}`;
 }
 
 const OMIT_BLANK_SETTING = 'courier.delhivery_omit_blank_seller_fields';
@@ -177,10 +203,7 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
 
     const pickupLocationName = await this.resolvePickupLocationName(courierAccountId ?? null);
     const omitBlank = await this.omitBlankOptionalFields();
-    const envelope = {
-      shipments: [this.buildShipment(req, preflight, omitBlank)],
-      pickup_location: { name: pickupLocationName },
-    };
+    const baseRef = labelReference(req);
 
     // No sandbox exists for this account, so this call manifests a REAL
     // parcel that Delhivery will come to collect. The guard makes that a
@@ -192,15 +215,33 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
     });
 
     try {
-      const response = await this.http.request<DelhiveryCreateResponse>({
-        actor,
-        method: 'POST',
-        path: '/api/cmu/create.json',
-        endpoint: 'create',
-        body: envelope,
-        encoding: 'form-data-key',
-      });
-      return this.parseCreateResponse(response);
+      for (let attempt = 1; ; attempt++) {
+        const orderRef = suffixedOrderRef(baseRef, attempt);
+        const envelope = {
+          shipments: [this.buildShipment(req, preflight, omitBlank, orderRef)],
+          pickup_location: { name: pickupLocationName },
+        };
+        const response = await this.http.request<DelhiveryCreateResponse>({
+          actor,
+          method: 'POST',
+          path: '/api/cmu/create.json',
+          endpoint: 'create',
+          body: envelope,
+          encoding: 'form-data-key',
+        });
+        const result = this.parseCreateResponse(response);
+        if (
+          result.ok ||
+          !isDuplicateOrderRefusal(result.errorMessage) ||
+          attempt > MAX_DUPLICATE_ORDER_RETRIES
+        ) {
+          return result;
+        }
+        this.logger.warn(
+          { shipmentNumber: req.shipmentNumber, attempt },
+          'Delhivery refused a repeated order id; retrying with a suffix',
+        );
+      }
     } catch (err) {
       // Network / 5xx → transient (CUR-2 retries).
       this.logger.warn(
@@ -319,6 +360,7 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
     req: DelhiveryAwbRequest,
     resolved: { city: string; state: string },
     omitBlank = false,
+    orderRef: string = labelReference(req),
   ): Record<string, unknown> {
     const isCod = req.codAmountInr !== null;
     const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
@@ -357,9 +399,11 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
         `SH-2026-11-000057`, which means nothing to the seller whose
         parcel it is.
 
-        The fallback is NOT cosmetic: `sellerOrderRef` is nullable, an
-        empty `order` is a barcode with no caption, and the shipment
-        number is the one reference every parcel always has.
+        The fallback is NOT cosmetic: `sellerOrderRef` is nullable and an
+        empty `order` is a barcode with no caption. Since 2026-11-15 the
+        fallback is the recipient's full name, never our SD/SH numbers
+        (owner), with "-2", "-3"… on a duplicate refusal (see
+        `isDuplicateOrderRefusal`).
 
         A CAPTION, NOT AN IDENTITY. `SH-…` is unique per shipment;
         `sellerOrderRef` is unique only per (seller, store) — ORD-9 —
@@ -374,7 +418,7 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
         persisted either. If anything ever starts scanning it, this has
         to go back to the shipment number.
       */
-      order: labelReference(req),
+      order: orderRef,
       name: sanitiseForDelhivery(req.recipientName),
       add: sanitiseForDelhivery([req.addressLine1, req.addressLine2].filter(Boolean).join(', ')),
       pin: req.postalCode,

@@ -446,10 +446,11 @@ describe('DelhiveryAwbService — `order` captions the second barcode', () => {
     expect(s.order).toBe('INV-1042');
   });
 
-  it('falls back to the shipment number when the order has no reference', async () => {
+  it('falls back to the recipient’s full name — never our SD/SH numbers (owner, 2026-11-15)', async () => {
     for (const over of [{}, { sellerOrderRef: '' }, { sellerOrderRef: '   ' }]) {
-      const s = await shipmentFor(over);
-      expect(s.order).toBe('SH-2026-05-000042');
+      const s = await shipmentFor({ ...over, recipientName: 'SCo MY Swapna pramanik MS' });
+      expect(s.order).toBe('SCo MY Swapna pramanik MS');
+      expect(String(s.order)).not.toMatch(/^S[DH]-/);
     }
   });
 
@@ -457,9 +458,44 @@ describe('DelhiveryAwbService — `order` captions the second barcode', () => {
     // ';' and '#' are on Delhivery's rejected-character list — a
     // reference carrying one must not fail the create.
     expect((await shipmentFor({ sellerOrderRef: 'INV#7; A' })).order).toBe('INV 7 A');
-    // Nothing survives sanitising ⇒ a caption-less barcode, so the
-    // shipment number wins rather than ''.
-    expect((await shipmentFor({ sellerOrderRef: '###' })).order).toBe('SH-2026-05-000042');
+    // Nothing survives sanitising ⇒ the full name, never the shipment number.
+    expect((await shipmentFor({ sellerOrderRef: '###', recipientName: 'Asha Rahman' })).order).toBe(
+      'Asha Rahman',
+    );
+  });
+
+  it('a duplicate refusal retries with "-2", "-3" and books on the first accepted', async () => {
+    const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
+    const dup = {
+      success: false,
+      rmk: 'An internal Error has occurred',
+      packages: [{ remarks: ['Duplicate order id'] }],
+    };
+    request.mockResolvedValueOnce(dup).mockResolvedValueOnce(dup).mockResolvedValueOnce(OK);
+    const r = await svc.generateAwb(awbReq({ sellerOrderRef: 'INV-1' }));
+    expect(r.ok).toBe(true);
+    const sent = request.mock.calls.map((c) => c[0].body.shipments[0].order);
+    expect(sent).toEqual(['INV-1', 'INV-1-2', 'INV-1-3']);
+  });
+
+  it('any other refusal is not retried', async () => {
+    const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
+    request.mockResolvedValueOnce({
+      success: false,
+      packages: [{ remarks: ['suspicious order/consignee'] }],
+    });
+    const r = await svc.generateAwb(awbReq({ sellerOrderRef: 'INV-1' }));
+    expect(r.ok).toBe(false);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up after the last suffix and reports the refusal', async () => {
+    const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
+    const dup = { success: false, packages: [{ remarks: ['Duplicate order id'] }] };
+    for (let i = 0; i < 10; i++) request.mockResolvedValueOnce(dup);
+    const r = await svc.generateAwb(awbReq({ sellerOrderRef: 'INV-1' }));
+    expect(r.ok).toBe(false);
+    expect(request).toHaveBeenCalledTimes(6); // INV-1, -2 … -6
   });
 
   it('changes NO other key — the reference is the whole diff', async () => {
