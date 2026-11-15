@@ -51,6 +51,7 @@ function fakePage(opts: {
     goto: yes,
     url: () => 'https://one.delhivery.com/',
     waitForLoadState: yes,
+    waitForTimeout: yes,
     keyboard: {
       press: async () => {
         log.escape += 1;

@@ -1,13 +1,15 @@
 import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
+import { CourierWhatsappQueueModule } from './courier-whatsapp-queue.module';
 import { ResellerOrderModule } from '../reseller-order/reseller-order.module';
 import {
   AdminCourierWhatsappController,
+  AdminCourierWhatsappHealthController,
   SellerCourierWhatsappController,
   StoreCourierWhatsappController,
 } from './controllers/courier-whatsapp.controllers';
+import { CourierWhatsappHealthService } from './services/courier-whatsapp-health.service';
 import { CourierWhatsappReadService } from './services/courier-whatsapp-read.service';
-import { CourierWhatsappRequestService } from './services/courier-whatsapp-request.service';
 
 /**
  * The courier's WhatsApp messages to the customer, as a READ for every
@@ -16,13 +18,14 @@ import { CourierWhatsappRequestService } from './services/courier-whatsapp-reque
  * Playwright and never imports it.
  */
 @Module({
-  imports: [AuthCommonModule, ResellerOrderModule],
+  imports: [AuthCommonModule, ResellerOrderModule, CourierWhatsappQueueModule],
   controllers: [
     AdminCourierWhatsappController,
+    AdminCourierWhatsappHealthController,
     SellerCourierWhatsappController,
     StoreCourierWhatsappController,
   ],
-  providers: [CourierWhatsappReadService, CourierWhatsappRequestService],
+  providers: [CourierWhatsappReadService, CourierWhatsappHealthService],
   exports: [CourierWhatsappReadService],
 })
 export class CourierWhatsappModule {}

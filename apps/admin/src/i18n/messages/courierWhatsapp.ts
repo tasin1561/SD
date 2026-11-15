@@ -44,4 +44,19 @@ export const courierWhatsapp = defineMessages({
     'এই বার্তা আনা এখন বন্ধ আছে।',
     'इन्हें लाना अभी बंद है।',
   ],
+  'courierWhatsapp.checking': [
+    'Checking for new messages…',
+    'নতুন বার্তা দেখা হচ্ছে…',
+    'नए संदेश देखे जा रहे हैं…',
+  ],
+  'courierWhatsapp.health': [
+    'WhatsApp reader: {reads} reads today, {failed} failed, {hour}/{cap} this hour.',
+    'হোয়াটসঅ্যাপ রিডার: আজ {reads}টি পড়া, {failed}টি ব্যর্থ, এই ঘণ্টায় {hour}/{cap}।',
+    'व्हाट्सऐप रीडर: आज {reads} रीड, {failed} विफल, इस घंटे {hour}/{cap}।',
+  ],
+  'courierWhatsapp.healthDue': [
+    'Oldest waiting: {minutes} min overdue.',
+    'সবচেয়ে পুরনো অপেক্ষমাণ: {minutes} মিনিট দেরি।',
+    'सबसे पुराना इंतज़ार: {minutes} मिनट देर।',
+  ],
 });

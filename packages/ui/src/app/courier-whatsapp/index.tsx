@@ -48,6 +48,7 @@ export function CourierWhatsappMessages({
   onRefresh,
   refreshLabel,
   refreshing = false,
+  status = null,
 }: {
   readonly messages: readonly CourierWhatsappMessageItem[];
   /** One line under the list, e.g. "Last checked …". */
@@ -56,6 +57,8 @@ export function CourierWhatsappMessages({
   readonly onRefresh?: (() => void) | undefined;
   readonly refreshLabel?: string | undefined;
   readonly refreshing?: boolean;
+  /** "Checking for new messages…" while a read is in flight. */
+  readonly status?: string | null;
 }): ReactElement | null {
   if (messages.length === 0) return null;
   return (
@@ -79,6 +82,11 @@ export function CourierWhatsappMessages({
           </li>
         ))}
       </ol>
+      {status !== null && (
+        <p className="sk-cwa__foot" role="status">
+          {status}
+        </p>
+      )}
       {((footer !== undefined && footer !== null) || onRefresh !== undefined) && (
         <div className="sk-cwa__foot">
           {footer !== undefined && footer !== null && <span>{footer}</span>}

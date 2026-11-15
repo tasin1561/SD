@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { CourierWhatsappQueueModule } from '../courier-whatsapp/courier-whatsapp-queue.module';
 import { PrismaModule } from '../../infrastructure/prisma/prisma.module';
 import { TrackingStatusMappingService } from './services/tracking-status-mapping.service';
 import { TrackingEventAppendService } from './services/tracking-event-append.service';
@@ -20,7 +21,7 @@ import { TrackingEventAppendService } from './services/tracking-event-append.ser
  * and the tracking-public read service (commit 10).
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, CourierWhatsappQueueModule],
   providers: [TrackingStatusMappingService, TrackingEventAppendService],
   exports: [TrackingStatusMappingService, TrackingEventAppendService],
 })

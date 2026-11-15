@@ -1661,6 +1661,25 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
       ],
     ),
   },
+  'courier.delhivery_whatsapp_batch': {
+    name: 'Delhivery WhatsApp: parcels queued per sweep',
+    group: 'Courier connection',
+    what: 'The safety-net sweep (every 15 minutes) queues at most this many parcels that are due for a WhatsApp read. Reads triggered by a scan or by someone opening an order are separate and not counted.',
+    example: 'Set to 60: a busy morning queues up to 60 parcels per sweep, 240 an hour.',
+  },
+  'courier.delhivery_whatsapp_parallel': {
+    name: 'Delhivery WhatsApp: reads at the same time',
+    group: 'Courier connection',
+    what: 'How many WhatsApp windows are read at once, each in its own tab of the one signed-in browser. Never more than 3: the server has 4 GB of memory.',
+    example: 'Set to 2: two parcels are read side by side, a few seconds apart.',
+  },
+  'courier.delhivery_whatsapp_hourly_cap': {
+    name: 'Delhivery WhatsApp: reads per hour ceiling',
+    group: 'Courier connection',
+    what: 'Once this many reads ran in the last hour, routine sweep reads wait for the next hour. Parcels in a live conversation keep being read.',
+    example:
+      'Set to 400: after 400 reads in an hour only live conversations are read until the count drops.',
+  },
   'courier.delhivery_live_writes_enabled': {
     name: 'Delhivery live writes',
     group: 'Courier connection',

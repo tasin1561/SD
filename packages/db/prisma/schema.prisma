@@ -4699,15 +4699,37 @@ model CourierWhatsappMessage {
 /// per-AWB debounce so a parcel is not re-read more often than every few
 /// hours. Mutable bookkeeping, unlike the messages.
 model CourierWhatsappCheck {
-  shipmentId    String   @id @map("shipment_id") @db.Uuid
-  lastAttemptAt DateTime @map("last_attempt_at") @db.Timestamptz
+  shipmentId    String    @id @map("shipment_id") @db.Uuid
+  lastAttemptAt DateTime  @map("last_attempt_at") @db.Timestamptz
   /// OK | NO_BUTTON | UNREADABLE | FAILED
-  lastOutcome   String   @map("last_outcome")
-  messageCount  Int      @default(0) @map("message_count")
+  lastOutcome   String    @map("last_outcome")
+  messageCount  Int       @default(0) @map("message_count")
+  /// When the next read of this parcel is due (hot cadence or the cold 6 h).
+  nextReadAt    DateTime? @map("next_read_at") @db.Timestamptz
+  /// The current hot gap in ms; null = cold (normal 6 h debounce).
+  gapMs         Int?      @map("gap_ms")
+  /// The last read that found a NEW bubble (the hot window runs 3 h from it).
+  lastNewAt     DateTime? @map("last_new_at") @db.Timestamptz
 
   shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
 
   @@map("courier_whatsapp_checks")
+}
+
+/// One row per portal read, insert-only: the health numbers (reads and
+/// failures today, the hourly ceiling) are counted from here.
+model CourierWhatsappRead {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentId String   @map("shipment_id") @db.Uuid
+  /// OK | NO_BUTTON | UNREADABLE | FAILED | LOGGED_OUT
+  outcome    String
+  newCount   Int      @default(0) @map("new_count")
+  /// hot | sweep | event | viewer
+  kind       String
+  at         DateTime @default(now()) @db.Timestamptz
+
+  @@index([at])
+  @@map("courier_whatsapp_reads")
 }
 
 // HYPERTABLE — composite @@id([id, createdAt]); immutable (no updatedAt,

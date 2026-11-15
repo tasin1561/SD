@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import type { ReactElement } from 'react';
+import { useRef, type ReactElement } from 'react';
 
 import { useApiClient } from '@skydrop/auth/client';
 import { CourierWhatsappMessages } from '@skydrop/ui/app/courier-whatsapp';
@@ -12,6 +12,7 @@ interface CourierMessagesView {
   readonly enabled: boolean;
   readonly shipmentId: string | null;
   readonly lastCheckedAt: string | null;
+  readonly checking: boolean;
   readonly messages: readonly { text: string; sentLabel: string; sentAt: string | null }[];
 }
 
@@ -30,11 +31,18 @@ export function CourierWhatsappSection({
   const locale = useLocale();
   const client = useApiClient();
   const id = orderId;
+  const startedAt = useRef(Date.now());
   const q = useQuery({
     queryKey: ['reseller-orders', 'courier-messages', id],
     queryFn: () => client.request<CourierMessagesView>(`/api/store/orders/${id}/courier-messages`),
     enabled: /^[0-9a-f-]{36}$/i.test(id),
     retry: false,
+    // A read was queued for this view: look again every 15 s for up to
+    // 2 minutes. A hidden tab does not poll (react-query's default).
+    refetchInterval: (query) =>
+      query.state.data?.checking === true && Date.now() - startedAt.current < 120_000
+        ? 15_000
+        : false,
   });
   const data = q.data;
   if (data === undefined) return null;
@@ -46,6 +54,7 @@ export function CourierWhatsappSection({
       <CourierWhatsappMessages
         messages={data.messages}
         note={t('courierWhatsapp.note')}
+        status={data.checking ? t('courierWhatsapp.checking') : null}
         footer={when === null ? null : t('courierWhatsapp.checked', { when })}
       />
     </section>

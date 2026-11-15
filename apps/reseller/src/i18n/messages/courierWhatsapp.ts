@@ -27,4 +27,5 @@ export const courierWhatsapp = defineMessages({
     'একটু আগেই দেখা হয়েছে। কয়েক মিনিট পরে আবার চেষ্টা করুন।',
   ],
   'courierWhatsapp.off': ['Reading these is switched off.', 'এই বার্তা আনা এখন বন্ধ আছে।'],
+  'courierWhatsapp.checking': ['Checking for new messages…', 'নতুন বার্তা দেখা হচ্ছে…'],
 });

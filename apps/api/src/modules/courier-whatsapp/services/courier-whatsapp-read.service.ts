@@ -1,5 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ShipmentStatus, TrackingEventType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import {
+  WHATSAPP_COURIER,
+  WHATSAPP_FAILED_EVENTS,
+  WHATSAPP_OFD_EVENTS,
+  WHATSAPP_TAIL_MS,
+  WHATSAPP_VIEWER_STALE_MS,
+} from '../whatsapp.constants';
+import { CourierWhatsappRequestService } from './courier-whatsapp-request.service';
 
 export interface CourierWhatsappMessageView {
   readonly text: string;
@@ -14,6 +23,8 @@ export interface CourierWhatsappView {
   readonly shipmentId: string | null;
   readonly awbNumber: string | null;
   readonly lastCheckedAt: string | null;
+  /** A fresh read was just queued; the page polls for it briefly. */
+  readonly checking: boolean;
   readonly messages: readonly CourierWhatsappMessageView[];
 }
 
@@ -28,7 +39,10 @@ export type WhatsappScope = { readonly sellerId: string | null };
  */
 @Injectable()
 export class CourierWhatsappReadService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly request: CourierWhatsappRequestService,
+  ) {}
 
   /** @param scope sellerId set → the order must be that seller's (404 otherwise). */
   async forOrder(orderId: string, scope: WhatsappScope): Promise<CourierWhatsappView> {
@@ -74,12 +88,21 @@ export class CourierWhatsappReadService {
         })
       )?.valueBoolean === true;
     if (shipmentId === null) {
-      return { enabled, shipmentId: null, awbNumber: null, lastCheckedAt: null, messages: [] };
+      return {
+        enabled,
+        shipmentId: null,
+        awbNumber: null,
+        lastCheckedAt: null,
+        checking: false,
+        messages: [],
+      };
     }
     const ship = await this.prisma.client.shipment.findUnique({
       where: { id: shipmentId },
       select: {
         awbNumber: true,
+        courierCode: true,
+        status: true,
         courierWhatsappCheck: { select: { lastAttemptAt: true } },
         courierWhatsappMessages: {
           select: { text: true, sentLabel: true, sentAt: true },
@@ -88,8 +111,25 @@ export class CourierWhatsappReadService {
         },
       },
     });
+    const last = ship?.courierWhatsappCheck?.lastAttemptAt ?? null;
+    // Viewer-driven refresh: opening an order whose copy is stale queues
+    // ONE read (jobId-deduped, 2-minute per-parcel floor). Delhivery is
+    // never called here — the worker does it.
+    let checking = false;
+    if (
+      enabled &&
+      ship !== null &&
+      ship.courierCode === WHATSAPP_COURIER &&
+      ship.awbNumber !== null &&
+      (last === null || Date.now() - last.getTime() > WHATSAPP_VIEWER_STALE_MS) &&
+      (await this.worthReading(shipmentId, ship.status))
+    ) {
+      const out = await this.request.request(shipmentId, { kind: 'viewer' }).catch(() => null);
+      checking = out?.queued === true;
+    }
     return {
       enabled,
+      checking,
       shipmentId,
       awbNumber: ship?.awbNumber ?? null,
       lastCheckedAt: ship?.courierWhatsappCheck?.lastAttemptAt.toISOString() ?? null,
@@ -99,5 +139,33 @@ export class CourierWhatsappReadService {
         sentAt: m.sentAt?.toISOString() ?? null,
       })),
     };
+  }
+
+  /** A delivery-time scan exists, and the parcel is live or finished under 7 days ago. */
+  private async worthReading(shipmentId: string, status: ShipmentStatus): Promise<boolean> {
+    const trigger = await this.prisma.client.trackingEvent.findFirst({
+      where: {
+        shipmentId,
+        eventType: {
+          in: [...WHATSAPP_OFD_EVENTS, ...WHATSAPP_FAILED_EVENTS].map((t) => TrackingEventType[t]),
+        },
+      },
+      select: { eventAt: true },
+    });
+    if (trigger === null) return false;
+    const finished: readonly ShipmentStatus[] = [
+      ShipmentStatus.DELIVERED,
+      ShipmentStatus.RTO_DELIVERED,
+      ShipmentStatus.CANCELLED,
+      ShipmentStatus.LOST,
+      ShipmentStatus.DAMAGED,
+    ];
+    if (!finished.includes(status)) return true;
+    const latest = await this.prisma.client.trackingEvent.findFirst({
+      where: { shipmentId },
+      orderBy: { eventAt: 'desc' },
+      select: { eventAt: true },
+    });
+    return latest !== null && Date.now() - latest.eventAt.getTime() < WHATSAPP_TAIL_MS;
   }
 }

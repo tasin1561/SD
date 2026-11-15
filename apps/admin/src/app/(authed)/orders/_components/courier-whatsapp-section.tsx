@@ -1,17 +1,19 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactElement } from 'react';
+import { useRef, useState, type ReactElement } from 'react';
 
 import { useApiClient } from '@skydrop/auth/client';
 import { CourierWhatsappMessages } from '@skydrop/ui/app/courier-whatsapp';
 import { useLocale, useT } from '@/i18n/client';
 import { formatDateTime } from '@/i18n/format';
+import { usePermission } from '@/lib/use-permission';
 
 interface CourierMessagesView {
   readonly enabled: boolean;
   readonly shipmentId: string | null;
   readonly lastCheckedAt: string | null;
+  readonly checking: boolean;
   readonly messages: readonly { text: string; sentLabel: string; sentAt: string | null }[];
 }
 
@@ -30,11 +32,18 @@ export function CourierWhatsappSection({
   const locale = useLocale();
   const client = useApiClient();
   const id = orderId;
+  const startedAt = useRef(Date.now());
   const q = useQuery({
     queryKey: ['admin-orders', 'courier-messages', id],
     queryFn: () => client.request<CourierMessagesView>(`/api/admin/orders/${id}/courier-messages`),
     enabled: /^[0-9a-f-]{36}$/i.test(id),
     retry: false,
+    // A read was queued for this view: look again every 15 s for up to
+    // 2 minutes. A hidden tab does not poll (react-query's default).
+    refetchInterval: (query) =>
+      query.state.data?.checking === true && Date.now() - startedAt.current < 120_000
+        ? 15_000
+        : false,
   });
   const qc = useQueryClient();
   const [note, setNote] = useState<string | null>(null);
@@ -81,6 +90,7 @@ export function CourierWhatsappSection({
       <CourierWhatsappMessages
         messages={data.messages}
         note={t('courierWhatsapp.note')}
+        status={data.checking ? t('courierWhatsapp.checking') : null}
         footer={note ?? (when === null ? null : t('courierWhatsapp.checked', { when }))}
         onRefresh={canAsk ? () => refresh.mutate() : undefined}
         refreshLabel={
@@ -89,5 +99,42 @@ export function CourierWhatsappSection({
         refreshing={refresh.isPending}
       />
     </section>
+  );
+}
+
+interface Health {
+  readonly readsToday: number;
+  readonly failuresToday: number;
+  readonly readsLastHour: number;
+  readonly hourlyCap: number;
+  readonly oldestDueMinutes: number | null;
+}
+
+/** Reader health for staff who may see courier ops: one quiet line. */
+export function CourierWhatsappHealthLine(): ReactElement | null {
+  const client = useApiClient();
+  const may = usePermission('courier.ops.view');
+  const q = useQuery({
+    queryKey: ['admin-courier', 'whatsapp-health'],
+    queryFn: () => client.request<Health>('/api/admin/courier/whatsapp-health'),
+    enabled: may,
+    retry: false,
+    staleTime: 60_000,
+  });
+  const t = useT();
+  const h = q.data;
+  if (h === undefined || (h.readsToday === 0 && h.oldestDueMinutes === null)) return null;
+  return (
+    <p className="sk-cwa__foot">
+      {t('courierWhatsapp.health', {
+        reads: h.readsToday,
+        failed: h.failuresToday,
+        hour: h.readsLastHour,
+        cap: h.hourlyCap,
+      })}
+      {h.oldestDueMinutes === null
+        ? ''
+        : ` ${t('courierWhatsapp.healthDue', { minutes: h.oldestDueMinutes })}`}
+    </p>
   );
 }

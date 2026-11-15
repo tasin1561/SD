@@ -10,6 +10,17 @@ export interface WhatsappBubble {
   readonly sentLabel: string;
 }
 
+/**
+ * The panel sent us to its sign-in page. Never answered with a login
+ * from here: the batch stops and the pause is recorded.
+ */
+export class WhatsappLoggedOutError extends Error {
+  constructor() {
+    super('Delhivery One asked for a sign-in');
+    this.name = 'WhatsappLoggedOutError';
+  }
+}
+
 export interface WhatsappRead {
   /** The parcel's own screen was reached. False = we could not even open it. */
   readonly found: boolean;
@@ -153,11 +164,16 @@ export class DelhiveryWhatsappPage {
     const notFound: WhatsappRead = { found: false, available: false, messages: null };
 
     await gotoPortal(this.page, SHIPMENT_URL(awbNumber));
+    // Their redirect to sign-in is client-side and takes a moment.
+    await this.page.waitForTimeout(1_500).catch(() => undefined);
+    this.assertSignedIn();
     let onParcel = await this.awbVisible(awbNumber, 15_000);
+    this.assertSignedIn();
 
     if (!onParcel) {
       // Fallback: their list search, then open the row.
       await gotoPortal(this.page, 'https://one.delhivery.com/orders/forward');
+      this.assertSignedIn();
       const search = this.page.getByPlaceholder(/search multiple awbs/i).first();
       const hasSearch = await search
         .waitFor({ state: 'visible', timeout: 15_000 })
@@ -211,6 +227,10 @@ export class DelhiveryWhatsappPage {
     } finally {
       await this.close(dialog);
     }
+  }
+
+  private assertSignedIn(): void {
+    if (/login|signin|ucp-auth/i.test(this.page.url())) throw new WhatsappLoggedOutError();
   }
 
   private async awbVisible(awb: string, timeout: number): Promise<boolean> {

@@ -21,6 +21,10 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller, AuthenticatedStoreUser } from '../../../common/types/request';
 import { StoreOrdersService, viewerFor } from '../../reseller-order/services/store-orders.service';
 import {
+  CourierWhatsappHealthService,
+  type CourierWhatsappHealth,
+} from '../services/courier-whatsapp-health.service';
+import {
   CourierWhatsappReadService,
   type CourierWhatsappView,
 } from '../services/courier-whatsapp-read.service';
@@ -56,7 +60,24 @@ export class AdminCourierWhatsappController {
   async refresh(@Param('id', uuid()) id: string): Promise<WhatsappRequestOutcome> {
     const view = await this.read.forOrder(id, { sellerId: null });
     if (view.shipmentId === null) return { queued: false, reason: 'NOT_DELHIVERY' };
-    return this.request.request(view.shipmentId);
+    return this.request.request(view.shipmentId, { kind: 'viewer' });
+  }
+}
+
+/** How the reader is doing: reads and failures today, backlog age. */
+@ApiTags('admin-courier')
+@ApiBearerAuth('staff-jwt')
+@UseGuards(StaffJwtGuard)
+@ThrottleKey('auth-user')
+@RequirePermissions('courier.ops.view')
+@Controller('admin/courier/whatsapp-health')
+export class AdminCourierWhatsappHealthController {
+  constructor(private readonly health: CourierWhatsappHealthService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Courier WhatsApp reader health' })
+  get(): Promise<CourierWhatsappHealth> {
+    return this.health.snapshot();
   }
 }
 

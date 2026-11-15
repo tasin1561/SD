@@ -28,12 +28,26 @@ CREATE TABLE "courier_whatsapp_checks" (
   "last_attempt_at" TIMESTAMPTZ NOT NULL,
   "last_outcome"    TEXT NOT NULL,
   "message_count"   INTEGER NOT NULL DEFAULT 0,
+  "next_read_at"    TIMESTAMPTZ,
+  "gap_ms"          INTEGER,
+  "last_new_at"     TIMESTAMPTZ,
   CONSTRAINT "courier_whatsapp_checks_pkey" PRIMARY KEY ("shipment_id")
 );
 
 ALTER TABLE "courier_whatsapp_checks"
   ADD CONSTRAINT "courier_whatsapp_checks_shipment_id_fkey"
   FOREIGN KEY ("shipment_id") REFERENCES "shipments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+CREATE TABLE "courier_whatsapp_reads" (
+  "id"          UUID NOT NULL DEFAULT uuidv7(),
+  "shipment_id" UUID NOT NULL,
+  "outcome"     TEXT NOT NULL,
+  "new_count"   INTEGER NOT NULL DEFAULT 0,
+  "kind"        TEXT NOT NULL,
+  "at"          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "courier_whatsapp_reads_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX "courier_whatsapp_reads_at_idx" ON "courier_whatsapp_reads"("at");
 
 -- seedSystemSettings() is create-only on value columns, so the setting is
 -- inserted here to exist in an already-deployed database. Default OFF.
@@ -57,4 +71,25 @@ VALUES (
   CURRENT_TIMESTAMP,
   CURRENT_TIMESTAMP
 )
+ON CONFLICT ("key") DO NOTHING;
+
+INSERT INTO "system_settings" (
+  "id", "key", "category", "value_type", "value_int",
+  "display_name", "description",
+  "is_editable_by_admin", "is_sensitive", "seller_overridable",
+  "created_at", "updated_at"
+)
+VALUES
+  (uuidv7(), 'courier.delhivery_whatsapp_batch', 'courier', 'int', 60,
+   'Delhivery WhatsApp — parcels queued per 15-minute sweep',
+   'The safety-net sweep queues at most this many due parcels per run (every 15 minutes). The real-time reads come from scans and from people opening an order, and are not counted here.',
+   true, false, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (uuidv7(), 'courier.delhivery_whatsapp_parallel', 'courier', 'int', 2,
+   'Delhivery WhatsApp — reads at the same time',
+   'How many Delhivery WhatsApp windows are read at once, each in its own tab of the one signed-in browser. Hard maximum 3 (the droplet has 4 GB of memory).',
+   true, false, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (uuidv7(), 'courier.delhivery_whatsapp_hourly_cap', 'courier', 'int', 400,
+   'Delhivery WhatsApp — reads per hour ceiling',
+   'Once this many reads have run in the last hour, sweep reads wait; parcels in a live conversation keep going.',
+   true, false, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT ("key") DO NOTHING;

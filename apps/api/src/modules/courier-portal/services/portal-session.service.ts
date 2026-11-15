@@ -215,6 +215,17 @@ export class PortalSessionService {
     return page;
   }
 
+  /**
+   * A fresh tab in the ALREADY signed-in context, with no sign-in of its
+   * own. For parallel readers: several tabs of one context share its
+   * cookies, and the caller treats a login page as "logged out" and stops
+   * rather than logging in from several tabs at once.
+   */
+  async readerPage(courierAccountId: string | null = null): Promise<Page> {
+    const ctx = await this.ensureContext(courierAccountId);
+    return ctx.newPage();
+  }
+
   private async ensureContext(courierAccountId: string | null): Promise<BrowserContext> {
     // Cached PER ACCOUNT: a context carries the cookies that say which
     // company you are signed in as, so sharing one across accounts would

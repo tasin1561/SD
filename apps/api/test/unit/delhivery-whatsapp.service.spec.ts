@@ -1,5 +1,10 @@
 import { DelhiveryWhatsappService } from '../../src/modules/courier-portal/services/delhivery-whatsapp.service';
+import { CourierPortalMode } from '@skydrop/db';
+import { WhatsappLoggedOutError } from '../../src/modules/courier-portal/pages/delhivery-whatsapp.page';
 import { CourierWhatsappRequestService } from '../../src/modules/courier-whatsapp/services/courier-whatsapp-request.service';
+
+const CHANNEL = { get: async () => ({ portalMode: CourierPortalMode.SHADOW }) };
+const REQUESTS = { request: jest.fn(async () => ({ queued: true })) };
 
 /**
  * Setting OFF → no job and no browser. Insert-only: the second read of
@@ -8,7 +13,9 @@ import { CourierWhatsappRequestService } from '../../src/modules/courier-whatsap
 function prismaFake(enabled: boolean, ship?: Record<string, unknown>) {
   const created: Array<Array<{ dedupeHash: string }>> = [];
   const client = {
-    systemSetting: { findUnique: jest.fn(async () => ({ valueBoolean: enabled })) },
+    systemSetting: {
+      findUnique: jest.fn(async () => ({ valueBoolean: enabled, valueInt: 2 })),
+    },
     shipment: { findUnique: jest.fn(async () => ship ?? null), findMany: jest.fn(async () => []) },
     courierWhatsappMessage: {
       createMany: jest.fn(async (a: { data: Array<{ dedupeHash: string }> }) => {
@@ -18,6 +25,7 @@ function prismaFake(enabled: boolean, ship?: Record<string, unknown>) {
       count: jest.fn(async () => 2),
     },
     courierWhatsappCheck: { upsert: jest.fn(async () => undefined) },
+    courierWhatsappRead: { create: jest.fn(async () => undefined), count: jest.fn(async () => 0) },
   };
   return { prisma: { client } as never, client, created };
 }
@@ -26,9 +34,14 @@ describe('setting OFF', () => {
   it('the worker reads nothing and opens no browser', async () => {
     const { prisma, client } = prismaFake(false);
     const session = { page: jest.fn() };
-    const svc = new DelhiveryWhatsappService(prisma, session as never);
-    expect(await svc.fetchOne('s1')).toBe('DISABLED');
-    expect(await svc.sweep()).toEqual({ picked: 0, outcomes: {} });
+    const svc = new DelhiveryWhatsappService(
+      prisma,
+      session as never,
+      CHANNEL as never,
+      REQUESTS as never,
+    );
+    expect((await svc.fetchOne('s1')).outcome).toBe('DISABLED');
+    expect(await svc.sweep()).toEqual({ queued: 0 });
     expect(session.page).not.toHaveBeenCalled();
     expect(client.shipment.findMany).not.toHaveBeenCalled();
   });
@@ -67,6 +80,7 @@ describe('insert-only', () => {
     };
     const page = {
       goto: yes,
+      waitForTimeout: yes,
       close: yes,
       url: () => '',
       keyboard: { press: yes },
@@ -74,12 +88,60 @@ describe('insert-only', () => {
       getByPlaceholder: () => node,
       getByRole: () => node,
     };
-    const svc = new DelhiveryWhatsappService(prisma, { page: async () => page } as never);
-    expect(await svc.fetchOne('s1')).toBe('OK');
-    expect(await svc.fetchOne('s1')).toBe('OK');
+    const svc = new DelhiveryWhatsappService(
+      prisma,
+      { page: async () => page, readerPage: async () => page } as never,
+      CHANNEL as never,
+      REQUESTS as never,
+    );
+    expect((await svc.fetchOne('s1')).outcome).toBe('OK');
+    expect((await svc.fetchOne('s1')).outcome).toBe('OK');
     expect(created[0]?.map((r) => r.dedupeHash)).toEqual(created[1]?.map((r) => r.dedupeHash));
     expect(client.courierWhatsappMessage.createMany).toHaveBeenCalledWith(
       expect.objectContaining({ skipDuplicates: true }),
     );
+  });
+});
+
+describe('logged out', () => {
+  it('stops the batch: records LOGGED_OUT and does not read again until the pause ends', async () => {
+    const { prisma, client } = prismaFake(true, {
+      id: 's1',
+      courierCode: 'delhivery',
+      awbNumber: '999',
+      courierAccountId: null,
+    });
+    const page = {
+      close: async (): Promise<void> => undefined,
+      goto: async () => undefined,
+      waitForTimeout: async () => undefined,
+      url: () => 'https://one.delhivery.com/v2/login',
+    };
+    const session = { page: jest.fn(async () => page), readerPage: jest.fn(async () => page) };
+    const svc = new DelhiveryWhatsappService(
+      prisma,
+      session as never,
+      CHANNEL as never,
+      REQUESTS as never,
+    );
+    expect((await svc.fetchOne('s1')).outcome).toBe('LOGGED_OUT');
+    expect((await svc.fetchOne('s1')).outcome).toBe('PAUSED');
+    expect(client.courierWhatsappRead.create).toHaveBeenCalledTimes(1);
+    expect(session.page).toHaveBeenCalledTimes(1); // one sign-in, never a loop
+    expect(new WhatsappLoggedOutError().name).toBe('WhatsappLoggedOutError');
+  });
+
+  it('portal mode OFF opens nothing', async () => {
+    const { prisma } = prismaFake(true);
+    const session = { page: jest.fn(), readerPage: jest.fn() };
+    const off = { get: async () => ({ portalMode: CourierPortalMode.OFF }) };
+    const svc = new DelhiveryWhatsappService(
+      prisma,
+      session as never,
+      off as never,
+      REQUESTS as never,
+    );
+    expect((await svc.fetchOne('s1')).outcome).toBe('DISABLED');
+    expect(session.page).not.toHaveBeenCalled();
   });
 });

@@ -20,7 +20,10 @@ describe('CourierWhatsappReadService scope', () => {
         },
       },
     };
-    return { service: new CourierWhatsappReadService(prisma as never), findFirst };
+    return {
+      service: new CourierWhatsappReadService(prisma as never, { request: jest.fn() } as never),
+      findFirst,
+    };
   }
 
   it("a seller's id is part of the query; another seller's order is a 404", async () => {

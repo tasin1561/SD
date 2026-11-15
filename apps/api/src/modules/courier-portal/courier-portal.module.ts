@@ -30,6 +30,8 @@ import { ShiprocketInvoiceCheckService } from './services/shiprocket-invoice-che
 import { DelhiveryBillingProbeService } from './services/delhivery-billing-probe.service';
 import { DelhiveryInvoiceCheckService } from './services/delhivery-invoice-check.service';
 import { DelhiveryWhatsappService } from './services/delhivery-whatsapp.service';
+import { DelhiveryWhatsappWorker } from './queue/delhivery-whatsapp.worker';
+import { CourierWhatsappQueueModule } from '../courier-whatsapp/courier-whatsapp-queue.module';
 
 /**
  * Phase 5 — browser automation of one.delhivery.com.
@@ -71,6 +73,8 @@ import { DelhiveryWhatsappService } from './services/delhivery-whatsapp.service'
     // The dispatcher marks a ticket MANUAL when the raise cannot go.
     TicketHandlingModule,
     SystemIssuesModule,
+    // The enqueue half of the WhatsApp reader (hot follow-ups, sweep).
+    CourierWhatsappQueueModule,
   ],
   providers: [
     PortalSessionService,
@@ -95,6 +99,7 @@ import { DelhiveryWhatsappService } from './services/delhivery-whatsapp.service'
     ConsigneeVerifyWorker,
     // Delhivery's "View Whatsapp" window, read on the portal queue.
     DelhiveryWhatsappService,
+    DelhiveryWhatsappWorker,
     // Shiprocket's panel: its own browser, out through the India egress
     // route named by `courier.shiprocket_portal_proxy` (the NordVPN
     // container since 2026-09-28; the Bangalore tunnel it replaced was

@@ -952,6 +952,33 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'When ON, the portal worker opens Delhivery One for parcels that were out for delivery or had a failed attempt, reads the WhatsApp messages Delhivery sent the customer, and shows them on the order page. Read-only on their panel. Default OFF until the panel read has been checked live.',
   },
+  {
+    key: 'courier.delhivery_whatsapp_batch',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 60,
+    displayName: 'Delhivery WhatsApp — parcels queued per 15-minute sweep',
+    description:
+      'The safety-net sweep queues at most this many due parcels per run (every 15 minutes). The real-time reads come from scans and from people opening an order, and are not counted here.',
+  },
+  {
+    key: 'courier.delhivery_whatsapp_parallel',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 2,
+    displayName: 'Delhivery WhatsApp — reads at the same time',
+    description:
+      'How many Delhivery WhatsApp windows are read at once, each in its own tab of the one signed-in browser. Hard maximum 3 (the droplet has 4 GB of memory).',
+  },
+  {
+    key: 'courier.delhivery_whatsapp_hourly_cap',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 400,
+    displayName: 'Delhivery WhatsApp — reads per hour ceiling',
+    description:
+      'Once this many reads have run in the last hour, sweep reads wait; parcels in a live conversation keep going.',
+  },
   // Per courier, not one switch for both. Enabling Delhivery for its
   // first controlled parcel must not silently arm every Shiprocket write
   // path: separate contracts, separate accounts, separate money, and
