@@ -98,6 +98,7 @@ export class CourierWhatsappReadService {
         awbNumber: null,
         lastCheckedAt: null,
         checking: false,
+        pausedUntil: null,
         messages: [],
       };
     }

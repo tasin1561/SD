@@ -507,6 +507,10 @@ describe('no courier-code branch upstream of the adapters (CUR-12)', () => {
       why: 'same origin-pincode debt',
     },
     {
+      path: 'courier-whatsapp/',
+      why: "reads Delhivery One's own WhatsApp window (Delhivery-only by nature, like the portal reader); its names are the courier's",
+    },
+    {
       path: 'courier-portal/',
       why: "Playwright driving each courier's own panel — the page it is on is the courier",
     },
