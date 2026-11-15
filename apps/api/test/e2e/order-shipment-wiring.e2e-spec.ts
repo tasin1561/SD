@@ -140,6 +140,13 @@ describe('Order ↔ shipment-provision wiring (M8 commit 16)', () => {
 
   it('CONFIRMED transition auto-provisions a shipment (recipient + items snapshot)', async () => {
     await receiveStock(10);
+    // uat.recipient_name_prefix defaults OFF; this test is about the code
+    // reaching the waybill, so turn it ON (and let the 2 s reader cache lapse).
+    await h.prisma.systemSetting.update({
+      where: { key: 'uat.recipient_name_prefix' },
+      data: { valueBoolean: true },
+    });
+    await new Promise((r) => setTimeout(r, 2200));
     const orderId = await createSubmittedOrder(2);
 
     // No manual provisionFromSnapshot call — the hook should do it.
