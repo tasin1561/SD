@@ -2,12 +2,10 @@ import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { CourierWhatsappQueueModule } from './courier-whatsapp-queue.module';
 import { ResellerOrderModule } from '../reseller-order/reseller-order.module';
-import {
-  AdminCourierWhatsappController,
-  AdminCourierWhatsappHealthController,
-  SellerCourierWhatsappController,
-  StoreCourierWhatsappController,
-} from './controllers/courier-whatsapp.controller';
+import { AdminCourierWhatsappController } from './controllers/admin-courier-whatsapp.controller';
+import { AdminCourierWhatsappHealthController } from './controllers/admin-courier-whatsapp-health.controller';
+import { SellerCourierWhatsappController } from './controllers/seller-courier-whatsapp.controller';
+import { StoreCourierWhatsappController } from './controllers/store-courier-whatsapp.controller';
 import { CourierWhatsappReadService } from './services/courier-whatsapp-read.service';
 
 /**

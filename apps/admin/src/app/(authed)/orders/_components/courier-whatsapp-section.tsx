@@ -32,6 +32,7 @@ export function CourierWhatsappSection({
   const t = useT();
   const locale = useLocale();
   const client = useApiClient();
+  const mayRefresh = usePermission('courier.ops.write');
   const id = orderId;
   const startedAt = useRef(Date.now());
   const q = useQuery({
@@ -68,7 +69,7 @@ export function CourierWhatsappSection({
   const data = q.data;
   if (data === undefined) return null;
   const when = data.lastCheckedAt === null ? null : formatDateTime(data.lastCheckedAt, locale);
-  const canAsk = data.enabled && data.shipmentId !== null;
+  const canAsk = mayRefresh && data.enabled && data.shipmentId !== null;
   if (data.messages.length === 0) {
     if (!canAsk) return null;
     return (

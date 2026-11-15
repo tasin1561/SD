@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { CourierWhatsappReadService } from '../../src/modules/courier-whatsapp/services/courier-whatsapp-read.service';
-import { StoreCourierWhatsappController } from '../../src/modules/courier-whatsapp/controllers/courier-whatsapp.controller';
+import { StoreCourierWhatsappController } from '../../src/modules/courier-whatsapp/controllers/store-courier-whatsapp.controller';
 
 /** Scope: the tenant id goes INTO the order query, so a foreign order is a 404. */
 describe('CourierWhatsappReadService scope', () => {
