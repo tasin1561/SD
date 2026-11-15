@@ -59,4 +59,9 @@ export const courierWhatsapp = defineMessages({
     'সবচেয়ে পুরনো অপেক্ষমাণ: {minutes} মিনিট দেরি।',
     'सबसे पुराना इंतज़ार: {minutes} मिनट देर।',
   ],
+  'courierWhatsapp.paused': [
+    'WhatsApp check paused — showing messages up to {when}',
+    'হোয়াটসঅ্যাপ দেখা সাময়িক বন্ধ — {when} পর্যন্ত বার্তা দেখানো হচ্ছে',
+    'व्हाट्सऐप जाँच रुकी है — {when} तक के संदेश दिख रहे हैं',
+  ],
 });

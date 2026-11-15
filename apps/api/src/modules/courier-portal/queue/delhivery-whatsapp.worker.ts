@@ -11,6 +11,7 @@ import {
   WHATSAPP_SWEEP_CRON,
   type WhatsappReadKind,
 } from '../../courier-whatsapp/whatsapp.constants';
+import { isStaleSweep } from '../../courier-whatsapp/guards';
 import { DelhiveryWhatsappService } from '../services/delhivery-whatsapp.service';
 
 /** A small random pause per tab after each read, so the panel sees a person-ish pace. */
@@ -59,9 +60,34 @@ export class DelhiveryWhatsappWorker implements OnModuleInit, OnModuleDestroy {
           return;
         }
         if (job.name !== JOB_WA_FETCH) return;
-        const data = job.data as { shipmentId?: unknown; kind?: WhatsappReadKind };
+        const data = job.data as {
+          shipmentId?: unknown;
+          kind?: WhatsappReadKind;
+          queuedAt?: number;
+        };
         if (typeof data.shipmentId !== 'string') return;
-        const res = await this.whatsapp.fetchOne(data.shipmentId, data.kind ?? 'viewer');
+        const kind = data.kind ?? 'viewer';
+        // A routine sweep read that sat in the queue over an hour is stale:
+        // the next sweep asks again if it is still due.
+        if (isStaleSweep(kind, data.queuedAt, Date.now())) return;
+        const res = await this.whatsapp.fetchOne(data.shipmentId, kind);
+        // Breaker open or memory short: the job WAITS (re-queued later),
+        // it does not fail.
+        if (res.retryAfterMs !== null) {
+          await this.requests.request(data.shipmentId, {
+            kind,
+            delayMs: Math.min(res.retryAfterMs, 5 * 60_000) + Math.floor(Math.random() * 10_000),
+            idSuffix: '-wait',
+            ignoreFloor: true,
+            ...(data.queuedAt !== undefined ? { queuedAt: data.queuedAt } : {}),
+          });
+          return;
+        }
+        // A transient failure (timeout, crashed tab) retries with BullMQ's
+        // backoff; the last attempt ends quietly.
+        if (res.outcome === 'FAILED' && job.attemptsMade + 1 < (job.opts.attempts ?? 1)) {
+          throw new Error('transient read failure; retrying');
+        }
         // A parcel in a live conversation schedules its own next read.
         if (res.nextDelayMs !== null) {
           await this.requests.request(data.shipmentId, {
@@ -73,9 +99,20 @@ export class DelhiveryWhatsappWorker implements OnModuleInit, OnModuleDestroy {
         }
         if (res.outcome !== 'DISABLED' && res.outcome !== 'SKIPPED') await sleep(jitterMs());
       },
-      { connection: this.redis.createConnection(), concurrency: await this.whatsapp.parallel() },
+      {
+        connection: this.redis.createConnection(),
+        concurrency: await this.whatsapp.parallel(),
+        // A hard backstop under the hourly-cap setting (which holds back
+        // sweeps only): even hot reads cannot exceed 1.5x the ceiling.
+        limiter: {
+          max: Math.round((await this.whatsapp.hourlyCap()) * 1.5),
+          duration: 60 * 60 * 1000,
+        },
+      },
     );
     this.worker.on('failed', (job, err) => {
+      // Only once BullMQ has stopped retrying.
+      if (job !== undefined && job.attemptsMade < (job.opts.attempts ?? 1)) return;
       void this.issues.reportJobFailure(DelhiveryWhatsappWorker.name, job, err);
     });
     this.worker.on('error', (err) => {

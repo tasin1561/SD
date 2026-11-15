@@ -14,6 +14,7 @@ interface CourierMessagesView {
   readonly shipmentId: string | null;
   readonly lastCheckedAt: string | null;
   readonly checking: boolean;
+  readonly pausedUntil: string | null;
   readonly messages: readonly { text: string; sentLabel: string; sentAt: string | null }[];
 }
 
@@ -90,7 +91,13 @@ export function CourierWhatsappSection({
       <CourierWhatsappMessages
         messages={data.messages}
         note={t('courierWhatsapp.note')}
-        status={data.checking ? t('courierWhatsapp.checking') : null}
+        status={
+          data.pausedUntil !== null && when !== null
+            ? t('courierWhatsapp.paused', { when })
+            : data.checking
+              ? t('courierWhatsapp.checking')
+              : null
+        }
         footer={note ?? (when === null ? null : t('courierWhatsapp.checked', { when }))}
         onRefresh={canAsk ? () => refresh.mutate() : undefined}
         refreshLabel={

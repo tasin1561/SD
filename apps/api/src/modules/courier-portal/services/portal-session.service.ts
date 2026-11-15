@@ -226,6 +226,17 @@ export class PortalSessionService {
     return ctx.newPage();
   }
 
+  /**
+   * Throw away this account's browser context (cookies stay in the saved
+   * state file) so a long-lived reader does not grow without bound. The
+   * next tab opens a fresh one; the browser process is kept.
+   */
+  async recycleContext(courierAccountId: string | null = null): Promise<void> {
+    const ctx = this.contexts.get(courierAccountId ?? '');
+    this.contexts.delete(courierAccountId ?? '');
+    await ctx?.close().catch(() => undefined);
+  }
+
   private async ensureContext(courierAccountId: string | null): Promise<BrowserContext> {
     // Cached PER ACCOUNT: a context carries the cookies that say which
     // company you are signed in as, so sharing one across accounts would

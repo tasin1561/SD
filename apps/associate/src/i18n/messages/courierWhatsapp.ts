@@ -28,4 +28,8 @@ export const courierWhatsapp = defineMessages({
   ],
   'courierWhatsapp.off': ['Reading these is switched off.', 'এই বার্তা আনা এখন বন্ধ আছে।'],
   'courierWhatsapp.checking': ['Checking for new messages…', 'নতুন বার্তা দেখা হচ্ছে…'],
+  'courierWhatsapp.paused': [
+    'WhatsApp check paused — showing messages up to {when}',
+    'হোয়াটসঅ্যাপ দেখা সাময়িক বন্ধ — {when} পর্যন্ত বার্তা দেখানো হচ্ছে',
+  ],
 });

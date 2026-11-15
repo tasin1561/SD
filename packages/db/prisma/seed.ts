@@ -979,6 +979,15 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'Once this many reads have run in the last hour, sweep reads wait; parcels in a live conversation keep going.',
   },
+  {
+    key: 'courier.delhivery_whatsapp_queue_max',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 2000,
+    displayName: 'Delhivery WhatsApp — most reads allowed to wait',
+    description:
+      'When more than this many WhatsApp reads are waiting, new routine sweep reads are dropped (counted on the System limits page); reads for live conversations and for pages being viewed are still accepted.',
+  },
   // Per courier, not one switch for both. Enabling Delhivery for its
   // first controlled parcel must not silently arm every Shiprocket write
   // path: separate contracts, separate accounts, separate money, and

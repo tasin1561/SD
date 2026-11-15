@@ -91,5 +91,9 @@ VALUES
   (uuidv7(), 'courier.delhivery_whatsapp_hourly_cap', 'courier', 'int', 400,
    'Delhivery WhatsApp — reads per hour ceiling',
    'Once this many reads have run in the last hour, sweep reads wait; parcels in a live conversation keep going.',
+   true, false, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (uuidv7(), 'courier.delhivery_whatsapp_queue_max', 'courier', 'int', 2000,
+   'Delhivery WhatsApp — most reads allowed to wait',
+   'When more than this many WhatsApp reads are waiting, new routine sweep reads are dropped (counted on the System limits page); reads for live conversations and for pages being viewed are still accepted.',
    true, false, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT ("key") DO NOTHING;

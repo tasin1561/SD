@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { CourierWhatsappHealthService } from './services/courier-whatsapp-health.service';
+import { WhatsappBreakerStore } from './services/whatsapp-breaker.store';
 import { CourierWhatsappRequestService } from './services/courier-whatsapp-request.service';
 
 /**
@@ -8,7 +10,7 @@ import { CourierWhatsappRequestService } from './services/courier-whatsapp-reque
  * graph (which would risk an import cycle).
  */
 @Module({
-  providers: [CourierWhatsappRequestService],
-  exports: [CourierWhatsappRequestService],
+  providers: [CourierWhatsappRequestService, WhatsappBreakerStore, CourierWhatsappHealthService],
+  exports: [CourierWhatsappRequestService, WhatsappBreakerStore, CourierWhatsappHealthService],
 })
 export class CourierWhatsappQueueModule {}

@@ -8,7 +8,6 @@ import {
   SellerCourierWhatsappController,
   StoreCourierWhatsappController,
 } from './controllers/courier-whatsapp.controllers';
-import { CourierWhatsappHealthService } from './services/courier-whatsapp-health.service';
 import { CourierWhatsappReadService } from './services/courier-whatsapp-read.service';
 
 /**
@@ -25,7 +24,7 @@ import { CourierWhatsappReadService } from './services/courier-whatsapp-read.ser
     SellerCourierWhatsappController,
     StoreCourierWhatsappController,
   ],
-  providers: [CourierWhatsappReadService, CourierWhatsappHealthService],
+  providers: [CourierWhatsappReadService],
   exports: [CourierWhatsappReadService],
 })
 export class CourierWhatsappModule {}

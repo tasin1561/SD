@@ -21,6 +21,14 @@ export class WhatsappLoggedOutError extends Error {
   }
 }
 
+/** A CAPTCHA / challenge page: back off, never solve or retry it. */
+export class WhatsappBlockedError extends Error {
+  constructor() {
+    super('Delhivery One showed a challenge page');
+    this.name = 'WhatsappBlockedError';
+  }
+}
+
 export interface WhatsappRead {
   /** The parcel's own screen was reached. False = we could not even open it. */
   readonly found: boolean;
@@ -230,7 +238,9 @@ export class DelhiveryWhatsappPage {
   }
 
   private assertSignedIn(): void {
-    if (/login|signin|ucp-auth/i.test(this.page.url())) throw new WhatsappLoggedOutError();
+    const url = this.page.url();
+    if (/captcha|challenge|blocked/i.test(url)) throw new WhatsappBlockedError();
+    if (/login|signin|ucp-auth/i.test(url)) throw new WhatsappLoggedOutError();
   }
 
   private async awbVisible(awb: string, timeout: number): Promise<boolean> {

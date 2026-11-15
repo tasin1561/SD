@@ -21,7 +21,11 @@ describe('CourierWhatsappReadService scope', () => {
       },
     };
     return {
-      service: new CourierWhatsappReadService(prisma as never, { request: jest.fn() } as never),
+      service: new CourierWhatsappReadService(
+        prisma as never,
+        { request: jest.fn() } as never,
+        { state: async () => ({ status: 'closed' }) } as never,
+      ),
       findFirst,
     };
   }

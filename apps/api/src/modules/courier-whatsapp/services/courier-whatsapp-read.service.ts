@@ -9,6 +9,7 @@ import {
   WHATSAPP_VIEWER_STALE_MS,
 } from '../whatsapp.constants';
 import { CourierWhatsappRequestService } from './courier-whatsapp-request.service';
+import { WhatsappBreakerStore } from './whatsapp-breaker.store';
 
 export interface CourierWhatsappMessageView {
   readonly text: string;
@@ -25,6 +26,8 @@ export interface CourierWhatsappView {
   readonly lastCheckedAt: string | null;
   /** A fresh read was just queued; the page polls for it briefly. */
   readonly checking: boolean;
+  /** The reader's breaker is open until this instant: shown messages may be behind. */
+  readonly pausedUntil: string | null;
   readonly messages: readonly CourierWhatsappMessageView[];
 }
 
@@ -42,6 +45,7 @@ export class CourierWhatsappReadService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly request: CourierWhatsappRequestService,
+    private readonly breaker: WhatsappBreakerStore,
   ) {}
 
   /** @param scope sellerId set → the order must be that seller's (404 otherwise). */
@@ -115,9 +119,15 @@ export class CourierWhatsappReadService {
     // Viewer-driven refresh: opening an order whose copy is stale queues
     // ONE read (jobId-deduped, 2-minute per-parcel floor). Delhivery is
     // never called here — the worker does it.
+    const bs = await this.breaker.state().catch(() => null);
+    const pausedUntil =
+      bs !== null && bs.status === 'open' && bs.openUntil !== null && bs.openUntil > Date.now()
+        ? new Date(bs.openUntil).toISOString()
+        : null;
     let checking = false;
     if (
       enabled &&
+      pausedUntil === null &&
       ship !== null &&
       ship.courierCode === WHATSAPP_COURIER &&
       ship.awbNumber !== null &&
@@ -130,6 +140,7 @@ export class CourierWhatsappReadService {
     return {
       enabled,
       checking,
+      pausedUntil,
       shipmentId,
       awbNumber: ship?.awbNumber ?? null,
       lastCheckedAt: ship?.courierWhatsappCheck?.lastAttemptAt.toISOString() ?? null,

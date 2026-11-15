@@ -4,6 +4,30 @@ import { WhatsappLoggedOutError } from '../../src/modules/courier-portal/pages/d
 import { CourierWhatsappRequestService } from '../../src/modules/courier-whatsapp/services/courier-whatsapp-request.service';
 
 const CHANNEL = { get: async () => ({ portalMode: CourierPortalMode.SHADOW }) };
+jest.mock('../../src/modules/courier-whatsapp/guards', () => ({
+  ...jest.requireActual('../../src/modules/courier-whatsapp/guards'),
+  availableMemoryMb: () => 4096,
+}));
+import {
+  CLOSED,
+  gate,
+  onFailure,
+  onSuccess,
+  type BreakerState,
+} from '../../src/modules/courier-whatsapp/breaker';
+/** The real state machine over an in-memory state, shaped like the Redis store. */
+function breaker() {
+  let st: BreakerState = CLOSED;
+  return {
+    state: async () => st,
+    gate: async () => gate(st, Date.now()),
+    success: async () => {
+      st = onSuccess();
+    },
+    failure: async (r: never, hard: boolean) => (st = onFailure(st, Date.now(), r, hard)),
+    bump: async () => undefined,
+  } as never;
+}
 const REQUESTS = { request: jest.fn(async () => ({ queued: true })) };
 
 /**
@@ -39,6 +63,7 @@ describe('setting OFF', () => {
       session as never,
       CHANNEL as never,
       REQUESTS as never,
+      breaker(),
     );
     expect((await svc.fetchOne('s1')).outcome).toBe('DISABLED');
     expect(await svc.sweep()).toEqual({ queued: 0 });
@@ -48,13 +73,21 @@ describe('setting OFF', () => {
 
   it('the API enqueues no job', async () => {
     const { prisma } = prismaFake(false);
-    const svc = new CourierWhatsappRequestService(prisma, { createConnection: jest.fn() } as never);
+    const svc = new CourierWhatsappRequestService(
+      prisma,
+      { createConnection: jest.fn() } as never,
+      {} as never,
+    );
     expect(await svc.request('s1')).toEqual({ queued: false, reason: 'DISABLED' });
   });
 
   it('a non-Delhivery parcel is never queued', async () => {
     const { prisma } = prismaFake(true, { courierCode: 'shiprocket', awbNumber: '1' });
-    const svc = new CourierWhatsappRequestService(prisma, { createConnection: jest.fn() } as never);
+    const svc = new CourierWhatsappRequestService(
+      prisma,
+      { createConnection: jest.fn() } as never,
+      {} as never,
+    );
     expect(await svc.request('s1')).toEqual({ queued: false, reason: 'NOT_DELHIVERY' });
   });
 });
@@ -93,6 +126,7 @@ describe('insert-only', () => {
       { page: async () => page, readerPage: async () => page } as never,
       CHANNEL as never,
       REQUESTS as never,
+      breaker(),
     );
     expect((await svc.fetchOne('s1')).outcome).toBe('OK');
     expect((await svc.fetchOne('s1')).outcome).toBe('OK');
@@ -123,9 +157,10 @@ describe('logged out', () => {
       session as never,
       CHANNEL as never,
       REQUESTS as never,
+      breaker(),
     );
     expect((await svc.fetchOne('s1')).outcome).toBe('LOGGED_OUT');
-    expect((await svc.fetchOne('s1')).outcome).toBe('PAUSED');
+    expect((await svc.fetchOne('s1')).outcome).toBe('BREAKER_OPEN');
     expect(client.courierWhatsappRead.create).toHaveBeenCalledTimes(1);
     expect(session.page).toHaveBeenCalledTimes(1); // one sign-in, never a loop
     expect(new WhatsappLoggedOutError().name).toBe('WhatsappLoggedOutError');
@@ -140,6 +175,7 @@ describe('logged out', () => {
       session as never,
       off as never,
       REQUESTS as never,
+      breaker(),
     );
     expect((await svc.fetchOne('s1')).outcome).toBe('DISABLED');
     expect(session.page).not.toHaveBeenCalled();

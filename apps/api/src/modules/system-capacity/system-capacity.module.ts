@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { AdminCapacityController } from './controllers/admin-capacity.controller';
 import { CapacityService } from './services/capacity.service';
+import { CourierWhatsappQueueModule } from '../courier-whatsapp/courier-whatsapp-queue.module';
 import { TrackingIngestionModule } from '../tracking-ingestion/tracking-ingestion.module';
 
 /**
@@ -15,7 +16,7 @@ import { TrackingIngestionModule } from '../tracking-ingestion/tracking-ingestio
 @Module({
   // For the retained-payload reading. tracking-ingestion is a leaf and
   // imports nothing of ours, so this cannot close a cycle.
-  imports: [TrackingIngestionModule],
+  imports: [TrackingIngestionModule, CourierWhatsappQueueModule],
   controllers: [AdminCapacityController],
   providers: [CapacityService, StaffJwtGuard],
 })

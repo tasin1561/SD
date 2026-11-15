@@ -46,3 +46,4 @@ export const WHATSAPP_FAILED_EVENTS = [
   'CUSTOMER_REFUSED',
   'CUSTOMER_REQUESTED_RESCHEDULE',
 ] as const;
+export const WHATSAPP_QUEUE_MAX_KEY = 'courier.delhivery_whatsapp_queue_max';

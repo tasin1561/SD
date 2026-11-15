@@ -1680,6 +1680,13 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     example:
       'Set to 400: after 400 reads in an hour only live conversations are read until the count drops.',
   },
+  'courier.delhivery_whatsapp_queue_max': {
+    name: 'Delhivery WhatsApp: most reads allowed to wait',
+    group: 'Courier connection',
+    what: 'When more reads than this are waiting, new routine sweep reads are dropped (the next sweep asks again). Reads for live conversations and for pages someone is viewing are always accepted, so nothing important is lost and the server is never flooded.',
+    example:
+      'Set to 2000: with 2,000 reads already waiting, a sweep adds nothing until the queue shrinks.',
+  },
   'courier.delhivery_live_writes_enabled': {
     name: 'Delhivery live writes',
     group: 'Courier connection',

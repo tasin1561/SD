@@ -1,4 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
+import {
+  LOW_MEMORY_DELAY_MS,
+  RECYCLE_AFTER_READS,
+  READ_TIMEOUT_MS,
+  availableMemoryMb,
+  memoryOk,
+} from '../../courier-whatsapp/guards';
+import {
+  LOWMEM_KEY,
+  WhatsappBreakerStore,
+} from '../../courier-whatsapp/services/whatsapp-breaker.store';
+import type { BreakerReason } from '../../courier-whatsapp/breaker';
 import { CourierPortalMode, ShipmentStatus, TrackingEventType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CourierChannelSettingsService } from '../../courier-escalation/services/courier-channel-settings.service';
@@ -9,7 +21,6 @@ import {
   WHATSAPP_COURIER,
   WHATSAPP_FAILED_EVENTS,
   WHATSAPP_HOURLY_CAP_KEY,
-  WHATSAPP_LOGGED_OUT_PAUSE_MS,
   WHATSAPP_OFD_EVENTS,
   WHATSAPP_PARALLEL_KEY,
   WHATSAPP_PARALLEL_MAX,
@@ -19,6 +30,7 @@ import {
 } from '../../courier-whatsapp/whatsapp.constants';
 import {
   DelhiveryWhatsappPage,
+  WhatsappBlockedError,
   WhatsappLoggedOutError,
   bubbleHashes,
   parseSentAt,
@@ -35,7 +47,10 @@ export type WhatsappFetchOutcome =
   | 'NO_BUTTON'
   | 'UNREADABLE'
   | 'FAILED'
-  | 'LOGGED_OUT';
+  | 'LOGGED_OUT'
+  | 'BLOCKED'
+  | 'BREAKER_OPEN'
+  | 'LOW_MEMORY';
 
 const TRIGGER_EVENTS: readonly TrackingEventType[] = [
   ...WHATSAPP_OFD_EVENTS,
@@ -63,13 +78,15 @@ export class DelhiveryWhatsappService {
   private readonly logger = new Logger(DelhiveryWhatsappService.name);
   private readonly warmed = new Set<string>();
   private warming = new Map<string, Promise<void>>();
-  private pausedUntil = 0;
+  private inFlight = 0;
+  private readsSinceRecycle = 0;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly session: PortalSessionService,
     private readonly channel: CourierChannelSettingsService,
     private readonly requests: CourierWhatsappRequestService,
+    private readonly breaker: WhatsappBreakerStore,
   ) {}
 
   async enabled(): Promise<boolean> {
@@ -86,6 +103,10 @@ export class DelhiveryWhatsappService {
       select: { valueInt: true },
     });
     return row?.valueInt ?? fallback;
+  }
+
+  async hourlyCap(): Promise<number> {
+    return this.int(WHATSAPP_HOURLY_CAP_KEY, 400);
   }
 
   /** 1..3, from the setting. */
@@ -119,19 +140,33 @@ export class DelhiveryWhatsappService {
     return this.session.readerPage(accountId);
   }
 
-  /** Read one parcel now. Returns the outcome and, when hot, the delay to the next read. */
+  /**
+   * Read one parcel now. Never throws: every failure is an outcome, so a
+   * bad read cannot take the worker down. `retryAfterMs` asks the worker
+   * to try the SAME parcel again later (breaker open, memory short).
+   */
   async fetchOne(
     shipmentId: string,
     kind: WhatsappReadKind = 'viewer',
-  ): Promise<{ outcome: WhatsappFetchOutcome; nextDelayMs: number | null }> {
+  ): Promise<{
+    outcome: WhatsappFetchOutcome;
+    nextDelayMs: number | null;
+    retryAfterMs: number | null;
+  }> {
     const none = (
       outcome: WhatsappFetchOutcome,
-    ): { outcome: WhatsappFetchOutcome; nextDelayMs: null } => ({
+      retryAfterMs: number | null = null,
+    ): { outcome: WhatsappFetchOutcome; nextDelayMs: null; retryAfterMs: number | null } => ({
       outcome,
       nextDelayMs: null,
+      retryAfterMs,
     });
     if (!(await this.mayRun())) return none('DISABLED');
-    if (Date.now() < this.pausedUntil) return none('PAUSED');
+    const g = await this.breaker.gate();
+    if (g === 'wait') {
+      const st = await this.breaker.state();
+      return none('BREAKER_OPEN', Math.max(30_000, (st.openUntil ?? Date.now()) - Date.now()));
+    }
     if (kind === 'sweep') {
       const cap = await this.int(WHATSAPP_HOURLY_CAP_KEY, 400);
       const lastHour = await this.prisma.client.courierWhatsappRead.count({
@@ -139,6 +174,12 @@ export class DelhiveryWhatsappService {
       });
       // Hot / event / viewer reads are never held back by the ceiling.
       if (lastHour >= cap) return none('CAPPED');
+    }
+    // Memory guard: no new tab on a squeezed droplet. The probe slot is
+    // given back by NOT having touched the breaker yet.
+    if (!memoryOk(availableMemoryMb())) {
+      await this.breaker.bump(LOWMEM_KEY).catch(() => undefined);
+      return none('LOW_MEMORY', LOW_MEMORY_DELAY_MS);
     }
     const ship = await this.prisma.client.shipment.findUnique({
       where: { id: shipmentId },
@@ -156,29 +197,61 @@ export class DelhiveryWhatsappService {
 
     let outcome: WhatsappFetchOutcome;
     let stored = 0;
+    // A box, because the response listener assigns it from a callback.
+    const box: { trip: { reason: BreakerReason; hard: boolean } | null } = { trip: null };
     let page: Awaited<ReturnType<PortalSessionService['page']>> | null = null;
+    this.inFlight += 1;
     try {
       page = await this.tab(ship.courierAccountId);
-      const read = await new DelhiveryWhatsappPage(page).read(ship.awbNumber);
+      // HTTP 429 anywhere, or a 5xx on the page itself, opens the breaker.
+      try {
+        page.on('response', (r) => {
+          const status = r.status();
+          if (!/one\.delhivery\.com/.test(r.url())) return;
+          if (status === 429) box.trip = { reason: 'RATE_LIMITED', hard: true };
+          else if (status >= 500 && r.request().resourceType() === 'document') {
+            box.trip = { reason: 'SERVER_ERROR', hard: true };
+          }
+        });
+      } catch {
+        // a page object without events (tests)
+      }
+      const live = page;
+      const read = await Promise.race([
+        new DelhiveryWhatsappPage(live).read(ship.awbNumber),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('read timed out')), READ_TIMEOUT_MS).unref?.(),
+        ),
+      ]);
       outcome = this.outcomeOf(read);
       if (read.messages !== null) stored = await this.store(ship.id, read);
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       if (err instanceof WhatsappLoggedOutError) {
         outcome = 'LOGGED_OUT';
-        // Stop the batch, remember it, and let the next try sign in once.
-        this.pausedUntil = Date.now() + WHATSAPP_LOGGED_OUT_PAUSE_MS;
+        box.trip = { reason: 'LOGGED_OUT', hard: true };
+        // The next probe signs in ONCE, after the pause.
         this.warmed.delete(ship.courierAccountId ?? '');
-        this.logger.warn({ shipmentId }, 'Delhivery asked for a sign-in; WhatsApp reads paused');
+      } else if (err instanceof WhatsappBlockedError) {
+        outcome = 'BLOCKED';
+        box.trip = { reason: 'CAPTCHA', hard: true };
       } else {
         outcome = 'FAILED';
+        box.trip ??= { reason: 'FAILURES', hard: false };
+        if (/closed|crash|disconnected/i.test(message)) {
+          await this.session.recycleContext(ship.courierAccountId).catch(() => undefined);
+          this.warmed.delete(ship.courierAccountId ?? '');
+        }
         this.logger.warn(
-          { shipmentId, err: err instanceof Error ? err.message : String(err) },
+          { shipmentId, err: message },
           'Could not read the courier WhatsApp window',
         );
       }
     } finally {
+      this.inFlight -= 1;
       await page?.close().catch(() => undefined);
     }
+    await this.afterRead(outcome, box.trip, ship.courierAccountId);
 
     const now = new Date();
     // A read that did not reach the window says nothing about news: keep
@@ -217,7 +290,33 @@ export class DelhiveryWhatsappService {
     return {
       outcome,
       nextDelayMs: reached && cad.hot ? cad.nextReadAt.getTime() - now.getTime() : null,
+      retryAfterMs: null,
     };
+  }
+
+  /** Feed the breaker, and recycle the browser context every 200 reads. */
+  private async afterRead(
+    outcome: WhatsappFetchOutcome,
+    trip: { reason: BreakerReason; hard: boolean } | null,
+    accountId: string | null,
+  ): Promise<void> {
+    if (trip !== null) {
+      const next = await this.breaker.failure(trip.reason, trip.hard).catch(() => null);
+      if (next?.status === 'open') {
+        this.logger.warn(
+          { reason: next.reason, until: next.openUntil },
+          'WhatsApp reader breaker OPEN',
+        );
+      }
+    } else if (outcome === 'OK' || outcome === 'NO_BUTTON') {
+      await this.breaker.success().catch(() => undefined);
+    }
+    this.readsSinceRecycle += 1;
+    if (this.readsSinceRecycle >= RECYCLE_AFTER_READS && this.inFlight === 0) {
+      this.readsSinceRecycle = 0;
+      await this.session.recycleContext(accountId).catch(() => undefined);
+      this.warmed.delete(accountId ?? '');
+    }
   }
 
   private outcomeOf(read: WhatsappRead): WhatsappFetchOutcome {

@@ -1,5 +1,7 @@
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { Queue } from 'bullmq';
+import { shouldDropSweep } from '../guards';
+import { DROPPED_KEY, WhatsappBreakerStore } from './whatsapp-breaker.store';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import {
@@ -9,6 +11,7 @@ import {
   PRIORITY_SWEEP,
   WHATSAPP_COURIER,
   WHATSAPP_MANUAL_MIN_GAP_MS,
+  WHATSAPP_QUEUE_MAX_KEY,
   WHATSAPP_QUEUE_NAME,
   WHATSAPP_SETTING_KEY,
   type WhatsappReadKind,
@@ -16,7 +19,10 @@ import {
 
 export type WhatsappRequestOutcome =
   | { readonly queued: true }
-  | { readonly queued: false; readonly reason: 'DISABLED' | 'NOT_DELHIVERY' | 'TOO_SOON' };
+  | {
+      readonly queued: false;
+      readonly reason: 'DISABLED' | 'NOT_DELHIVERY' | 'TOO_SOON' | 'QUEUE_FULL';
+    };
 
 export interface WhatsappRequestOptions {
   readonly kind?: WhatsappReadKind;
@@ -26,6 +32,8 @@ export interface WhatsappRequestOptions {
   readonly ignoreFloor?: boolean;
   /** Distinct jobId suffix, so the follow-up does not collide with the immediate read. */
   readonly idSuffix?: string;
+  /** When the work was first asked for (kept across re-queues, for the 1 h stale rule). */
+  readonly queuedAt?: number;
 }
 
 const PRIORITY: Record<WhatsappReadKind, number> = {
@@ -49,6 +57,7 @@ export class CourierWhatsappRequestService implements OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly breaker: WhatsappBreakerStore,
   ) {}
 
   async isEnabled(): Promise<boolean> {
@@ -91,21 +100,50 @@ export class CourierWhatsappRequestService implements OnModuleDestroy {
     }
     const kind = opts.kind ?? 'viewer';
     this.queue ??= new Queue(WHATSAPP_QUEUE_NAME, { connection: this.redis.createConnection() });
+    // Bounded queue: past the max, new SWEEP jobs are dropped (counted);
+    // hot, event and viewer jobs still go in.
+    if (kind === 'sweep') {
+      const max = await this.queueMax();
+      if (shouldDropSweep(kind, await this.waitingCount(), max)) {
+        await this.breaker.bump(DROPPED_KEY).catch(() => undefined);
+        return { queued: false, reason: 'QUEUE_FULL' };
+      }
+    }
     // jobId dedupes a second request while the first is still waiting.
     await this.queue.add(
       JOB_WA_FETCH,
-      { shipmentId, kind },
+      { shipmentId, kind, queuedAt: opts.queuedAt ?? Date.now() },
       {
         jobId: `wa-${shipmentId}${opts.idSuffix ?? ''}`,
         priority: PRIORITY[kind],
         ...(opts.delayMs !== undefined ? { delay: opts.delayMs } : {}),
-        attempts: 1,
+        // Transient failures (a timeout, a crashed tab) get two more
+        // tries, 30 s then 60 s apart; the worker never throws otherwise.
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 30_000 },
         removeOnComplete: true,
         removeOnFail: 50,
       },
     );
     this.logger.log({ shipmentId, kind }, 'WhatsApp read queued');
     return { queued: true };
+  }
+
+  /** Jobs waiting to run: the plain list plus the priority set (priorities live there). */
+  async waitingCount(): Promise<number> {
+    const [wait, prioritized] = await Promise.all([
+      this.redis.client.llen(`bull:${WHATSAPP_QUEUE_NAME}:wait`),
+      this.redis.client.zcard(`bull:${WHATSAPP_QUEUE_NAME}:prioritized`),
+    ]);
+    return wait + prioritized;
+  }
+
+  async queueMax(): Promise<number> {
+    const row = await this.prisma.client.systemSetting.findUnique({
+      where: { key: WHATSAPP_QUEUE_MAX_KEY },
+      select: { valueInt: true },
+    });
+    return row?.valueInt ?? 2000;
   }
 
   async onModuleDestroy(): Promise<void> {
