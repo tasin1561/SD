@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import {
   ArrowLeft,
   Banknote,
@@ -34,6 +34,8 @@ import { ordersPaused } from '@/lib/orders-paused';
 import { itemLabel, itemThumb, useSellCatalogue } from '@/lib/catalogue-hooks';
 import { useCreateOrder } from '@/lib/order-hooks';
 import { BackLink, LinkButton, Notice, Section } from '../../_components/parts';
+import { CloneBanner } from '../../_components/clone-banner';
+import { useCloneSeed } from '@/lib/clone-order-hooks';
 import { useUatField } from '@skydrop/ui/app/uat-fields';
 
 interface Line {
@@ -106,6 +108,30 @@ export function OldOrderForm(): ReactElement {
   const sellable = useMemo(() => items.filter((i) => i.retailPriceInr !== null), [items]);
   const unpriced = useMemo(() => items.filter((i) => i.retailPriceInr === null), [items]);
   const byId = useMemo(() => new Map(items.map((i) => [i.variantId, i])), [items]);
+
+  // "Clone order": pre-fill ONCE from the source order (`?cloneFrom=`).
+  // Nothing is created — the form is submitted as usual. The reference
+  // is deliberately left empty (it must be unique).
+  const clone = useCloneSeed(catalogue.data?.items);
+  const cloneApplied = useRef(false);
+  useEffect(() => {
+    if (cloneApplied.current || clone.seed === null) return;
+    cloneApplied.current = true;
+    const { fields, lines: seeded } = clone.seed;
+    setName(fields.name);
+    setPhone(fields.phone);
+    setEmail(fields.email);
+    setLine1(fields.line1);
+    setLandmark(fields.landmark);
+    setPin(fields.pin);
+    setNotes(fields.notes);
+    setPayment(fields.payment);
+    setCodAmount(fields.codAmount);
+    if (seeded.length > 0) {
+      setLines(seeded.map((l, i) => ({ key: i + 1, ...l })));
+      setNextKey(seeded.length + 1);
+    }
+  }, [clone.seed]);
   // The SERVER's count, not a re-derivation: it is the one figure the
   // endpoint exists to report, and two ways of counting the same thing
   // eventually disagree.
@@ -203,6 +229,7 @@ export function OldOrderForm(): ReactElement {
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
         {t('nav.myOrders')}
       </BackLink>
+      <CloneBanner clone={clone} />
       {header}
 
       {/* The standing notice. The form below stays readable and still

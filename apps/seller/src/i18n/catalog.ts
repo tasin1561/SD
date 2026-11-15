@@ -23,6 +23,7 @@ import { misc } from './messages/misc';
 import { needsAttention } from './messages/needsAttention';
 import { notificationSettings } from './messages/notificationSettings';
 import { notifications } from './messages/notifications';
+import { cloneOrder } from './messages/cloneOrder';
 import { orderConsignee } from './messages/orderConsignee';
 import { orderDelivery } from './messages/orderDelivery';
 import { orderDetail } from './messages/orderDetail';
@@ -107,6 +108,7 @@ export const NAMESPACES = [
   notifications,
   orderConsignee,
   orderDelivery,
+  cloneOrder,
   orderDetail,
   orderDialogs,
   orderDispute,
@@ -188,6 +190,7 @@ const ALL = {
   ...orderDetail,
   ...orderDialogs,
   ...orderDispute,
+  ...cloneOrder,
   ...orderEdit,
   ...orderImport,
   ...csvColumns,

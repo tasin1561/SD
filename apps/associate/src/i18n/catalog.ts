@@ -5,6 +5,7 @@ import { common } from './messages/common';
 import { notifications } from './messages/notifications';
 import { orderImport } from './messages/orderImport';
 import { csvColumns } from './messages/csvColumns';
+import { cloneOrder } from './messages/cloneOrder';
 import { orderNew } from './messages/orderNew';
 import { orders } from './messages/orders';
 import { shell } from './messages/shell';
@@ -26,6 +27,7 @@ export const NAMESPACES = [
   orderImport,
   csvColumns,
   orderNew,
+  cloneOrder,
 ] as const;
 
 const ALL = {
@@ -39,6 +41,7 @@ const ALL = {
   ...orderImport,
   ...csvColumns,
   ...orderNew,
+  ...cloneOrder,
 };
 
 export type MessageKey = keyof typeof ALL;

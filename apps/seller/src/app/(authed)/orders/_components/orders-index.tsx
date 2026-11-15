@@ -8,7 +8,7 @@ import { useSellerIdentity } from '@skydrop/auth/client';
 import { useOrderStatusSummary, usePendingRows, useOrdersList } from '@/lib/api-hooks';
 import { can, canSeePath } from '@/lib/page-access';
 import { useResellerStores } from '@/lib/reseller-store-hooks';
-import { Hourglass, Package, Plus, Search, Upload } from 'lucide-react';
+import { Copy, Hourglass, Package, Plus, Search, Upload } from 'lucide-react';
 import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
 import { Select } from '@skydrop/ui/app/select';
 import { Tabs, type TabItem } from '@skydrop/ui/app/tabs';
@@ -19,6 +19,7 @@ import { chipWords, StatusChip } from '@skydrop/ui/app/status-chip';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { LinkButton } from './orders-parts';
+import { cloneHref } from '@/lib/clone-order';
 import {
   formatPlaced,
   KpiStrip,
@@ -191,6 +192,8 @@ export function OrdersIndex(): ReactElement {
   const params = useMemo(() => parseParams(new URLSearchParams(sp.toString())), [sp]);
 
   const [searchInput, setSearchInput] = useState(params.search);
+  // Same key that gates creating an order.
+  const mayClone = identity !== null && can(identity, 'orders.create');
   const [moreOpen, setMoreOpen] = useState(false);
   // CLOSED stores are still listed: they hold past orders, and a filter
   // that could not reach them would make those orders unfindable.
@@ -589,6 +592,22 @@ export function OrdersIndex(): ReactElement {
                   <Th>{t('orderList.status')}</Th>
                   <Th align="right">{t('orderList.cod')}</Th>
                   <Th>{t('orderList.placed')}</Th>
+                  {mayClone && (
+                    <Th align="right">
+                      <span
+                        style={{
+                          position: 'absolute',
+                          width: 1,
+                          height: 1,
+                          overflow: 'hidden',
+                          clip: 'rect(0 0 0 0)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {t('cloneOrder.button')}
+                      </span>
+                    </Th>
+                  )}
                 </Tr>
               </THead>
               <TBody>
@@ -663,6 +682,20 @@ export function OrdersIndex(): ReactElement {
                           {formatPlaced(o.placedAt, locale)}
                         </span>
                       </Td>
+                      {mayClone && (
+                        <Td align="right">
+                          {/* One quiet icon per row: the create form pre-filled from this order. */}
+                          <Link
+                            href={cloneHref(o.id)}
+                            className="ord-link"
+                            title={t('cloneOrder.button')}
+                            aria-label={t('cloneOrder.rowLabel', { order: o.orderNumber })}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Copy size={14} aria-hidden />
+                          </Link>
+                        </Td>
+                      )}
                     </Tr>
                   );
                 })}

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { notFound, useParams } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
-import { ArrowLeft, ExternalLink, MessagesSquare, OctagonX, Truck } from 'lucide-react';
+import { ArrowLeft, Copy, ExternalLink, MessagesSquare, OctagonX, Truck } from 'lucide-react';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import { looksLikeOrderId } from '@/lib/order-id';
 import { Money, ProductThumb } from '@skydrop/ui/components';
@@ -22,6 +22,7 @@ import { richMessage, useLocale, useT } from '@/i18n/client';
 import { formatDateTime } from '@/i18n/format';
 import { verdict } from '@/i18n/verdict';
 import { useCancelOrder, useMyOrder, useMyOrderEvents } from '@/lib/order-hooks';
+import { cloneHref } from '@/lib/clone-order';
 import { BackLink, Facts, LinkButton, Notice, Section } from '../../_components/parts';
 import { Reattempt } from './_components/reattempt';
 import { OrderAddressCheckPanel } from './_components/address-check-panel';
@@ -143,6 +144,11 @@ export default function OrderDetailPage(): ReactElement {
             >
               {t('order.raiseIssue')}
             </LinkButton>
+            {can(me, 'orders.create') ? (
+              <LinkButton href={cloneHref(o.id)} variant="ghost" icon={<Copy size={15} />}>
+                {t('cloneOrder.button')}
+              </LinkButton>
+            ) : null}
             {mayCancel ? (
               <Button
                 variant="destructive"
