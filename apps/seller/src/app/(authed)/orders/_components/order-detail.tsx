@@ -42,7 +42,6 @@ import { CancelOrderDialog } from './cancel-order-dialog';
 import { RequestReturnDialog } from './request-return-dialog';
 import { ReattemptRequestDialog } from './reattempt-request-dialog';
 import { OrderChargesSection } from './order-charges';
-import { CsvExtrasSection } from './csv-extras';
 import { BackLink, Facts, Notice } from './orders-parts';
 import { verdict } from '@/i18n/verdict';
 import { packageWords } from '@/lib/package-type';
@@ -475,7 +474,10 @@ function OrderBody({
             </DetailCard>
           )}
 
-          <CsvExtrasSection extras={order.csvExtras} />
+          {/* The "Columns from your file we did not use" card is not shown
+              (owner, 2026-11-15). The values are still saved with the order
+              and `CsvExtrasSection` is kept, so putting the card back is this
+              one line. */}
 
           {/* RS-6 phase 3c — a reseller store's order: your transfer
               price, your fee shares, and when.
