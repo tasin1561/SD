@@ -20,7 +20,7 @@ import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
-import { AboutThis } from '@/components/easy/about';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /**
  * THE SELLER'S side of the NSA worklist.
@@ -234,8 +234,12 @@ export function NeedsAttentionIndex(): ReactElement {
               width most of these sellers are on — a long title wraps
               into the note beside it; the sentence belongs in the note. */}
           <SectionHeading
-            title={t('needsAttention.couldNotReach')}
-            note={t('needsAttention.ourAgentsRangAnd')}
+            title={
+              <InfoLabel
+                label={t('needsAttention.couldNotReach')}
+                info={t('needsAttention.ourAgentsRangAnd')}
+              />
+            }
           />
           <ListRows label={t('needsAttention.ordersWeCouldNot2')}>
             {unconfirmed.map((o) => {
@@ -320,8 +324,12 @@ export function NeedsAttentionIndex(): ReactElement {
 
       <section className="nat-section">
         <SectionHeading
-          title={t('needsAttention.overdueParcels')}
-          note={t('needsAttention.outForDeliveryAnd')}
+          title={
+            <InfoLabel
+              label={t('needsAttention.overdueParcels')}
+              info={t('needsAttention.outForDeliveryAnd')}
+            />
+          }
         />
         {list.isLoading ? (
           <SkeletonRows rows={3} label={t('needsAttention.loadingOverdueParcels')} />

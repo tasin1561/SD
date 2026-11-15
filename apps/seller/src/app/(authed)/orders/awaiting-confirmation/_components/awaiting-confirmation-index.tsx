@@ -386,47 +386,49 @@ export function AwaitingConfirmationIndex(): ReactElement {
               onAction={onSend}
             />
           </div>
-          <Table caption={t('callConfirm.tableCaption')} className="cc-table">
-            <THead>
-              <Tr>
-                <SelectAllTh selection={selection} label={t('callConfirm.selectAll')} />
-                <Th>{t('callConfirm.colOrder')}</Th>
-                <Th>{t('callConfirm.colCustomer')}</Th>
-                <Th align="right">{t('callConfirm.colCod')}</Th>
-                <Th align="right">{t('callConfirm.colItems')}</Th>
-                <Th>{t('callConfirm.colPlaced')}</Th>
-                <Th>{t('callConfirm.colTimeLeft')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.map((r) => (
-                <Tr key={r.id} selected={selection.isSelected(r.id)}>
-                  <SelectTd
-                    selection={selection}
-                    id={r.id}
-                    label={t('callConfirm.selectRow', { order: r.orderNumber })}
-                  />
-                  <Td>
-                    <Link href={`/orders/${r.id}`} className="ord-link sk-ident">
-                      {r.orderNumber}
-                    </Link>
-                  </Td>
-                  <Td>
-                    <span className="cc-name">{r.recipientName}</span>
-                    <span className="cc-faint">{r.recipientCity}</span>
-                  </Td>
-                  <Td align="right">
-                    <Money amount={r.codAmountInr} />
-                  </Td>
-                  <Td align="right">{r.itemCount}</Td>
-                  <Td>{formatDateTime(r.createdAt, locale)}</Td>
-                  <Td>
-                    <TimeLeft row={r} now={now} />
-                  </Td>
+          <div className="ez-wrap ez-cards ez-then-3">
+            <Table caption={t('callConfirm.tableCaption')} className="cc-table">
+              <THead>
+                <Tr>
+                  <SelectAllTh selection={selection} label={t('callConfirm.selectAll')} />
+                  <Th>{t('callConfirm.colOrder')}</Th>
+                  <Th>{t('callConfirm.colCustomer')}</Th>
+                  <Th align="right">{t('callConfirm.colCod')}</Th>
+                  <Th align="right">{t('callConfirm.colItems')}</Th>
+                  <Th>{t('callConfirm.colPlaced')}</Th>
+                  <Th>{t('callConfirm.colTimeLeft')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {rows.map((r) => (
+                  <Tr key={r.id} selected={selection.isSelected(r.id)}>
+                    <SelectTd
+                      selection={selection}
+                      id={r.id}
+                      label={t('callConfirm.selectRow', { order: r.orderNumber })}
+                    />
+                    <Td>
+                      <Link href={`/orders/${r.id}`} className="ord-link sk-ident">
+                        {r.orderNumber}
+                      </Link>
+                    </Td>
+                    <Td>
+                      <span className="cc-name">{r.recipientName}</span>
+                      <span className="cc-faint">{r.recipientCity}</span>
+                    </Td>
+                    <Td align="right">
+                      <Money amount={r.codAmountInr} />
+                    </Td>
+                    <Td align="right">{r.itemCount}</Td>
+                    <Td>{formatDateTime(r.createdAt, locale)}</Td>
+                    <Td>
+                      <TimeLeft row={r} now={now} />
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
           <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
         </div>
       )}

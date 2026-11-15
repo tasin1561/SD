@@ -421,26 +421,28 @@ function OverviewTab({
         {s.events.length === 0 ? (
           <EmptyState bare title={t('resellerStoreDetail.noHistoryYet')} />
         ) : (
-          <Table caption={t('resellerStoreDetail.storeHistory')}>
-            <THead>
-              <Tr>
-                <Th>{t('resellerStoreDetail.when')}</Th>
-                <Th>{t('resellerStoreDetail.what')}</Th>
-                <Th>{t('resellerStoreDetail.by')}</Th>
-                <Th>{t('resellerStoreDetail.note2')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {s.events.map((e) => (
-                <Tr key={e.id}>
-                  <Td className="rs-when sk-figure">{when(e.createdAt, locale)}</Td>
-                  <Td className="rs-strong">{eventWordsOf(t)[e.kind] ?? e.kind}</Td>
-                  <Td className="rs-small">{actorWordsOf(t)[e.actorType] ?? e.actorType}</Td>
-                  <Td className="rs-small">{e.note ?? '—'}</Td>
+          <div className="ez-wrap ez-cards ez-lead-2">
+            <Table caption={t('resellerStoreDetail.storeHistory')}>
+              <THead>
+                <Tr>
+                  <Th>{t('resellerStoreDetail.when')}</Th>
+                  <Th>{t('resellerStoreDetail.what')}</Th>
+                  <Th>{t('resellerStoreDetail.by')}</Th>
+                  <Th>{t('resellerStoreDetail.note2')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {s.events.map((e) => (
+                  <Tr key={e.id}>
+                    <Td className="rs-when sk-figure">{when(e.createdAt, locale)}</Td>
+                    <Td className="rs-strong">{eventWordsOf(t)[e.kind] ?? e.kind}</Td>
+                    <Td className="rs-small">{actorWordsOf(t)[e.actorType] ?? e.actorType}</Td>
+                    <Td className="rs-small">{e.note ?? '—'}</Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
         )}
       </RsSection>
     </>

@@ -323,34 +323,36 @@ export default function ResellerReportsPage(): ReactElement {
               note={t('resellerReports.walletCreditsLessCharges')}
               flush
             >
-              <Table caption={t('resellerReports.storesRankedByWhat')}>
-                <THead>
-                  <Tr>
-                    <Th>#</Th>
-                    <Th>{t('resellerReports.store')}</Th>
-                    <Th align="right">{t('resellerReports.profit')}</Th>
-                    <Th align="right">{t('resellerReports.costKnown2')}</Th>
-                  </Tr>
-                </THead>
-                <TBody>
-                  {cards.data.ranking.map((r) => (
-                    <Tr key={r.storeId}>
-                      <Td className="rs-faint sk-figure">{r.rank}</Td>
-                      <Td>
-                        <Link href={`/reseller-stores/${r.storeId}`} className="rs-name-link">
-                          {r.name}
-                        </Link>
-                      </Td>
-                      <Td align="right">
-                        <Money amount={r.profitInr} />
-                      </Td>
-                      <Td align="right" className="rs-small sk-figure">
-                        {r.costCoverage.linesWithCost}/{r.costCoverage.lines} lines
-                      </Td>
+              <div className="ez-wrap ez-cards ez-lead-2 ez-then-3">
+                <Table caption={t('resellerReports.storesRankedByWhat')}>
+                  <THead>
+                    <Tr>
+                      <Th>#</Th>
+                      <Th>{t('resellerReports.store')}</Th>
+                      <Th align="right">{t('resellerReports.profit')}</Th>
+                      <Th align="right">{t('resellerReports.costKnown2')}</Th>
                     </Tr>
-                  ))}
-                </TBody>
-              </Table>
+                  </THead>
+                  <TBody>
+                    {cards.data.ranking.map((r) => (
+                      <Tr key={r.storeId}>
+                        <Td className="rs-faint sk-figure">{r.rank}</Td>
+                        <Td>
+                          <Link href={`/reseller-stores/${r.storeId}`} className="rs-name-link">
+                            {r.name}
+                          </Link>
+                        </Td>
+                        <Td align="right">
+                          <Money amount={r.profitInr} />
+                        </Td>
+                        <Td align="right" className="rs-small sk-figure">
+                          {r.costCoverage.linesWithCost}/{r.costCoverage.lines} lines
+                        </Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+              </div>
             </RsSection>
           </>
         ))}

@@ -9,6 +9,7 @@ import './wallet.css';
 import { useT } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { InfoLabel } from '@/components/easy/about';
 
 /**
  * The rules this wallet runs on.
@@ -47,7 +48,9 @@ export function WalletTermsCard(): ReactElement | null {
   */
   return (
     <section className="wal-section">
-      <SectionHeading title={t('wallet.yourLimits')} note={t('wallet.setBySkydropShown')} />
+      <SectionHeading
+        title={<InfoLabel label={t('wallet.yourLimits')} info={t('wallet.setBySkydropShown')} />}
+      />
       <div className="wal-card">
         <ul className="wal-terms">
           {items.map((term) => (

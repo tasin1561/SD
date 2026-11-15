@@ -783,3 +783,33 @@ a.ez-jump__link:focus-visible {
     grid-column: 1 / -1;
   }
 }
+/* An odd card out does not leave a hole beside it. */
+@media (max-width: 559.98px) {
+  .ez-phone :where(div, section, ul):has(> .sk-kpi + .sk-kpi) {
+    grid-auto-flow: dense;
+  }
+}
+
+/* ── Client portal links and small buttons, finger-sized on touch ───────── */
+@media (pointer: coarse) {
+  .ez-touch td a.tkt-subject,
+  .ez-touch td a.inv-strong-link,
+  .ez-touch td a.rs-name-link,
+  .ez-touch a.set-link,
+  .ez-touch button.ord-expand,
+  .ez-touch button.imp-chip,
+  .ez-touch button.imp-guide__toggle {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  /* The switch keeps its drawn size; its touch area grows around it. */
+  .ez-touch .sk-switch__track {
+    position: relative;
+  }
+  .ez-touch .sk-switch__track::after {
+    content: '';
+    position: absolute;
+    inset: -10px -6px;
+  }
+}

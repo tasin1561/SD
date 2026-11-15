@@ -402,8 +402,11 @@ export function SellerTicketsIndex(): ReactElement {
       </section>
 
       <section className="tkt-section">
-        <SectionHeading title={t('tickets.howATicketCloses')} />
-        <p className="tkt-note">{t('tickets.aTicketClosesIn')}</p>
+        <SectionHeading
+          title={
+            <InfoLabel label={t('tickets.howATicketCloses')} info={t('tickets.aTicketClosesIn')} />
+          }
+        />
       </section>
 
       {loaded && rows.length > 0 && (

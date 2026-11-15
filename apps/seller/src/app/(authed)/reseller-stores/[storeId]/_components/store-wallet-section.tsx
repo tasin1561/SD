@@ -185,54 +185,56 @@ export function StoreWalletSection({
           />
         ) : (
           <div className="rs-stack rs-stack--tight">
-            <Table caption={t('resellerStoreDetail.theStoreSWallet2')}>
-              <THead>
-                <Tr>
-                  <Th>{t('resellerStoreDetail.when')}</Th>
-                  <Th>{t('resellerStoreDetail.what')}</Th>
-                  <Th align="right">{t('resellerStoreDetail.amount')}</Th>
-                  <Th align="right">{t('resellerStoreDetail.balanceAfter')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {ledger.map((e) => {
-                  const credit = isStoreWalletCredit(e.direction);
-                  return (
-                    <Tr key={e.id}>
-                      <Td className="rs-when sk-figure">{when(e.createdAt, locale)}</Td>
-                      <Td>
-                        {/* Which way the money went: an arrow chip beside
-                            the sign and colour the figure already carries. */}
-                        <div className="rs-row">
-                          <span
-                            className="rs-dir"
-                            data-dir={credit ? 'credit' : 'debit'}
-                            aria-hidden
-                          >
-                            {credit ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
-                          </span>
-                          <span className="rs-body">
-                            {storeWalletDirectionLabel(e.direction, 'you', locale)}
-                          </span>
-                        </div>
-                        {e.linkedOrderId !== null ? (
-                          <Link href={`/orders/${e.linkedOrderId}`} className="rs-order-link">
-                            {t('resellerStoreDetail.seeTheOrder')}
-                          </Link>
-                        ) : null}
-                        {e.note !== null ? <div className="rs-faint">{e.note}</div> : null}
-                      </Td>
-                      <Td align="right">
-                        <Money amount={e.amountInr} direction={credit ? 'credit' : 'debit'} />
-                      </Td>
-                      <Td align="right">
-                        <Money amount={e.runningBalanceAfterInr} />
-                      </Td>
-                    </Tr>
-                  );
-                })}
-              </TBody>
-            </Table>
+            <div className="ez-wrap ez-cards ez-lead-2 ez-then-3">
+              <Table caption={t('resellerStoreDetail.theStoreSWallet2')}>
+                <THead>
+                  <Tr>
+                    <Th>{t('resellerStoreDetail.when')}</Th>
+                    <Th>{t('resellerStoreDetail.what')}</Th>
+                    <Th align="right">{t('resellerStoreDetail.amount')}</Th>
+                    <Th align="right">{t('resellerStoreDetail.balanceAfter')}</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {ledger.map((e) => {
+                    const credit = isStoreWalletCredit(e.direction);
+                    return (
+                      <Tr key={e.id}>
+                        <Td className="rs-when sk-figure">{when(e.createdAt, locale)}</Td>
+                        <Td>
+                          {/* Which way the money went: an arrow chip beside
+                              the sign and colour the figure already carries. */}
+                          <div className="rs-row">
+                            <span
+                              className="rs-dir"
+                              data-dir={credit ? 'credit' : 'debit'}
+                              aria-hidden
+                            >
+                              {credit ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
+                            </span>
+                            <span className="rs-body">
+                              {storeWalletDirectionLabel(e.direction, 'you', locale)}
+                            </span>
+                          </div>
+                          {e.linkedOrderId !== null ? (
+                            <Link href={`/orders/${e.linkedOrderId}`} className="rs-order-link">
+                              {t('resellerStoreDetail.seeTheOrder')}
+                            </Link>
+                          ) : null}
+                          {e.note !== null ? <div className="rs-faint">{e.note}</div> : null}
+                        </Td>
+                        <Td align="right">
+                          <Money amount={e.amountInr} direction={credit ? 'credit' : 'debit'} />
+                        </Td>
+                        <Td align="right">
+                          <Money amount={e.runningBalanceAfterInr} />
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </TBody>
+              </Table>
+            </div>
             <div className="rs-row rs-row--between">
               <p className="rs-faint">
                 {entries.hasNextPage

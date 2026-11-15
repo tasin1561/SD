@@ -42,7 +42,7 @@ import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
-import { InfoLabel } from '@/components/easy/about';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /**
  * Everything about what Skydrop sends you, on one page.
@@ -135,9 +135,13 @@ export function NotificationSettingsView(): ReactElement {
         ]}
         title={t('notificationSettings.notificationSettings')}
         subtitle={
-          mayManageCompany
-            ? t('notificationSettings.twoSeparateChoicesWhat')
-            : t('notificationSettings.whatReachesYourInbox')
+          <AboutThis
+            text={
+              mayManageCompany
+                ? t('notificationSettings.twoSeparateChoicesWhat')
+                : t('notificationSettings.whatReachesYourInbox')
+            }
+          />
         }
         // WHOSE decision each half is, said in the fact row rather than
         // only in the prose — it is the distinction the merge of these
@@ -279,8 +283,12 @@ function YourTopics({
   return (
     <section className="set-section">
       <SectionHeading
-        title={t('notificationSettings.whatReachesYou')}
-        note={t('notificationSettings.yourOwnChoicesFor')}
+        title={
+          <InfoLabel
+            label={t('notificationSettings.whatReachesYou')}
+            info={t('notificationSettings.yourOwnChoicesFor')}
+          />
+        }
       />
       <p className="set-muted">{t('notificationSettings.nobodyElseAtThis')}</p>
       {error !== null && (
@@ -414,8 +422,12 @@ function CompanyCategories(): ReactElement {
   return (
     <section className="set-section">
       <SectionHeading
-        title={t('notificationSettings.theCompanySEmail')}
-        note={t('notificationSettings.whatThisCompanyIs')}
+        title={
+          <InfoLabel
+            label={t('notificationSettings.theCompanySEmail')}
+            info={t('notificationSettings.whatThisCompanyIs')}
+          />
+        }
       />
       {list.isLoading ? (
         <div className="set-card" data-flush>

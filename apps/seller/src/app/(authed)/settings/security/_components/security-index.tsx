@@ -18,7 +18,7 @@ import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
-import { AboutThis } from '@/components/easy/about';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 const crumbsOf = (t: Translate<MessageKey>) => [
   { label: t('settingsSecurity.clientConsole') },
@@ -128,8 +128,12 @@ export function SecurityIndex(): ReactElement {
 
       <section className="set-section">
         <SectionHeading
-          title={t('settingsSecurity.thisSession')}
-          note={t('settingsSecurity.whatTheServerSays')}
+          title={
+            <InfoLabel
+              label={t('settingsSecurity.thisSession')}
+              info={t('settingsSecurity.whatTheServerSays')}
+            />
+          }
         />
         <div className="set-card">
           {identity === null ? (
@@ -194,8 +198,12 @@ export function SecurityIndex(): ReactElement {
 
       <section className="set-section">
         <SectionHeading
-          title={t('settingsSecurity.signOutEverywhere')}
-          note={t('settingsSecurity.everyDeviceIncludingThis')}
+          title={
+            <InfoLabel
+              label={t('settingsSecurity.signOutEverywhere')}
+              info={t('settingsSecurity.everyDeviceIncludingThis')}
+            />
+          }
         />
         {revokedCount === null ? (
           <div className="set-card" data-tone="danger">

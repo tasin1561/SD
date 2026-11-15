@@ -86,53 +86,55 @@ export function WithdrawalsCard({
           }
         />
       ) : (
-        <Table caption={t('wallet.withdrawalRequests')}>
-          <THead>
-            <Tr>
-              <Th>{t('wallet.requested')}</Th>
-              <Th align="right">{t('wallet.amount')}</Th>
-              <Th>{t('wallet.status')}</Th>
-              <Th>{t('wallet.outcome')}</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {rows.map((w) => (
-              <Tr key={w.id}>
-                <Td className="wal-when sk-figure">
-                  {new Date(w.createdAt).toLocaleDateString(dateTag(locale))}
-                  <div className="wal-faint">
-                    {new Date(w.createdAt).toLocaleTimeString(dateTag(locale, []), {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                    {w.requestedBy === 'SYSTEM' && <span className="wal-tag">auto</span>}
-                  </div>
-                </Td>
-                <Td align="right">
-                  <Money amount={w.amountRequested} currency={w.currency} />
-                </Td>
-                <Td>
-                  <StatusChip
-                    kind={withdrawalStatusKind(w.status)}
-                    label={withdrawalStatusLabel(w.status, 'seller', locale)}
-                    size="sm"
-                  />
-                </Td>
-                <Td className="wal-faint">
-                  {w.rejectionReason ??
-                    (w.resolvedAt === null
-                      ? t('wallet.awaitingReview')
-                      : t('wallet.paidAt', {
-                          when: new Date(w.resolvedAt).toLocaleString(dateTag(locale, []), {
-                            dateStyle: 'short',
-                            timeStyle: 'short',
-                          }),
-                        }))}
-                </Td>
+        <div className="ez-wrap ez-cards ez-then-2">
+          <Table caption={t('wallet.withdrawalRequests')}>
+            <THead>
+              <Tr>
+                <Th>{t('wallet.requested')}</Th>
+                <Th align="right">{t('wallet.amount')}</Th>
+                <Th>{t('wallet.status')}</Th>
+                <Th>{t('wallet.outcome')}</Th>
               </Tr>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {rows.map((w) => (
+                <Tr key={w.id}>
+                  <Td className="wal-when sk-figure">
+                    {new Date(w.createdAt).toLocaleDateString(dateTag(locale))}
+                    <div className="wal-faint">
+                      {new Date(w.createdAt).toLocaleTimeString(dateTag(locale, []), {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                      {w.requestedBy === 'SYSTEM' && <span className="wal-tag">auto</span>}
+                    </div>
+                  </Td>
+                  <Td align="right">
+                    <Money amount={w.amountRequested} currency={w.currency} />
+                  </Td>
+                  <Td>
+                    <StatusChip
+                      kind={withdrawalStatusKind(w.status)}
+                      label={withdrawalStatusLabel(w.status, 'seller', locale)}
+                      size="sm"
+                    />
+                  </Td>
+                  <Td className="wal-faint">
+                    {w.rejectionReason ??
+                      (w.resolvedAt === null
+                        ? t('wallet.awaitingReview')
+                        : t('wallet.paidAt', {
+                            when: new Date(w.resolvedAt).toLocaleString(dateTag(locale, []), {
+                              dateStyle: 'short',
+                              timeStyle: 'short',
+                            }),
+                          }))}
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </div>
       )}
 
       <RequestWithdrawalModal open={requesting} onOpenChange={onRequestingChange} />

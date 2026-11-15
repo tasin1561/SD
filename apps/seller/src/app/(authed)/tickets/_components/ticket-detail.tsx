@@ -19,6 +19,7 @@ import './tickets.css';
 import { useT, useLocale } from '@/i18n/client';
 import { dateTag } from '@/i18n/format';
 import type { Locale } from '@skydrop/ui/app/i18n';
+import { InfoLabel } from '@/components/easy/about';
 
 /**
  * One ticket, opened.
@@ -209,7 +210,9 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
       {ticket.resolutionAmountInr !== null && <RefundBanner ticket={ticket} />}
 
       <section className="tkt-section">
-        <SectionHeading title={t('tickets.ticket')} note={t('tickets.theFactsWeHold')} />
+        <SectionHeading
+          title={<InfoLabel label={t('tickets.ticket')} info={t('tickets.theFactsWeHold')} />}
+        />
         <div className="tkt-card">
           <dl className="tkt-facts">
             <FactItem label={t('tickets.type')}>
@@ -293,7 +296,9 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
         messages harder to find rather than the history clearer.
       */}
       <section className="tkt-section">
-        <SectionHeading title={t('tickets.conversation')} note={t('tickets.whatYouToldUs')} />
+        <SectionHeading
+          title={<InfoLabel label={t('tickets.conversation')} info={t('tickets.whatYouToldUs')} />}
+        />
         <div className="tkt-card">
           <TicketConversation ticket={ticket} />
         </div>

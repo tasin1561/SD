@@ -254,36 +254,38 @@ export function StoreCatalogue({
           note={t('resellerStoreDetail.whenStockFellBelow')}
           flush
         >
-          <Table caption={t('resellerStoreDetail.setAsidesWeReduced')}>
-            <THead>
-              <Tr>
-                <Th>{t('resellerStoreDetail.when')}</Th>
-                <Th>{t('resellerStoreDetail.sku')}</Th>
-                <Th>
-                  <GlossaryTerm {...glossaryOf(t).setAside}>
-                    {t('resellerStoreDetail.setAside2')}
-                  </GlossaryTerm>
-                </Th>
-                <Th align="right">{t('resellerStoreDetail.onHandThen')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {terms.data.recentShrinks.map((s) => (
-                <Tr key={s.id}>
-                  <Td className="rs-when sk-figure">{when(s.createdAt, locale)}</Td>
-                  <Td>
-                    <span className="sk-ident">{s.skuCode ?? '—'}</span>
-                  </Td>
-                  <Td className="sk-figure">
-                    {s.fromQty} → {s.toQty}
-                  </Td>
-                  <Td align="right">
-                    <Num value={s.onHand} />
-                  </Td>
+          <div className="ez-wrap ez-cards ez-lead-2">
+            <Table caption={t('resellerStoreDetail.setAsidesWeReduced')}>
+              <THead>
+                <Tr>
+                  <Th>{t('resellerStoreDetail.when')}</Th>
+                  <Th>{t('resellerStoreDetail.sku')}</Th>
+                  <Th>
+                    <GlossaryTerm {...glossaryOf(t).setAside}>
+                      {t('resellerStoreDetail.setAside2')}
+                    </GlossaryTerm>
+                  </Th>
+                  <Th align="right">{t('resellerStoreDetail.onHandThen')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {terms.data.recentShrinks.map((s) => (
+                  <Tr key={s.id}>
+                    <Td className="rs-when sk-figure">{when(s.createdAt, locale)}</Td>
+                    <Td>
+                      <span className="sk-ident">{s.skuCode ?? '—'}</span>
+                    </Td>
+                    <Td className="sk-figure">
+                      {s.fromQty} → {s.toQty}
+                    </Td>
+                    <Td align="right">
+                      <Num value={s.onHand} />
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
         </RsSection>
       ) : null}
 

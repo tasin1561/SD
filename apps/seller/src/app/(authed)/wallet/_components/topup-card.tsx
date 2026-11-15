@@ -74,113 +74,115 @@ export function TopupCard({
           }
         />
       ) : (
-        <Table caption={t('wallet.topUps')}>
-          <THead>
-            <Tr>
-              <Th>{t('wallet.sent')}</Th>
-              <Th>{t('wallet.to')}</Th>
-              <Th align="right">{t('wallet.amount')}</Th>
-              <Th>{t('wallet.reference')}</Th>
-              <Th>{t('wallet.status')}</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {rows.map((r) => (
-              <Tr key={r.id}>
-                <Td className="wal-when sk-figure">
-                  {/* Local, not `toISOString().slice(0,10)`, which is
-                        UTC: a transfer sent at 1am in Dhaka was shown
-                        as the previous day. And with the time, because
-                        the Status column beside it already carries one
-                        — a row that dates two of its own events
-                        differently reads as two different events. */}
-                  {new Date(r.createdAt).toLocaleDateString(dateTag(locale))}
-                  <div className="wal-faint">
-                    {new Date(r.createdAt).toLocaleTimeString(dateTag(locale, []), {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </div>
-                </Td>
-                <Td>
-                  {/* The account, not our filing name for it. A seller
-                        checking this against their bank statement needs
-                        the bank and the number they typed; "Tasin City"
-                        is nothing they can compare. */}
-                  <div className="wal-stack">
-                    <span>{r.bankName}</span>
-                    <span className="wal-faint sk-ident">{r.bankAccountNumber}</span>
-                    {r.bankBranchName !== null && (
-                      <span className="wal-faint">{r.bankBranchName}</span>
-                    )}
-                  </div>
-                </Td>
-                <Td align="right">
-                  {/* In the currency they SENT, and never converted:
-                        this is a record of a bank transfer that already
-                        happened, so restating it in another currency
-                        would stop it matching their statement. A bare
-                        1000.00 does not say whether that was taka or
-                        rupees, which is the one thing they need to
-                        recognise the payment. */}
-                  <Money
-                    amount={r.amount}
-                    currency={r.currency === 'BDT' ? 'BDT' : 'INR'}
-                    convert={false}
-                  />
-                </Td>
-                <Td>
-                  <div className="wal-stack">
-                    {r.transactionRef !== null && (
-                      <span className="wal-faint sk-ident">{r.transactionRef}</span>
-                    )}
-                    {r.hasProof ? (
-                      <ProofLink topupId={r.id} />
-                    ) : (
-                      r.transactionRef === null && <span className="wal-faint">—</span>
-                    )}
-                  </div>
-                </Td>
-                <Td>
-                  {/* The CHIP, not the raw enum. Spelling `PENDING` here
-                        while every other list in the app renders a chip
-                        is a second vocabulary for one status, which is
-                        the drift FE-6 exists to stop. The payer's words
-                        (`topupStatusLabel(…, 'payer')`) differ from an
-                        operator's.
-
-                        NARROWED, never cast — the view type says
-                        `string`, and a cast would render an unstyled
-                        chip for a value the mapper does not know. An
-                        unrecognised status falls back to its own text,
-                        which is what the column said before. */}
-                  {isTopupStatus(r.status) ? (
-                    <StatusChip
-                      kind={topupStatusKind(r.status)}
-                      label={topupStatusLabel(r.status, 'payer', locale)}
-                      size="sm"
-                    />
-                  ) : (
-                    <span>{r.status}</span>
-                  )}
-                  {/* When it was decided. "REJECTED" with no date leaves
-                        a seller unsure whether anyone has looked yet. */}
-                  {r.reviewedAt !== null && (
-                    <div className="wal-faint">
-                      {new Date(r.reviewedAt).toLocaleString(dateTag(locale))}
-                    </div>
-                  )}
-                  {/* A rejection is only useful if the reason travels
-                        with it — otherwise the seller resubmits the same
-                        thing. */}
-                  {r.reviewNote !== null && r.reviewNote !== '' && (
-                    <div className="wal-faint">{r.reviewNote}</div>
-                  )}
-                </Td>
+        <div className="ez-wrap ez-cards ez-then-3">
+          <Table caption={t('wallet.topUps')}>
+            <THead>
+              <Tr>
+                <Th>{t('wallet.sent')}</Th>
+                <Th>{t('wallet.to')}</Th>
+                <Th align="right">{t('wallet.amount')}</Th>
+                <Th>{t('wallet.reference')}</Th>
+                <Th>{t('wallet.status')}</Th>
               </Tr>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {rows.map((r) => (
+                <Tr key={r.id}>
+                  <Td className="wal-when sk-figure">
+                    {/* Local, not `toISOString().slice(0,10)`, which is
+                          UTC: a transfer sent at 1am in Dhaka was shown
+                          as the previous day. And with the time, because
+                          the Status column beside it already carries one
+                          — a row that dates two of its own events
+                          differently reads as two different events. */}
+                    {new Date(r.createdAt).toLocaleDateString(dateTag(locale))}
+                    <div className="wal-faint">
+                      {new Date(r.createdAt).toLocaleTimeString(dateTag(locale, []), {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </div>
+                  </Td>
+                  <Td>
+                    {/* The account, not our filing name for it. A seller
+                          checking this against their bank statement needs
+                          the bank and the number they typed; "Tasin City"
+                          is nothing they can compare. */}
+                    <div className="wal-stack">
+                      <span>{r.bankName}</span>
+                      <span className="wal-faint sk-ident">{r.bankAccountNumber}</span>
+                      {r.bankBranchName !== null && (
+                        <span className="wal-faint">{r.bankBranchName}</span>
+                      )}
+                    </div>
+                  </Td>
+                  <Td align="right">
+                    {/* In the currency they SENT, and never converted:
+                          this is a record of a bank transfer that already
+                          happened, so restating it in another currency
+                          would stop it matching their statement. A bare
+                          1000.00 does not say whether that was taka or
+                          rupees, which is the one thing they need to
+                          recognise the payment. */}
+                    <Money
+                      amount={r.amount}
+                      currency={r.currency === 'BDT' ? 'BDT' : 'INR'}
+                      convert={false}
+                    />
+                  </Td>
+                  <Td>
+                    <div className="wal-stack">
+                      {r.transactionRef !== null && (
+                        <span className="wal-faint sk-ident">{r.transactionRef}</span>
+                      )}
+                      {r.hasProof ? (
+                        <ProofLink topupId={r.id} />
+                      ) : (
+                        r.transactionRef === null && <span className="wal-faint">—</span>
+                      )}
+                    </div>
+                  </Td>
+                  <Td>
+                    {/* The CHIP, not the raw enum. Spelling `PENDING` here
+                          while every other list in the app renders a chip
+                          is a second vocabulary for one status, which is
+                          the drift FE-6 exists to stop. The payer's words
+                          (`topupStatusLabel(…, 'payer')`) differ from an
+                          operator's.
+
+                          NARROWED, never cast — the view type says
+                          `string`, and a cast would render an unstyled
+                          chip for a value the mapper does not know. An
+                          unrecognised status falls back to its own text,
+                          which is what the column said before. */}
+                    {isTopupStatus(r.status) ? (
+                      <StatusChip
+                        kind={topupStatusKind(r.status)}
+                        label={topupStatusLabel(r.status, 'payer', locale)}
+                        size="sm"
+                      />
+                    ) : (
+                      <span>{r.status}</span>
+                    )}
+                    {/* When it was decided. "REJECTED" with no date leaves
+                          a seller unsure whether anyone has looked yet. */}
+                    {r.reviewedAt !== null && (
+                      <div className="wal-faint">
+                        {new Date(r.reviewedAt).toLocaleString(dateTag(locale))}
+                      </div>
+                    )}
+                    {/* A rejection is only useful if the reason travels
+                          with it — otherwise the seller resubmits the same
+                          thing. */}
+                    {r.reviewNote !== null && r.reviewNote !== '' && (
+                      <div className="wal-faint">{r.reviewNote}</div>
+                    )}
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </div>
       )}
 
       <TopupWizard

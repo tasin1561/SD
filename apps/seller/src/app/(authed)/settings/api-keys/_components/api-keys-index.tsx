@@ -25,7 +25,7 @@ import { useT, useLocale } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
-import { AboutThis } from '@/components/easy/about';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 const crumbsOf = (t: Translate<MessageKey>) => [
   { label: t('settingsApiKeys.clientConsole') },
@@ -199,8 +199,12 @@ export function ApiKeysIndex(): ReactElement {
 
       <section className="set-section">
         <SectionHeading
-          title={t('settingsApiKeys.issueAKey')}
-          note={t('settingsApiKeys.thePlaintextIsShown')}
+          title={
+            <InfoLabel
+              label={t('settingsApiKeys.issueAKey')}
+              info={t('settingsApiKeys.thePlaintextIsShown')}
+            />
+          }
         />
         <div className="set-card">
           <form onSubmit={onCreate} className="set-inline">

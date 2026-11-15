@@ -17,6 +17,7 @@ import { verdict } from '@/i18n/verdict';
 import './wallet.css';
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { InfoLabel } from '@/components/easy/about';
 
 /**
  * The two wallet terms a seller owns.
@@ -117,8 +118,12 @@ export function WithdrawalScheduleCard(): ReactElement | null {
   return (
     <section className="wal-section">
       <SectionHeading
-        title={t('wallet.withdrawalSettings')}
-        note={t('wallet.yoursToChangeEverything')}
+        title={
+          <InfoLabel
+            label={t('wallet.withdrawalSettings')}
+            info={t('wallet.yoursToChangeEverything')}
+          />
+        }
       />
       <div className="wal-card">
         <div className="wal-settings">

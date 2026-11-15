@@ -61,7 +61,7 @@ import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
 import type { Locale } from '@skydrop/ui/app/i18n';
-import { AboutThis } from '@/components/easy/about';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 const crumbsOf = (t: Translate<MessageKey>) => [
   { label: t('profile.clientConsole') },
@@ -380,8 +380,7 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
   return (
     <section className="set-section">
       <SectionHeading
-        title={t('profile.companyInfo')}
-        note={t('profile.whatWeCallYou')}
+        title={<InfoLabel label={t('profile.companyInfo')} info={t('profile.whatWeCallYou')} />}
         action={
           canManage &&
           !editing && (
@@ -750,8 +749,12 @@ function BankDetailsSection({
   return (
     <section className="set-section">
       <SectionHeading
-        title={t('profile.bankDetails')}
-        note={t('profile.whereAWithdrawalActually')}
+        title={
+          <InfoLabel
+            label={t('profile.bankDetails')}
+            info={t('profile.whereAWithdrawalActually')}
+          />
+        }
         action={
           canManage &&
           !editing &&
@@ -1067,7 +1070,11 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
 
   return (
     <section className="set-section">
-      <SectionHeading title={t('profile.companyLogo')} note={t('profile.shownToYourCustomers')} />
+      <SectionHeading
+        title={
+          <InfoLabel label={t('profile.companyLogo')} info={t('profile.shownToYourCustomers')} />
+        }
+      />
       <div className="set-card">
         {canManage ? (
           // Uploading or removing a logo is `profile.manage`; without it

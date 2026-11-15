@@ -12,6 +12,7 @@ import './settings.css';
 import { useT } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { InfoLabel } from '@/components/easy/about';
 
 /**
  * The settings tiles, filtered to what this person can actually open.
@@ -60,8 +61,12 @@ export function SettingsHub({ items }: { readonly items: readonly SettingsTile[]
   const preferences = (
     <section className="set-section">
       <SectionHeading
-        title={t('settingsHub.thisBrowser')}
-        note={t('settingsHub.howTheConsoleMoves')}
+        title={
+          <InfoLabel
+            label={t('settingsHub.thisBrowser')}
+            info={t('settingsHub.howTheConsoleMoves')}
+          />
+        }
       />
       <div className="set-card">
         <MotionSwitch />

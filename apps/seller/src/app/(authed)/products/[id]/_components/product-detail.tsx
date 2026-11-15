@@ -396,72 +396,74 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                   />
                 </PanelPad>
               ) : (
-                <Table caption={t('productDetail.variants')}>
-                  <THead>
-                    <Tr>
-                      <Th aria-label={t('productDetail.image')} />
-                      <Th>{t('productDetail.sku')}</Th>
-                      <Th>{t('productDetail.label')}</Th>
-                      <Th align="right">{t('productDetail.weightG')}</Th>
-                      <Th>{t('productDetail.status')}</Th>
-                    </Tr>
-                  </THead>
-                  <TBody>
-                    {variants.data.map((v) => (
-                      <Tr
-                        key={v.id}
-                        onActivate={() => router.push(`/products/${productId}/variants/${v.id}`)}
-                      >
-                        <Td>
-                          {/* A colour is something you recognise by looking.
-                            Without this the seller decodes AVIATO-GREE-BLAC
-                            to find the green one. */}
-                          {v.primaryImageUrl != null ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={v.primaryImageUrl} alt="" className="prd-thumb" />
-                          ) : (
-                            <div className="prd-thumb" aria-hidden />
-                          )}
-                        </Td>
-                        <Td>
-                          <Link
-                            href={`/products/${productId}/variants/${v.id}`}
-                            className="inv-strong-link sk-ident"
-                          >
-                            {v.skuCode}
-                          </Link>
-                        </Td>
-                        <Td>{v.variantLabel ?? '—'}</Td>
-                        {/*
-                        The EFFECTIVE weight, not the variant's own column.
-                        A blank variant weight means "inherit the product
-                        default" (M4: `variant.weightGrams ??
-                        product.defaultWeightGrams`), so printing the raw
-                        null as "—" told the seller no weight was set while
-                        the courier would in fact bill on the product's
-                        500g. Inherited values are marked as inherited
-                        rather than silently shown as the variant's own.
-                      */}
-                        <Td align="right" className="sk-figure">
-                          {v.weightGrams !== null ? (
-                            <span>{v.weightGrams}</span>
-                          ) : detail.data?.defaultWeightGrams != null ? (
-                            // The product default, shown plainly. It IS the
-                            // weight this variant ships at, so dressing it up
-                            // as second-class only invites the question the
-                            // dash used to raise.
-                            <span title={t('productDetail.fromTheProductDefault')}>
-                              {detail.data.defaultWeightGrams}
-                            </span>
-                          ) : (
-                            <span className="inv-muted">—</span>
-                          )}
-                        </Td>
-                        <Td>{statusChip(v.status)}</Td>
+                <div className="ez-wrap ez-cards ez-lead-2">
+                  <Table caption={t('productDetail.variants')}>
+                    <THead>
+                      <Tr>
+                        <Th aria-label={t('productDetail.image')} />
+                        <Th>{t('productDetail.sku')}</Th>
+                        <Th>{t('productDetail.label')}</Th>
+                        <Th align="right">{t('productDetail.weightG')}</Th>
+                        <Th>{t('productDetail.status')}</Th>
                       </Tr>
-                    ))}
-                  </TBody>
-                </Table>
+                    </THead>
+                    <TBody>
+                      {variants.data.map((v) => (
+                        <Tr
+                          key={v.id}
+                          onActivate={() => router.push(`/products/${productId}/variants/${v.id}`)}
+                        >
+                          <Td>
+                            {/* A colour is something you recognise by looking.
+                              Without this the seller decodes AVIATO-GREE-BLAC
+                              to find the green one. */}
+                            {v.primaryImageUrl != null ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={v.primaryImageUrl} alt="" className="prd-thumb" />
+                            ) : (
+                              <div className="prd-thumb" aria-hidden />
+                            )}
+                          </Td>
+                          <Td>
+                            <Link
+                              href={`/products/${productId}/variants/${v.id}`}
+                              className="inv-strong-link sk-ident"
+                            >
+                              {v.skuCode}
+                            </Link>
+                          </Td>
+                          <Td>{v.variantLabel ?? '—'}</Td>
+                          {/*
+                          The EFFECTIVE weight, not the variant's own column.
+                          A blank variant weight means "inherit the product
+                          default" (M4: `variant.weightGrams ??
+                          product.defaultWeightGrams`), so printing the raw
+                          null as "—" told the seller no weight was set while
+                          the courier would in fact bill on the product's
+                          500g. Inherited values are marked as inherited
+                          rather than silently shown as the variant's own.
+                        */}
+                          <Td align="right" className="sk-figure">
+                            {v.weightGrams !== null ? (
+                              <span>{v.weightGrams}</span>
+                            ) : detail.data?.defaultWeightGrams != null ? (
+                              // The product default, shown plainly. It IS the
+                              // weight this variant ships at, so dressing it up
+                              // as second-class only invites the question the
+                              // dash used to raise.
+                              <span title={t('productDetail.fromTheProductDefault')}>
+                                {detail.data.defaultWeightGrams}
+                              </span>
+                            ) : (
+                              <span className="inv-muted">—</span>
+                            )}
+                          </Td>
+                          <Td>{statusChip(v.status)}</Td>
+                        </Tr>
+                      ))}
+                    </TBody>
+                  </Table>
+                </div>
               )}
             </Panel>
           </AreaSection>

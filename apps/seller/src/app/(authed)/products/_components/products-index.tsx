@@ -402,85 +402,87 @@ export function ProductsIndex(): ReactElement {
             </PanelPad>
           ) : (
             <>
-              <Table caption={t('productList.catalogueRegister')}>
-                <THead>
-                  <Tr>
-                    <Th aria-label={t('productList.picture')} />
-                    <Th>{t('productList.product')}</Th>
-                    <Th>{t('productList.yourRef')}</Th>
-                    <Th>{t('productList.boxWeight')}</Th>
-                    <Th align="right">{t('productList.declaredValue')}</Th>
-                    <Th>{t('productList.status')}</Th>
-                    <Th>{t('productList.updated')}</Th>
-                  </Tr>
-                </THead>
-                <TBody>
-                  {list.data.items.map((p) => {
-                    const box = dimensions(p);
-                    return (
-                      <Tr key={p.id} onActivate={() => router.push(`/products/${p.id}`)}>
-                        <Td>
-                          {/* A catalogue is browsed by eye; a column of
-                              names makes the seller read to find the thing
-                              they can already see. */}
-                          {p.primaryImageUrl != null ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={p.primaryImageUrl} alt="" className="prd-thumb" />
-                          ) : (
-                            <div className="prd-thumb" aria-hidden />
-                          )}
-                        </Td>
-                        <Td>
-                          <Link href={`/products/${p.id}`} className="inv-strong-link">
-                            {p.name}
-                          </Link>
-                          {p.description !== null && p.description !== '' && (
-                            <span className="inv-sub inv-truncate">{p.description}</span>
-                          )}
-                        </Td>
-                        <Td>
-                          <span className="sk-ident inv-muted">{p.externalRef ?? '—'}</span>
-                        </Td>
-                        <Td>
-                          {box === null && p.defaultWeightGrams === null ? (
-                            <Dash />
-                          ) : (
-                            <>
-                              <span className="sk-figure inv-muted">
-                                {box ?? t('productList.noBoxSize')}
-                              </span>
-                              <span className="inv-sub sk-figure">
-                                {p.defaultWeightGrams === null
-                                  ? t('productList.noWeight')
-                                  : `${p.defaultWeightGrams} g`}
-                              </span>
-                            </>
-                          )}
-                        </Td>
-                        <Td align="right">
-                          {p.defaultDeclaredValueInr === null ? (
-                            <Dash />
-                          ) : (
-                            <Money amount={p.defaultDeclaredValueInr} />
-                          )}
-                        </Td>
-                        <Td>
-                          <StatusChip
-                            kind={productStatusKind(p.status)}
-                            label={p.status.toLowerCase()}
-                            size="sm"
-                          />
-                        </Td>
-                        <Td>
-                          <span className="sk-figure inv-muted">
-                            {new Date(p.updatedAt).toISOString().slice(0, 16).replace('T', ' ')}
-                          </span>
-                        </Td>
-                      </Tr>
-                    );
-                  })}
-                </TBody>
-              </Table>
+              <div className="ez-wrap ez-cards ez-lead-2">
+                <Table caption={t('productList.catalogueRegister')}>
+                  <THead>
+                    <Tr>
+                      <Th aria-label={t('productList.picture')} />
+                      <Th>{t('productList.product')}</Th>
+                      <Th>{t('productList.yourRef')}</Th>
+                      <Th>{t('productList.boxWeight')}</Th>
+                      <Th align="right">{t('productList.declaredValue')}</Th>
+                      <Th>{t('productList.status')}</Th>
+                      <Th>{t('productList.updated')}</Th>
+                    </Tr>
+                  </THead>
+                  <TBody>
+                    {list.data.items.map((p) => {
+                      const box = dimensions(p);
+                      return (
+                        <Tr key={p.id} onActivate={() => router.push(`/products/${p.id}`)}>
+                          <Td>
+                            {/* A catalogue is browsed by eye; a column of
+                                names makes the seller read to find the thing
+                                they can already see. */}
+                            {p.primaryImageUrl != null ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={p.primaryImageUrl} alt="" className="prd-thumb" />
+                            ) : (
+                              <div className="prd-thumb" aria-hidden />
+                            )}
+                          </Td>
+                          <Td>
+                            <Link href={`/products/${p.id}`} className="inv-strong-link">
+                              {p.name}
+                            </Link>
+                            {p.description !== null && p.description !== '' && (
+                              <span className="inv-sub inv-truncate">{p.description}</span>
+                            )}
+                          </Td>
+                          <Td>
+                            <span className="sk-ident inv-muted">{p.externalRef ?? '—'}</span>
+                          </Td>
+                          <Td>
+                            {box === null && p.defaultWeightGrams === null ? (
+                              <Dash />
+                            ) : (
+                              <>
+                                <span className="sk-figure inv-muted">
+                                  {box ?? t('productList.noBoxSize')}
+                                </span>
+                                <span className="inv-sub sk-figure">
+                                  {p.defaultWeightGrams === null
+                                    ? t('productList.noWeight')
+                                    : `${p.defaultWeightGrams} g`}
+                                </span>
+                              </>
+                            )}
+                          </Td>
+                          <Td align="right">
+                            {p.defaultDeclaredValueInr === null ? (
+                              <Dash />
+                            ) : (
+                              <Money amount={p.defaultDeclaredValueInr} />
+                            )}
+                          </Td>
+                          <Td>
+                            <StatusChip
+                              kind={productStatusKind(p.status)}
+                              label={p.status.toLowerCase()}
+                              size="sm"
+                            />
+                          </Td>
+                          <Td>
+                            <span className="sk-figure inv-muted">
+                              {new Date(p.updatedAt).toISOString().slice(0, 16).replace('T', ' ')}
+                            </span>
+                          </Td>
+                        </Tr>
+                      );
+                    })}
+                  </TBody>
+                </Table>
+              </div>
               <PanelPad>
                 <Pagination
                   page={params.page}

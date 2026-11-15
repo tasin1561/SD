@@ -381,60 +381,62 @@ export function DashboardView(): ReactElement {
               description={t('dashboard.yourMostRecentOrders2')}
             />
           ) : (
-            <Table caption={t('dashboard.recentOrders')}>
-              <THead>
-                <Tr>
-                  <Th>{t('dashboard.order')}</Th>
-                  <Th>{t('dashboard.recipient')}</Th>
-                  <Th>{t('dashboard.stage')}</Th>
-                  <Th align="right">{t('dashboard.cod')}</Th>
-                  <Th>{t('dashboard.open')}</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {(recent.data?.items ?? []).map((o) => (
-                  <Tr key={o.id}>
-                    <Td>
-                      <Link href={`/orders/${o.id}`} className="db-order-link sk-ident">
-                        {o.orderNumber}
-                      </Link>
-                      {o.shipment?.awbNumber != null && o.shipment.awbNumber !== '' && (
-                        <div className="db-recipient-place">
-                          <AwbCopy awb={o.shipment.awbNumber} />
-                        </div>
-                      )}
-                    </Td>
-                    <Td>
-                      <div className="db-recipient">{o.recipientName}</div>
-                      <div className="db-recipient-place">
-                        {o.recipientCity === ''
-                          ? (o.recipientStateProvince ?? '—')
-                          : o.recipientCity}
-                      </div>
-                    </Td>
-                    <Td>
-                      <StatusChip
-                        kind={orderStatusKind(o.status)}
-                        label={statusLabel(o.status, locale)}
-                        size="sm"
-                      />
-                    </Td>
-                    <Td align="right">
-                      {o.codAmountInr === null ? (
-                        <span className="db-prepaid">{t('dashboard.prepaid')}</span>
-                      ) : (
-                        <Money amount={o.codAmountInr} />
-                      )}
-                    </Td>
-                    <Td>
-                      <Link href={`/orders/${o.id}`} className="db-link">
-                        {t('dashboard.view')}
-                      </Link>
-                    </Td>
+            <div className="ez-wrap ez-cards ez-then-4">
+              <Table caption={t('dashboard.recentOrders')}>
+                <THead>
+                  <Tr>
+                    <Th>{t('dashboard.order')}</Th>
+                    <Th>{t('dashboard.recipient')}</Th>
+                    <Th>{t('dashboard.stage')}</Th>
+                    <Th align="right">{t('dashboard.cod')}</Th>
+                    <Th>{t('dashboard.open')}</Th>
                   </Tr>
-                ))}
-              </TBody>
-            </Table>
+                </THead>
+                <TBody>
+                  {(recent.data?.items ?? []).map((o) => (
+                    <Tr key={o.id}>
+                      <Td>
+                        <Link href={`/orders/${o.id}`} className="db-order-link sk-ident">
+                          {o.orderNumber}
+                        </Link>
+                        {o.shipment?.awbNumber != null && o.shipment.awbNumber !== '' && (
+                          <div className="db-recipient-place">
+                            <AwbCopy awb={o.shipment.awbNumber} />
+                          </div>
+                        )}
+                      </Td>
+                      <Td>
+                        <div className="db-recipient">{o.recipientName}</div>
+                        <div className="db-recipient-place">
+                          {o.recipientCity === ''
+                            ? (o.recipientStateProvince ?? '—')
+                            : o.recipientCity}
+                        </div>
+                      </Td>
+                      <Td>
+                        <StatusChip
+                          kind={orderStatusKind(o.status)}
+                          label={statusLabel(o.status, locale)}
+                          size="sm"
+                        />
+                      </Td>
+                      <Td align="right">
+                        {o.codAmountInr === null ? (
+                          <span className="db-prepaid">{t('dashboard.prepaid')}</span>
+                        ) : (
+                          <Money amount={o.codAmountInr} />
+                        )}
+                      </Td>
+                      <Td>
+                        <Link href={`/orders/${o.id}`} className="db-link">
+                          {t('dashboard.view')}
+                        </Link>
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
           )}
         </DashSection>
       )}

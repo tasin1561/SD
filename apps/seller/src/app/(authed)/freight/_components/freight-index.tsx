@@ -245,101 +245,103 @@ export function SellerFreightIndex(): ReactElement {
             description={filtered ? t('freight.tryAnotherStatusOr') : t('freight.aBillAppearsHere')}
           />
         ) : (
-          <Table caption={t('freight.freightBills')}>
-            <THead>
-              <Tr>
-                <Th>{t('freight.consignment')}</Th>
-                <Th>{t('freight.terms')}</Th>
-                <Th align="right">{t('freight.total')}</Th>
-                <Th align="right">{t('freight.chargedSoFar')}</Th>
-                <Th align="right">{t('freight.stillOwed2')}</Th>
-                <Th>{t('freight.unitsCharged')}</Th>
-                <Th>{t('freight.status')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.map((r) => (
-                <Tr key={r.id}>
-                  <Td>
-                    {/* The bill is for one ARRIVAL, but the details a seller
-                      wants — what was declared, what was counted, where it
-                      is — live on the consignment, so that is where this
-                      goes. */}
-                    <div className="frt-cons">
-                      <Link href={`/inbound/${r.consignmentId}`} className="frt-cons__link">
-                        <Ident value={r.receiptNumber ?? `${r.goodsReceiptId.slice(0, 8)}…`} />
-                      </Link>
-                      <span className="frt-faint sk-figure">
-                        {new Date(r.createdAt).toLocaleDateString(dateTag(locale))}
-                      </span>
-                      {r.voidedAt !== null && (
-                        <span className="frt-muted">
-                          {t('freight.withdrawnBillWrong', {
-                            date: new Date(r.voidedAt).toLocaleDateString(dateTag(locale)),
-                          })}
-                          {r.voidReason === null ? '' : ` ${r.voidReason}`}
-                        </span>
-                      )}
-                    </div>
-                  </Td>
-                  <Td>
-                    <div className="frt-terms">
-                      <span>{freightModeWords(r.mode, 'SELLER', locale)}</span>
-                      {r.serviceChargeInr !== null && Number(r.serviceChargeInr) > 0 && (
-                        <span className="frt-faint">
-                          {richMessage(t('freight.includesServiceCharge'), {
-                            money: <Money amount={r.serviceChargeInr} decimals={false} />,
-                          })}
-                        </span>
-                      )}
-                    </div>
-                  </Td>
-                  <Td align="right">
-                    <Money amount={r.totalInr} />
-                    {/* The figure agreed on the phone, when that was not
-                      rupees. Without it "why ₹162.60?" has no answer,
-                      and the rate is the thing the seller actually
-                      negotiated. */}
-                    {r.agreedCurrency !== 'INR' && (
-                      <div className="frt-faint">
-                        <Money
-                          amount={r.agreedAmount}
-                          currency={r.agreedCurrency}
-                          convert={false}
-                        />{' '}
-                        agreed
-                      </div>
-                    )}
-                  </Td>
-                  <Td align="right">
-                    <Money amount={r.amountSettledInr} />
-                  </Td>
-                  <Td align="right">
-                    {/* A withdrawn bill still computes total minus
-                      settled; it is not a debt. Showing the arithmetic
-                      would tell a seller they owe money we took back. */}
-                    {r.voidedAt !== null ? (
-                      <span className="frt-faint">{t('freight.nothingWithdrawn')}</span>
-                    ) : Number(r.outstandingInr) === 0 ? (
-                      <span className="frt-faint">—</span>
-                    ) : (
-                      <Money amount={r.outstandingInr} direction="debit" />
-                    )}
-                  </Td>
-                  <Td className="frt-units sk-figure">
-                    <Num value={r.unitsSettled} /> / <Num value={r.totalUnits} />
-                  </Td>
-                  <Td>
-                    <StatusChip
-                      kind={inboundFreightStatusKind(r.status)}
-                      label={statusLabel(r.status, locale)}
-                      size="sm"
-                    />
-                  </Td>
+          <div className="ez-wrap ez-cards ez-then-3">
+            <Table caption={t('freight.freightBills')}>
+              <THead>
+                <Tr>
+                  <Th>{t('freight.consignment')}</Th>
+                  <Th>{t('freight.terms')}</Th>
+                  <Th align="right">{t('freight.total')}</Th>
+                  <Th align="right">{t('freight.chargedSoFar')}</Th>
+                  <Th align="right">{t('freight.stillOwed2')}</Th>
+                  <Th>{t('freight.unitsCharged')}</Th>
+                  <Th>{t('freight.status')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {rows.map((r) => (
+                  <Tr key={r.id}>
+                    <Td>
+                      {/* The bill is for one ARRIVAL, but the details a seller
+                        wants — what was declared, what was counted, where it
+                        is — live on the consignment, so that is where this
+                        goes. */}
+                      <div className="frt-cons">
+                        <Link href={`/inbound/${r.consignmentId}`} className="frt-cons__link">
+                          <Ident value={r.receiptNumber ?? `${r.goodsReceiptId.slice(0, 8)}…`} />
+                        </Link>
+                        <span className="frt-faint sk-figure">
+                          {new Date(r.createdAt).toLocaleDateString(dateTag(locale))}
+                        </span>
+                        {r.voidedAt !== null && (
+                          <span className="frt-muted">
+                            {t('freight.withdrawnBillWrong', {
+                              date: new Date(r.voidedAt).toLocaleDateString(dateTag(locale)),
+                            })}
+                            {r.voidReason === null ? '' : ` ${r.voidReason}`}
+                          </span>
+                        )}
+                      </div>
+                    </Td>
+                    <Td>
+                      <div className="frt-terms">
+                        <span>{freightModeWords(r.mode, 'SELLER', locale)}</span>
+                        {r.serviceChargeInr !== null && Number(r.serviceChargeInr) > 0 && (
+                          <span className="frt-faint">
+                            {richMessage(t('freight.includesServiceCharge'), {
+                              money: <Money amount={r.serviceChargeInr} decimals={false} />,
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </Td>
+                    <Td align="right">
+                      <Money amount={r.totalInr} />
+                      {/* The figure agreed on the phone, when that was not
+                        rupees. Without it "why ₹162.60?" has no answer,
+                        and the rate is the thing the seller actually
+                        negotiated. */}
+                      {r.agreedCurrency !== 'INR' && (
+                        <div className="frt-faint">
+                          <Money
+                            amount={r.agreedAmount}
+                            currency={r.agreedCurrency}
+                            convert={false}
+                          />{' '}
+                          agreed
+                        </div>
+                      )}
+                    </Td>
+                    <Td align="right">
+                      <Money amount={r.amountSettledInr} />
+                    </Td>
+                    <Td align="right">
+                      {/* A withdrawn bill still computes total minus
+                        settled; it is not a debt. Showing the arithmetic
+                        would tell a seller they owe money we took back. */}
+                      {r.voidedAt !== null ? (
+                        <span className="frt-faint">{t('freight.nothingWithdrawn')}</span>
+                      ) : Number(r.outstandingInr) === 0 ? (
+                        <span className="frt-faint">—</span>
+                      ) : (
+                        <Money amount={r.outstandingInr} direction="debit" />
+                      )}
+                    </Td>
+                    <Td className="frt-units sk-figure">
+                      <Num value={r.unitsSettled} /> / <Num value={r.totalUnits} />
+                    </Td>
+                    <Td>
+                      <StatusChip
+                        kind={inboundFreightStatusKind(r.status)}
+                        label={statusLabel(r.status, locale)}
+                        size="sm"
+                      />
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
         )}
       </section>
 

@@ -700,3 +700,19 @@ tr[data-dead] > td {
   gap: var(--sp-2);
   margin-top: var(--sp-3);
 }
+
+/* On a phone the switch stays on the row's right instead of dropping to a
+   line of its own, which halves the length of a list of choices. */
+@media (max-width: 559.98px) {
+  .set-row {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+  }
+  .set-row__text {
+    flex: 1 1 0;
+  }
+  .set-row__control {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+}
