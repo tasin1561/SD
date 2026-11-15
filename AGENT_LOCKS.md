@@ -35,6 +35,7 @@ Admin "easy pages" redesign (owner's list of 31 admin pages, 2026-11-13): light 
 
 ## Claimed by Claude Code
 
+- Remove the "Ready to dispatch" milestone — 2026-11-15: `apps/api/src/modules/order-journey/services/order-journey.service.ts` + its spec, `apps/seller/src/app/(authed)/orders/_components/detail/{summary.ts,milestone-words.ts}`, `apps/seller/src/i18n/messages/orderPage.ts`, `apps/seller/src/app/dev/order-detail/fixtures.dev.ts`, `apps/seller/src/tests/order-page-summary.test.ts` (merging now; claim removed once live)
 - `apps/api/src/modules/assistant/**` — 2026-11-13 — assistant Phase D (privacy e2e, raise-a-ticket, 80% budget alert; branch `feat/assistant-phase-d`), then 2.5× billing, AI control panel, monitor
 - `apps/api/test/unit/assistant-*.spec.ts`, `apps/api/test/e2e/assistant-*.e2e-spec.ts`, `apps/api/test/helpers/assistant-fixtures.ts` — 2026-11-13 — same
 - `packages/ui/src/app/assistant/**` — 2026-11-13 — same (chat window)
