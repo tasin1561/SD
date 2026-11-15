@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, type ReactElement } from 'react';
-import { Package, Search, Upload } from 'lucide-react';
+import { Copy, Package, Search, Upload } from 'lucide-react';
 import { OrderStatus } from '@skydrop/db';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import { Money } from '@skydrop/ui/components';
@@ -25,6 +25,7 @@ import { seesOwnOnly } from '@/lib/orders-paused';
 import { verdict } from '@/i18n/verdict';
 import { useMyOrders } from '@/lib/order-hooks';
 import { LinkButton } from '../_components/parts';
+import { cloneHref } from '@/lib/clone-order';
 import '../_components/as.css';
 
 const PAGE_SIZE = 20;
@@ -206,6 +207,22 @@ function OrdersList(): ReactElement {
                   <Th>{t('orders.col.status')}</Th>
                   <Th align="right">{t('orders.col.collect')}</Th>
                   <Th>{t('orders.col.placed')}</Th>
+                  {mayPlace && (
+                    <Th align="right">
+                      <span
+                        style={{
+                          position: 'absolute',
+                          width: 1,
+                          height: 1,
+                          overflow: 'hidden',
+                          clip: 'rect(0 0 0 0)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {t('cloneOrder.button')}
+                      </span>
+                    </Th>
+                  )}
                 </Tr>
               </THead>
               <TBody>
@@ -255,6 +272,20 @@ function OrdersList(): ReactElement {
                         {formatDateTime(o.placedAt, locale)}
                       </span>
                     </Td>
+                    {mayPlace && (
+                      <Td align="right">
+                        {/* One quiet icon per row: the order form pre-filled from this order. */}
+                        <Link
+                          href={cloneHref(o.id)}
+                          className="as-link"
+                          title={t('cloneOrder.button')}
+                          aria-label={t('cloneOrder.rowLabel', { order: o.orderNumber })}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Copy size={14} aria-hidden />
+                        </Link>
+                      </Td>
+                    )}
                   </Tr>
                 ))}
               </TBody>

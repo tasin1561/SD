@@ -5,6 +5,7 @@ import { notFound, useParams } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 import {
   ArrowLeft,
+  Copy,
   Flag,
   OctagonX,
   PhoneMissed,
@@ -60,7 +61,15 @@ import { StoreConsigneePanel } from './_components/store-consignee-panel';
 import { OrderAddressCheckPanel } from './_components/address-check-panel';
 import { OrderActions } from './_components/order-actions';
 import { AddressCorrection } from './_components/address-correction';
-import { BackLink, ConfirmSubject, Facts, Notice, RoSection } from '../_components/orders-parts';
+import {
+  BackLink,
+  ConfirmSubject,
+  Facts,
+  LinkButton,
+  Notice,
+  RoSection,
+} from '../_components/orders-parts';
+import { cloneHref } from '@/lib/clone-order';
 
 /**
  * RS-5 — one of this store's orders: who it is going to, what is in it,
@@ -157,17 +166,27 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
         }
         meta={<StatusChip kind={orderStatusKind(o.status)} label={statusLabel(o.status, locale)} />}
         action={
-          // Only while the order's stage still allows a cancel (until it is
-          // packed) — past that the button could only ever be refused.
-          !o.terminal && o.stages.cancel && can(me, 'orders.cancel') && cancelMode !== 'OFF' ? (
-            <Button
-              variant="ghost"
-              icon={<XCircle size={15} />}
-              onClick={() => setConfirming(true)}
-            >
-              {cancelNeedsSeller ? t('ordd.askCancel') : t('ordd.cancelOrder')}
-            </Button>
-          ) : undefined
+          <>
+            {/* Clone: the order form pre-filled from this order. Same key as placing one. */}
+            {can(me, 'orders.create') ? (
+              <LinkButton href={cloneHref(o.id)} variant="secondary" icon={<Copy size={15} />}>
+                {t('cloneOrder.button')}
+              </LinkButton>
+            ) : null}
+            {
+              // Only while the order's stage still allows a cancel (until it is
+              // packed) — past that the button could only ever be refused.
+              !o.terminal && o.stages.cancel && can(me, 'orders.cancel') && cancelMode !== 'OFF' ? (
+                <Button
+                  variant="ghost"
+                  icon={<XCircle size={15} />}
+                  onClick={() => setConfirming(true)}
+                >
+                  {cancelNeedsSeller ? t('ordd.askCancel') : t('ordd.cancelOrder')}
+                </Button>
+              ) : null
+            }
+          </>
         }
       />
       {error !== null ? (

@@ -58,6 +58,7 @@ import { DetailCard } from './detail/detail-card';
 import { CopyButton } from './detail/copy-button';
 import { fmtWhen } from './detail/format';
 import { OrderHeader, type HeaderActions } from './detail/order-header';
+import { cloneHref } from '@/lib/clone-order';
 import { OrderStepper } from './detail/order-stepper';
 import { OrderActivity } from './detail/order-activity';
 import { ParcelFacts, collectableMismatch } from './detail/parcel-facts';
@@ -196,6 +197,8 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
       order.status === 'DRAFT' || order.status === 'PENDING_CONFIRMATION'
         ? `/orders/${orderId}/edit`
         : null,
+    // Clone: the same key that gates creating an order.
+    cloneHref: identity !== null && can(identity, 'orders.create') ? cloneHref(order.id) : null,
     // The customer declined, so nothing calls this order again on its own.
     // Asking is the only path — and it is an ASK: an admin decides.
     // `canRequest` is the SERVER's answer — which statuses qualify is a

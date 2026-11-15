@@ -44,6 +44,8 @@ import {
 } from '@/lib/address-auto-check';
 import './order-v2.css';
 import { BackLink, Notice, OrdSection } from '../../_components/orders-parts';
+import { CloneBanner } from '../../_components/clone-banner';
+import { useCloneSeed } from '@/lib/clone-order-hooks';
 import {
   useCheckAddress,
   usePincodeLookup,
@@ -503,6 +505,17 @@ export function NewOrderForm(): ReactElement {
 
   const [items, setItems] = useState<readonly PickedLine[]>([]);
   const nextKey = useRef(1);
+  // "Clone order": pre-fill ONCE from the source order (`?cloneFrom=`).
+  // Nothing is created — the form is submitted as usual.
+  const clone = useCloneSeed();
+  const cloneApplied = useRef(false);
+  useEffect(() => {
+    if (cloneApplied.current || clone.seed === null) return;
+    cloneApplied.current = true;
+    const seed = clone.seed;
+    setForm((f) => ({ ...f, ...seed.fields }));
+    setItems(seed.lines.map((l) => ({ ...l, key: nextKey.current++ })));
+  }, [clone.seed]);
   const [error, setError] = useState<string | null>(null);
   // The server decides whether this is a duplicate; the dialog only
   // relays its answer and collects the acknowledgement (FE-2 — the UI
@@ -968,6 +981,8 @@ export function NewOrderForm(): ReactElement {
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
         {t('orderNew.backToOrders')}
       </BackLink>
+
+      <CloneBanner clone={clone} />
 
       <PageHeader
         breadcrumbs={[

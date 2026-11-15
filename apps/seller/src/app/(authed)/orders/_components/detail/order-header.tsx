@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, LifeBuoy, Pencil, PhoneCall, Truck, Undo2, XCircle } from 'lucide-react';
+import { ArrowLeft, Copy, LifeBuoy, Pencil, PhoneCall, Truck, Undo2, XCircle } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 import type { OrderStatus } from '@skydrop/db';
 import type { OrderView } from '@skydrop/api-client';
@@ -26,6 +26,8 @@ export interface HeaderActions {
   readonly askAdmin: (() => void) | null;
   readonly raiseIssue: () => void;
   readonly editHref: string | null;
+  /** "Clone order" — the create form pre-filled from this order. `null` without `orders.create`. */
+  readonly cloneHref?: string | null;
   /** "Ask us to call again" / "Ask again". */
   readonly reattempt: { readonly label: string; readonly onClick: () => void } | null;
   readonly requestReturn: (() => void) | null;
@@ -177,6 +179,16 @@ export function OrderHeader({
               icon={<Pencil size={16} />}
             >
               {t('orderPage.editOrder')}
+            </LinkButton>
+          )}
+          {actions.cloneHref != null && (
+            <LinkButton
+              href={actions.cloneHref}
+              variant="secondary"
+              size="md"
+              icon={<Copy size={16} />}
+            >
+              {t('cloneOrder.button')}
             </LinkButton>
           )}
           {actions.requestReturn !== null && (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import {
   ArrowLeft,
   Banknote,
@@ -36,6 +36,8 @@ import { verdict } from '@/i18n/verdict';
 import { useStoreCatalogue, type StoreCatalogueItem } from '@/lib/catalogue-hooks';
 import { useCreateStoreOrder } from '@/lib/order-hooks';
 import { BackLink, LinkButton, Notice, RoSection } from '../_components/orders-parts';
+import { CloneBanner } from '../_components/clone-banner';
+import { useCloneSeed } from '@/lib/clone-order-hooks';
 import { useUatField } from '@skydrop/ui/app/uat-fields';
 
 interface Line {
@@ -124,6 +126,30 @@ export function OldStoreOrderForm(): ReactElement {
 
   const items = useMemo(() => catalogue.data?.items ?? [], [catalogue.data]);
   const byId = useMemo(() => new Map(items.map((i) => [i.variantId, i])), [items]);
+
+  // "Clone order": pre-fill ONCE from the source order (`?cloneFrom=`).
+  // Nothing is created — the form is submitted as usual. The reference
+  // is deliberately left empty (it must be unique).
+  const clone = useCloneSeed(catalogue.data?.items);
+  const cloneApplied = useRef(false);
+  useEffect(() => {
+    if (cloneApplied.current || clone.seed === null) return;
+    cloneApplied.current = true;
+    const { fields, lines: seeded } = clone.seed;
+    setName(fields.name);
+    setPhone(fields.phone);
+    setEmail(fields.email);
+    setLine1(fields.line1);
+    setLandmark(fields.landmark);
+    setPin(fields.pin);
+    setNotes(fields.notes);
+    setPayment(fields.payment);
+    setCodAmount(fields.codAmount);
+    if (seeded.length > 0) {
+      setLines(seeded.map((l, i) => ({ key: i + 1, ...l })));
+      setNextKey(seeded.length + 1);
+    }
+  }, [clone.seed]);
 
   const retailTotal = lines.reduce((sum, l) => {
     const q = Number(l.quantity);
@@ -256,6 +282,7 @@ export function OldStoreOrderForm(): ReactElement {
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
         {t('neworder.back')}
       </BackLink>
+      <CloneBanner clone={clone} />
       {header}
 
       {/* A progress header over the SAME single form: it marks the
