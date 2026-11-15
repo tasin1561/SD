@@ -116,7 +116,7 @@ export function AuthedShell({
           label: t('authedShell.awaitingConfirmation'),
           icon: <PhoneCall size={15} />,
         },
-        { href: '/tracking', label: t('authedShell.tracking'), icon: <Truck size={15} /> },
+        // 2026-11-15 owner: Tracking hidden from the menu (page still works by URL).
         {
           href: '/needs-attention',
           label: t('authedShell.needsAttention'),
