@@ -34,6 +34,7 @@ import {
   pendingPhase,
 } from '../_components/rs-parts';
 import { useT } from '@/i18n/client';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /**
  * RS-3 — the seller's DEFAULT reseller price list: what every reseller
@@ -85,7 +86,7 @@ export default function ResellerPriceListPage(): ReactElement {
         ]}
         Link={Link}
         title={t('resellerPriceList.memberStorePriceList')}
-        subtitle={t('resellerPriceList.yourDefaultPriceTo')}
+        subtitle={<AboutThis text={t('resellerPriceList.yourDefaultPriceTo')} />}
         meta={
           list.data === undefined ? undefined : (
             <RsFacts>
@@ -135,28 +136,40 @@ export default function ResellerPriceListPage(): ReactElement {
              counts roll up once; the unit total keeps its `<Num>`. */}
       <div className="rs-kpis">
         <KpiCard
-          label={t('resellerPriceList.pricedForResale')}
+          label={
+            <InfoLabel
+              label={t('resellerPriceList.pricedForResale')}
+              info={t('resellerPriceList.aProductWithNo')}
+            />
+          }
           icon={<Tag size={14} />}
           value={priced}
           unit={`of ${all.length}`}
           tone={priced === 0 ? 'pending' : 'neutral'}
-          hint={t('resellerPriceList.aProductWithNo')}
         />
         <KpiCard
-          label={t('resellerPriceList.beingSoldByA')}
+          label={
+            <InfoLabel
+              label={t('resellerPriceList.beingSoldByA')}
+              info={t('resellerPriceList.switchedOnForAt')}
+            />
+          }
           icon={<Store size={14} />}
           value={inStores}
           unit={inStores === 1 ? 'product' : 'products'}
           tone="neutral"
-          hint={t('resellerPriceList.switchedOnForAt')}
         />
         <KpiCard
-          label={t('resellerPriceList.unitsAvailable')}
+          label={
+            <InfoLabel
+              label={t('resellerPriceList.unitsAvailable')}
+              info={t('resellerPriceList.sellableStockAcrossThe')}
+            />
+          }
           icon={<Boxes size={14} />}
           figure={<Num value={available} />}
           unit="units"
           tone="neutral"
-          hint={t('resellerPriceList.sellableStockAcrossThe')}
         />
       </div>
 

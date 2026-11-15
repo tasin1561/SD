@@ -60,6 +60,7 @@ import { VariantPicker } from './variant-picker';
 import { productCount, routeWords, shortDate, statusWords } from './consignment-words';
 import { useLocale, useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 const PAGE_SIZE = 25;
 
@@ -130,7 +131,7 @@ export function InboundIndex(): ReactElement {
         ]}
         Link={Link}
         title={t('inbound.addStock')}
-        subtitle={t('inbound.consignmentsOnTheirWay')}
+        subtitle={<AboutThis text={t('inbound.consignmentsOnTheirWay')} />}
         meta={
           list.data === undefined ? undefined : (
             <MetaFacts>
@@ -195,22 +196,30 @@ export function InboundIndex(): ReactElement {
       ) : (
         <KpiGrid>
           <KpiCard
-            label={t('inbound.stillTravelling2')}
+            label={
+              <InfoLabel
+                label={t('inbound.stillTravelling2')}
+                info={t('inbound.announcedInDhakaOr')}
+              />
+            }
             icon={<Plane size={14} />}
             value={moving.length}
             format={rawCount}
             unit={t('inbound.onThisPage')}
             tone="info"
-            hint={t('inbound.announcedInDhakaOr')}
           />
           <KpiCard
-            label={t('inbound.landedAndCounted')}
+            label={
+              <InfoLabel
+                label={t('inbound.landedAndCounted')}
+                info={t('inbound.fullyReceivedInIndia')}
+              />
+            }
             icon={<PackageOpen size={14} />}
             value={landed.length}
             format={rawCount}
             unit={t('inbound.onThisPage')}
             tone="neutral"
-            hint={t('inbound.fullyReceivedInIndia')}
           />
           <KpiCard
             label={t('inbound.countedDifferently2')}

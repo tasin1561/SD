@@ -44,6 +44,7 @@ import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
 import type { Locale } from '@skydrop/ui/app/i18n';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 function when(iso: string, locale: Locale = 'en'): string {
   return new Date(iso).toLocaleString(dateTag(locale, 'en-IN'), {
@@ -120,7 +121,7 @@ export default function StoreRequestsPage(): ReactElement {
       ]}
       Link={Link}
       title={t('resellerRequests.waitingOnYou')}
-      subtitle={t('resellerRequests.whatYourMemberStores')}
+      subtitle={<AboutThis text={t('resellerRequests.whatYourMemberStores')} />}
       meta={
         !counted ? undefined : (
           <RsFacts>
@@ -146,28 +147,40 @@ export default function StoreRequestsPage(): ReactElement {
   const tiles = counted ? (
     <div className="rs-kpis">
       <KpiCard
-        label={t('resellerRequests.cancelsCallQuestionsIssues')}
+        label={
+          <InfoLabel
+            label={t('resellerRequests.cancelsCallQuestionsIssues')}
+            info={t('resellerRequests.approvingRunsItExactly')}
+          />
+        }
         icon={<MessageSquareWarning size={14} />}
         value={orderCount ?? 0}
         unit={orderCount === 1 ? 'request' : 'requests'}
         tone={(orderCount ?? 0) > 0 ? 'pending' : 'neutral'}
-        hint={t('resellerRequests.approvingRunsItExactly')}
       />
       <KpiCard
-        label={t('resellerRequests.deliveryAsks')}
+        label={
+          <InfoLabel
+            label={t('resellerRequests.deliveryAsks')}
+            info={t('resellerRequests.callAgainDeliverAgain')}
+          />
+        }
         icon={<Truck size={14} />}
         value={actionCount ?? 0}
         unit={actionCount === 1 ? 'ask' : 'asks'}
         tone={(actionCount ?? 0) > 0 ? 'pending' : 'neutral'}
-        hint={t('resellerRequests.callAgainDeliverAgain')}
       />
       <KpiCard
-        label={t('resellerRequests.orderAndAddressChanges')}
+        label={
+          <InfoLabel
+            label={t('resellerRequests.orderAndAddressChanges')}
+            info={t('resellerRequests.untilYouAnswerThe')}
+          />
+        }
         icon={<MapPin size={14} />}
         value={addressCount ?? 0}
         unit={addressCount === 1 ? 'change' : 'changes'}
         tone={(addressCount ?? 0) > 0 ? 'pending' : 'neutral'}
-        hint={t('resellerRequests.untilYouAnswerThe')}
       />
     </div>
   ) : null;

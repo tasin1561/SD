@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { SetPageHeader } from '../_components/settings-parts';
 import { AlertConfigPanel } from './_components/alert-config-panel';
 import { getT } from '@/i18n/server';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * Stock alerts, in Settings.
@@ -28,7 +29,7 @@ export default async function StockSettingsPage(): Promise<ReactElement> {
           { label: t('settingsStock.stockAlerts') },
         ]}
         title={t('settingsStock.stockAlerts')}
-        subtitle={t('settingsStock.whenWeWarnYou')}
+        subtitle={<AboutThis text={t('settingsStock.whenWeWarnYou')} />}
       />
       <AlertConfigPanel />
     </div>

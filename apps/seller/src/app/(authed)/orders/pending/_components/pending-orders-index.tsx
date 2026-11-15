@@ -26,6 +26,7 @@ import { LinkButton, MetaFact, Notice, OrdSection } from '../../_components/orde
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { MessageKey } from '@/i18n/catalog';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /**
  * The rows your upload could not turn into orders.
@@ -291,7 +292,7 @@ export function PendingOrdersIndex(): ReactElement {
         ]}
         Link={Link}
         title={t('orderPending.pendingOrders')}
-        subtitle={t('orderPending.rowsFromACsv')}
+        subtitle={<AboutThis text={t('orderPending.rowsFromACsv')} />}
         meta={
           rows.isLoading ? undefined : list.length === 0 ? (
             <span className="ord-meta">
@@ -324,28 +325,40 @@ export function PendingOrdersIndex(): ReactElement {
       {!rows.isLoading && list.length > 0 && (
         <div className="ord-kpis">
           <KpiCard
-            label={t('orderPending.waitingOnYou')}
+            label={
+              <InfoLabel
+                label={t('orderPending.waitingOnYou')}
+                info={t('orderPending.noneOfTheseIs')}
+              />
+            }
             icon={<ListChecks size={14} />}
             value={list.length}
             unit={list.length === 1 ? 'row' : 'rows'}
             tone="pending"
-            hint={t('orderPending.noneOfTheseIs')}
           />
           <KpiCard
-            label={t('orderPending.valuesToFix')}
+            label={
+              <InfoLabel
+                label={t('orderPending.valuesToFix')}
+                info={t('orderPending.somethingIsMissingOr')}
+              />
+            }
             icon={<FileWarning size={14} />}
             value={broken}
             unit={broken === 1 ? 'row' : 'rows'}
             tone={broken > 0 ? 'debit' : 'neutral'}
-            hint={t('orderPending.somethingIsMissingOr')}
           />
           <KpiCard
-            label={t('orderPending.lookLikeDuplicates2')}
+            label={
+              <InfoLabel
+                label={t('orderPending.lookLikeDuplicates2')}
+                info={t('orderPending.thisCustomerAlreadyHas2')}
+              />
+            }
             icon={<CopyCheck size={14} />}
             value={duplicates}
             unit={duplicates === 1 ? 'row' : 'rows'}
             tone={duplicates > 0 ? 'pending' : 'neutral'}
-            hint={t('orderPending.thisCustomerAlreadyHas2')}
           />
         </div>
       )}

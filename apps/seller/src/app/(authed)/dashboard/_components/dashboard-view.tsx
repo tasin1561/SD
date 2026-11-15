@@ -44,6 +44,7 @@ import {
 import { can } from '@/lib/page-access';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * The seller dashboard.
@@ -236,7 +237,7 @@ export function DashboardView(): ReactElement {
         breadcrumbs={[{ label: t('dashboard.clientConsole') }, { label: t('dashboard.dashboard') }]}
         Link={Link}
         title={t('dashboard.hello', { companyName })}
-        subtitle={t('dashboard.yourMostRecentOrders')}
+        subtitle={<AboutThis text={t('dashboard.yourMostRecentOrders')} />}
         meta={
           <span className="db-meta">
             <MetaFact tone="good" dot>

@@ -24,6 +24,7 @@ import { ImportStatusBadge } from './import-status';
 import { useT, useLocale } from '@/i18n/client';
 import { dateTag } from '@/i18n/format';
 import type { Locale } from '@skydrop/ui/app/i18n';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * Every catalog import this seller has sent.
@@ -71,7 +72,7 @@ export function ImportJobsIndex(): ReactElement {
         ]}
         Link={Link}
         title={t('productImport.importHistory')}
-        subtitle={t('productImport.everyCsvYouHave')}
+        subtitle={<AboutThis text={t('productImport.everyCsvYouHave')} />}
         meta={
           list.data === undefined ? undefined : (
             <MetaFact tone="accent">

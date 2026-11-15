@@ -3,6 +3,7 @@ import { SetPageHeader } from '../_components/settings-parts';
 import { OrderDefaultsPanel } from './_components/order-defaults-panel';
 import { CallConfirmationPanel } from './_components/call-confirmation-panel';
 import { getT } from '@/i18n/server';
+import { AboutThis } from '@/components/easy/about';
 
 export default async function OrderDefaultsPage(): Promise<ReactElement> {
   const { t } = await getT();
@@ -16,7 +17,7 @@ export default async function OrderDefaultsPage(): Promise<ReactElement> {
           { label: t('settingsOrders.orderDefaults') },
         ]}
         title={t('settingsOrders.orderDefaults')}
-        subtitle={t('settingsOrders.whatANewOrder')}
+        subtitle={<AboutThis text={t('settingsOrders.whatANewOrder')} />}
       />
       <OrderDefaultsPanel />
       <CallConfirmationPanel />

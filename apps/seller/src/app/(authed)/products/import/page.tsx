@@ -8,6 +8,7 @@ import {
 import { CsvImportPanel } from '../../orders/_components/csv-import-panel';
 import { SavedMappings } from './_components/saved-mappings';
 import { getT } from '@/i18n/server';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * Bulk import products + variants from a CSV. Same flow as the order
@@ -29,7 +30,7 @@ export default async function CatalogImportPage(): Promise<ReactElement> {
           { label: t('productImport.csvImport') },
         ]}
         title={t('productImport.bulkCatalogueImport')}
-        subtitle={t('productImport.uploadACsvOf')}
+        subtitle={<AboutThis text={t('productImport.uploadACsvOf')} />}
         action={
           <LinkButton href="/products/import/jobs" variant="ghost" icon={<History size={15} />}>
             {t('productImport.importHistory')}

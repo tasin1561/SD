@@ -26,6 +26,7 @@ import { useT, useLocale } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /**
  * The seller's ticket list.
@@ -103,7 +104,7 @@ export function SellerTicketsIndex(): ReactElement {
         ]}
         Link={Link}
         title={t('tickets.tickets')}
-        subtitle={t('tickets.damageWeFoundOn')}
+        subtitle={<AboutThis text={t('tickets.damageWeFoundOn')} />}
         meta={
           !loaded ? undefined : (
             <span className="tkt-meta">
@@ -142,21 +143,29 @@ export function SellerTicketsIndex(): ReactElement {
       <div className="tkt-kpis">
         {loaded ? (
           <KpiCard
-            label={t('tickets.awaitingADecision2')}
+            label={
+              <InfoLabel
+                label={t('tickets.awaitingADecision2')}
+                info={t('tickets.openOrUnderDiscussion')}
+              />
+            }
             icon={<CircleDot size={14} />}
             value={open}
             format={String}
             unit={open === 1 ? 'ticket' : 'tickets'}
             tone={open > 0 ? 'pending' : 'neutral'}
-            hint={t('tickets.openOrUnderDiscussion')}
           />
         ) : (
           <KpiCard
-            label={t('tickets.awaitingADecision2')}
+            label={
+              <InfoLabel
+                label={t('tickets.awaitingADecision2')}
+                info={t('tickets.openOrUnderDiscussion')}
+              />
+            }
             icon={<CircleDot size={14} />}
             figure={<span className="tkt-faint">—</span>}
             tone="neutral"
-            hint={t('tickets.openOrUnderDiscussion')}
           />
         )}
         <KpiCard

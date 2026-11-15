@@ -22,6 +22,7 @@ import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 const PAGE_SIZE = 25;
 
@@ -103,7 +104,7 @@ export function CustomersIndex(): ReactElement {
         ]}
         Link={Link}
         title={t('customers.customers')}
-        subtitle={t('customers.everyoneYouHaveShipped')}
+        subtitle={<AboutThis text={t('customers.everyoneYouHaveShipped')} />}
         meta={
           list.data === undefined ? undefined : (
             <span className="cst-meta">
@@ -126,21 +127,29 @@ export function CustomersIndex(): ReactElement {
             always showed (`String`, no digit grouping). */}
         {list.data === undefined ? (
           <KpiCard
-            label={t('customers.customers')}
+            label={
+              <InfoLabel
+                label={t('customers.customers')}
+                info={t('customers.everyPhoneNumberYou')}
+              />
+            }
             icon={<Users size={14} />}
             figure={<span className="cst-faint">—</span>}
             tone="neutral"
-            hint={t('customers.everyPhoneNumberYou')}
           />
         ) : (
           <KpiCard
-            label={t('customers.customers')}
+            label={
+              <InfoLabel
+                label={t('customers.customers')}
+                info={t('customers.everyPhoneNumberYou')}
+              />
+            }
             icon={<Users size={14} />}
             value={total}
             format={String}
             unit="people"
             tone="neutral"
-            hint={t('customers.everyPhoneNumberYou')}
           />
         )}
         {loaded ? (

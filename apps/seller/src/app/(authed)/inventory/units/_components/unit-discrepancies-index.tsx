@@ -28,6 +28,7 @@ import { UnitTracePanel } from './unit-trace-panel';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { dateTag } from '@/i18n/format';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /**
  * Serialized-unit discrepancies (strict-mode SKUs only).
@@ -77,7 +78,7 @@ export function UnitDiscrepanciesIndex(): ReactElement {
         ]}
         Link={Link}
         title={t('inventoryUnits.unitDiscrepancies')}
-        subtitle={t('inventoryUnits.forSkusTrackedPer')}
+        subtitle={<AboutThis text={t('inventoryUnits.forSkusTrackedPer')} />}
         meta={
           data === undefined ? undefined : (
             <MetaFacts>
@@ -160,13 +161,17 @@ export function UnitDiscrepanciesIndex(): ReactElement {
               })}
             />
             <KpiCard
-              label={t('inventoryUnits.countMismatches')}
+              label={
+                <InfoLabel
+                  label={t('inventoryUnits.countMismatches')}
+                  info={t('inventoryUnits.serialsDisagreeWithThe')}
+                />
+              }
               icon={<Scale size={14} />}
               value={mismatches}
               format={rawCount}
               {...(mismatches === 0 ? {} : { unit: t('inventoryUnits.skus') })}
               tone={mismatches > 0 ? 'debit' : 'neutral'}
-              hint={t('inventoryUnits.serialsDisagreeWithThe')}
             />
           </KpiGrid>
 

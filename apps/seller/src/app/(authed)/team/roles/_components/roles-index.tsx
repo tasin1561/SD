@@ -17,6 +17,7 @@ import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { AboutThis } from '@/components/easy/about';
 
 const crumbsOf = (t: Translate<MessageKey>) => [
   { label: t('teamRoles.clientConsole') },
@@ -78,7 +79,7 @@ export function RolesIndex(): ReactElement {
       <SetPageHeader
         crumbs={crumbsOf(t)}
         title={t('teamRoles.roles')}
-        subtitle={t('teamRoles.aRoleIsA')}
+        subtitle={<AboutThis text={t('teamRoles.aRoleIsA')} />}
         meta={
           roles.data === undefined ? undefined : (
             <span className="set-meta">

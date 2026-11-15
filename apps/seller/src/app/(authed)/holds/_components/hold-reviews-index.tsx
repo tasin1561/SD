@@ -32,6 +32,7 @@ import { useRouter } from 'next/navigation';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { dateTag } from '@/i18n/format';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /**
  * Orders our agents could not confirm on the phone, waiting on the seller.
@@ -99,7 +100,7 @@ export function HoldReviewsIndex(): ReactElement {
         ]}
         Link={Link}
         title={t('holds.unreachableCustomers')}
-        subtitle={t('holds.ordersOurAgentsRang')}
+        subtitle={<AboutThis text={t('holds.ordersOurAgentsRang')} />}
         meta={
           !loaded ? undefined : openRows.length > 0 ? (
             <MetaFacts>
@@ -135,21 +136,29 @@ export function HoldReviewsIndex(): ReactElement {
       <KpiGrid>
         {loaded ? (
           <KpiCard
-            label={t('holds.waitingOnYourDecision')}
+            label={
+              <InfoLabel
+                label={t('holds.waitingOnYourDecision')}
+                info={t('holds.eachOneNeedsAnother')}
+              />
+            }
             icon={<PackageCheck size={14} />}
             value={openRows.length}
             format={rawCount}
             unit={openRows.length === 1 ? 'order' : 'orders'}
             tone={openRows.length > 0 ? 'pending' : 'neutral'}
-            hint={t('holds.eachOneNeedsAnother')}
           />
         ) : (
           <KpiCard
-            label={t('holds.waitingOnYourDecision')}
+            label={
+              <InfoLabel
+                label={t('holds.waitingOnYourDecision')}
+                info={t('holds.eachOneNeedsAnother')}
+              />
+            }
             icon={<PackageCheck size={14} />}
             figure={<Dash />}
             tone="neutral"
-            hint={t('holds.eachOneNeedsAnother')}
           />
         )}
         <KpiCard
@@ -166,12 +175,16 @@ export function HoldReviewsIndex(): ReactElement {
         />
         {loaded && heldUnits > 0 && (
           <KpiCard
-            label={t('holds.unitsHeldPendingYour')}
+            label={
+              <InfoLabel
+                label={t('holds.unitsHeldPendingYour')}
+                info={t('holds.unavailableToYourOther')}
+              />
+            }
             icon={<Lock size={14} />}
             figure={<Num value={heldUnits} />}
             unit={heldUnits === 1 ? 'unit' : 'units'}
             tone="pending"
-            hint={t('holds.unavailableToYourOther')}
           />
         )}
       </KpiGrid>

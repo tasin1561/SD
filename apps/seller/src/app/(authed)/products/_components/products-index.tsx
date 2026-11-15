@@ -33,6 +33,7 @@ import {
 } from '@/app/(authed)/inventory/_components/stock-ui';
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * Seller catalogue list — the LIST pattern for the console redesign.
@@ -172,7 +173,7 @@ export function ProductsIndex(): ReactElement {
         ]}
         Link={Link}
         title={t('productList.products')}
-        subtitle={t('productList.yourCatalogueProductsTheir')}
+        subtitle={<AboutThis text={t('productList.yourCatalogueProductsTheir')} />}
         meta={
           stock.data === undefined ? undefined : (
             <MetaFacts>

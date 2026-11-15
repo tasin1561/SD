@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { AreaPage, StockPageHeader } from '@/app/(authed)/inventory/_components/stock-ui';
 import { NewProductForm } from './_components/new-product-form';
 import { getT } from '@/i18n/server';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * Add one product by hand.
@@ -22,7 +23,7 @@ export default async function NewProductPage(): Promise<ReactElement> {
           { label: t('productNew.new') },
         ]}
         title={t('productNew.newProduct')}
-        subtitle={t('productNew.oneProductAndEvery')}
+        subtitle={<AboutThis text={t('productNew.oneProductAndEvery')} />}
       />
       <NewProductForm />
     </AreaPage>

@@ -11,6 +11,8 @@ import { PrefsControl } from '@/components/prefs-control';
 import { ToastProvider } from '@skydrop/ui/app/toast';
 import { AssistantWidget } from '@skydrop/ui/app/assistant';
 import { RestrictionBanner } from './restriction-banner';
+import { TidyCards } from '@/components/easy/tidy-cards';
+import '@/components/easy/easy.css';
 import { ImpersonationBanner } from './impersonation-banner';
 import { NotificationBellContainer } from '@/components/notification-bell-container';
 import { canSeePath } from '@/lib/page-access';
@@ -340,7 +342,13 @@ export function AuthedShell({
               })}
             </p>
           )}
-          {children}
+          {/* Every page is worked from a phone: finger-sized controls, and a
+            table row reads as a card with its head line first and no empty
+            lines. `ez-wrap` adds no box of its own. */}
+          <div className="ez-wrap ez-phone ez-cards ez-touch">
+            <TidyCards />
+            {children}
+          </div>
         </Shell>
         <AssistantWidget
           console="seller"

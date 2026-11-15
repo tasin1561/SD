@@ -37,6 +37,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { dateTag } from '@/i18n/format';
 import type { Locale } from '@skydrop/ui/app/i18n';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 function day(iso: string, locale: Locale = 'en'): string {
   return new Date(iso).toLocaleDateString(dateTag(locale, 'en-IN'), { dateStyle: 'medium' });
@@ -81,7 +82,7 @@ export default function ResellerStoresPage(): ReactElement {
       ]}
       Link={Link}
       title={t('resellerStores.memberStores')}
-      subtitle={t('resellerStores.otherBusinessesThatSell')}
+      subtitle={<AboutThis text={t('resellerStores.otherBusinessesThatSell')} />}
       meta={
         !loaded ? undefined : (
           <RsFacts>
@@ -143,20 +144,28 @@ export default function ResellerStoresPage(): ReactElement {
              reports page. */}
       <div className="rs-kpis">
         <KpiCard
-          label={t('resellerStores.stores')}
+          label={
+            <InfoLabel
+              label={t('resellerStores.stores')}
+              info={t('resellerStores.everyStoreOnYour')}
+            />
+          }
           icon={<Store size={14} />}
           value={all.length}
           unit={all.length === 1 ? 'store' : 'stores'}
           tone="neutral"
-          hint={t('resellerStores.everyStoreOnYour')}
         />
         <KpiCard
-          label={t('resellerStores.sellingNow')}
+          label={
+            <InfoLabel
+              label={t('resellerStores.sellingNow')}
+              info={t('resellerStores.takingOrdersAgainstYour')}
+            />
+          }
           icon={<UserCheck size={14} />}
           value={active}
           unit="active"
           tone={active > 0 ? 'credit' : 'neutral'}
-          hint={t('resellerStores.takingOrdersAgainstYour')}
         />
         <KpiCard
           label={t('resellerStores.waitingForYou')}
@@ -171,12 +180,16 @@ export default function ResellerStoresPage(): ReactElement {
           }
         />
         <KpiCard
-          label={t('resellerStores.peopleWithALogin')}
+          label={
+            <InfoLabel
+              label={t('resellerStores.peopleWithALogin')}
+              info={t('resellerStores.acrossEveryOneOf')}
+            />
+          }
           icon={<Users size={14} />}
           value={people}
           unit={people === 1 ? 'person' : 'people'}
           tone="neutral"
-          hint={t('resellerStores.acrossEveryOneOf')}
         />
       </div>
 

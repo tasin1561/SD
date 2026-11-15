@@ -34,6 +34,7 @@ import { WalFact, WalStripFact } from './_components/wallet-parts';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { dateTag } from '@/i18n/format';
+import { AboutThis } from '@/components/easy/about';
 
 type WalletTab = 'ledger' | 'withdrawals' | 'topups';
 
@@ -130,22 +131,26 @@ export default function WalletPage(): ReactElement {
           here kept its desktop shape on a phone and scrolled the page
           sideways, while every other list in the app folded into cards
           (FE-7). */}
-      <Table caption={t('wallet.walletLedger')}>
-        <THead>
-          <Tr>
-            <Th>{t('wallet.when')}</Th>
-            <Th>{t('wallet.type')}</Th>
-            <Th>{t('wallet.linked')}</Th>
-            <Th align="right">{t('wallet.amount')}</Th>
-            <Th align="right">{t('wallet.balanceAfter')}</Th>
-          </Tr>
-        </THead>
-        <TBody>
-          {accumulated.map((e) => (
-            <LedgerRow key={e.id} entry={e} />
-          ))}
-        </TBody>
-      </Table>
+      {/* On a phone each entry is a card headed by what it was, with the
+          amount next — the two things looked for in a ledger. */}
+      <div className="ez-wrap ez-cards ez-lead-2 ez-then-4">
+        <Table caption={t('wallet.walletLedger')}>
+          <THead>
+            <Tr>
+              <Th>{t('wallet.when')}</Th>
+              <Th>{t('wallet.type')}</Th>
+              <Th>{t('wallet.linked')}</Th>
+              <Th align="right">{t('wallet.amount')}</Th>
+              <Th align="right">{t('wallet.balanceAfter')}</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {accumulated.map((e) => (
+              <LedgerRow key={e.id} entry={e} />
+            ))}
+          </TBody>
+        </Table>
+      </div>
       {entries.hasNextPage && (
         <div className="wal-more">
           <AsyncButton
@@ -187,7 +192,7 @@ export default function WalletPage(): ReactElement {
         ]}
         Link={Link}
         title={t('wallet.wallet')}
-        subtitle={t('wallet.whatSOwedTo')}
+        subtitle={<AboutThis text={t('wallet.whatSOwedTo')} />}
         meta={
           owed === null ? undefined : (
             <span className="wal-meta">

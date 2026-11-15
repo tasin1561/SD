@@ -40,6 +40,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { dateTag } from '@/i18n/format';
 import type { Locale } from '@skydrop/ui/app/i18n';
+import { InfoLabel } from '@/components/easy/about';
 
 function when(iso: string, locale: Locale = 'en'): string {
   return new Date(iso).toLocaleString(dateTag(locale, 'en-IN'), {
@@ -147,11 +148,15 @@ export function StoreWalletSection({
                 }
               />
               <KpiCard
-                label={t('resellerStoreDetail.waitingOnSkydrop')}
+                label={
+                  <InfoLabel
+                    label={t('resellerStoreDetail.waitingOnSkydrop')}
+                    info={t('resellerStoreDetail.theStoreSTop')}
+                  />
+                }
                 icon={<Clock size={14} />}
                 value={summary.data.pendingTopups.count + summary.data.pendingWithdrawals.count}
                 tone="neutral"
-                hint={t('resellerStoreDetail.theStoreSTop')}
               />
             </div>
             {open ? (

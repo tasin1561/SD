@@ -45,6 +45,7 @@ import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 // The hardcoded six are gone: roles are rows now, so the options come
 // from the server and include anything created under Team → Roles.
@@ -231,7 +232,7 @@ export function TeamManagementIndex(): ReactElement {
       <SetPageHeader
         crumbs={crumbsOf(t)}
         title={t('team.team')}
-        subtitle={t('team.inviteManageYourTeam')}
+        subtitle={<AboutThis text={t('team.inviteManageYourTeam')} />}
         meta={
           members.data === undefined ? undefined : (
             <span className="set-meta">
@@ -269,11 +270,10 @@ export function TeamManagementIndex(): ReactElement {
       <div className="set-kpis">
         {members.data === undefined ? (
           <KpiCard
-            label={t('team.activeMembers')}
+            label={<InfoLabel label={t('team.activeMembers')} info={t('team.nobodyDeactivated')} />}
             icon={<Users size={14} />}
             figure="—"
             tone="neutral"
-            hint={t('team.nobodyDeactivated')}
           />
         ) : (
           <KpiCard
@@ -292,40 +292,46 @@ export function TeamManagementIndex(): ReactElement {
         )}
         {invitations.data === undefined ? (
           <KpiCard
-            label={t('team.invitationsOutstanding')}
+            label={
+              <InfoLabel
+                label={t('team.invitationsOutstanding')}
+                info={t('team.sentNotYetAccepted')}
+              />
+            }
             icon={<MailPlus size={14} />}
             figure="—"
             tone="neutral"
-            hint={t('team.sentNotYetAccepted')}
           />
         ) : (
           <KpiCard
-            label={t('team.invitationsOutstanding')}
+            label={
+              <InfoLabel
+                label={t('team.invitationsOutstanding')}
+                info={t('team.sentNotYetAccepted')}
+              />
+            }
             icon={<MailPlus size={14} />}
             value={openInvites.length}
             format={String}
             unit={openInvites.length === 1 ? 'invite' : 'invites'}
             tone={openInvites.length > 0 ? 'pending' : 'neutral'}
-            hint={t('team.sentNotYetAccepted')}
           />
         )}
         {roles.data === undefined ? (
           <KpiCard
-            label={t('team.rolesDefined')}
+            label={<InfoLabel label={t('team.rolesDefined')} info={t('team.editWhatEachOne')} />}
             icon={<ShieldCheck size={14} />}
             figure="—"
             tone="neutral"
-            hint={t('team.editWhatEachOne')}
           />
         ) : (
           <KpiCard
-            label={t('team.rolesDefined')}
+            label={<InfoLabel label={t('team.rolesDefined')} info={t('team.editWhatEachOne')} />}
             icon={<ShieldCheck size={14} />}
             value={roles.data.length}
             format={String}
             unit={roles.data.length === 1 ? 'role' : 'roles'}
             tone="neutral"
-            hint={t('team.editWhatEachOne')}
           />
         )}
       </div>

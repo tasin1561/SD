@@ -26,6 +26,7 @@ import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
+import { AboutThis } from '@/components/easy/about';
 
 const crumbsOf = (t: Translate<MessageKey>) => [
   { label: t('settingsWebhooks.clientConsole') },
@@ -81,7 +82,7 @@ export function WebhooksIndex(): ReactElement {
       <SetPageHeader
         crumbs={crumbsOf(t)}
         title={t('settingsWebhooks.outboundWebhooks')}
-        subtitle={t('settingsWebhooks.wireSkydropEventsInto')}
+        subtitle={<AboutThis text={t('settingsWebhooks.wireSkydropEventsInto')} />}
         /*
           The comps show a delivery success rate and a p95 latency. We
           store neither — `consecutiveFailureCount` and the two last-*

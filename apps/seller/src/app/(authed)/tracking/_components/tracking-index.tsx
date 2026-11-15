@@ -23,6 +23,7 @@ import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 /**
  * Every parcel that has left, and where it got to.
  *
@@ -97,7 +98,7 @@ export function TrackingIndex(): ReactElement {
         ]}
         Link={Link}
         title={t('tracking.tracking')}
-        subtitle={t('tracking.whereYourParcelsAre')}
+        subtitle={<AboutThis text={t('tracking.whereYourParcelsAre')} />}
         meta={
           list.data === undefined ? undefined : (
             <span className="ord-meta">
@@ -120,12 +121,13 @@ export function TrackingIndex(): ReactElement {
       {unfiltered && rows.length > 0 && (
         <div className="ord-kpis">
           <KpiCard
-            label={t('tracking.onTheMove')}
+            label={
+              <InfoLabel label={t('tracking.onTheMove')} info={t('tracking.inTransitOrOut')} />
+            }
             icon={<Truck size={14} />}
             value={moving}
             unit="parcels"
             tone="info"
-            hint={t('tracking.inTransitOrOut')}
           />
           <KpiCard
             label={t('tracking.deliveryFailed')}

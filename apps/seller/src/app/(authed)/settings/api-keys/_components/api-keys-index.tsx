@@ -25,6 +25,7 @@ import { useT, useLocale } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
+import { AboutThis } from '@/components/easy/about';
 
 const crumbsOf = (t: Translate<MessageKey>) => [
   { label: t('settingsApiKeys.clientConsole') },
@@ -148,7 +149,7 @@ export function ApiKeysIndex(): ReactElement {
       <SetPageHeader
         crumbs={crumbsOf(t)}
         title={t('settingsApiKeys.apiKeys')}
-        subtitle={t('settingsApiKeys.programmaticAccessPlaintextIs')}
+        subtitle={<AboutThis text={t('settingsApiKeys.programmaticAccessPlaintextIs')} />}
         /*
           The comps put a request count and a rate-limit headroom bar
           here. Neither is stored per key — `lastUsedAt` is the whole

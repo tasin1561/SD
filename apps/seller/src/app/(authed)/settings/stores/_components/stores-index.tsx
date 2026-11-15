@@ -29,6 +29,7 @@ import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 const crumbsOf = (t: Translate<MessageKey>) => [
   { label: t('settingsStores.clientConsole') },
@@ -150,7 +151,7 @@ export function StoresIndex(): ReactElement {
       <SetPageHeader
         crumbs={crumbsOf(t)}
         title={t('settingsStores.stores')}
-        subtitle={t('settingsStores.theShopsYouSell')}
+        subtitle={<AboutThis text={t('settingsStores.theShopsYouSell')} />}
         meta={
           stores.data === undefined ? undefined : (
             <span className="set-meta">
@@ -207,16 +208,25 @@ export function StoresIndex(): ReactElement {
               })}
             />
             <KpiCard
-              label={t('settingsStores.filedUnderAStore')}
+              label={
+                <InfoLabel
+                  label={t('settingsStores.filedUnderAStore')}
+                  info={t('settingsStores.everyOrderYouHave')}
+                />
+              }
               icon={<PackageCheck size={14} />}
               value={totalOrders}
               format={String}
               unit={totalOrders === 1 ? 'order' : 'orders'}
               tone="neutral"
-              hint={t('settingsStores.everyOrderYouHave')}
             />
             <KpiCard
-              label={t('settingsStores.newOrdersGoTo')}
+              label={
+                <InfoLabel
+                  label={t('settingsStores.newOrdersGoTo')}
+                  info={t('settingsStores.includingEveryCsvRow')}
+                />
+              }
               icon={<Star size={14} />}
               figure={
                 defaultStore === undefined ? (
@@ -226,7 +236,6 @@ export function StoresIndex(): ReactElement {
                 )
               }
               tone={defaultStore === undefined ? 'pending' : 'neutral'}
-              hint={t('settingsStores.includingEveryCsvRow')}
             />
           </div>
 

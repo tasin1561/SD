@@ -23,6 +23,7 @@ import {
 } from '../_components/rs-parts';
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /**
  * How long the stock your reseller stores sell will last (RS-9), at the
@@ -60,7 +61,7 @@ export default function ResellerStockForecastPage(): ReactElement {
         ]}
         Link={Link}
         title={t('resellerForecast.stockForecast')}
-        subtitle={t('resellerForecast.daysOfStockLeft')}
+        subtitle={<AboutThis text={t('resellerForecast.daysOfStockLeft')} />}
         meta={
           !loaded ? undefined : (
             <RsFacts>
@@ -119,29 +120,41 @@ export default function ResellerStockForecastPage(): ReactElement {
           )}
           {loaded ? (
             <KpiCard
-              label={t('resellerForecast.selling')}
+              label={
+                <InfoLabel
+                  label={t('resellerForecast.selling')}
+                  info={t('resellerForecast.aProductWithNo')}
+                />
+              }
               icon={<CalendarClock size={14} />}
               value={selling}
               unit={`of ${rows.length}`}
               tone="neutral"
-              hint={t('resellerForecast.aProductWithNo')}
             />
           ) : (
             <KpiCard
-              label={t('resellerForecast.selling')}
+              label={
+                <InfoLabel
+                  label={t('resellerForecast.selling')}
+                  info={t('resellerForecast.aProductWithNo')}
+                />
+              }
               icon={<CalendarClock size={14} />}
               figure={dash}
               tone="neutral"
-              hint={t('resellerForecast.aProductWithNo')}
             />
           )}
           <KpiCard
-            label={t('resellerForecast.unitsAvailable')}
+            label={
+              <InfoLabel
+                label={t('resellerForecast.unitsAvailable')}
+                info={t('resellerForecast.acrossEveryProductA')}
+              />
+            }
             icon={<Boxes size={14} />}
             figure={loaded ? <Num value={available} /> : dash}
             unit={loaded ? 'units' : undefined}
             tone="neutral"
-            hint={t('resellerForecast.acrossEveryProductA')}
           />
         </div>
       )}

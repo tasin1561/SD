@@ -27,6 +27,7 @@ import './notifications.css';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { dateTag } from '@/i18n/format';
+import { AboutThis } from '@/components/easy/about';
 
 /** The tab id that means "every group" — a group name is never empty. */
 const ALL_GROUPS = '__all';
@@ -166,7 +167,7 @@ export function NotificationsView(): ReactElement {
           { label: t('notifications.notifications') },
         ]}
         title={t('notifications.notifications')}
-        subtitle={t('notifications.everythingSentToYou')}
+        subtitle={<AboutThis text={t('notifications.everythingSentToYou')} />}
         meta={
           feed.data === undefined ? undefined : (
             <span className="set-meta">

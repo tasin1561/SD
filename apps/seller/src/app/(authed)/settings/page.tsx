@@ -12,6 +12,7 @@ import {
 import { SettingsHub, type SettingsTile } from './_components/settings-hub';
 import { SetPageHeader } from './_components/settings-parts';
 import { getT } from '@/i18n/server';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * Settings hub — links into each settings sub-area.
@@ -104,7 +105,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
           { label: t('settingsHub.settings') },
         ]}
         title={t('settingsHub.settings')}
-        subtitle={t('settingsHub.signInAndSessions')}
+        subtitle={<AboutThis text={t('settingsHub.signInAndSessions')} />}
       />
       <SettingsHub items={items} />
     </div>

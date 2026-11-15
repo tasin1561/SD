@@ -8,6 +8,7 @@ import { WithdrawalScheduleCard } from '../_components/withdrawal-schedule-card'
 import { WalletTermsCard } from '../_components/wallet-terms-card';
 import '../_components/wallet.css';
 import { useT } from '@/i18n/client';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * The rules this wallet runs on, on their own page.
@@ -43,7 +44,7 @@ export default function WalletLimitsPage(): ReactElement {
         ]}
         Link={Link}
         title={t('wallet.walletLimitsAndSettings')}
-        subtitle={t('wallet.everyRuleThatDecides')}
+        subtitle={<AboutThis text={t('wallet.everyRuleThatDecides')} />}
       />
 
       {/* What you can change, then what you cannot. Mixing the two was

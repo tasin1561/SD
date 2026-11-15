@@ -42,6 +42,7 @@ import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { InfoLabel } from '@/components/easy/about';
 
 /**
  * Everything about what Skydrop sends you, on one page.
@@ -153,7 +154,12 @@ export function NotificationSettingsView(): ReactElement {
              comp's telemetry tiles are not here for that reason. ─── */}
       <div className="set-kpis">
         <KpiCard
-          label={t('notificationSettings.yourAlerts')}
+          label={
+            <InfoLabel
+              label={t('notificationSettings.yourAlerts')}
+              info={t('notificationSettings.topicsReachingYourInbox')}
+            />
+          }
           icon={<BellRing size={14} />}
           figure={
             topics.isLoading ? (
@@ -165,26 +171,33 @@ export function NotificationSettingsView(): ReactElement {
             )
           }
           tone="neutral"
-          hint={t('notificationSettings.topicsReachingYourInbox')}
         />
         {mayManageCompany &&
           (prefs.isLoading ? (
             <KpiCard
-              label={t('notificationSettings.companyCategories')}
+              label={
+                <InfoLabel
+                  label={t('notificationSettings.companyCategories')}
+                  info={t('notificationSettings.emailInAppSet')}
+                />
+              }
               icon={<Landmark size={14} />}
               figure={<span className="set-kpi-faint">—</span>}
               tone="neutral"
-              hint={t('notificationSettings.emailInAppSet')}
             />
           ) : (
             <KpiCard
-              label={t('notificationSettings.companyCategories')}
+              label={
+                <InfoLabel
+                  label={t('notificationSettings.companyCategories')}
+                  info={t('notificationSettings.emailInAppSet')}
+                />
+              }
               icon={<Landmark size={14} />}
               value={rows.length}
               format={String}
               unit="categories"
               tone="neutral"
-              hint={t('notificationSettings.emailInAppSet')}
             />
           ))}
         <KpiCard
@@ -195,11 +208,15 @@ export function NotificationSettingsView(): ReactElement {
           hint={quiet.note}
         />
         <KpiCard
-          label={t('notificationSettings.neverSilenced')}
+          label={
+            <InfoLabel
+              label={t('notificationSettings.neverSilenced')}
+              info={t('notificationSettings.signInPasswordInvites')}
+            />
+          }
           icon={<ShieldCheck size={14} />}
           figure={<span className="set-kpi-text">{t('notificationSettings.accountSecurity')}</span>}
           tone="neutral"
-          hint={t('notificationSettings.signInPasswordInvites')}
         />
       </div>
 

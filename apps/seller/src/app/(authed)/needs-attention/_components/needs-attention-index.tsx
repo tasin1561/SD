@@ -20,6 +20,7 @@ import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * THE SELLER'S side of the NSA worklist.
@@ -116,7 +117,7 @@ export function NeedsAttentionIndex(): ReactElement {
         ]}
         Link={Link}
         title={t('needsAttention.needsAttention')}
-        subtitle={t('needsAttention.ordersWeCouldNot')}
+        subtitle={<AboutThis text={t('needsAttention.ordersWeCouldNot')} />}
         /*
           EVERY non-empty case gets a fact, or the row goes blank while
           the page below it is full.

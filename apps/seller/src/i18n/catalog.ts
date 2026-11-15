@@ -12,6 +12,7 @@ import { dashboard } from './messages/dashboard';
 import { freight } from './messages/freight';
 import { guidance } from './messages/guidance';
 import { holdDecision } from './messages/holdDecision';
+import { easy } from './messages/easy';
 import { holds } from './messages/holds';
 import { impersonation } from './messages/impersonation';
 import { inbound } from './messages/inbound';
@@ -96,6 +97,7 @@ export const NAMESPACES = [
   freight,
   guidance,
   holdDecision,
+  easy,
   holds,
   impersonation,
   inbound,
@@ -176,6 +178,7 @@ const ALL = {
   ...freight,
   ...guidance,
   ...holdDecision,
+  ...easy,
   ...holds,
   ...impersonation,
   ...inbound,

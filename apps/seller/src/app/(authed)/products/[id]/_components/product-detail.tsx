@@ -56,6 +56,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { InfoLabel } from '@/components/easy/about';
 
 /**
  * Seller product detail. Inline edit (no separate edit page) — write
@@ -202,21 +203,29 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
             )}
             {detail.data.defaultWeightGrams === null ? (
               <KpiCard
-                label={t('productDetail.defaultWeight')}
+                label={
+                  <InfoLabel
+                    label={t('productDetail.defaultWeight')}
+                    info={t('productDetail.aVariantThatSets')}
+                  />
+                }
                 icon={<Boxes size={14} />}
                 figure={<span className="inv-faint">{t('productDetail.notSet')}</span>}
                 tone="pending"
-                hint={t('productDetail.aVariantThatSets')}
               />
             ) : (
               <KpiCard
-                label={t('productDetail.defaultWeight')}
+                label={
+                  <InfoLabel
+                    label={t('productDetail.defaultWeight')}
+                    info={t('productDetail.usedByAnyVariant')}
+                  />
+                }
                 icon={<Boxes size={14} />}
                 value={detail.data.defaultWeightGrams}
                 format={rawCount}
                 unit="g"
                 tone="neutral"
-                hint={t('productDetail.usedByAnyVariant')}
               />
             )}
             <KpiCard
@@ -236,7 +245,12 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
               tone="neutral"
             />
             <KpiCard
-              label={t('productDetail.declaredValue')}
+              label={
+                <InfoLabel
+                  label={t('productDetail.declaredValue')}
+                  info={t('productDetail.whatAParcelOf')}
+                />
+              }
               icon={<Wallet size={14} />}
               figure={
                 detail.data.defaultDeclaredValueInr === null ? (
@@ -246,7 +260,6 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                 )
               }
               tone="neutral"
-              hint={t('productDetail.whatAParcelOf')}
             />
           </KpiGrid>
 

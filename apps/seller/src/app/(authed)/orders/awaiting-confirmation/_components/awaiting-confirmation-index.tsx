@@ -41,6 +41,7 @@ import { formatDateTime } from '@/i18n/format';
 import { MetaFact, LinkButton } from '../../_components/orders-parts';
 import { msLeft, partsOf, urgencyOf, type Urgency } from './time-left';
 import './awaiting.css';
+import { AboutThis } from '@/components/easy/about';
 
 const PAGE_SIZE = 25;
 
@@ -236,7 +237,7 @@ export function AwaitingConfirmationIndex(): ReactElement {
         ]}
         Link={Link}
         title={t('callConfirm.pageTitle')}
-        subtitle={t('callConfirm.pageSubtitle')}
+        subtitle={<AboutThis text={t('callConfirm.pageSubtitle')} />}
         meta={
           list.isLoading || total === 0 ? undefined : (
             <span className="ord-meta">

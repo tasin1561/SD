@@ -61,6 +61,7 @@ import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
 import type { Locale } from '@skydrop/ui/app/i18n';
+import { AboutThis } from '@/components/easy/about';
 
 const crumbsOf = (t: Translate<MessageKey>) => [
   { label: t('profile.clientConsole') },
@@ -92,7 +93,7 @@ export default function ProfilePage(): ReactElement {
         <SetPageHeader
           crumbs={crumbsOf(t)}
           title={t('profile.profile')}
-          subtitle={t('profile.companyInfoBankDetails')}
+          subtitle={<AboutThis text={t('profile.companyInfoBankDetails')} />}
         />
         <div className="set-kpis" aria-busy="true">
           <span className="set-sr">{t('profile.loadingProfile')}</span>
@@ -114,7 +115,7 @@ export default function ProfilePage(): ReactElement {
         <SetPageHeader
           crumbs={crumbsOf(t)}
           title={t('profile.profile')}
-          subtitle={t('profile.companyInfoBankDetails')}
+          subtitle={<AboutThis text={t('profile.companyInfoBankDetails')} />}
         />
         <ErrorState
           message={detail.error?.message ?? t('profile.failedToLoadProfile')}
@@ -129,7 +130,7 @@ export default function ProfilePage(): ReactElement {
         <SetPageHeader
           crumbs={crumbsOf(t)}
           title={t('profile.profile')}
-          subtitle={t('profile.companyInfoBankDetails')}
+          subtitle={<AboutThis text={t('profile.companyInfoBankDetails')} />}
         />
         <ErrorState message={t('profile.profileNotLoaded')} />
       </div>
@@ -141,7 +142,7 @@ export default function ProfilePage(): ReactElement {
       <SetPageHeader
         crumbs={crumbsOf(t)}
         title={t('profile.profile')}
-        subtitle={t('profile.yourCompanyAsWe')}
+        subtitle={<AboutThis text={t('profile.yourCompanyAsWe')} />}
         /*
           The comp's chip row here reads VERIFIED ENTITY, L-4
           INSTITUTIONAL VERIFIED, SOC-2 TYPE II, FEMA/BB COMPLIANT and a

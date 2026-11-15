@@ -28,6 +28,7 @@ import {
 } from './stock-ui';
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { AboutThis } from '@/components/easy/about';
 
 const PAGE_SIZE = 25;
 
@@ -91,7 +92,7 @@ export function InventoryView(): ReactElement {
         ]}
         Link={Link}
         title={t('inventory.inventory')}
-        subtitle={t('inventory.stockAvailableForOrders')}
+        subtitle={<AboutThis text={t('inventory.stockAvailableForOrders')} />}
         meta={
           s === undefined ? undefined : (
             <MetaFacts>

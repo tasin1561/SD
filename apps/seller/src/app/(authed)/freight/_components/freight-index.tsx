@@ -19,6 +19,7 @@ import './freight.css';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { dateTag } from '@/i18n/format';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /** The filter tab that means "no status filter". */
 const ALL = 'all';
@@ -98,7 +99,7 @@ export function SellerFreightIndex(): ReactElement {
         ]}
         Link={Link}
         title={t('freight.inboundFreight')}
-        subtitle={t('freight.theShippingCostOf')}
+        subtitle={<AboutThis text={t('freight.theShippingCostOf')} />}
         meta={
           !loaded ? undefined : (
             <span className="frt-meta">
@@ -136,11 +137,10 @@ export function SellerFreightIndex(): ReactElement {
              `figure`; the two counts roll up once when they first land. */}
       <div className="frt-kpis">
         <KpiCard
-          label={t('freight.stillOwed2')}
+          label={<InfoLabel label={t('freight.stillOwed2')} info={t('freight.whatIsStillTo')} />}
           icon={<Wallet size={14} />}
           figure={loaded ? <Money amount={outstanding} decimals={false} /> : dash}
           tone={loaded && Number(outstanding) > 0 ? 'pending' : 'neutral'}
-          hint={t('freight.whatIsStillTo')}
         />
         <KpiCard
           label={t('freight.billedToYou')}
@@ -178,7 +178,9 @@ export function SellerFreightIndex(): ReactElement {
         )}
         {loaded ? (
           <KpiCard
-            label={t('freight.unitsCharged')}
+            label={
+              <InfoLabel label={t('freight.unitsCharged')} info={t('freight.aUnitIsCharged')} />
+            }
             icon={<Boxes size={14} />}
             value={totals.unitsSettled}
             unit={
@@ -187,15 +189,15 @@ export function SellerFreightIndex(): ReactElement {
               </>
             }
             tone="neutral"
-            hint={t('freight.aUnitIsCharged')}
           />
         ) : (
           <KpiCard
-            label={t('freight.unitsCharged')}
+            label={
+              <InfoLabel label={t('freight.unitsCharged')} info={t('freight.aUnitIsCharged')} />
+            }
             icon={<Boxes size={14} />}
             figure={dash}
             tone="neutral"
-            hint={t('freight.aUnitIsCharged')}
           />
         )}
       </div>

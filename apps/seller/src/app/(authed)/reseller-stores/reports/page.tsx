@@ -31,6 +31,7 @@ import { verdict } from '@/i18n/verdict';
 import { RsFact, RsFacts, RsLink, RsSection, RsStrip, RsStripFact } from '../_components/rs-parts';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 const pct = (v: string | null): string => (v === null ? '—' : `${v}%`);
 
@@ -84,7 +85,7 @@ export default function ResellerReportsPage(): ReactElement {
         ]}
         Link={Link}
         title={t('resellerReports.memberStoreReports')}
-        subtitle={t('resellerReports.howEachOfYour')}
+        subtitle={<AboutThis text={t('resellerReports.howEachOfYour')} />}
         meta={
           !loaded ? undefined : (
             <RsFacts>
@@ -125,23 +126,36 @@ export default function ResellerReportsPage(): ReactElement {
       ) : (
         <div className="rs-kpis">
           <KpiCard
-            label={t('resellerReports.ordersPlaced')}
+            label={
+              <InfoLabel
+                label={t('resellerReports.ordersPlaced')}
+                info={t('resellerReports.byYourMemberStores')}
+              />
+            }
             icon={<Package size={14} />}
             figure={loaded ? <Num value={placed} /> : dash}
             unit={loaded ? (placed === 1 ? 'order' : 'orders') : undefined}
             tone="neutral"
-            hint={t('resellerReports.byYourMemberStores')}
           />
           <KpiCard
-            label={t('resellerReports.unitsDelivered')}
+            label={
+              <InfoLabel
+                label={t('resellerReports.unitsDelivered')}
+                info={t('resellerReports.reachedACustomerAnd')}
+              />
+            }
             icon={<TrendingUp size={14} />}
             figure={loaded ? <Num value={units} /> : dash}
             unit={loaded ? 'units' : undefined}
             tone="neutral"
-            hint={t('resellerReports.reachedACustomerAnd')}
           />
           <KpiCard
-            label={t('resellerReports.marginOnWhatShipped')}
+            label={
+              <InfoLabel
+                label={t('resellerReports.marginOnWhatShipped')}
+                info={t('resellerReports.transferPriceLessYour')}
+              />
+            }
             icon={<PercentCircle size={14} />}
             figure={loaded ? <Money amount={margin} decimals={false} /> : dash}
             tone="neutral"
@@ -155,15 +169,18 @@ export default function ResellerReportsPage(): ReactElement {
                   ],
                 }
               : {})}
-            hint={t('resellerReports.transferPriceLessYour')}
           />
           <KpiCard
-            label={t('resellerReports.autoPauseArmed')}
+            label={
+              <InfoLabel
+                label={t('resellerReports.autoPauseArmed')}
+                info={t('resellerReports.storesThatStopThemselves')}
+              />
+            }
             icon={<Undo2 size={14} />}
             figure={loaded ? <Num value={autoPaused} /> : dash}
             unit={loaded ? `of ${stores.length}` : undefined}
             tone={loaded && autoPaused > 0 ? 'pending' : 'neutral'}
-            hint={t('resellerReports.storesThatStopThemselves')}
           />
         </div>
       )}

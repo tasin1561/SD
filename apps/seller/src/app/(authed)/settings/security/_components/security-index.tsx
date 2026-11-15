@@ -18,6 +18,7 @@ import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { AboutThis } from '@/components/easy/about';
 
 const crumbsOf = (t: Translate<MessageKey>) => [
   { label: t('settingsSecurity.clientConsole') },
@@ -86,7 +87,7 @@ export function SecurityIndex(): ReactElement {
       <SetPageHeader
         crumbs={crumbsOf(t)}
         title={t('settingsSecurity.signInSessions')}
-        subtitle={t('settingsSecurity.whoThisBrowserIs')}
+        subtitle={<AboutThis text={t('settingsSecurity.whoThisBrowserIs')} />}
         /*
           The comps put a session count and a last-seen location here.
           The API exposes no read over `seller_refresh_tokens`, so
