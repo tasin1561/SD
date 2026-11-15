@@ -113,6 +113,7 @@ export const ERROR_CODES: ReadonlyArray<readonly [string, string, string | null]
   ["BROADCAST_NOT_FOUND","notification-audience","No such broadcast"],
   ["BULK_PATCH_NOT_ALLOWED","order","Order in {…} is not CSV-patchable"],
   ["BULK_TRANSFER_NO_LINES","warehouse-bin-ops","Nothing to move"],
+  ["CANCEL_REQUEST_NOT_AVAILABLE","ticket","This order is not at a stage where a cancel request applies. If it has not been packed you can cancel it directly."],
   ["CANDIDATE_NOT_FOUND","courier-escalation","No such candidate."],
   ["CANDIDATE_NOT_REJECTABLE","courier-escalation","That candidate is gone, or has already been promoted."],
   ["CANNOT_CHANGE_OWN_ROLE","reseller-store,seller-team,staff-invitation","You cannot change your own roles. Ask another owner — this is what stops somebody removing their own way back in."],
