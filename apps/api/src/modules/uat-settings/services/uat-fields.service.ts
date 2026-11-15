@@ -33,6 +33,10 @@ export const UAT_FIELDS = {
   orderDeliveryFee: 'uat.order_delivery_fee_field',
   orderDiscount: 'uat.order_discount_field',
   orderDeclaredValue: 'uat.order_declared_value_field',
+  // Not a form field: whether the client code goes before the stored
+  // recipient name. ON = prefixed, OFF (the default, and the fail-closed
+  // answer) = the name exactly as typed.
+  recipientNamePrefix: 'uat.recipient_name_prefix',
 } as const;
 
 export type UatField = keyof typeof UAT_FIELDS;
@@ -42,6 +46,7 @@ const ALL_HIDDEN: Readonly<Record<UatField, boolean>> = {
   orderDeliveryFee: false,
   orderDiscount: false,
   orderDeclaredValue: false,
+  recipientNamePrefix: false,
 };
 
 const CACHE_MS = 2_000;

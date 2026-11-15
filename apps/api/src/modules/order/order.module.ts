@@ -9,6 +9,7 @@ import { SellerOrderController } from './controllers/seller-order.controller';
 import { SellerCustomerController } from './controllers/seller-customer.controller';
 import { SellerRecipientAddressController } from './controllers/seller-recipient-address.controller';
 import { AdminOrderController } from './controllers/admin-order.controller';
+import { UatSettingsModule } from '../uat-settings/uat-settings.module';
 import { SettingsModule } from '../settings/settings.module';
 import { ResellerOrderGateModule } from '../reseller-order-gate/reseller-order-gate.module';
 import { SellerOrderDefaultsController } from './controllers/seller-order-defaults.controller';
@@ -65,6 +66,8 @@ import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-po
     InventorySharedModule,
     // The seller's own default for the delivery-fee field (SET-1).
     SettingsModule,
+    // uat.recipient_name_prefix (cached reader, global in the app).
+    UatSettingsModule,
     // RS-5: the reseller set-aside guard every confirmation reserves
     // through. A dependency-free R3 primitive (it imports neither order
     // nor reseller-catalogue), so no cycle.

@@ -2023,6 +2023,16 @@ const systemSettings: SystemSettingSeed[] = [
     sellerOverridable: false,
   },
   {
+    key: 'uat.recipient_name_prefix',
+    category: 'uat',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'UAT — add the client code before the customer name',
+    description:
+      "Whether a client's short code (for example MST) is stored in front of the recipient's full name on orders placed from the client console, the bulk CSV and the API. OFF (default) — the name is saved exactly as typed. ON — it is saved as 'MST Syed Talha Islam'. Past orders are never rewritten either way.",
+    sellerOverridable: false,
+  },
+  {
     key: 'address_check.base_url',
     category: 'ops',
     valueType: SettingValueType.STRING,

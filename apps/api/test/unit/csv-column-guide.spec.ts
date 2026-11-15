@@ -25,8 +25,18 @@ import {
  * field becomes required (or stops being), the page changes with it, and what
  * the page calls required is what the importer actually refuses.
  */
-const NONE = { orderDeliveryFee: false, orderDiscount: false, orderDeclaredValue: false };
-const ALL = { orderDeliveryFee: true, orderDiscount: true, orderDeclaredValue: true };
+const NONE = {
+  orderDeliveryFee: false,
+  orderDiscount: false,
+  orderDeclaredValue: false,
+  recipientNamePrefix: false,
+};
+const ALL = {
+  orderDeliveryFee: true,
+  orderDiscount: true,
+  orderDeclaredValue: true,
+  recipientNamePrefix: false,
+};
 const seller = TEMPLATE_COLUMNS;
 const store = STORE_TEMPLATE_COLUMNS;
 

@@ -42,6 +42,7 @@ describe('UatFieldsService — it fails closed, and closed means HIDDEN', () => 
       orderDeliveryFee: false,
       orderDiscount: false,
       orderDeclaredValue: false,
+      recipientNamePrefix: false,
     });
   });
 
@@ -51,6 +52,7 @@ describe('UatFieldsService — it fails closed, and closed means HIDDEN', () => 
       orderDeliveryFee: true,
       orderDiscount: true,
       orderDeclaredValue: true,
+      recipientNamePrefix: false,
     });
   });
 
@@ -70,7 +72,7 @@ describe('UatFieldsService — it fails closed, and closed means HIDDEN', () => 
 
   it('a row for some OTHER key cannot turn a field on', async () => {
     const { svc } = makeService({ rows: [{ key: 'uat.something_else', valueBoolean: true }] });
-    expect(Object.values(await svc.all())).toEqual([false, false, false]);
+    expect(Object.values(await svc.all())).toEqual([false, false, false, false]);
   });
 });
 
@@ -118,13 +120,14 @@ describe('UatFieldsService — the cache', () => {
 });
 
 describe('UatFieldsService — the keys are the seeded ones', () => {
-  it('names the three settings the seed creates', () => {
+  it('names the settings the seed creates', () => {
     // A typo here is a field that can never be turned on, and nothing
     // would fail — `all()` would simply keep answering false.
     expect(Object.values(UAT_FIELDS).sort()).toEqual([
       'uat.order_declared_value_field',
       'uat.order_delivery_fee_field',
       'uat.order_discount_field',
+      'uat.recipient_name_prefix',
     ]);
   });
 });

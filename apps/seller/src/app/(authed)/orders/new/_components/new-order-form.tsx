@@ -132,7 +132,10 @@ const INITIAL: FormState = {
 
 export function NewOrderForm(): ReactElement {
   const t = useT();
-  const sellerInitials = useSellerIdentity()?.initials ?? null;
+  // `uat.recipient_name_prefix` OFF: no client code — no helper, no lead.
+  const namePrefixOn = useUatField('recipientNamePrefix');
+  const ownInitials = useSellerIdentity()?.initials ?? null;
+  const sellerInitials = namePrefixOn ? ownInitials : null;
   const stores = useStores();
   // CLOSED stores are left out: the server refuses one by name, and a
   // form should not offer an option it knows will be rejected.

@@ -53,6 +53,8 @@ function makeService(
     existing?: AnyArgs | null;
     openOrders?: AnyArgs[];
     sellerInitials?: string | null;
+    /** uat.recipient_name_prefix. Defaults ON here so the prefix tests below stay meaningful. */
+    namePrefix?: boolean;
     overdrawn?: boolean;
     /** An agent holding this order right now, if a test needs one. */
     activeCall?: { assignedAgentId: string | null; assignedAt: Date | null } | null;
@@ -228,6 +230,7 @@ function makeService(
     } as never,
     // The list's parcel read — one call per page (WMS-1).
     { summariesForOrders } as never,
+    { isShown: async () => opts.namePrefix ?? true } as never,
   );
   return {
     svc,
@@ -278,6 +281,38 @@ describe('OrderService.create — the seller code on the recipient name', () => 
     const { svc, orderCreate } = makeService({ sellerInitials: null });
     await svc.create('s1', baseDto(), ACTOR, CTX);
     expect((orderCreate.mock.calls[0]![0].data as AnyArgs).recipientName).toBe('Asha');
+  });
+});
+
+describe('OrderService — uat.recipient_name_prefix OFF', () => {
+  it('create stores the name exactly as typed (trimmed), customer record clean', async () => {
+    const { svc, orderCreate } = makeService({ namePrefix: false });
+    await svc.create('s1', baseDto({ recipientName: '  Asha  ' }), ACTOR, CTX);
+    expect((orderCreate.mock.calls[0]![0].data as AnyArgs).recipientName).toBe('Asha');
+  });
+
+  it('create does not add the code to a name that has none, even for a seller with a code', async () => {
+    const { svc, orderCreate } = makeService({ namePrefix: false, sellerInitials: 'MST' });
+    await svc.create('s1', baseDto({ recipientName: 'Syed Talha Islam' }), ACTOR, CTX);
+    expect((orderCreate.mock.calls[0]![0].data as AnyArgs).recipientName).toBe('Syed Talha Islam');
+  });
+
+  it('edit stores a changed name exactly as typed, with no code', async () => {
+    const { svc, orderUpdate } = makeService({
+      namePrefix: false,
+      sellerInitials: 'MST',
+      existing: patchableOrder(),
+    });
+    await svc.applyBulkPatch('s1', 'o1', { ...PATCH, customerName: 'Asha Verma' }, ACTOR);
+    expect((orderUpdate.mock.calls[0]![0].data as AnyArgs).recipientName).toBe('Asha Verma');
+  });
+
+  it('create with the setting ON adds the code', async () => {
+    const { svc, orderCreate } = makeService({ namePrefix: true, sellerInitials: 'MST' });
+    await svc.create('s1', baseDto({ recipientName: 'Syed Talha Islam' }), ACTOR, CTX);
+    expect((orderCreate.mock.calls[0]![0].data as AnyArgs).recipientName).toBe(
+      'MST Syed Talha Islam',
+    );
   });
 });
 

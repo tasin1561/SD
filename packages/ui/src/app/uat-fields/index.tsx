@@ -30,7 +30,11 @@ import { createContext, useContext, type ReactElement, type ReactNode } from 're
  * query settles.
  */
 
-export type UatField = 'orderDeliveryFee' | 'orderDiscount' | 'orderDeclaredValue';
+export type UatField =
+  | 'orderDeliveryFee'
+  | 'orderDiscount'
+  | 'orderDeclaredValue'
+  | 'recipientNamePrefix';
 
 export type UatFieldMap = Readonly<Record<UatField, boolean>>;
 
@@ -39,6 +43,7 @@ const ALL_HIDDEN: UatFieldMap = {
   orderDeliveryFee: false,
   orderDiscount: false,
   orderDeclaredValue: false,
+  recipientNamePrefix: false,
 };
 
 const UatFieldsContext = createContext<UatFieldMap>(ALL_HIDDEN);
