@@ -1,0 +1,77 @@
+/* Courier WhatsApp messages (chat-bubble list). Tokens only; animates
+   nothing, so there is no motion to reduce and no layout shift. */
+.sk-cwa {
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+  container-type: inline-size;
+}
+.sk-cwa__list {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: var(--sp-3);
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+}
+.sk-cwa__row {
+  display: grid;
+  justify-items: start;
+  min-width: 0;
+}
+.sk-cwa__bubble {
+  max-width: min(100%, 46ch);
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md) var(--r-md) var(--r-md) var(--sp-1);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.sk-cwa__bubble a {
+  color: var(--accent-fg-text, var(--accent-fill));
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+.sk-cwa__time {
+  display: block;
+  margin-top: var(--sp-1);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  text-align: right;
+}
+.sk-cwa__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.sk-cwa__refresh {
+  padding: var(--sp-1) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+.sk-cwa__refresh:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.sk-cwa__title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--fg);
+}

@@ -1644,6 +1644,23 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     what: 'The address we call Shiprocket at. Empty means practice mode. Bookings also need "Shiprocket live writes"; the login lives with the courier account, not here.',
     example: 'Set to https://apiv2.shiprocket.in: Shiprocket is reached for real.',
   },
+  'courier.delhivery_whatsapp_enabled': {
+    name: 'Delhivery WhatsApp messages',
+    group: 'Courier connection',
+    what: 'When on, our portal worker opens Delhivery One for parcels that were out for delivery or had a failed attempt, reads the WhatsApp messages Delhivery sent the customer, and shows them on the order page for staff, clients, member stores and associates. It only reads their screen; it changes nothing there.',
+    example:
+      'On: a parcel that was refused at the door shows "You refused delivery of your shipment" in its Activity area.',
+    values: onOff(
+      [
+        'The worker reads Delhivery’s WhatsApp window for active and recently finished parcels, and staff get a Refresh button.',
+        'Order pages show the courier’s WhatsApp messages once they have been read.',
+      ],
+      [
+        'Nothing is read from Delhivery One for this; messages already stored stay visible.',
+        'No new messages appear and the Refresh button does nothing.',
+      ],
+    ),
+  },
   'courier.delhivery_live_writes_enabled': {
     name: 'Delhivery live writes',
     group: 'Courier connection',

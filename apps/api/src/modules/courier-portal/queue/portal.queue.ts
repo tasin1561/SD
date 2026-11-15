@@ -9,6 +9,11 @@ import { PortalDispatcherService } from '../services/portal-dispatcher.service';
 import { PortalSessionService } from '../services/portal-session.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { PortalTicketSyncService } from '../services/portal-ticket-sync.service';
+import { DelhiveryWhatsappService } from '../services/delhivery-whatsapp.service';
+import {
+  JOB_PORTAL_WHATSAPP_FETCH,
+  JOB_PORTAL_WHATSAPP_SWEEP,
+} from '../../courier-whatsapp/whatsapp.constants';
 
 export const PORTAL_QUEUE = 'courier-portal';
 export const JOB_PORTAL_DISPATCH = 'portal-dispatch';
@@ -52,6 +57,7 @@ export class PortalQueue implements OnModuleInit, OnModuleDestroy {
     private readonly dispatcher: PortalDispatcherService,
     private readonly canary: PortalCanaryService,
     private readonly ticketSync: PortalTicketSyncService,
+    private readonly whatsapp: DelhiveryWhatsappService,
     private readonly session: PortalSessionService,
     private readonly settings: CourierChannelSettingsService,
     private readonly workerRole: WorkerRoleService,
@@ -84,6 +90,14 @@ export class PortalQueue implements OnModuleInit, OnModuleDestroy {
       JOB_PORTAL_TICKET_SYNC,
       {},
       { repeat: { pattern: '*/20 * * * *' }, removeOnComplete: 20, removeOnFail: 50 },
+    );
+    // Every 30 minutes: the sweep itself debounces per parcel (6 h), caps
+    // how many it reads per run, and does nothing while
+    // courier.delhivery_whatsapp_enabled is off.
+    await this.queue.add(
+      JOB_PORTAL_WHATSAPP_SWEEP,
+      {},
+      { repeat: { pattern: '*/30 * * * *' }, removeOnComplete: 20, removeOnFail: 50 },
     );
     await this.queue.add(
       JOB_PORTAL_CANARY,
@@ -136,6 +150,15 @@ export class PortalQueue implements OnModuleInit, OnModuleDestroy {
         if (job.name === JOB_PORTAL_TICKET_SYNC) {
           const res = await this.ticketSync.sync();
           this.logger.log(res, 'Courier ticket sync complete');
+          return;
+        }
+        if (job.name === JOB_PORTAL_WHATSAPP_SWEEP) {
+          this.logger.log(await this.whatsapp.sweep(), 'Courier WhatsApp sweep complete');
+          return;
+        }
+        if (job.name === JOB_PORTAL_WHATSAPP_FETCH) {
+          const shipmentId = (job.data as { shipmentId?: unknown }).shipmentId;
+          if (typeof shipmentId === 'string') await this.whatsapp.fetchOne(shipmentId);
           return;
         }
         if (job.name === JOB_PORTAL_CANARY) {

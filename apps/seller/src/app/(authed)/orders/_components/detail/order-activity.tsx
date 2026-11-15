@@ -7,6 +7,7 @@ import { isCourierOwned, journeyOwnerLabel } from '@skydrop/ui/status';
 import { useLocale, useT } from '@/i18n/client';
 import { fmtDay, fmtFull, fmtWhen } from './format';
 import { milestoneLabel } from './milestone-words';
+import { CourierWhatsappSection } from './courier-whatsapp-section';
 
 const FIRST = 8;
 
@@ -99,6 +100,7 @@ export function OrderActivity({
           </button>
         )}
       </div>
+      <CourierWhatsappSection />
     </div>
   );
 }

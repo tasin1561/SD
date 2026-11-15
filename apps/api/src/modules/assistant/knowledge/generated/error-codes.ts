@@ -441,7 +441,7 @@ export const ERROR_CODES: ReadonlyArray<readonly [string, string, string | null]
   ["ORDER_ALREADY_RESERVED","order","Order {…} already holds {…} active reservation(s). Restoring would claim the same stock twice."],
   ["ORDER_BEING_PACKED","order","Someone is packing this order right now. Try again in a few minutes, or contact support to stop it."],
   ["ORDER_NOT_AWAITING_COURIER","courier-awb","This order is {…}; it is not waiting for a carrier"],
-  ["ORDER_NOT_FOUND","assistant,customer-return,delivery-action,invoice,order,order-charges,order-journey,reseller-order,reseller-order-money-view,store-order-request,ticket,warehouse-activity,warehouse-pack,warehouse-pick,warehouse-rto","No such order in your store."],
+  ["ORDER_NOT_FOUND","assistant,courier-whatsapp,customer-return,delivery-action,invoice,order,order-charges,order-journey,reseller-order,reseller-order-money-view,store-order-request,ticket,warehouse-activity,warehouse-pack,warehouse-pick,warehouse-rto","No such order in your store."],
   ["ORDER_NOT_INSPECTABLE","warehouse-rto","Order is {…}; RTO inspection requires RTO_RECEIVED"],
   ["ORDER_NOT_MANUAL_PLACEMENT","courier-manual-placement","Order is {…}; manual placement requires PENDING_MANUAL_PLACEMENT"],
   ["ORDER_NOT_PACKABLE","warehouse-pack","Order is {…}; a box can only be opened once the order is PICKED"],

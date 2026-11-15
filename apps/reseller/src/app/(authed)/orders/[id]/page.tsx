@@ -71,6 +71,7 @@ import {
   RoSection,
 } from '../_components/orders-parts';
 import { cloneHref } from '@/lib/clone-order';
+import { CourierWhatsappSection } from './_components/courier-whatsapp-section';
 
 /**
  * RS-5 — one of this store's orders: who it is going to, what is in it,
@@ -430,6 +431,7 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
       ) : null}
 
       <OrderTimeline orderId={o.id} orderNumber={o.orderNumber} status={o.status} />
+      <CourierWhatsappSection orderId={o.id} />
 
       <Dialog
         open={confirming}

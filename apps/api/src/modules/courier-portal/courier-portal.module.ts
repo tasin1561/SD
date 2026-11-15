@@ -29,6 +29,7 @@ import { ShiprocketWalletSyncService } from './services/shiprocket-wallet-sync.s
 import { ShiprocketInvoiceCheckService } from './services/shiprocket-invoice-check.service';
 import { DelhiveryBillingProbeService } from './services/delhivery-billing-probe.service';
 import { DelhiveryInvoiceCheckService } from './services/delhivery-invoice-check.service';
+import { DelhiveryWhatsappService } from './services/delhivery-whatsapp.service';
 
 /**
  * Phase 5 — browser automation of one.delhivery.com.
@@ -92,6 +93,8 @@ import { DelhiveryInvoiceCheckService } from './services/delhivery-invoice-check
     DelhiveryInvoiceCheckService,
     ConsigneeVerifyService,
     ConsigneeVerifyWorker,
+    // Delhivery's "View Whatsapp" window, read on the portal queue.
+    DelhiveryWhatsappService,
     // Shiprocket's panel: its own browser, out through the India egress
     // route named by `courier.shiprocket_portal_proxy` (the NordVPN
     // container since 2026-09-28; the Bangalore tunnel it replaced was

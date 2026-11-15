@@ -943,6 +943,15 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'When OFF (default) Skydrop refuses any Delhivery call with a physical or billable effect — manifest a shipment, edit/cancel one, request a pickup, take an NDR action, register a warehouse, consume waybills — while still allowing reads. There is no sandbox for this account: every write here is a real parcel, a real van or a real cancellation. Turn it on deliberately for live operations (or for a controlled single-parcel test), and expect a HIGH audit row for every blocked attempt while it is off.',
   },
+  {
+    key: 'courier.delhivery_whatsapp_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Delhivery — read the WhatsApp messages they sent the customer',
+    description:
+      'When ON, the portal worker opens Delhivery One for parcels that were out for delivery or had a failed attempt, reads the WhatsApp messages Delhivery sent the customer, and shows them on the order page. Read-only on their panel. Default OFF until the panel read has been checked live.',
+  },
   // Per courier, not one switch for both. Enabling Delhivery for its
   // first controlled parcel must not silently arm every Shiprocket write
   // path: separate contracts, separate accounts, separate money, and
