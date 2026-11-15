@@ -7,7 +7,7 @@ import {
   AdminCourierWhatsappHealthController,
   SellerCourierWhatsappController,
   StoreCourierWhatsappController,
-} from './controllers/courier-whatsapp.controllers';
+} from './controllers/courier-whatsapp.controller';
 import { CourierWhatsappReadService } from './services/courier-whatsapp-read.service';
 
 /**
