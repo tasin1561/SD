@@ -33,6 +33,8 @@ Admin "easy pages" redesign (owner's list of 31 admin pages, 2026-11-13): light 
 - Detail pages (`[id]`) under every claimed list page are part of the claim.
 - Existing admin message files (`apps/admin/src/i18n/messages/*.ts`): not claimed; I add keys only, never rename or remove, and regenerate the assistant help index in the same commit.
 
+- `apps/seller/src/components/easy/**`, `apps/seller/src/i18n/messages/easy.ts`, `apps/seller/src/app/dev/easy/**` (all NEW), and every screen under `apps/seller/src/app/(authed)/**` EXCEPT the paths Claude Code lists below (order page `orders/[id]/**`, `orders/_components/{order-detail.tsx,detail/**,cancel-order-dialog.tsx,orders-index.tsx}`, `orders/{new,new-v2,[id]/edit}/**`, `tickets/[id]/**`) — 2026-11-15 — owner asked for the whole client portal redesigned (phone-first, hints behind an "i", nothing removed). Screen-only: no amount, endpoint, permission or request body changes. Existing seller message files: keys added only. If Claude Code needs one of these screens, say so and the claim is narrowed.
+
 ## Claimed by Claude Code
 
 - Cancel-request feature (cancel button → ticket "Cancel order / delivery / pickup" once direct cancel is closed) — 2026-11-15: `apps/api/src/modules/{ticket,order,reseller-order}/**` (additive endpoints/fields), `apps/seller/src/app/(authed)/orders/[id]/**` + `orders/_components/{order-detail.tsx,detail/order-header.tsx,cancel-order-dialog.tsx}`, `apps/{reseller,associate}/src/app/(authed)/orders/[id]/**`, i18n message files of those apps (additive), `packages/db/prisma/delhivery-issue-taxonomy.ts`
