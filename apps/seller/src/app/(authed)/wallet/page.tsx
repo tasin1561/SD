@@ -34,6 +34,7 @@ import { WalFact, WalStripFact } from './_components/wallet-parts';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { dateTag } from '@/i18n/format';
+import { PhoneFold } from '@/components/easy/phone-fold';
 import { AboutThis } from '@/components/easy/about';
 
 type WalletTab = 'ledger' | 'withdrawals' | 'topups';
@@ -133,7 +134,7 @@ export default function WalletPage(): ReactElement {
           (FE-7). */}
       {/* On a phone each entry is a card headed by what it was, with the
           amount next — the two things looked for in a ledger. */}
-      <div className="ez-wrap ez-cards ez-lead-2 ez-then-4">
+      <PhoneFold className="ez-cards ez-lead-2 ez-then-4">
         <Table caption={t('wallet.walletLedger')}>
           <THead>
             <Tr>
@@ -150,7 +151,7 @@ export default function WalletPage(): ReactElement {
             ))}
           </TBody>
         </Table>
-      </div>
+      </PhoneFold>
       {entries.hasNextPage && (
         <div className="wal-more">
           <AsyncButton

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import {
   Banknote,
   BellOff,
@@ -279,6 +279,18 @@ function YourTopics({
 
   // Every group starts open; closing one is remembered for this visit.
   const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set());
+  // On a phone only the first group starts open: the list of groups fits
+  // one screen, and each opens with a tap. Done once, when the topics
+  // arrive, so it never undoes a choice the person has made since.
+  const foldedOnce = useRef(false);
+  const groupKey = groupNames.join('|');
+  useEffect(() => {
+    if (foldedOnce.current || groupKey === '') return;
+    foldedOnce.current = true;
+    if (typeof window.matchMedia !== 'function') return;
+    if (!window.matchMedia('(max-width: 559.98px)').matches) return;
+    setClosed(new Set(groupKey.split('|').slice(1)));
+  }, [groupKey]);
 
   return (
     <section className="set-section">
