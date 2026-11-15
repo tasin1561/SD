@@ -56,6 +56,7 @@ import {
 } from '@/lib/order-hooks';
 import { useStoreCallReviews } from '@/lib/review-hooks';
 import { CallReviewDecision } from '@/components/call-review-decision';
+import { CancelRequestAction } from './_components/cancel-request';
 import { OrderMoney } from './_components/order-money';
 import { StoreConsigneePanel } from './_components/store-consignee-panel';
 import { OrderAddressCheckPanel } from './_components/address-check-panel';
@@ -184,6 +185,18 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
                 >
                   {cancelNeedsSeller ? t('ordd.askCancel') : t('ordd.cancelOrder')}
                 </Button>
+              ) : // Past the packing window (2026-11-15): still offered, but it asks
+              // Skydrop by ticket and is disabled while that ticket is open. The
+              // server withholds it when the seller turned cancelling off.
+              !o.terminal &&
+                o.cancelRequest?.available === true &&
+                can(me, 'orders.cancel') &&
+                cancelMode !== 'OFF' ? (
+                <CancelRequestAction
+                  orderId={o.id}
+                  orderNumber={o.orderNumber}
+                  openTicket={o.cancelRequest.openTicket}
+                />
               ) : null
             }
           </>

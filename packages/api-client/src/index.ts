@@ -47,6 +47,8 @@ export type {
   RestoreReservationsRequest,
   RestoreReservationsResult,
   StoreKindValue,
+  CancelRequestView,
+  CancelRequestResult,
 } from './endpoints/admin-orders';
 export type {
   CustomerDeliveryFeeView,

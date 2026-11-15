@@ -8,6 +8,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import type { OrderStatus } from '@skydrop/db';
+import type { CancelRequestView } from '@skydrop/api-client';
 import { useApiClient } from '@skydrop/auth/client';
 
 /**
@@ -76,6 +77,8 @@ export interface MyOrderView {
      */
     readonly deliveryActions: boolean;
   };
+  /** Past the packing window: ask Skydrop by ticket (2026-11-15). Absent on older servers. */
+  readonly cancelRequest?: CancelRequestView;
   readonly placedAt: string;
   readonly confirmedAt: string | null;
   readonly cancelledAt: string | null;

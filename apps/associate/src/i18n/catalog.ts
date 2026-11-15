@@ -1,6 +1,7 @@
 import { toCatalogs } from './define';
 import { account } from './messages/account';
 import { auth } from './messages/auth';
+import { cancelRequest } from './messages/cancelRequest';
 import { common } from './messages/common';
 import { notifications } from './messages/notifications';
 import { orderImport } from './messages/orderImport';
@@ -17,6 +18,7 @@ import { tickets } from './messages/tickets';
  * the later file win) and that every `{placeholder}` appears in both languages.
  */
 export const NAMESPACES = [
+  cancelRequest,
   common,
   auth,
   shell,
@@ -31,6 +33,7 @@ export const NAMESPACES = [
 ] as const;
 
 const ALL = {
+  ...cancelRequest,
   ...common,
   ...auth,
   ...shell,

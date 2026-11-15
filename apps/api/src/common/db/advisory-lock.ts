@@ -122,6 +122,12 @@ export const AdvisoryLock = {
    */
   TICKET_NUMBER: 0x0544b,
   /**
+   * 'CR' — raising the cancel request of ONE order. "Is a cancel ticket
+   * already open for it?" and the insert are two statements; two taps at once
+   * both read "none" and open two. Keyed by order id.
+   */
+  CANCEL_REQUEST: 0x04352,
+  /**
    * 'PL' — closing a P&L month and writing carry-forwards (PNL-CF-1).
    *
    * Detection reads a closed month's snapshot plus every carry-forward

@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { OrderSource } from '@skydrop/db';
+import { OrderSource, ResellerStoreActionMode } from '@skydrop/db';
 import { RequireStorePermissions } from '../../../common/auth/require-store-permissions.decorator';
 import {
   ClientInfo,
@@ -21,6 +21,9 @@ import { CurrentStoreUser } from '../../../common/decorators/current-store-user.
 import { StoreJwtGuard } from '../../../common/guards/store-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStoreUser } from '../../../common/types/request';
+import { CancelRequestReadService } from '../../cancel-request/cancel-request-read.service';
+import type { CancelRequestView } from '../../cancel-request/cancel-request.rules';
+import { ResellerStoreActionPolicyService } from '../../reseller-store/services/reseller-store-action-policy.service';
 import { CancelOrderDto } from '../../order/dto/cancel-order.dto';
 import { CreateStoreOrderDto } from '../../order/dto/create-store-order.dto';
 import { ResellerOrderService } from '../../order/services/reseller-order.service';
@@ -52,6 +55,8 @@ export class StoreOrderController {
   constructor(
     private readonly orders: StoreOrdersService,
     private readonly placing: ResellerOrderService,
+    private readonly cancelRequests: CancelRequestReadService,
+    private readonly policies: ResellerStoreActionPolicyService,
   ) {}
 
   @Get()
@@ -86,11 +91,22 @@ export class StoreOrderController {
 
   @Get(':id')
   @ApiOperation({ summary: 'One of this store’s orders' })
-  get(
+  async get(
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('id', uuid()) id: string,
-  ): Promise<StoreOrderView> {
-    return this.orders.detail(user.storeId, viewerFor(user), id);
+  ): Promise<StoreOrderView & { cancelRequest: CancelRequestView }> {
+    const order = await this.orders.detail(user.storeId, viewerFor(user), id);
+    // Past the direct-cancel window the button asks Skydrop by ticket
+    // (2026-11-15). The seller's cancel policy for the store still rules:
+    // OFF means no button at all, exactly as before.
+    const policy = await this.policies.forStore(user.storeId);
+    return {
+      ...order,
+      cancelRequest: await this.cancelRequests.viewFor(
+        order,
+        policy.cancel !== ResellerStoreActionMode.OFF,
+      ),
+    };
   }
 
   @Get(':id/events')

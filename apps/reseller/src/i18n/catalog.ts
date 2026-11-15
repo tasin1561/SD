@@ -4,6 +4,7 @@ import { addressCorrection } from './messages/addressCorrection';
 import { associates } from './messages/associates';
 import { auth } from './messages/auth';
 import { callReviews } from './messages/callReviews';
+import { cancelRequest } from './messages/cancelRequest';
 import { catalogue } from './messages/catalogue';
 import { common } from './messages/common';
 import { consignee } from './messages/consignee';
@@ -39,6 +40,7 @@ export const NAMESPACES = [
   associates,
   auth,
   callReviews,
+  cancelRequest,
   catalogue,
   common,
   consignee,
@@ -70,6 +72,7 @@ const ALL = {
   ...associates,
   ...auth,
   ...callReviews,
+  ...cancelRequest,
   ...catalogue,
   ...common,
   ...consignee,
