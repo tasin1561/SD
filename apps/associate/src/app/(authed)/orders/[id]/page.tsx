@@ -27,6 +27,7 @@ import { BackLink, Facts, LinkButton, Notice, Section } from '../../_components/
 import { CancelRequestAction } from './_components/cancel-request';
 import { Reattempt } from './_components/reattempt';
 import { OrderAddressCheckPanel } from './_components/address-check-panel';
+import { CourierWhatsappSection } from './_components/courier-whatsapp-section';
 import '../../_components/as.css';
 
 /** Where a customer looks their own parcel up. */
@@ -342,6 +343,8 @@ export default function OrderDetailPage(): ReactElement {
           )}
         </div>
       </Section>
+
+      <CourierWhatsappSection orderId={o.id} />
 
       <ConfirmDialog
         open={confirming}

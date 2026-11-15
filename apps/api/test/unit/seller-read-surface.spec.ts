@@ -125,6 +125,7 @@ const ORDERS_VIEW_GETS: Readonly<Record<string, Readonly<Record<string, string>>
   // The same order, told as a story — a strict re-presentation of what
   // `:id` and `:id/events` already return.
   'seller-order-journey.controller.ts': { ':id/journey': 'orders.view' },
+  'seller-courier-whatsapp.controller.ts': { ':id/courier-messages': 'orders.view' },
   // Where those same parcels are.
   'seller-tracking.controller.ts': { '': 'orders.view', ':shipmentId': 'orders.view' },
   // Their own orders stuck out for delivery — a filtered view of the list.

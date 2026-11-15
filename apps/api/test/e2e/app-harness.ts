@@ -874,6 +874,9 @@ export async function resetWarehouseState(prisma: PrismaClient): Promise<void> {
         'shipment_item_rto_inspections',
         'shipment_items',
         'awb_labels',
+        // Courier WhatsApp copies — FK shipments (CASCADE); explicit per MUST #12.
+        'courier_whatsapp_messages',
+        'courier_whatsapp_checks',
         'order_shipments',
         'shipments',
         'manifests',

@@ -1,5 +1,6 @@
 import { makeTranslator } from '@skydrop/ui/app/i18n';
 import { toCatalogs } from './define';
+import { courierWhatsapp } from './messages/courierWhatsapp';
 import { activity } from './messages/activity';
 import { ai } from './messages/ai';
 import { cc } from './messages/cc';
@@ -26,6 +27,7 @@ import { wh } from './messages/wh';
  * the later file win) and that every `{placeholder}` appears in both languages.
  */
 export const NAMESPACES = [
+  courierWhatsapp,
   activity,
   ai,
   common,
@@ -48,6 +50,7 @@ export const NAMESPACES = [
 ] as const;
 
 const ALL = {
+  ...courierWhatsapp,
   ...activity,
   ...ai,
   ...common,

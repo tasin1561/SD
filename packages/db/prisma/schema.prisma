@@ -4386,32 +4386,34 @@ model Shipment {
   updatedAt                DateTime         @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt                DateTime?        @map("deleted_at") @db.Timestamptz
 
-  courier              Courier           @relation(fields: [courierCode], references: [code])
-  courierAccount       CourierAccount?   @relation(fields: [courierAccountId], references: [id])
-  originWarehouse      Warehouse         @relation(fields: [originWarehouseId], references: [id])
-  rtoReceivedWarehouse Warehouse?        @relation("ShipmentRtoReceivedWarehouse", fields: [rtoReceivedWarehouseId], references: [id])
-  supersedes           Shipment?         @relation("ShipmentSupersedes", fields: [supersedesShipmentId], references: [id])
-  supersededBy         Shipment[]        @relation("ShipmentSupersedes")
-  pickStartedBy        StaffUser?        @relation("ShipmentPickStartedBy", fields: [pickStartedByStaffId], references: [id])
-  packedBy             StaffUser?        @relation("ShipmentPackedBy", fields: [packedByStaffId], references: [id])
-  packClaimedBy        StaffUser?        @relation("ShipmentPackClaimedBy", fields: [packClaimedByStaffId], references: [id])
-  manifest             Manifest?         @relation(fields: [manifestId], references: [id])
-  labelPrintedBy       StaffUser?        @relation("ShipmentLabelPrintedBy", fields: [labelPrintedByStaffId], references: [id])
-  handoverScannedBy    StaffUser?        @relation("ShipmentHandoverScannedBy", fields: [handoverScannedByStaffId], references: [id])
-  courierChosenBy      StaffUser?        @relation("ShipmentCourierChosenBy", fields: [courierChosenByStaffId], references: [id])
-  pickBatch            PickBatch?        @relation(fields: [pickBatchId], references: [id])
-  orderShipments       OrderShipment[]
-  items                ShipmentItem[]
-  packBoxes            PackBox[]
-  awbLabels            AwbLabel[]
-  trackingEvents       TrackingEvent[]
-  courierDocuments     CourierDocument[]
-  webhooks             CourierWebhook[]
-  deliveryAttempts     DeliveryAttempt[]
-  stockMovements       StockMovement[]
-  charges              OrderCharge[]
-  notificationLogs     NotificationLog[]
-  tickets              Ticket[]
+  courier                 Courier                  @relation(fields: [courierCode], references: [code])
+  courierAccount          CourierAccount?          @relation(fields: [courierAccountId], references: [id])
+  originWarehouse         Warehouse                @relation(fields: [originWarehouseId], references: [id])
+  rtoReceivedWarehouse    Warehouse?               @relation("ShipmentRtoReceivedWarehouse", fields: [rtoReceivedWarehouseId], references: [id])
+  supersedes              Shipment?                @relation("ShipmentSupersedes", fields: [supersedesShipmentId], references: [id])
+  supersededBy            Shipment[]               @relation("ShipmentSupersedes")
+  pickStartedBy           StaffUser?               @relation("ShipmentPickStartedBy", fields: [pickStartedByStaffId], references: [id])
+  packedBy                StaffUser?               @relation("ShipmentPackedBy", fields: [packedByStaffId], references: [id])
+  packClaimedBy           StaffUser?               @relation("ShipmentPackClaimedBy", fields: [packClaimedByStaffId], references: [id])
+  manifest                Manifest?                @relation(fields: [manifestId], references: [id])
+  labelPrintedBy          StaffUser?               @relation("ShipmentLabelPrintedBy", fields: [labelPrintedByStaffId], references: [id])
+  handoverScannedBy       StaffUser?               @relation("ShipmentHandoverScannedBy", fields: [handoverScannedByStaffId], references: [id])
+  courierChosenBy         StaffUser?               @relation("ShipmentCourierChosenBy", fields: [courierChosenByStaffId], references: [id])
+  pickBatch               PickBatch?               @relation(fields: [pickBatchId], references: [id])
+  orderShipments          OrderShipment[]
+  items                   ShipmentItem[]
+  packBoxes               PackBox[]
+  awbLabels               AwbLabel[]
+  courierWhatsappMessages CourierWhatsappMessage[]
+  courierWhatsappCheck    CourierWhatsappCheck?
+  trackingEvents          TrackingEvent[]
+  courierDocuments        CourierDocument[]
+  webhooks                CourierWebhook[]
+  deliveryAttempts        DeliveryAttempt[]
+  stockMovements          StockMovement[]
+  charges                 OrderCharge[]
+  notificationLogs        NotificationLog[]
+  tickets                 Ticket[]
 
   ndrActionRequests      NdrActionRequest[]
   deliveryActionRequests OrderDeliveryActionRequest[]
@@ -4665,6 +4667,69 @@ model AwbLabel {
   @@index([generatedAt])
   @@index([generatedByStaffId])
   @@map("awb_labels")
+}
+
+/// What a courier's own panel shows it sent the CUSTOMER on WhatsApp
+/// (Delhivery One's "View Whatsapp" window). The courier's public API has
+/// no endpoint for this, so the portal worker reads it off their screen.
+///
+/// INSERT-ONLY: a re-read adds only bubbles not already stored. The
+/// panel is the source of truth and we keep a verbatim copy.
+/// `sent_label` is the raw time text exactly as shown; `sent_at` is set
+/// ONLY when that text carries a full date (never guessed).
+/// `dedupe_hash` = hash(text | sent_label | n-th identical pair).
+model CourierWhatsappMessage {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentId  String    @map("shipment_id") @db.Uuid
+  courierCode String    @map("courier_code")
+  text        String
+  sentLabel   String    @map("sent_label")
+  sentAt      DateTime? @map("sent_at") @db.Timestamptz
+  dedupeHash  String    @map("dedupe_hash")
+  fetchedAt   DateTime  @default(now()) @map("fetched_at") @db.Timestamptz
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@unique([shipmentId, dedupeHash])
+  @@index([shipmentId])
+  @@map("courier_whatsapp_messages")
+}
+
+/// One row per parcel: when we last LOOKED, and what we saw. Drives the
+/// per-AWB debounce so a parcel is not re-read more often than every few
+/// hours. Mutable bookkeeping, unlike the messages.
+model CourierWhatsappCheck {
+  shipmentId    String    @id @map("shipment_id") @db.Uuid
+  lastAttemptAt DateTime  @map("last_attempt_at") @db.Timestamptz
+  /// OK | NO_BUTTON | UNREADABLE | FAILED
+  lastOutcome   String    @map("last_outcome")
+  messageCount  Int       @default(0) @map("message_count")
+  /// When the next read of this parcel is due (hot cadence or the cold 6 h).
+  nextReadAt    DateTime? @map("next_read_at") @db.Timestamptz
+  /// The current hot gap in ms; null = cold (normal 6 h debounce).
+  gapMs         Int?      @map("gap_ms")
+  /// The last read that found a NEW bubble (the hot window runs 3 h from it).
+  lastNewAt     DateTime? @map("last_new_at") @db.Timestamptz
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@map("courier_whatsapp_checks")
+}
+
+/// One row per portal read, insert-only: the health numbers (reads and
+/// failures today, the hourly ceiling) are counted from here.
+model CourierWhatsappRead {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentId String   @map("shipment_id") @db.Uuid
+  /// OK | NO_BUTTON | UNREADABLE | FAILED | LOGGED_OUT
+  outcome    String
+  newCount   Int      @default(0) @map("new_count")
+  /// hot | sweep | event | viewer
+  kind       String
+  at         DateTime @default(now()) @db.Timestamptz
+
+  @@index([at])
+  @@map("courier_whatsapp_reads")
 }
 
 // HYPERTABLE — composite @@id([id, createdAt]); immutable (no updatedAt,

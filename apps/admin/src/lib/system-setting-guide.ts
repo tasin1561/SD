@@ -1644,6 +1644,49 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     what: 'The address we call Shiprocket at. Empty means practice mode. Bookings also need "Shiprocket live writes"; the login lives with the courier account, not here.',
     example: 'Set to https://apiv2.shiprocket.in: Shiprocket is reached for real.',
   },
+  'courier.delhivery_whatsapp_enabled': {
+    name: 'Delhivery WhatsApp messages',
+    group: 'Courier connection',
+    what: 'When on, our portal worker opens Delhivery One for parcels that were out for delivery or had a failed attempt, reads the WhatsApp messages Delhivery sent the customer, and shows them on the order page for staff, clients, member stores and associates. It only reads their screen; it changes nothing there.',
+    example:
+      'On: a parcel that was refused at the door shows "You refused delivery of your shipment" in its Activity area.',
+    values: onOff(
+      [
+        'The worker reads Delhivery’s WhatsApp window for active and recently finished parcels, and staff get a Refresh button.',
+        'Order pages show the courier’s WhatsApp messages once they have been read.',
+      ],
+      [
+        'Nothing is read from Delhivery One for this; messages already stored stay visible.',
+        'No new messages appear and the Refresh button does nothing.',
+      ],
+    ),
+  },
+  'courier.delhivery_whatsapp_batch': {
+    name: 'Delhivery WhatsApp: parcels queued per sweep',
+    group: 'Courier connection',
+    what: 'The safety-net sweep (every 15 minutes) queues at most this many parcels that are due for a WhatsApp read. Reads triggered by a scan or by someone opening an order are separate and not counted.',
+    example: 'Set to 60: a busy morning queues up to 60 parcels per sweep, 240 an hour.',
+  },
+  'courier.delhivery_whatsapp_parallel': {
+    name: 'Delhivery WhatsApp: reads at the same time',
+    group: 'Courier connection',
+    what: 'How many WhatsApp windows are read at once, each in its own tab of the one signed-in browser. Never more than 3: the server has 4 GB of memory.',
+    example: 'Set to 2: two parcels are read side by side, a few seconds apart.',
+  },
+  'courier.delhivery_whatsapp_hourly_cap': {
+    name: 'Delhivery WhatsApp: reads per hour ceiling',
+    group: 'Courier connection',
+    what: 'Once this many reads ran in the last hour, routine sweep reads wait for the next hour. Parcels in a live conversation keep being read.',
+    example:
+      'Set to 400: after 400 reads in an hour only live conversations are read until the count drops.',
+  },
+  'courier.delhivery_whatsapp_queue_max': {
+    name: 'Delhivery WhatsApp: most reads allowed to wait',
+    group: 'Courier connection',
+    what: 'When more reads than this are waiting, new routine sweep reads are dropped (the next sweep asks again). Reads for live conversations and for pages someone is viewing are always accepted, so nothing important is lost and the server is never flooded.',
+    example:
+      'Set to 2000: with 2,000 reads already waiting, a sweep adds nothing until the queue shrinks.',
+  },
   'courier.delhivery_live_writes_enabled': {
     name: 'Delhivery live writes',
     group: 'Courier connection',

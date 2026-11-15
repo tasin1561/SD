@@ -1,4 +1,5 @@
 import { toCatalogs } from './define';
+import { courierWhatsapp } from './messages/courierWhatsapp';
 import { account } from './messages/account';
 import { addressCorrection } from './messages/addressCorrection';
 import { associates } from './messages/associates';
@@ -35,6 +36,7 @@ import { wallet } from './messages/wallet';
  * the later file win) and that every `{placeholder}` appears in both languages.
  */
 export const NAMESPACES = [
+  courierWhatsapp,
   account,
   addressCorrection,
   associates,
@@ -67,6 +69,7 @@ export const NAMESPACES = [
 ] as const;
 
 const ALL = {
+  ...courierWhatsapp,
   ...account,
   ...addressCorrection,
   ...associates,

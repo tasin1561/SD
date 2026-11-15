@@ -12,6 +12,7 @@ import { useParcelActivity } from '@/lib/activity-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { actorLabel } from '@/lib/activity-format';
 import { DetailCard } from './detail-card';
+import { CourierWhatsappHealthLine, CourierWhatsappSection } from './courier-whatsapp-section';
 import { ACTIVITY_PREVIEW, buildActivity, rowsFor, type ActivityRow } from './order-activity';
 import { fmtRowTime, fmtStamp } from './order-detail-format';
 import type { ActivityFilter } from './order-detail-ui-state';
@@ -140,6 +141,8 @@ export function ActivityCard({
           {expanded ? t('common.showLess') : t('common.showAll', { count: rows.length })}
         </Button>
       ) : null}
+      <CourierWhatsappSection orderId={orderId} />
+      <CourierWhatsappHealthLine />
     </DetailCard>
   );
 }

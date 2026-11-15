@@ -2,6 +2,19 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { EnvService } from '../../../config/env.service';
+import { availableMemoryMb, MIN_FREE_MB } from '../../courier-whatsapp/guards';
+import { CourierWhatsappHealthService } from '../../courier-whatsapp/services/courier-whatsapp-health.service';
+import { CourierWhatsappRequestService } from '../../courier-whatsapp/services/courier-whatsapp-request.service';
+import {
+  DROPPED_KEY,
+  LOWMEM_KEY,
+  WhatsappBreakerStore,
+} from '../../courier-whatsapp/services/whatsapp-breaker.store';
+import {
+  WHATSAPP_PARALLEL_KEY,
+  WHATSAPP_PARALLEL_MAX,
+  WHATSAPP_SETTING_KEY,
+} from '../../courier-whatsapp/whatsapp.constants';
 import { WebhookPayloadRetentionService } from '../../tracking-ingestion/services/webhook-payload-retention.service';
 
 /**
@@ -103,20 +116,24 @@ export class CapacityService {
     private readonly redis: RedisService,
     private readonly env: EnvService,
     private readonly webhookRetention: WebhookPayloadRetentionService,
+    private readonly whatsappHealth: CourierWhatsappHealthService,
+    private readonly whatsappBreaker: WhatsappBreakerStore,
+    private readonly whatsappQueue: CourierWhatsappRequestService,
   ) {}
 
   async report(): Promise<CapacityReport> {
-    const [db, timescale, payloads, redis, queues, growth, settings] = await Promise.all([
+    const [db, timescale, payloads, redis, queues, whatsapp, growth, settings] = await Promise.all([
       this.databaseMetrics(),
       this.timescaleMetrics(),
       this.payloadRetentionMetrics(),
       this.redisMetrics(),
       this.queueDepth(),
+      this.whatsappMetrics(),
       this.growth(),
       this.ceilings(),
     ]);
 
-    const metrics = [...db, ...timescale, ...payloads, ...redis, ...queues];
+    const metrics = [...db, ...timescale, ...payloads, ...redis, ...queues, ...whatsapp];
     const worstStatus = metrics.reduce<CapacityStatus>(
       (worst, m) => (RANK[m.status] > RANK[worst] ? m.status : worst),
       'OK',
@@ -154,6 +171,58 @@ export class CapacityService {
           : 'This instance serves HTTP only; another owns the queues.',
       },
     };
+  }
+
+  // ── Delhivery WhatsApp reader ───────────────────────────────────────
+
+  /**
+   * Six rows for the courier WhatsApp reader. Shown only once the feature
+   * is switched on (or has ever read), so a shop that never uses it sees
+   * nothing new on the page.
+   */
+  async whatsappMetrics(): Promise<CapacityMetric[]> {
+    try {
+      const enabled =
+        (
+          await this.prisma.client.systemSetting.findUnique({
+            where: { key: WHATSAPP_SETTING_KEY },
+            select: { valueBoolean: true },
+          })
+        )?.valueBoolean === true;
+      const h = await this.whatsappHealth.snapshot();
+      if (!enabled && h.readsToday === 0 && h.lastReadAt === null) return [];
+
+      const [parallelRow, queueMax, waiting, breaker, dropped, lowMem] = await Promise.all([
+        this.prisma.client.systemSetting.findUnique({
+          where: { key: WHATSAPP_PARALLEL_KEY },
+          select: { valueInt: true },
+        }),
+        this.whatsappQueue.queueMax(),
+        this.whatsappQueue.waitingCount(),
+        this.whatsappBreaker.state(),
+        this.whatsappBreaker.count(DROPPED_KEY),
+        this.whatsappBreaker.count(LOWMEM_KEY),
+      ]);
+      const parallel = Math.min(WHATSAPP_PARALLEL_MAX, Math.max(1, parallelRow?.valueInt ?? 2));
+      const freeMb = availableMemoryMb();
+      return buildWhatsappMetrics({
+        health: h,
+        parallel,
+        queueMax,
+        waiting,
+        breaker,
+        dropped,
+        lowMemory: lowMem,
+        freeMb,
+        now: Date.now(),
+      });
+    } catch (err) {
+      this.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'WhatsApp capacity rows unavailable',
+      );
+      return [];
+    }
   }
 
   // ── database ────────────────────────────────────────────────────────
@@ -538,4 +607,137 @@ export class CapacityService {
           : `Last completed cycle ${last.toISOString()}. The cron default is every 20 minutes (courier.tracking_poll_cron).`,
     };
   }
+}
+
+const pct = (used: number, ceiling: number): number =>
+  Math.round(Math.min(100, (used / Math.max(1, ceiling)) * 100) * 10) / 10;
+
+/** Pure: the WhatsApp rows from already-gathered numbers (unit-tested). */
+export function buildWhatsappMetrics(i: {
+  readonly health: {
+    readonly readsLastHour: number;
+    readonly hourlyCap: number;
+    readonly oldestDueMinutes: number | null;
+    readonly failuresToday: number;
+    readonly readsToday: number;
+  };
+  readonly parallel: number;
+  readonly queueMax: number;
+  readonly waiting: number;
+  readonly breaker: {
+    readonly status: 'closed' | 'open';
+    readonly reason: string | null;
+    readonly openUntil: number | null;
+  };
+  readonly dropped: number;
+  readonly lowMemory: number;
+  readonly freeMb: number;
+  readonly now: number;
+}): CapacityMetric[] {
+  const hourPct = pct(i.health.readsLastHour, i.health.hourlyCap);
+  const queuePct = pct(i.waiting, i.queueMax);
+  const isOpen =
+    i.breaker.status === 'open' && i.breaker.openUntil !== null && i.breaker.openUntil > i.now;
+  const due = i.health.oldestDueMinutes;
+  const dueStatus: CapacityStatus =
+    due === null || due < 60 ? 'OK' : due < 180 ? 'WATCH' : due < 360 ? 'WARNING' : 'CRITICAL';
+  const memStatus: CapacityStatus =
+    i.freeMb < MIN_FREE_MB
+      ? 'CRITICAL'
+      : i.freeMb < 700
+        ? 'WARNING'
+        : i.freeMb < 1000
+          ? 'WATCH'
+          : 'OK';
+  return [
+    {
+      key: 'whatsapp_reads_hour',
+      label: 'WhatsApp reads this hour',
+      current: i.health.readsLastHour,
+      ceiling: i.health.hourlyCap,
+      unit: 'reads / hour',
+      percent: hourPct,
+      status: statusFor(hourPct),
+      ceilingSource: 'CONFIGURED',
+      consequence:
+        'Past the ceiling, routine sweep reads wait for the next hour, so messages for parcels nobody is looking at arrive late. Live conversations and pages being viewed are still read.',
+      remedy:
+        'Raise "Delhivery WhatsApp: reads per hour ceiling" in Settings. Beyond about 700 reads an hour the 4 GB server is too small: move to a bigger droplet first.',
+      detail: `${i.health.readsToday} read(s) today, ${i.health.failuresToday} failed.`,
+    },
+    {
+      key: 'whatsapp_parallel',
+      label: 'WhatsApp parallel tabs',
+      current: i.parallel,
+      ceiling: WHATSAPP_PARALLEL_MAX,
+      unit: 'tabs at once',
+      percent: pct(i.parallel, WHATSAPP_PARALLEL_MAX),
+      status: 'OK',
+      ceilingSource: 'CONFIGURED',
+      consequence:
+        'Each tab is a page of the one signed-in Delhivery browser and costs memory. With one tab, reads queue up behind each other in a busy morning.',
+      remedy:
+        'Raise "Delhivery WhatsApp: reads at the same time" in Settings (3 is the hard maximum on this server). More than 3 needs a bigger droplet.',
+    },
+    {
+      key: 'whatsapp_queue',
+      label: 'WhatsApp queue depth',
+      current: i.waiting,
+      ceiling: i.queueMax,
+      unit: 'reads waiting',
+      percent: queuePct,
+      status: statusFor(queuePct),
+      ceilingSource: 'CONFIGURED',
+      consequence:
+        'Past the limit, new routine sweep reads are dropped (the next sweep asks again) so the queue cannot grow without bound. Live and viewed parcels are always accepted.',
+      remedy:
+        'A queue that stays full means reads arrive faster than the tabs clear them: raise the tabs or the hourly ceiling, or lower the sweep batch. "Most reads allowed to wait" in Settings sets this limit.',
+      detail: `${i.dropped} sweep read(s) dropped so far.`,
+    },
+    {
+      key: 'whatsapp_breaker',
+      label: 'WhatsApp circuit breaker',
+      current: isOpen ? 1 : 0,
+      ceiling: 1,
+      unit: isOpen ? 'open' : 'closed',
+      percent: isOpen ? 100 : 0,
+      status: isOpen ? 'CRITICAL' : 'OK',
+      ceilingSource: 'CONFIGURED',
+      consequence:
+        'When Delhivery shows a login page or CAPTCHA, answers too many requests or fails repeatedly, reading stops for 15 minutes (doubling to 2 hours). Pages show the saved messages marked "check paused".',
+      remedy:
+        'Usually nothing: one probe read runs when the pause ends. If it keeps re-opening, check the Delhivery portal login on the courier account, or switch the master switch off.',
+      detail: isOpen
+        ? `Open (${i.breaker.reason ?? 'unknown'}) until ${new Date(i.breaker.openUntil ?? i.now).toISOString()}.`
+        : 'Closed: reads are running.',
+    },
+    {
+      key: 'whatsapp_oldest_due',
+      label: 'Oldest parcel waiting for a WhatsApp read',
+      current: due ?? 0,
+      ceiling: null,
+      unit: 'minutes overdue',
+      percent: null,
+      status: dueStatus,
+      ceilingSource: 'UNKNOWN',
+      consequence:
+        'A parcel overdue for hours means its WhatsApp messages on the order pages are that far behind.',
+      remedy:
+        'Check the breaker row and the queue row above; raise the tabs or the hourly ceiling if the queue is healthy but reads cannot keep up.',
+    },
+    {
+      key: 'whatsapp_memory',
+      label: 'Server memory free for WhatsApp tabs',
+      current: i.freeMb,
+      ceiling: null,
+      unit: 'MB available',
+      percent: null,
+      status: memStatus,
+      ceilingSource: 'MEASURED',
+      consequence: `Below ${MIN_FREE_MB} MB available no new tab is opened (the read waits 2 minutes), so the website and other workers are never starved by the browser.`,
+      remedy:
+        'Lower the parallel tabs, or move to a bigger droplet. Tabs are closed after every read and the browser context is recycled every 200 reads.',
+      detail: `${i.lowMemory} read(s) deferred for low memory so far.`,
+    },
+  ];
 }

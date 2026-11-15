@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
   ActorType,
   type Prisma,
@@ -7,6 +7,13 @@ import {
   TrackingEventType,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { CourierWhatsappRequestService } from '../../courier-whatsapp/services/courier-whatsapp-request.service';
+import {
+  WHATSAPP_COURIER,
+  WHATSAPP_FAILED_EVENTS,
+  WHATSAPP_FAILED_FOLLOWUP_MS,
+  WHATSAPP_OFD_EVENTS,
+} from '../../courier-whatsapp/whatsapp.constants';
 
 /**
  * Input for a single tracking_event append. Per TRK-3, `eventAt` is the
@@ -107,7 +114,49 @@ export interface TrackingEventRow {
  */
 @Injectable()
 export class TrackingEventAppendService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(TrackingEventAppendService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    // Optional so a bare `new TrackingEventAppendService(prisma)` keeps working.
+    @Optional() private readonly whatsapp?: CourierWhatsappRequestService,
+  ) {}
+
+  /**
+   * Out-for-delivery and failed-attempt scans are when Delhivery messages
+   * the customer: queue a WhatsApp read (jobId-deduped, setting-gated
+   * inside the request service). Post-insert, fire-and-forget, and never
+   * able to fail the append.
+   */
+  private nudgeWhatsapp(
+    shipmentId: string,
+    eventType: TrackingEventType,
+    courier: string | null,
+  ): void {
+    if (this.whatsapp === undefined) return;
+    if (courier !== null && courier !== WHATSAPP_COURIER) return;
+    const ofd = (WHATSAPP_OFD_EVENTS as readonly string[]).includes(eventType);
+    const failed = (WHATSAPP_FAILED_EVENTS as readonly string[]).includes(eventType);
+    if (!ofd && !failed) return;
+    const svc = this.whatsapp;
+    void (async () => {
+      await svc.request(shipmentId, { kind: 'event' });
+      // One follow-up ~2 h after a failed attempt: the customer's reply.
+      if (failed) {
+        await svc.request(shipmentId, {
+          kind: 'event',
+          delayMs: WHATSAPP_FAILED_FOLLOWUP_MS,
+          idSuffix: '-late',
+          ignoreFloor: true,
+        });
+      }
+    })().catch((err: unknown) =>
+      this.logger.warn(
+        { shipmentId, err: err instanceof Error ? err.message : String(err) },
+        'WhatsApp nudge failed',
+      ),
+    );
+  }
 
   async append(input: AppendTrackingEventInput): Promise<TrackingEventRow> {
     const row = await this.prisma.client.trackingEvent.create({
@@ -134,6 +183,7 @@ export class TrackingEventAppendService {
       },
       select: ROW_SELECT,
     });
+    this.nudgeWhatsapp(input.shipmentId, input.eventType, input.courierCode ?? null);
     return row;
   }
 
