@@ -133,7 +133,10 @@ const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' 
 
 export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactElement {
   const t = useT();
-  const sellerInitials = useSellerIdentity()?.initials ?? null;
+  // `uat.recipient_name_prefix` OFF: no client code — no helper, no lead.
+  const namePrefixOn = useUatField('recipientNamePrefix');
+  const ownInitials = useSellerIdentity()?.initials ?? null;
+  const sellerInitials = namePrefixOn ? ownInitials : null;
   const router = useRouter();
   const toast = useToast();
 

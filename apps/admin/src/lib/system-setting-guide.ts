@@ -1063,6 +1063,23 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
       ],
     ),
   },
+  'uat.recipient_name_prefix': {
+    name: "Add the client code before the customer's name",
+    group: 'UAT',
+    what: "Whether a client's short code (for example MST) is stored in front of the recipient's full name on orders placed from the client console, the bulk CSV upload and the API. It is what the courier label prints, so it also decides whether the code appears on the waybill. Off for UAT. Member store orders never carry a code either way.",
+    example:
+      "A client with the code MST places an order for 'Syed Talha Islam'. Off, it is saved as 'Syed Talha Islam'. On, it is saved as 'MST Syed Talha Islam'. Past orders are never rewritten.",
+    values: onOff(
+      [
+        "The client code goes in front of the name when an order is placed or its name is edited, and the order form shows a 'Saved as' note under Full name.",
+        "'MST Syed Talha Islam' is stored and printed on the label.",
+      ],
+      [
+        'The name is stored exactly as typed, with no code, on every way of placing an order, and the note under Full name is hidden.',
+        "'Syed Talha Islam' is stored and printed on the label.",
+      ],
+    ),
+  },
   'orders.page_v2_audience': {
     name: 'New order page — who sees it',
     group: 'Orders',

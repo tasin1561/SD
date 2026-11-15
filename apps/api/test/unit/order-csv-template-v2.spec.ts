@@ -19,7 +19,12 @@ import { buildOrderColumnGuide } from '../../src/modules/order-csv-import/order-
 
 const UNUSED = undefined as never;
 const BOM = '﻿';
-const ALL_OFF = { orderDeliveryFee: false, orderDiscount: false, orderDeclaredValue: false };
+const ALL_OFF = {
+  orderDeliveryFee: false,
+  orderDiscount: false,
+  orderDeclaredValue: false,
+  recipientNamePrefix: false,
+};
 
 /** The owner's file (2026-10-27), byte for byte after the BOM + `sep=,` prefix. */
 const OWNER_TEMPLATE =

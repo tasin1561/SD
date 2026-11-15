@@ -43,6 +43,7 @@ import { ConfirmationPolicyService } from '../../confirmation-policy/confirmatio
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import { OrderChargesService } from '../../order-charges/services/order-charges.service';
 import { EarlyReservationService } from '../../early-reservation/services/early-reservation.service';
+import { UatFieldsService } from '../../uat-settings/services/uat-fields.service';
 import { composeSellerPrefixedName, stripSellerPrefix } from '../../../common/text/recipient-name';
 import { unrefundedCharge } from '../../../common/money/order-charge-pairing';
 import type { CreateOrderDto } from '../dto/create-order.dto';
@@ -422,6 +423,9 @@ export class OrderService {
     // The order list's AWB / courier / dimensions (WMS-1: shipments are
     // read only through this service).
     private readonly shipments: ShipmentProvisionService,
+    // `uat.recipient_name_prefix` — whether the client code goes in front
+    // of the stored recipient name. Global module, cached reader.
+    private readonly uatFields: UatFieldsService,
   ) {}
 
   private async withShipments<T extends { id: string }>(
@@ -601,6 +605,9 @@ export class OrderService {
       catalogueWeightGrams ??
       (input.totalWeightGrams !== undefined ? input.totalWeightGrams : null);
 
+    // Read once, before the transaction (cached reader, fails to OFF).
+    const namePrefixOn = await this.uatFields.isShown('recipientNamePrefix');
+
     let created;
     try {
       created = await this.prisma.client.$transaction(async (tx) => {
@@ -625,7 +632,7 @@ export class OrderService {
           select: { initials: true },
         });
         const prefixedRecipientName =
-          reseller === null
+          reseller === null && namePrefixOn
             ? composeSellerPrefixedName(seller?.initials, input.recipientName)
             : input.recipientName.trim();
 
@@ -1319,9 +1326,11 @@ export class OrderService {
         // the seller would reach the store's customer. So a store
         // correcting the name writes it through unchanged; prefixing here
         // would corrupt the very field it came to fix.
+        // `uat.recipient_name_prefix` OFF: stored exactly as typed.
+        const namePrefixOn = await this.uatFields.isShown('recipientNamePrefix');
         data.recipientName =
-          order.storeKind === SellerStoreKind.RESELLER
-            ? input.recipientName
+          order.storeKind === SellerStoreKind.RESELLER || !namePrefixOn
+            ? input.recipientName.trim()
             : composeSellerPrefixedName(seller?.initials, input.recipientName);
       }
       if (input.recipientPhoneE164 !== undefined) {
