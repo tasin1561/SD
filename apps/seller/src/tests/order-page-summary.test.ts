@@ -114,7 +114,7 @@ describe('order page summary sentence', () => {
     expect(
       nextMilestoneKey([
         { key: 'a', state: 'CURRENT' },
-        { key: 'ready_to_dispatch', state: 'SKIPPED' },
+        { key: 'a_skipped_step', state: 'SKIPPED' },
         { key: 'dispatched', state: 'PENDING' },
       ]),
     ).toBe('dispatched');

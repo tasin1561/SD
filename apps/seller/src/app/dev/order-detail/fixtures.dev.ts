@@ -146,7 +146,6 @@ const KEYS: ReadonlyArray<[string, string, 'SKYDROP' | 'COURIER']> = [
   ['call_confirmed', 'Confirmed by phone', 'SKYDROP'],
   ['picked', 'Picked from shelf', 'SKYDROP'],
   ['packed', 'Packed', 'SKYDROP'],
-  ['ready_to_dispatch', 'Ready to dispatch', 'SKYDROP'],
   ['dispatched', 'Handed to courier', 'SKYDROP'],
   ['in_transit', 'In transit', 'COURIER'],
   ['out_for_delivery', 'Out for delivery', 'COURIER'],
@@ -375,7 +374,7 @@ const DELIVERED_STEPS = ladder(
     out_for_delivery: '2026-11-08T09:00:00Z',
     delivered: '2026-11-08T13:15:00Z',
   },
-  { skip: ['ready_to_dispatch'] },
+  {},
 );
 
 const RTO_STEPS: Json[] = [
@@ -390,7 +389,7 @@ const RTO_STEPS: Json[] = [
       in_transit: '2026-11-06T08:00:00Z',
       out_for_delivery: '2026-11-08T09:00:00Z',
     },
-    { skip: ['ready_to_dispatch'] },
+    {},
   ).slice(0, 8),
   {
     key: 'returning',
@@ -583,7 +582,6 @@ export function fixture(id: FixtureId): Fixture {
               in_transit: '2026-11-12T08:00:00Z',
             },
             {
-              skip: ['ready_to_dispatch'],
               eta: '2026-11-14T12:00:00Z',
               details: { in_transit: 'Kolkata Panihati' },
             },

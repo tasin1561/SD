@@ -65,7 +65,6 @@ const NEXT_KEYS: ReadonlySet<string> = new Set([
   'call_confirmed',
   'picked',
   'packed',
-  'ready_to_dispatch',
   'dispatched',
   'in_transit',
   'out_for_delivery',

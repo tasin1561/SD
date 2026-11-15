@@ -381,39 +381,19 @@ export class OrderJourneyService {
         label: 'Packed',
         owner: 'SKYDROP',
         at: input.firstEventTo(OrderStatus.PACKED) ?? input.packCompletedAt,
-        detail: null,
-        estimated: false,
-      },
-      {
-        key: 'ready_to_dispatch',
-        label: 'Ready to dispatch',
-        owner: 'SKYDROP',
         /*
-          THE EVENT ONLY. It used to fall back to the shipment's
-          `awbGeneratedAt`, which was right under the model this ladder
-          was written against — a waybill was booked when a supervisor
-          closed the manifest, by which point the parcel really was
-          packed and waiting for a van.
-
-          CUR-2b moved the booking to order CONFIRMATION (2026-08-01),
-          and nothing here noticed. So every confirmed order carried a
-          time on this rung days before anything was picked — which
-          made it CURRENT, and made the two rungs above it, with no
-          times of their own and a later rung passed, read
-          "Picked from shelf — Skipped · not needed" and
-          "Packed — Skipped · not needed". The seller was told the
-          warehouse work was not needed and the parcel was ready to go,
-          while it sat unpicked on a shelf. Found by filming the cancel
-          video against a CONFIRMED order (2026-09-30).
-
-          With no fallback the rung is PENDING until a manifest is
-          closed, and SKIPPED on a parcel the handover scan dispatched
-          without one — which is now the ordinary path (CUR-4: "the
-          manifest is a RECORD, not a step"), and is exactly what
-          "not needed" is for.
+          The old "Ready to dispatch" rung is GONE (owner, 2026-11-14): it
+          was the closed-manifest wait, which CUR-4 made a record rather than
+          a step, so on almost every parcel it read "Skipped · not needed"
+          (27 of 30 handed-over orders never passed through it). The status
+          PENDING_DISPATCH still exists for the manifest workflow; a parcel in
+          it shows Packed as its current step, with this note.
         */
-        at: input.firstEventTo(OrderStatus.PENDING_DISPATCH),
-        detail: null,
+        detail:
+          input.firstEventTo(OrderStatus.PENDING_DISPATCH) !== null &&
+          input.firstEventTo(OrderStatus.DISPATCHED) === null
+            ? 'On a closed manifest, waiting for the courier'
+            : null,
         estimated: false,
       },
       {

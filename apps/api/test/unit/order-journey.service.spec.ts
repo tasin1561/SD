@@ -343,18 +343,43 @@ describe('OrderJourneyService — the ladder', () => {
     const by = Object.fromEntries(j.milestones.map((m) => [m.key, m]));
 
     expect(by['call_confirmed']?.state).toBe('CURRENT');
-    // Still to come, all three of them — and none of them "not needed".
+    // Still to come, both of them — and neither "not needed".
     expect(by['picked']?.state).toBe('PENDING');
     expect(by['packed']?.state).toBe('PENDING');
-    expect(by['ready_to_dispatch']?.state).toBe('PENDING');
-    expect(by['ready_to_dispatch']?.at).toBeNull();
+    // The "Ready to dispatch" rung was removed (owner, 2026-11-14).
+    expect(by['ready_to_dispatch']).toBeUndefined();
   });
 
-  it('still calls the manifest rung "not needed" when a handover scan carried the dispatch', async () => {
-    // CUR-4: the scan IS the handover and a manifest nobody closed is
-    // the ordinary case, so PENDING_DISPATCH never happens. SKIPPED is
-    // the honest word for that rung — this is the behaviour the fix
-    // above must not take away.
+  it('a parcel on a closed manifest shows Packed as current, with a note, and no separate rung', async () => {
+    const { svc } = makeService({
+      events: [
+        {
+          type: 'STATUS_CHANGED',
+          toStatus: OrderStatus.PACKED,
+          description: null,
+          createdAt: new Date('2026-08-27T12:00:00Z'),
+        },
+        {
+          type: 'STATUS_CHANGED',
+          toStatus: OrderStatus.PENDING_DISPATCH,
+          description: null,
+          createdAt: new Date('2026-08-27T12:30:00Z'),
+        },
+      ],
+      orderShipments: [shipment()],
+    });
+    const j = await svc.forOrder('order-1', 'seller-1');
+    const by = Object.fromEntries(j.milestones.map((m) => [m.key, m]));
+    expect(by['ready_to_dispatch']).toBeUndefined();
+    expect(by['packed']?.state).toBe('CURRENT');
+    expect(by['packed']?.detail).toBe('On a closed manifest, waiting for the courier');
+    expect(by['dispatched']?.state).toBe('PENDING');
+  });
+
+  it('a handover scan goes straight from Packed to Handed to courier, with no "not needed" rung', async () => {
+    // CUR-4: the scan IS the handover and a manifest nobody closed is the
+    // ordinary case. The "Ready to dispatch" rung that read "not needed"
+    // here was removed (owner, 2026-11-14).
     const { svc } = makeService({
       events: [
         {
@@ -376,7 +401,8 @@ describe('OrderJourneyService — the ladder', () => {
     const j = await svc.forOrder('order-1', 'seller-1');
     const by = Object.fromEntries(j.milestones.map((m) => [m.key, m]));
     expect(by['packed']?.state).toBe('DONE');
-    expect(by['ready_to_dispatch']?.state).toBe('SKIPPED');
+    // No "Ready to dispatch · not needed" rung any more.
+    expect(by['ready_to_dispatch']).toBeUndefined();
     // The last rung with a real time, so CURRENT rather than DONE.
     expect(by['dispatched']?.state).toBe('CURRENT');
   });

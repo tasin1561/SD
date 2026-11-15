@@ -157,10 +157,6 @@ export const orderPage = defineMessages({
     'এরপর আমরা তাক থেকে পণ্য তুলব।',
   ],
   'orderPage.sum.next.packed': ['Next, we pack it.', 'এরপর আমরা প্যাক করব।'],
-  'orderPage.sum.next.ready_to_dispatch': [
-    'Next, it gets ready to dispatch.',
-    'এরপর পাঠানোর জন্য তৈরি হবে।',
-  ],
   'orderPage.sum.next.dispatched': [
     'Next, we hand it to the courier.',
     'এরপর আমরা কুরিয়ারের হাতে দেব।',
@@ -192,7 +188,6 @@ export const orderPage = defineMessages({
   'orderPage.m.call_confirmed': ['Confirmed by phone', 'ফোনে কনফার্ম হয়েছে'],
   'orderPage.m.picked': ['Picked from shelf', 'তাক থেকে তোলা হয়েছে'],
   'orderPage.m.packed': ['Packed', 'প্যাক হয়েছে'],
-  'orderPage.m.ready_to_dispatch': ['Ready to dispatch', 'পাঠানোর জন্য তৈরি'],
   'orderPage.m.dispatched': ['Handed to courier', 'কুরিয়ারের হাতে দেওয়া হয়েছে'],
   'orderPage.m.in_transit': ['In transit', 'পথে আছে'],
   'orderPage.m.out_for_delivery': ['Out for delivery', 'ডেলিভারির জন্য বেরিয়েছে'],

@@ -7,7 +7,6 @@ const BY_KEY: Readonly<Record<string, MessageKey>> = {
   call_confirmed: 'orderPage.m.call_confirmed',
   picked: 'orderPage.m.picked',
   packed: 'orderPage.m.packed',
-  ready_to_dispatch: 'orderPage.m.ready_to_dispatch',
   dispatched: 'orderPage.m.dispatched',
   in_transit: 'orderPage.m.in_transit',
   out_for_delivery: 'orderPage.m.out_for_delivery',
