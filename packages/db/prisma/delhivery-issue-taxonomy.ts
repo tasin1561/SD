@@ -108,7 +108,9 @@ export const DELHIVERY_ISSUE_TAXONOMY: readonly SeedIssueCategory[] = [
   },
 
   // ── 6. Cancel — no subcategories ───────────────────────────────────
-  { externalId: 'cancel', label: 'Cancel delivery / pickup' },
+  // Owner, 2026-11-15: "rename it" — the label is ours to show; Delhivery
+  // matches on externalId, which is unchanged.
+  { externalId: 'cancel', label: 'Cancel order / delivery / pickup' },
 
   // ── 7. Claims / finance. Money: never unattended ───────────────────
   {
