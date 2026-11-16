@@ -128,7 +128,7 @@ describe('DelhiveryWhatsappPage.read', () => {
   it('button absent → available false, nothing clicked', async () => {
     const { page, log } = fakePage({ button: false });
     const r = await new DelhiveryWhatsappPage(page).read('123');
-    expect(r).toEqual({ found: true, available: false, messages: null });
+    expect(r).toEqual({ found: true, available: false, messages: null, ndr: null });
     expect(log.clicks).toEqual([]);
   });
 

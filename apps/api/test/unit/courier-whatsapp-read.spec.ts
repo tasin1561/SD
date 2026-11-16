@@ -13,6 +13,8 @@ describe('CourierWhatsappReadService scope', () => {
       client: {
         order: { findFirst },
         orderShipment: { findFirst: jest.fn(async () => null) },
+        courierNdrPanelSnapshot: { findFirst: jest.fn(async () => null) },
+        ticket: { findFirst: jest.fn(async () => null) },
         systemSetting: { findUnique: jest.fn(async () => ({ valueBoolean: true })) },
         shipment: {
           findUnique: jest.fn(async () => ({
@@ -74,6 +76,8 @@ describe('delivery OTP is staff-only', () => {
           findFirst: jest.fn(async () => ({ orderShipments: [{ shipmentId: 's1' }] })),
         },
         orderShipment: { findFirst: jest.fn(async () => ({ shipmentId: 's1' })) },
+        courierNdrPanelSnapshot: { findFirst: jest.fn(async () => null) },
+        ticket: { findFirst: jest.fn(async () => null) },
         systemSetting: { findUnique: jest.fn(async () => ({ valueBoolean: false })) },
         shipment: {
           findUnique: jest.fn(async () => ({

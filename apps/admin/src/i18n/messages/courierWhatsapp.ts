@@ -69,4 +69,47 @@ export const courierWhatsapp = defineMessages({
     'কথোপকথন বন্ধ — Delhivery আর এটি দেখাচ্ছে না। এটি আমাদের সংরক্ষিত কপি।',
     'बातचीत बंद — Delhivery अब इसे नहीं दिखाता। यह हमारी सहेजी हुई प्रति है।',
   ],
+  'courierWhatsapp.ndrAttempts': [
+    'Attempt {failed} of {max} failed',
+    '{max}টির মধ্যে {failed}টি চেষ্টা ব্যর্থ',
+    '{max} में से {failed} प्रयास विफल',
+  ],
+  'courierWhatsapp.ndrDeadline': [
+    'Delhivery deadline: {days} days',
+    'Delhivery-র সময়সীমা: {days} দিন',
+    'Delhivery की समय-सीमा: {days} दिन',
+  ],
+  'courierWhatsapp.ndrDeadlineOne': [
+    'Delhivery deadline: 1 day',
+    'Delhivery-র সময়সীমা: 1 দিন',
+    'Delhivery की समय-सीमा: 1 दिन',
+  ],
+  'courierWhatsapp.ndrDeadlineToday': [
+    'Delhivery deadline: under a day',
+    'Delhivery-র সময়সীমা: এক দিনের কম',
+    'Delhivery की समय-सीमा: एक दिन से कम',
+  ],
+  'courierWhatsapp.ndrRemark': ['Remark:', 'মন্তব্য:', 'रिमार्क:'],
+  'courierWhatsapp.ndrNotVerified': ['Not verified', 'যাচাই হয়নি', 'सत्यापित नहीं'],
+  'courierWhatsapp.ndrVerified': ['Verified', 'যাচাই হয়েছে', 'सत्यापित'],
+  'courierWhatsapp.ndrReason': [
+    'NDR text on Delhivery: {text}',
+    'Delhivery-র NDR লেখা: {text}',
+    'Delhivery का NDR पाठ: {text}',
+  ],
+  'courierWhatsapp.ndrRaiseTicket': [
+    'Raise fake-attempt ticket',
+    'ভুয়া চেষ্টার টিকিট খুলুন',
+    'फर्जी प्रयास का टिकट खोलें',
+  ],
+  'courierWhatsapp.ndrTicketOpen': [
+    'Fake-attempt ticket {number} is open',
+    'ভুয়া চেষ্টার টিকিট {number} খোলা আছে',
+    'फर्जी प्रयास का टिकट {number} खुला है',
+  ],
+  'courierWhatsapp.ndrTicketRaised': [
+    'Ticket {number} raised',
+    'টিকিট {number} খোলা হয়েছে',
+    'टिकट {number} खोला गया',
+  ],
 });

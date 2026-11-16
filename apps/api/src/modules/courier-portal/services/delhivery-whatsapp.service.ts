@@ -1,5 +1,5 @@
 // Redeploy marker 2026-11-16: #46 was skipped by an overlapping deploy.
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
   LOW_MEMORY_DELAY_MS,
   RECYCLE_AFTER_READS,
@@ -36,6 +36,7 @@ import {
   parseSentAt,
   type WhatsappRead,
 } from '../pages/delhivery-whatsapp.page';
+import { NdrPanelService } from './ndr-panel.service';
 import { PortalSessionService } from './portal-session.service';
 
 export type WhatsappFetchOutcome =
@@ -88,6 +89,7 @@ export class DelhiveryWhatsappService {
     private readonly session: PortalSessionService,
     private readonly requests: CourierWhatsappRequestService,
     private readonly breaker: WhatsappBreakerStore,
+    @Optional() private readonly ndrPanel?: NdrPanelService,
   ) {}
 
   async enabled(): Promise<boolean> {
@@ -194,6 +196,7 @@ export class DelhiveryWhatsappService {
         courierCode: true,
         awbNumber: true,
         courierAccountId: true,
+        status: true,
         courierWhatsappCheck: { select: { gapMs: true, lastNewAt: true } },
       },
     });
@@ -231,6 +234,14 @@ export class DelhiveryWhatsappService {
           setTimeout(() => reject(new Error('read timed out')), READ_TIMEOUT_MS).unref?.(),
         ),
       ]);
+      // NDR panel facts from the same visit: stored even when the WhatsApp
+      // window was empty or unreadable. Never throws.
+      await this.ndrPanel?.record(
+        ship.id,
+        ship.awbNumber,
+        read.ndr ?? null,
+        FINAL.includes(ship.status),
+      );
       outcome = this.outcomeOf(read);
       emptyWindow =
         outcome === 'NO_BUTTON' || (outcome === 'OK' && (read.messages ?? []).length === 0);
@@ -369,6 +380,7 @@ export class DelhiveryWhatsappService {
    */
   async sweep(): Promise<{ queued: number }> {
     if (!(await this.mayRun())) return { queued: 0 };
+    await this.ndrPanel?.clearFinished().catch(() => undefined);
     const batch = Math.max(0, await this.int(WHATSAPP_BATCH_KEY, 60));
     const now = Date.now();
     const rows = await this.prisma.client.shipment.findMany({

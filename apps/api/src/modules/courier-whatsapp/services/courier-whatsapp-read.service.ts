@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ShipmentStatus, TrackingEventType } from '@skydrop/db';
+import { ShipmentStatus, TicketStatus, TrackingEventType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import {
   WHATSAPP_COURIER,
@@ -11,12 +11,31 @@ import {
 import { CourierWhatsappRequestService } from './courier-whatsapp-request.service';
 import { WhatsappBreakerStore } from './whatsapp-breaker.store';
 
+/** The Delhivery taxonomy category the staff "fake attempt" ticket is raised under. */
+export const FAKE_ATTEMPT_CATEGORY = 'not-delivered.fake-remark';
+export const FAKE_ATTEMPT_OPEN_STATUSES: readonly TicketStatus[] = [
+  TicketStatus.OPEN,
+  TicketStatus.NEGOTIATING,
+];
+
 export interface CourierWhatsappMessageView {
   readonly text: string;
   /** The time exactly as the courier's window showed it. */
   readonly sentLabel: string;
   /** Only when the label carried a full date; otherwise null. */
   readonly sentAt: string | null;
+}
+
+/** Delhivery's NDR panel facts (latest snapshot). null field = could not read. */
+export interface CourierNdrView {
+  readonly open: boolean | null;
+  readonly attemptsFailed: number | null;
+  readonly attemptsMax: number | null;
+  readonly deadlineDays: number | null;
+  readonly remarkVerified: boolean | null;
+  /** The courier's own words: staff only, otherwise null. */
+  readonly reasonText: string | null;
+  readonly readAt: string;
 }
 
 export interface CourierWhatsappView {
@@ -34,6 +53,13 @@ export interface CourierWhatsappView {
    */
   readonly closed: boolean;
   readonly messages: readonly CourierWhatsappMessageView[];
+  /** Latest NDR panel snapshot, or null when none was ever read. */
+  readonly ndr: CourierNdrView | null;
+  /**
+   * STAFF only: the open "fake attempt" ticket of this parcel, if any.
+   * Always null for a client / store / associate.
+   */
+  readonly fakeAttemptTicket: { readonly id: string; readonly number: string } | null;
 }
 
 /** Who is asking; the order lookup is scoped by it, in the query. */
@@ -110,6 +136,8 @@ export class CourierWhatsappReadService {
         pausedUntil: null,
         closed: false,
         messages: [],
+        ndr: null,
+        fakeAttemptTicket: null,
       };
     }
     const ship = await this.prisma.client.shipment.findUnique({
@@ -150,6 +178,21 @@ export class CourierWhatsappReadService {
       const out = await this.request.request(shipmentId, { kind: 'viewer' }).catch(() => null);
       checking = out?.queued === true;
     }
+    const snap = await this.prisma.client.courierNdrPanelSnapshot.findFirst({
+      where: { shipmentId },
+      orderBy: [{ readAt: 'desc' }, { id: 'desc' }],
+    });
+    const fake = maskOtp
+      ? null
+      : await this.prisma.client.ticket.findFirst({
+          where: {
+            shipmentId,
+            issueCategoryExternalId: FAKE_ATTEMPT_CATEGORY,
+            status: { in: [...FAKE_ATTEMPT_OPEN_STATUSES] },
+          },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, ticketNumber: true },
+        });
     return {
       enabled,
       checking,
@@ -158,6 +201,19 @@ export class CourierWhatsappReadService {
       shipmentId,
       awbNumber: ship?.awbNumber ?? null,
       lastCheckedAt: ship?.courierWhatsappCheck?.lastAttemptAt.toISOString() ?? null,
+      ndr:
+        snap === null
+          ? null
+          : {
+              open: snap.open,
+              attemptsFailed: snap.attemptsFailed,
+              attemptsMax: snap.attemptsMax,
+              deadlineDays: snap.deadlineDays,
+              remarkVerified: snap.remarkVerified,
+              reasonText: maskOtp ? null : snap.reasonText,
+              readAt: snap.readAt.toISOString(),
+            },
+      fakeAttemptTicket: fake === null ? null : { id: fake.id, number: fake.ticketNumber },
       messages: (ship?.courierWhatsappMessages ?? []).map((m) => ({
         text: maskOtp ? maskDeliveryOtp(m.text) : m.text,
         sentLabel: m.sentLabel,

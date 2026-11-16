@@ -69,6 +69,24 @@ export function judgeClick(c: ClickCandidate): GuardVerdict {
 }
 
 /**
+ * The NDR panel reader's allow-list: the ONLY two controls it may click
+ * besides the WhatsApp ones — the "View NDRs" button (opens a read-only
+ * drawer) and that drawer's close control. Anything else on an NDR panel
+ * ("Resolve now", "Activate now", edit pencils) is not here, and is
+ * refused by `judgeClickNdr` even if `judgeClick` alone would let it by.
+ */
+export const NDR_READ_ALLOW = /^(view\s+ndrs?|close|dismiss|[×✕xX])$/i;
+
+/** `judgeClick` AND the NDR allow-list: both must agree. */
+export function judgeClickNdr(c: ClickCandidate): GuardVerdict {
+  const label = c.label.replace(/\s+/g, ' ').trim();
+  if (!NDR_READ_ALLOW.test(label)) {
+    return { allowed: false, reason: `"${label}" is not on the NDR read allow-list` };
+  }
+  return judgeClick(c);
+}
+
+/**
  * May the probe GET this url? A GET is a read, except where a url IS an
  * action (a logout link signs the session out; some portals put a
  * cancel or pay action behind a plain link). https only.

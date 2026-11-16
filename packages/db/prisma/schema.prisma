@@ -4386,34 +4386,35 @@ model Shipment {
   updatedAt                DateTime         @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt                DateTime?        @map("deleted_at") @db.Timestamptz
 
-  courier                 Courier                  @relation(fields: [courierCode], references: [code])
-  courierAccount          CourierAccount?          @relation(fields: [courierAccountId], references: [id])
-  originWarehouse         Warehouse                @relation(fields: [originWarehouseId], references: [id])
-  rtoReceivedWarehouse    Warehouse?               @relation("ShipmentRtoReceivedWarehouse", fields: [rtoReceivedWarehouseId], references: [id])
-  supersedes              Shipment?                @relation("ShipmentSupersedes", fields: [supersedesShipmentId], references: [id])
-  supersededBy            Shipment[]               @relation("ShipmentSupersedes")
-  pickStartedBy           StaffUser?               @relation("ShipmentPickStartedBy", fields: [pickStartedByStaffId], references: [id])
-  packedBy                StaffUser?               @relation("ShipmentPackedBy", fields: [packedByStaffId], references: [id])
-  packClaimedBy           StaffUser?               @relation("ShipmentPackClaimedBy", fields: [packClaimedByStaffId], references: [id])
-  manifest                Manifest?                @relation(fields: [manifestId], references: [id])
-  labelPrintedBy          StaffUser?               @relation("ShipmentLabelPrintedBy", fields: [labelPrintedByStaffId], references: [id])
-  handoverScannedBy       StaffUser?               @relation("ShipmentHandoverScannedBy", fields: [handoverScannedByStaffId], references: [id])
-  courierChosenBy         StaffUser?               @relation("ShipmentCourierChosenBy", fields: [courierChosenByStaffId], references: [id])
-  pickBatch               PickBatch?               @relation(fields: [pickBatchId], references: [id])
-  orderShipments          OrderShipment[]
-  items                   ShipmentItem[]
-  packBoxes               PackBox[]
-  awbLabels               AwbLabel[]
-  courierWhatsappMessages CourierWhatsappMessage[]
-  courierWhatsappCheck    CourierWhatsappCheck?
-  trackingEvents          TrackingEvent[]
-  courierDocuments        CourierDocument[]
-  webhooks                CourierWebhook[]
-  deliveryAttempts        DeliveryAttempt[]
-  stockMovements          StockMovement[]
-  charges                 OrderCharge[]
-  notificationLogs        NotificationLog[]
-  tickets                 Ticket[]
+  courier                  Courier                   @relation(fields: [courierCode], references: [code])
+  courierAccount           CourierAccount?           @relation(fields: [courierAccountId], references: [id])
+  originWarehouse          Warehouse                 @relation(fields: [originWarehouseId], references: [id])
+  rtoReceivedWarehouse     Warehouse?                @relation("ShipmentRtoReceivedWarehouse", fields: [rtoReceivedWarehouseId], references: [id])
+  supersedes               Shipment?                 @relation("ShipmentSupersedes", fields: [supersedesShipmentId], references: [id])
+  supersededBy             Shipment[]                @relation("ShipmentSupersedes")
+  pickStartedBy            StaffUser?                @relation("ShipmentPickStartedBy", fields: [pickStartedByStaffId], references: [id])
+  packedBy                 StaffUser?                @relation("ShipmentPackedBy", fields: [packedByStaffId], references: [id])
+  packClaimedBy            StaffUser?                @relation("ShipmentPackClaimedBy", fields: [packClaimedByStaffId], references: [id])
+  manifest                 Manifest?                 @relation(fields: [manifestId], references: [id])
+  labelPrintedBy           StaffUser?                @relation("ShipmentLabelPrintedBy", fields: [labelPrintedByStaffId], references: [id])
+  handoverScannedBy        StaffUser?                @relation("ShipmentHandoverScannedBy", fields: [handoverScannedByStaffId], references: [id])
+  courierChosenBy          StaffUser?                @relation("ShipmentCourierChosenBy", fields: [courierChosenByStaffId], references: [id])
+  pickBatch                PickBatch?                @relation(fields: [pickBatchId], references: [id])
+  orderShipments           OrderShipment[]
+  items                    ShipmentItem[]
+  packBoxes                PackBox[]
+  awbLabels                AwbLabel[]
+  courierWhatsappMessages  CourierWhatsappMessage[]
+  courierWhatsappCheck     CourierWhatsappCheck?
+  courierNdrPanelSnapshots CourierNdrPanelSnapshot[]
+  trackingEvents           TrackingEvent[]
+  courierDocuments         CourierDocument[]
+  webhooks                 CourierWebhook[]
+  deliveryAttempts         DeliveryAttempt[]
+  stockMovements           StockMovement[]
+  charges                  OrderCharge[]
+  notificationLogs         NotificationLog[]
+  tickets                  Ticket[]
 
   ndrActionRequests      NdrActionRequest[]
   deliveryActionRequests OrderDeliveryActionRequest[]
@@ -4693,6 +4694,27 @@ model CourierWhatsappMessage {
   @@unique([shipmentId, dedupeHash])
   @@index([shipmentId])
   @@map("courier_whatsapp_messages")
+}
+
+/// Delhivery One's NDR panel facts the tracking API does not carry (read on
+/// the same page visit as the WhatsApp window). INSERT-ONLY: a row is written
+/// only when a value changed against the latest row. A field the reader could
+/// not read is NULL ("could not read"), never a false "no NDR".
+model CourierNdrPanelSnapshot {
+  id             String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentId     String   @map("shipment_id") @db.Uuid
+  open           Boolean?
+  attemptsFailed Int?     @map("attempts_failed")
+  attemptsMax    Int?     @map("attempts_max")
+  deadlineDays   Int?     @map("deadline_days")
+  remarkVerified Boolean? @map("remark_verified")
+  reasonText     String?  @map("reason_text")
+  readAt         DateTime @default(now()) @map("read_at") @db.Timestamptz
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId, readAt])
+  @@map("courier_ndr_panel_snapshots")
 }
 
 /// One row per parcel: when we last LOOKED, and what we saw. Drives the
