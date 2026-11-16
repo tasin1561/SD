@@ -177,13 +177,54 @@ jobs:
       # which apps to place is decided on the droplet — it already holds
       # the marker and the diff, so asking it for that over a second
       # connection was always the wasteful part.
+      #
+      # RETRIED ONLY WHEN THE DROPLET REFUSES THE CONNECTION (2026-11-14).
+      # Three deploys that day died here in under a second with
+      # "ssh: connect to host … port 22: Connection refused", and each
+      # passed when the failed job was re-run by hand. A refused
+      # connection means the far end never started: nothing was
+      # unpacked and deploy.sh did not run, so trying again is safe. The
+      # first wait is 35 seconds, which is past the 30-second window
+      # `ufw limit` counts in.
+      #
+      # FIVE TRIES, EACH WAIT LONGER (2026-11-16). Two days later the
+      # same refusal took three and then four hand re-runs a couple of
+      # minutes apart before one got through, so three tries 35 seconds
+      # apart would not have been enough. The waits are 35, 70, 105 and
+      # 140 seconds: just under six minutes in all before it gives up.
+      #
+      # ANY OTHER failure stops at once, as before. A connection that
+      # drops halfway, or deploy.sh exiting non-zero, is NOT retried: by
+      # then the deploy has run in part, and running it again blind is a
+      # decision for a person. The two are told apart by ssh's own
+      # message, which it prints only when it cannot connect at all.
       - name: Ship and deploy (one connection)
         run: |
           set -euo pipefail
-          tar -cz -C out . | ssh droplet "
+          attempt=1
+          while :; do
+            set +e
+            tar -cz -C out . | ssh droplet "
+              set -e
+              D=~/app/.deploy-incoming/${SHA}
+              rm -rf \$D && mkdir -p \$D
+              tar -xz -C \$D
+              cd ~/app && bash scripts/deploy.sh ${SHA}
+            " 2> >(tee ship.err >&2)
+            status=$?
             set -e
-            D=~/app/.deploy-incoming/${SHA}
-            rm -rf \$D && mkdir -p \$D
-            tar -xz -C \$D
-            cd ~/app && bash scripts/deploy.sh ${SHA}
-          "
+            if [ "$status" -eq 0 ]; then
+              break
+            fi
+            # Give the stderr copy a moment to finish writing before it is read.
+            sleep 1
+            if [ "$attempt" -lt 5 ] &&
+              grep -qE 'connect to host .* port 22: Connection (refused|timed out)' ship.err; then
+              wait=$((attempt * 35))
+              echo "::warning::The droplet refused the SSH connection (attempt ${attempt} of 5). Nothing ran on it. Waiting ${wait}s and trying again."
+              attempt=$((attempt + 1))
+              sleep "$wait"
+              continue
+            fi
+            exit "$status"
+          done
