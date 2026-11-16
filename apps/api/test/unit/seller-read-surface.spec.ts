@@ -129,7 +129,7 @@ const ORDERS_VIEW_GETS: Readonly<Record<string, Readonly<Record<string, string>>
   // Where those same parcels are.
   'seller-tracking.controller.ts': { '': 'orders.view', ':shipmentId': 'orders.view' },
   // Their own orders stuck out for delivery — a filtered view of the list.
-  'seller-nsa.controller.ts': { '': 'orders.view' },
+  'seller-nsa.controller.ts': { '': 'orders.view', 'failed-attempts': 'orders.view' },
   // The names of their own company's shopfronts, which the order list
   // filters by. Every WRITE here declares profile.manage at the handler.
   'seller-store.controller.ts': { '': 'orders.view' },

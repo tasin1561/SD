@@ -5,6 +5,7 @@ import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { OrderAttentionService } from '../services/order-attention.service';
+import { SellerFailedAttemptsService } from '../services/seller-failed-attempts.service';
 
 /**
  * THE SELLER'S side of the NSA worklist.
@@ -27,7 +28,10 @@ import { OrderAttentionService } from '../services/order-attention.service';
 @RequireSellerPermissions('orders.view')
 @Controller('seller/nsa')
 export class SellerNsaController {
-  constructor(private readonly attention: OrderAttentionService) {}
+  constructor(
+    private readonly attention: OrderAttentionService,
+    private readonly failedAttemptsSvc: SellerFailedAttemptsService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -35,5 +39,15 @@ export class SellerNsaController {
   })
   list(@CurrentSeller() seller: AuthenticatedSeller): ReturnType<OrderAttentionService['list']> {
     return this.attention.list(seller.id);
+  }
+
+  @Get('failed-attempts')
+  @ApiOperation({
+    summary: 'Your parcels the courier tried to deliver and failed, still with the courier',
+  })
+  failedAttempts(
+    @CurrentSeller() seller: AuthenticatedSeller,
+  ): ReturnType<SellerFailedAttemptsService['list']> {
+    return this.failedAttemptsSvc.list(seller.id);
   }
 }
