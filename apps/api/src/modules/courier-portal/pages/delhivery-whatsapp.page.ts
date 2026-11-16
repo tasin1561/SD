@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Page } from 'playwright';
 import { gotoPortal } from './navigate';
 import { judgeClick } from '../services/portal-read-only-guard';
-import { readNdrPanel, type NdrPanelRead } from './delhivery-ndr-panel';
+import { readNdrPanel, readNeedActionRow, type NdrPanelRead } from './delhivery-ndr-panel';
 
 /** One bubble exactly as their window shows it. */
 export interface WhatsappBubble {
@@ -175,6 +175,19 @@ export class DelhiveryWhatsappPage {
   constructor(private readonly page: Page) {}
 
   async read(awbNumber: string): Promise<WhatsappRead> {
+    const res = await this.readParcelPage(awbNumber);
+    // "View NDRs" is a link to a separate page, not a window (owner's
+    // screenshot, 2026-11-16). Read that page's row LAST, after the
+    // WhatsApp window is closed, and only when an NDR is open. A GET by
+    // address; nothing on it is clicked (it carries Reattempt / Return).
+    if (res.ndr?.open === true) {
+      const reasonText = await readNeedActionRow(this.page, awbNumber);
+      if (reasonText !== null) return { ...res, ndr: { ...res.ndr, reasonText } };
+    }
+    return res;
+  }
+
+  private async readParcelPage(awbNumber: string): Promise<WhatsappRead> {
     const notFound: WhatsappRead = { found: false, available: false, messages: null };
 
     await gotoPortal(this.page, SHIPMENT_URL(awbNumber));

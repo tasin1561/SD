@@ -1,6 +1,8 @@
 import {
+  NEED_ACTION_URL,
   parseNdrDrawerText,
   parseNdrPanelText,
+  parseNeedActionText,
   readNdrPanel,
 } from '../../src/modules/courier-portal/pages/delhivery-ndr-panel';
 import {
@@ -136,32 +138,17 @@ describe('parseNdrDrawerText', () => {
 });
 
 describe('readNdrPanel (fake page)', () => {
-  it('present: reads the facts and the drawer text, then closes it', async () => {
-    const { page, log } = fakePage({
-      body: PAGE_NOT_VERIFIED,
-      drawer: 'NDR reason\nCustomer refused\nClose',
-    });
+  it('reads the facts and clicks NOTHING ("View NDRs" is a link to another page)', async () => {
+    const { page, log } = fakePage({ body: PAGE_NOT_VERIFIED });
     const r = await readNdrPanel(page);
     expect(r).toMatchObject({
       open: true,
+      attemptsFailed: 1,
       remarkVerified: false,
-      reasonText: 'NDR reason · Customer refused',
+      reasonText: null,
     });
-    expect(log.clicks).toEqual(['view-ndrs', 'close']);
-  });
-
-  it('closes with Escape when no close control matches', async () => {
-    const { page, log } = fakePage({ body: PAGE_NOT_VERIFIED, drawer: 'x\ny', closeButton: false });
-    await readNdrPanel(page);
-    expect(log.escape).toBe(1);
-  });
-
-  it('drawer never opens: facts kept, reason null, Escape pressed', async () => {
-    const { page, log } = fakePage({ body: PAGE_NOT_VERIFIED, drawer: null });
-    const r = await readNdrPanel(page);
-    expect(r).toMatchObject({ open: true, reasonText: null });
-    expect(log.clicks).toEqual(['view-ndrs']);
-    expect(log.escape).toBe(1);
+    expect(log.clicks).toEqual([]);
+    expect(log.escape).toBe(0);
   });
 
   it('absent NDR: no clicks at all', async () => {
@@ -177,6 +164,66 @@ describe('readNdrPanel (fake page)', () => {
     ).toBeNull();
     expect(await readNdrPanel(fakePage({ body: new Error('boom') }).page)).toBeNull();
     expect(await readNdrPanel({} as never)).toBeNull();
+  });
+});
+
+/** The NDR page from the owner's screenshot (2026-11-16), as innerText. */
+const NEED_ACTION_PAGE = [
+  'Exceptions & NDR',
+  'NDR Management',
+  'Need Action',
+  '1',
+  'Auto Reattempt',
+  'Return Recommendation',
+  'ORDER ID & AWB NO.',
+  'PRODUCT DETAILS',
+  'PAYMENT MODE',
+  'NDR TYPE',
+  'ATTEMPT COUNT',
+  'LAST UPDATED',
+  'SH-2026-11-000058',
+  '38061110627384',
+  'Elite Collagen x1',
+  '₹1,400',
+  'COD',
+  'Consignee Unavailable',
+  '1 attempt',
+  'Nov 16 | 11:38 AM',
+  'Proofs',
+  'Call not connected',
+  'Consignee details',
+  'Reattempt',
+  'Return',
+  'Showing',
+].join('\n');
+
+describe('the NDR page "View NDRs" links to', () => {
+  it('is addressed by AWB', () => {
+    expect(NEED_ACTION_URL('38061110627384')).toBe(
+      'https://one.delhivery.com/v2/exceptions/ndr/need-action?filter_awb=38061110627384',
+    );
+  });
+
+  it('reads type, attempts, time and proof from the owner screenshot', () => {
+    expect(parseNeedActionText(NEED_ACTION_PAGE, '38061110627384')).toBe(
+      'Consignee Unavailable · 1 attempt · Nov 16 | 11:38 AM · Proof: Call not connected',
+    );
+  });
+
+  it('never takes an action button for a reason or a proof', () => {
+    const r = parseNeedActionText(NEED_ACTION_PAGE, '38061110627384') ?? '';
+    expect(r).not.toMatch(/reattempt|return|consignee details/i);
+  });
+
+  it('another AWB, a missing row, or a shifted layout reads null', () => {
+    expect(parseNeedActionText(NEED_ACTION_PAGE, '99999')).toBeNull();
+    expect(parseNeedActionText('NDR Management\nNo results', '38061110627384')).toBeNull();
+    expect(
+      parseNeedActionText(
+        '38061110627384\nCOD\n1 attempt\nConsignee Unavailable',
+        '38061110627384',
+      ),
+    ).toBeNull();
   });
 });
 
