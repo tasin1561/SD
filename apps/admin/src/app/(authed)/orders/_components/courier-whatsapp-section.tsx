@@ -6,6 +6,7 @@ import { useRef, useState, type ReactElement } from 'react';
 
 import { useApiClient } from '@skydrop/auth/client';
 import { CourierWhatsappMessages } from '@skydrop/ui/app/courier-whatsapp';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { useLocale, useT } from '@/i18n/client';
 import { formatDateTime } from '@/i18n/format';
 import { usePermission } from '@/lib/use-permission';
@@ -19,6 +20,85 @@ interface CourierMessagesView {
   /** Delhivery took the conversation off its panel; these are our saved copy. */
   readonly closed?: boolean;
   readonly messages: readonly { text: string; sentLabel: string; sentAt: string | null }[];
+  readonly ndr?: {
+    readonly open: boolean | null;
+    readonly attemptsFailed: number | null;
+    readonly attemptsMax: number | null;
+    readonly deadlineDays: number | null;
+    readonly remarkVerified: boolean | null;
+    readonly reasonText: string | null;
+  } | null;
+  readonly fakeAttemptTicket?: { readonly id: string; readonly number: string } | null;
+}
+
+type NdrView = NonNullable<CourierMessagesView['ndr']>;
+
+/**
+ * Delhivery's NDR panel facts on one line. A fact we could not read is
+ * simply not shown; "Not verified" is a red chip, "Verified" a green one.
+ */
+function NdrLine({
+  ndr,
+  t,
+}: {
+  readonly ndr: NdrView;
+  readonly t: ReturnType<typeof useT>;
+}): ReactElement | null {
+  const parts: ReactElement[] = [];
+  if (ndr.attemptsFailed !== null && ndr.attemptsMax !== null) {
+    parts.push(
+      <span key="a">
+        {t('courierWhatsapp.ndrAttempts', { failed: ndr.attemptsFailed, max: ndr.attemptsMax })}
+      </span>,
+    );
+  }
+  if (ndr.deadlineDays !== null) {
+    parts.push(
+      <span key="d">
+        {ndr.deadlineDays === 0
+          ? t('courierWhatsapp.ndrDeadlineToday')
+          : ndr.deadlineDays === 1
+            ? t('courierWhatsapp.ndrDeadlineOne')
+            : t('courierWhatsapp.ndrDeadline', { days: ndr.deadlineDays })}
+      </span>,
+    );
+  }
+  if (ndr.remarkVerified !== null) {
+    parts.push(
+      <span key="r" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        {t('courierWhatsapp.ndrRemark')}
+        <StatusChip
+          size="sm"
+          kind={ndr.remarkVerified ? 'delivered' : 'failed'}
+          label={
+            ndr.remarkVerified
+              ? t('courierWhatsapp.ndrVerified')
+              : t('courierWhatsapp.ndrNotVerified')
+          }
+        />
+      </span>,
+    );
+  }
+  if (parts.length === 0) return null;
+  return (
+    <p
+      className="sk-cwa__foot"
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: '4px 10px',
+        margin: 0,
+      }}
+    >
+      {parts.map((p, i) => (
+        <span key={p.key ?? i} style={{ display: 'inline-flex', gap: 10 }}>
+          {i > 0 && <span aria-hidden="true">·</span>}
+          {p}
+        </span>
+      ))}
+    </p>
+  );
 }
 
 /**
@@ -69,29 +149,77 @@ export function CourierWhatsappSection({
       void qc.invalidateQueries({ queryKey: ['admin-orders', 'courier-messages', id] });
     },
   });
+  const [ticketNote, setTicketNote] = useState<string | null>(null);
+  const fakeTicket = useMutation({
+    mutationFn: () =>
+      client.request<{ created: boolean; ticket: { id: string; number: string } }>(
+        `/api/admin/orders/${id}/courier-ndr/fake-attempt-ticket`,
+        { method: 'POST' },
+      ),
+    onSuccess: (r) => {
+      setTicketNote(t('courierWhatsapp.ndrTicketRaised', { number: r.ticket.number }));
+      void qc.invalidateQueries({ queryKey: ['admin-orders', 'courier-messages', id] });
+    },
+  });
   const data = q.data;
   if (data === undefined) return null;
   const when = data.lastCheckedAt === null ? null : formatDateTime(data.lastCheckedAt, locale);
   const canAsk = mayRefresh && data.enabled && data.shipmentId !== null;
-  if (data.messages.length === 0) {
-    if (!canAsk) return null;
-    return (
-      <div className="sk-cwa__foot">
-        <button
-          type="button"
-          className="sk-cwa__refresh"
-          disabled={refresh.isPending}
-          onClick={() => refresh.mutate()}
-        >
-          {t('courierWhatsapp.refresh')}
-        </button>
-        {note !== null && <span>{note}</span>}
+  const ndrBlock =
+    data.ndr == null ? null : (
+      <div>
+        <NdrLine ndr={data.ndr} t={t} />
+        {data.ndr.reasonText !== null && (
+          <p className="sk-cwa__foot" style={{ margin: 0 }}>
+            {t('courierWhatsapp.ndrReason', { text: data.ndr.reasonText })}
+          </p>
+        )}
+        {data.ndr.remarkVerified === false && data.fakeAttemptTicket != null && (
+          <p className="sk-cwa__foot" style={{ margin: 0 }}>
+            {t('courierWhatsapp.ndrTicketOpen', { number: data.fakeAttemptTicket.number })}
+          </p>
+        )}
+        {data.ndr.remarkVerified === false &&
+          data.fakeAttemptTicket == null &&
+          mayRefresh &&
+          data.shipmentId !== null && (
+            <div className="sk-cwa__foot">
+              <button
+                type="button"
+                className="sk-cwa__refresh"
+                disabled={fakeTicket.isPending}
+                onClick={() => fakeTicket.mutate()}
+              >
+                {t('courierWhatsapp.ndrRaiseTicket')}
+              </button>
+              {ticketNote !== null && <span>{ticketNote}</span>}
+            </div>
+          )}
       </div>
+    );
+  if (data.messages.length === 0) {
+    if (!canAsk) return ndrBlock;
+    return (
+      <>
+        {ndrBlock}
+        <div className="sk-cwa__foot">
+          <button
+            type="button"
+            className="sk-cwa__refresh"
+            disabled={refresh.isPending}
+            onClick={() => refresh.mutate()}
+          >
+            {t('courierWhatsapp.refresh')}
+          </button>
+          {note !== null && <span>{note}</span>}
+        </div>
+      </>
     );
   }
   return (
     <section aria-label={t('courierWhatsapp.title')}>
       <h4 className="sk-cwa__title">{t('courierWhatsapp.title')}</h4>
+      {ndrBlock}
       <CourierWhatsappMessages
         messages={data.messages}
         note={t('courierWhatsapp.note')}

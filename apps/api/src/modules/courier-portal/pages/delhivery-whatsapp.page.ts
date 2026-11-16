@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Page } from 'playwright';
 import { gotoPortal } from './navigate';
 import { judgeClick } from '../services/portal-read-only-guard';
+import { readNdrPanel, type NdrPanelRead } from './delhivery-ndr-panel';
 
 /** One bubble exactly as their window shows it. */
 export interface WhatsappBubble {
@@ -40,6 +41,11 @@ export interface WhatsappRead {
    * as "the customer got no messages".
    */
   readonly messages: readonly WhatsappBubble[] | null;
+  /**
+   * The NDR panel facts read on the same visit. Null = could not read
+   * (or not reached), never "no NDR".
+   */
+  readonly ndr?: NdrPanelRead | null;
 }
 
 const SHIPMENT_URL = (awb: string): string =>
@@ -201,6 +207,9 @@ export class DelhiveryWhatsappPage {
       if (!onParcel) return notFound;
     }
 
+    // Same visit, no extra navigation. Never throws.
+    const ndr = await readNdrPanel(this.page);
+
     const button = this.page
       .getByRole('button', { name: /view whatsapp/i })
       .or(this.page.getByRole('link', { name: /view whatsapp/i }))
@@ -209,11 +218,11 @@ export class DelhiveryWhatsappPage {
       .waitFor({ state: 'visible', timeout: 8_000 })
       .then(() => true)
       .catch(() => false);
-    if (!hasButton) return { found: true, available: false, messages: null };
+    if (!hasButton) return { found: true, available: false, messages: null, ndr };
 
     const label = ((await button.innerText().catch(() => '')) || 'View Whatsapp').trim();
     const verdict = judgeClick({ label, tag: 'button', type: '', inForm: false });
-    if (!verdict.allowed) return { found: true, available: true, messages: null };
+    if (!verdict.allowed) return { found: true, available: true, messages: null, ndr };
 
     await button.click();
     const dialog = this.page.getByRole('dialog').first();
@@ -221,7 +230,7 @@ export class DelhiveryWhatsappPage {
       .waitFor({ state: 'visible', timeout: 10_000 })
       .then(() => true)
       .catch(() => false);
-    if (!hasDialog) return { found: true, available: true, messages: null };
+    if (!hasDialog) return { found: true, available: true, messages: null, ndr };
 
     try {
       const raw = await dialog.innerText().catch(() => null);
@@ -231,6 +240,7 @@ export class DelhiveryWhatsappPage {
         found: true,
         available: true,
         messages: isWhatsapp ? parseWhatsappModalText(raw) : null,
+        ndr,
       };
     } finally {
       await this.close(dialog);

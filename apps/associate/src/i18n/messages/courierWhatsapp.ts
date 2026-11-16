@@ -36,4 +36,20 @@ export const courierWhatsapp = defineMessages({
     'Conversation closed — Delhivery no longer shows it. This is our saved copy.',
     'কথোপকথন বন্ধ — Delhivery আর এটি দেখাচ্ছে না। এটি আমাদের সংরক্ষিত কপি।',
   ],
+  'courierWhatsapp.ndrAttempts': [
+    'Attempt {failed} of {max} failed',
+    '{max}টির মধ্যে {failed}টি চেষ্টা ব্যর্থ',
+  ],
+  'courierWhatsapp.ndrDeadline': [
+    'Delhivery deadline: {days} days',
+    'Delhivery-র সময়সীমা: {days} দিন',
+  ],
+  'courierWhatsapp.ndrDeadlineOne': ['Delhivery deadline: 1 day', 'Delhivery-র সময়সীমা: 1 দিন'],
+  'courierWhatsapp.ndrDeadlineToday': [
+    'Delhivery deadline: under a day',
+    'Delhivery-র সময়সীমা: এক দিনের কম',
+  ],
+  'courierWhatsapp.ndrRemark': ['Remark:', 'মন্তব্য:'],
+  'courierWhatsapp.ndrNotVerified': ['Not verified', 'যাচাই হয়নি'],
+  'courierWhatsapp.ndrVerified': ['Verified', 'যাচাই হয়েছে'],
 });

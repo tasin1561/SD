@@ -6,6 +6,8 @@ import { AdminCourierWhatsappController } from './controllers/admin-courier-what
 import { AdminCourierWhatsappHealthController } from './controllers/admin-courier-whatsapp-health.controller';
 import { SellerCourierWhatsappController } from './controllers/seller-courier-whatsapp.controller';
 import { StoreCourierWhatsappController } from './controllers/store-courier-whatsapp.controller';
+import { TicketModule } from '../ticket/ticket.module';
+import { FakeAttemptTicketService } from './services/fake-attempt-ticket.service';
 import { CourierWhatsappReadService } from './services/courier-whatsapp-read.service';
 
 /**
@@ -15,14 +17,14 @@ import { CourierWhatsappReadService } from './services/courier-whatsapp-read.ser
  * Playwright and never imports it.
  */
 @Module({
-  imports: [AuthCommonModule, ResellerOrderModule, CourierWhatsappQueueModule],
+  imports: [AuthCommonModule, ResellerOrderModule, CourierWhatsappQueueModule, TicketModule],
   controllers: [
     AdminCourierWhatsappController,
     AdminCourierWhatsappHealthController,
     SellerCourierWhatsappController,
     StoreCourierWhatsappController,
   ],
-  providers: [CourierWhatsappReadService],
+  providers: [CourierWhatsappReadService, FakeAttemptTicketService],
   exports: [CourierWhatsappReadService],
 })
 export class CourierWhatsappModule {}

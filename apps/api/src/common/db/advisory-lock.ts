@@ -209,6 +209,12 @@ export const AdvisoryLock = {
    * right. Keyed on the order id.
    */
   STORE_ADDRESS_CHANGE: 0x04143,
+  /**
+   * 'FA' — raising the staff "fake delivery attempt" ticket of ONE
+   * shipment. "Is one open?" and the insert are two statements; two taps
+   * at once would open two. Keyed on the shipment id.
+   */
+  FAKE_ATTEMPT_TICKET: 0x04644,
 } as const;
 
 /**

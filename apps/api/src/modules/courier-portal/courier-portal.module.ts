@@ -30,6 +30,7 @@ import { ShiprocketInvoiceCheckService } from './services/shiprocket-invoice-che
 import { DelhiveryBillingProbeService } from './services/delhivery-billing-probe.service';
 import { DelhiveryInvoiceCheckService } from './services/delhivery-invoice-check.service';
 import { DelhiveryWhatsappService } from './services/delhivery-whatsapp.service';
+import { NdrPanelService } from './services/ndr-panel.service';
 import { DelhiveryWhatsappWorker } from './queue/delhivery-whatsapp.worker';
 import { CourierWhatsappQueueModule } from '../courier-whatsapp/courier-whatsapp-queue.module';
 
@@ -99,6 +100,7 @@ import { CourierWhatsappQueueModule } from '../courier-whatsapp/courier-whatsapp
     ConsigneeVerifyWorker,
     // Delhivery's "View Whatsapp" window, read on the portal queue.
     DelhiveryWhatsappService,
+    NdrPanelService,
     DelhiveryWhatsappWorker,
     // Shiprocket's panel: its own browser, out through the India egress
     // route named by `courier.shiprocket_portal_proxy` (the NordVPN
