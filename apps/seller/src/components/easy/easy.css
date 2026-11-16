@@ -851,3 +851,15 @@ a.ez-jump__link:focus-visible {
     min-height: 44px;
   }
 }
+
+/* ── A pending order row on a phone: the values that need fixing first ───
+   (orders/pending). The rest are behind "Show all N". */
+@media (max-width: 767.98px) {
+  .pend-fields[data-all='false'] > .pend-field[data-ok] {
+    display: none;
+  }
+  /* The flagged values come before the ones that are only empty. */
+  .pend-fields > .pend-field[data-bad] {
+    order: -1;
+  }
+}

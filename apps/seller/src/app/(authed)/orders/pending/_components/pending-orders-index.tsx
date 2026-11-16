@@ -88,6 +88,10 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
   // one about a column the form does not show (payment mode). Without
   // this the card said "1 value to fix" and marked nothing.
   const unplaced = row.problems.filter((p) => !FIELDS.some((f) => f.key === p.field));
+  const [allFields, setAllFields] = useState(false);
+  const settled = (key: string): boolean =>
+    String(row.data[key] ?? '') !== '' && problemFor(key) === undefined;
+  const settledCount = FIELDS.filter((f) => settled(f.key)).length;
   const isDuplicate = row.status === 'DUPLICATE_SUSPECTED';
   const dirty = FIELDS.some((f) => draft[f.key] !== String(row.data[f.key] ?? ''));
 
@@ -183,21 +187,42 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
           </Notice>
         )}
 
-        <div className="ord-grid-3">
+        {/* On a phone the row opens on the values that need a person: the
+            ones flagged, and the ones the file left empty. The values that
+            arrived fine are one press away. "Fine" is judged from the row
+            as it was uploaded, never from what is being typed, so a field
+            does not vanish under the finger. */}
+        <div className="ord-grid-3 pend-fields" data-all={allFields ? 'true' : 'false'}>
           {FIELDS.map((f) => {
             const problem = problemFor(f.key);
             return (
-              <TextField
+              <div
                 key={f.key}
-                label={t(f.labelKey)}
-                value={draft[f.key] ?? ''}
-                onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-                {...(problem !== undefined ? { error: problem } : {})}
-                {...(f.hint !== undefined ? { hint: f.hint } : {})}
-              />
+                className="pend-field"
+                {...(settled(f.key) ? { 'data-ok': '' } : {})}
+                {...(problem !== undefined ? { 'data-bad': '' } : {})}
+              >
+                <TextField
+                  label={t(f.labelKey)}
+                  value={draft[f.key] ?? ''}
+                  onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+                  {...(problem !== undefined ? { error: problem } : {})}
+                  {...(f.hint !== undefined ? { hint: f.hint } : {})}
+                />
+              </div>
             );
           })}
         </div>
+        {settledCount > 0 && (
+          <button
+            type="button"
+            className="ez-fold__more pend-more"
+            aria-expanded={allFields}
+            onClick={() => setAllFields((v) => !v)}
+          >
+            {allFields ? t('easy.showFewer') : t('easy.showAll', { n: FIELDS.length })}
+          </button>
+        )}
 
         <div className="ord-row">
           <AsyncButton
