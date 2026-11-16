@@ -1,9 +1,8 @@
 import { DelhiveryWhatsappService } from '../../src/modules/courier-portal/services/delhivery-whatsapp.service';
-import { CourierPortalMode } from '@skydrop/db';
 import { WhatsappLoggedOutError } from '../../src/modules/courier-portal/pages/delhivery-whatsapp.page';
+import { DelhiveryWhatsappPage } from '../../src/modules/courier-portal/pages/delhivery-whatsapp.page';
 import { CourierWhatsappRequestService } from '../../src/modules/courier-whatsapp/services/courier-whatsapp-request.service';
 
-const CHANNEL = { get: async () => ({ portalMode: CourierPortalMode.SHADOW }) };
 jest.mock('../../src/modules/courier-whatsapp/guards', () => ({
   ...jest.requireActual('../../src/modules/courier-whatsapp/guards'),
   availableMemoryMb: () => 4096,
@@ -61,7 +60,6 @@ describe('setting OFF', () => {
     const svc = new DelhiveryWhatsappService(
       prisma,
       session as never,
-      CHANNEL as never,
       REQUESTS as never,
       breaker(),
     );
@@ -124,7 +122,6 @@ describe('insert-only', () => {
     const svc = new DelhiveryWhatsappService(
       prisma,
       { page: async () => page, readerPage: async () => page } as never,
-      CHANNEL as never,
       REQUESTS as never,
       breaker(),
     );
@@ -155,7 +152,6 @@ describe('logged out', () => {
     const svc = new DelhiveryWhatsappService(
       prisma,
       session as never,
-      CHANNEL as never,
       REQUESTS as never,
       breaker(),
     );
@@ -166,18 +162,58 @@ describe('logged out', () => {
     expect(new WhatsappLoggedOutError().name).toBe('WhatsappLoggedOutError');
   });
 
-  it('portal mode OFF opens nothing', async () => {
-    const { prisma } = prismaFake(true);
+  it('master switch OFF opens nothing (portalMode is not consulted: a read)', async () => {
+    const { prisma } = prismaFake(false);
     const session = { page: jest.fn(), readerPage: jest.fn() };
-    const off = { get: async () => ({ portalMode: CourierPortalMode.OFF }) };
     const svc = new DelhiveryWhatsappService(
       prisma,
       session as never,
-      off as never,
       REQUESTS as never,
       breaker(),
     );
     expect((await svc.fetchOne('s1')).outcome).toBe('DISABLED');
     expect(session.page).not.toHaveBeenCalled();
+    expect(session.readerPage).not.toHaveBeenCalled();
+  });
+});
+
+describe('Delhivery hides a conversation we already saved', () => {
+  const ship = { id: 's1', courierCode: 'delhivery', awbNumber: '999', courierAccountId: null };
+  const page = { close: async () => undefined } as never;
+  function svcWith(stored: number, read: unknown) {
+    const { prisma, client } = prismaFake(true, ship);
+    client.courierWhatsappMessage.count = jest.fn(async () => stored);
+    jest.spyOn(DelhiveryWhatsappPage.prototype, 'read').mockResolvedValue(read as never);
+    const svc = new DelhiveryWhatsappService(
+      prisma,
+      { page: async () => page, readerPage: async () => page } as never,
+      REQUESTS as never,
+      breaker(),
+    );
+    return { svc, client };
+  }
+  afterEach(() => jest.restoreAllMocks());
+
+  it('no button any more → HIDDEN, kept copy, no further timed reads', async () => {
+    const { svc, client } = svcWith(3, { found: true, available: false, messages: null });
+    const r = await svc.fetchOne('s1', 'sweep');
+    expect(r.outcome).toBe('HIDDEN');
+    expect(r.nextDelayMs).toBeNull();
+    const up = client.courierWhatsappCheck.upsert.mock.calls[0] as unknown as [
+      { update: { lastOutcome: string; nextReadAt: Date | null } },
+    ];
+    expect(up[0].update.lastOutcome).toBe('HIDDEN');
+    expect(up[0].update.nextReadAt).toBeNull();
+    expect(client.courierWhatsappMessage.createMany).not.toHaveBeenCalled();
+  });
+
+  it('an empty window over a saved conversation is HIDDEN too', async () => {
+    const { svc } = svcWith(2, { found: true, available: true, messages: [] });
+    expect((await svc.fetchOne('s1', 'sweep')).outcome).toBe('HIDDEN');
+  });
+
+  it('no button and nothing ever saved is just NO_BUTTON (not closed)', async () => {
+    const { svc } = svcWith(0, { found: true, available: false, messages: null });
+    expect((await svc.fetchOne('s1', 'sweep')).outcome).toBe('NO_BUTTON');
   });
 });

@@ -28,6 +28,11 @@ export interface CourierWhatsappView {
   readonly checking: boolean;
   /** The reader's breaker is open until this instant: shown messages may be behind. */
   readonly pausedUntil: string | null;
+  /**
+   * Delhivery no longer shows this conversation (it was taken off their
+   * panel). The messages below are our saved copy; no further reads.
+   */
+  readonly closed: boolean;
   readonly messages: readonly CourierWhatsappMessageView[];
 }
 
@@ -99,6 +104,7 @@ export class CourierWhatsappReadService {
         lastCheckedAt: null,
         checking: false,
         pausedUntil: null,
+        closed: false,
         messages: [],
       };
     }
@@ -108,7 +114,7 @@ export class CourierWhatsappReadService {
         awbNumber: true,
         courierCode: true,
         status: true,
-        courierWhatsappCheck: { select: { lastAttemptAt: true } },
+        courierWhatsappCheck: { select: { lastAttemptAt: true, lastOutcome: true } },
         courierWhatsappMessages: {
           select: { text: true, sentLabel: true, sentAt: true },
           // Insertion order is the window's order: ids are uuidv7.
@@ -125,9 +131,11 @@ export class CourierWhatsappReadService {
       bs !== null && bs.status === 'open' && bs.openUntil !== null && bs.openUntil > Date.now()
         ? new Date(bs.openUntil).toISOString()
         : null;
+    const closed = ship?.courierWhatsappCheck?.lastOutcome === 'HIDDEN';
     let checking = false;
     if (
       enabled &&
+      !closed &&
       pausedUntil === null &&
       ship !== null &&
       ship.courierCode === WHATSAPP_COURIER &&
@@ -142,6 +150,7 @@ export class CourierWhatsappReadService {
       enabled,
       checking,
       pausedUntil,
+      closed,
       shipmentId,
       awbNumber: ship?.awbNumber ?? null,
       lastCheckedAt: ship?.courierWhatsappCheck?.lastAttemptAt.toISOString() ?? null,

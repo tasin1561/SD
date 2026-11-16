@@ -11,9 +11,8 @@ import {
   WhatsappBreakerStore,
 } from '../../courier-whatsapp/services/whatsapp-breaker.store';
 import type { BreakerReason } from '../../courier-whatsapp/breaker';
-import { CourierPortalMode, ShipmentStatus, TrackingEventType } from '@skydrop/db';
+import { ShipmentStatus, TrackingEventType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
-import { CourierChannelSettingsService } from '../../courier-escalation/services/courier-channel-settings.service';
 import { nextCadence } from '../../courier-whatsapp/cadence';
 import { CourierWhatsappRequestService } from '../../courier-whatsapp/services/courier-whatsapp-request.service';
 import {
@@ -45,6 +44,8 @@ export type WhatsappFetchOutcome =
   | 'CAPPED'
   | 'OK'
   | 'NO_BUTTON'
+  /** Delhivery removed a conversation we had already saved: closed, our copy is kept. */
+  | 'HIDDEN'
   | 'UNREADABLE'
   | 'FAILED'
   | 'LOGGED_OUT'
@@ -84,7 +85,6 @@ export class DelhiveryWhatsappService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly session: PortalSessionService,
-    private readonly channel: CourierChannelSettingsService,
     private readonly requests: CourierWhatsappRequestService,
     private readonly breaker: WhatsappBreakerStore,
   ) {}
@@ -115,10 +115,15 @@ export class DelhiveryWhatsappService {
     return Math.min(WHATSAPP_PARALLEL_MAX, Math.max(1, n));
   }
 
-  /** The master switch AND the portal kill switch (CUR-18): OFF opens nothing. */
+  /**
+   * Only the reader's own master switch. Like the wallet sync and the
+   * invoice check it is a READ (it clicks only "View Whatsapp" and the
+   * modal's "Okay"), so it does not consult `portalMode` — CUR-18's OFF
+   * stops the portal ACTING. Owner, 2026-11-16: the messages must show
+   * while escalations stay manual.
+   */
   async mayRun(): Promise<boolean> {
-    if (!(await this.enabled())) return false;
-    return (await this.channel.get()).portalMode !== CourierPortalMode.OFF;
+    return this.enabled();
   }
 
   private async tab(
@@ -197,6 +202,8 @@ export class DelhiveryWhatsappService {
 
     let outcome: WhatsappFetchOutcome;
     let stored = 0;
+    // The window was reached and showed no conversation (no button, or an empty one).
+    let emptyWindow = false;
     // A box, because the response listener assigns it from a callback.
     const box: { trip: { reason: BreakerReason; hard: boolean } | null } = { trip: null };
     let page: Awaited<ReturnType<PortalSessionService['page']>> | null = null;
@@ -224,6 +231,8 @@ export class DelhiveryWhatsappService {
         ),
       ]);
       outcome = this.outcomeOf(read);
+      emptyWindow =
+        outcome === 'NO_BUTTON' || (outcome === 'OK' && (read.messages ?? []).length === 0);
       if (read.messages !== null) stored = await this.store(ship.id, read);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -265,13 +274,22 @@ export class DelhiveryWhatsappService {
     const count = await this.prisma.client.courierWhatsappMessage.count({
       where: { shipmentId: ship.id },
     });
-    const state = reached
-      ? { nextReadAt: cad.nextReadAt, gapMs: cad.gapMs, lastNewAt: cad.lastNewAt }
-      : {
-          nextReadAt: new Date(now.getTime() + 30 * 60_000),
-          gapMs: prev.gapMs,
-          lastNewAt: prev.lastNewAt,
-        };
+    // Owner, 2026-11-16: Delhivery sometimes takes a conversation off the
+    // panel after it happened. Messages are insert-only, so our copy stays;
+    // the conversation is marked CLOSED and is not read again on a timer
+    // (a new delivery-time scan still triggers a read, which reopens it if
+    // the button comes back).
+    const hidden = emptyWindow && count > 0;
+    if (hidden) outcome = 'HIDDEN';
+    const state = hidden
+      ? { nextReadAt: null, gapMs: null, lastNewAt: prev.lastNewAt }
+      : reached
+        ? { nextReadAt: cad.nextReadAt, gapMs: cad.gapMs, lastNewAt: cad.lastNewAt }
+        : {
+            nextReadAt: new Date(now.getTime() + 30 * 60_000),
+            gapMs: prev.gapMs,
+            lastNewAt: prev.lastNewAt,
+          };
     await this.prisma.client.courierWhatsappCheck.upsert({
       where: { shipmentId: ship.id },
       create: {
@@ -289,7 +307,7 @@ export class DelhiveryWhatsappService {
     this.logger.log({ shipmentId, outcome, stored, kind }, 'Courier WhatsApp read');
     return {
       outcome,
-      nextDelayMs: reached && cad.hot ? cad.nextReadAt.getTime() - now.getTime() : null,
+      nextDelayMs: !hidden && reached && cad.hot ? cad.nextReadAt.getTime() - now.getTime() : null,
       retryAfterMs: null,
     };
   }
@@ -377,7 +395,9 @@ export class DelhiveryWhatsappService {
       },
       select: {
         id: true,
-        courierWhatsappCheck: { select: { nextReadAt: true, lastAttemptAt: true } },
+        courierWhatsappCheck: {
+          select: { nextReadAt: true, lastAttemptAt: true, lastOutcome: true },
+        },
       },
       take: 400,
     });
@@ -389,6 +409,8 @@ export class DelhiveryWhatsappService {
             new Date(r.courierWhatsappCheck.lastAttemptAt.getTime() + 6 * 3600_000)
           ).getTime();
     const due = rows
+      // A conversation Delhivery hid stays closed: only a new scan reopens it.
+      .filter((r) => r.courierWhatsappCheck?.lastOutcome !== 'HIDDEN')
       .filter((r) => dueAt(r) <= now)
       .sort((a, b) => dueAt(a) - dueAt(b))
       .slice(0, batch);
