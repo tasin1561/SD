@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, OctagonX } from 'lucide-react';
 import type { AsyncPhase } from '@skydrop/ui/app/async-button';
 import { SectionHeading } from '@skydrop/ui/app/page-header';
 import './reseller-stores.css';
+import { foldNote } from '@/components/easy/about';
 
 /**
  * The reseller stores area's presentational pieces. Nothing here fetches,
@@ -29,7 +30,7 @@ export function RsSection({
 }): ReactElement {
   return (
     <section className="rs-section">
-      <SectionHeading title={title} note={note} action={action} />
+      <SectionHeading {...foldNote(title, note)} action={action} />
       <div className="rs-card" data-flush={flush ? '1' : undefined}>
         {children}
       </div>

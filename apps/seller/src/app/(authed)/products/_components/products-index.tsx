@@ -34,6 +34,7 @@ import {
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { AboutThis } from '@/components/easy/about';
+import { Unit } from '@/components/easy/units';
 
 /**
  * Seller catalogue list — the LIST pattern for the console redesign.
@@ -261,7 +262,7 @@ export function ProductsIndex(): ReactElement {
                 icon={<Boxes size={14} />}
                 value={stock.data.totalQtyOnHand}
                 format={rawCount}
-                unit="units"
+                unit={<Unit w="units" />}
                 tone="neutral"
                 foot={[
                   { label: t('productList.sellableNow'), value: stock.data.totalQtyAvailable },

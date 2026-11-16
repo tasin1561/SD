@@ -37,6 +37,7 @@ import {
   useGuidePanelId,
 } from './import-page-parts';
 import { useT, useLocale } from '@/i18n/client';
+import { AboutThis } from '@/components/easy/about';
 import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
@@ -661,7 +662,9 @@ export function CsvImportPanel({
                 onAction={() => downloadTemplateXlsx()}
               />
             </div>
-            <p className="imp-head__sub">{t('orderImport.importOneLiner')}</p>
+            <p className="imp-head__sub">
+              <AboutThis text={t('orderImport.importOneLiner')} />
+            </p>
           </header>
 
           <ImportSteps

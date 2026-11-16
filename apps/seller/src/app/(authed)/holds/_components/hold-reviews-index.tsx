@@ -33,6 +33,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { dateTag } from '@/i18n/format';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit } from '@/components/easy/units';
 
 /**
  * Orders our agents could not confirm on the phone, waiting on the seller.
@@ -145,7 +146,7 @@ export function HoldReviewsIndex(): ReactElement {
             icon={<PackageCheck size={14} />}
             value={openRows.length}
             format={rawCount}
-            unit={openRows.length === 1 ? 'order' : 'orders'}
+            unit={<Unit w={openRows.length === 1 ? 'order' : 'orders'} />}
             tone={openRows.length > 0 ? 'pending' : 'neutral'}
           />
         ) : (
@@ -183,7 +184,7 @@ export function HoldReviewsIndex(): ReactElement {
             }
             icon={<Lock size={14} />}
             figure={<Num value={heldUnits} />}
-            unit={heldUnits === 1 ? 'unit' : 'units'}
+            unit={<Unit w={heldUnits === 1 ? 'unit' : 'units'} />}
             tone="pending"
           />
         )}

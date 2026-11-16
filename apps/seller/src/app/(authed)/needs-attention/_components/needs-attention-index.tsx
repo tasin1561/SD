@@ -21,6 +21,7 @@ import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit } from '@/components/easy/units';
 
 /**
  * THE SELLER'S side of the NSA worklist.
@@ -169,7 +170,7 @@ export function NeedsAttentionIndex(): ReactElement {
             icon={<PhoneOff size={14} />}
             value={unconfirmed.length}
             format={String}
-            unit={unconfirmed.length === 0 ? undefined : 'orders'}
+            unit={<Unit w={unconfirmed.length === 0 ? undefined : 'orders'} />}
             tone={waitingOnYou > 0 ? 'pending' : 'neutral'}
             hint={
               unconfirmed.length === 0
@@ -206,7 +207,7 @@ export function NeedsAttentionIndex(): ReactElement {
             label={t('needsAttention.outForDeliveryNever')}
             icon={<Truck size={14} />}
             figure={<span className="nat-faint">—</span>}
-            unit={rows.length === 0 ? undefined : 'parcels'}
+            unit={<Unit w={rows.length === 0 ? undefined : 'parcels'} />}
             tone={overdue > 0 ? 'debit' : rows.length > 0 ? 'pending' : 'neutral'}
             hint={answered ? overdueHint(t, rows.length) : undefined}
           />
@@ -216,7 +217,7 @@ export function NeedsAttentionIndex(): ReactElement {
             icon={<Truck size={14} />}
             value={rows.length}
             format={String}
-            unit={rows.length === 0 ? undefined : 'parcels'}
+            unit={<Unit w={rows.length === 0 ? undefined : 'parcels'} />}
             tone={overdue > 0 ? 'debit' : rows.length > 0 ? 'pending' : 'neutral'}
             hint={answered ? overdueHint(t, rows.length) : undefined}
             foot={

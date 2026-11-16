@@ -35,6 +35,7 @@ import {
 } from '../_components/rs-parts';
 import { useT } from '@/i18n/client';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit, unitWord } from '@/components/easy/units';
 
 /**
  * RS-3 — the seller's DEFAULT reseller price list: what every reseller
@@ -156,7 +157,7 @@ export default function ResellerPriceListPage(): ReactElement {
           }
           icon={<Store size={14} />}
           value={inStores}
-          unit={inStores === 1 ? 'product' : 'products'}
+          unit={<Unit w={inStores === 1 ? 'product' : 'products'} />}
           tone="neutral"
         />
         <KpiCard
@@ -168,7 +169,7 @@ export default function ResellerPriceListPage(): ReactElement {
           }
           icon={<Boxes size={14} />}
           figure={<Num value={available} />}
-          unit="units"
+          unit={<Unit w="units" />}
           tone="neutral"
         />
       </div>
@@ -178,7 +179,7 @@ export default function ResellerPriceListPage(): ReactElement {
         note={
           list.data.truncated
             ? t('resellerPriceList.yourFirst2000')
-            : `${rows.length} ${rows.length === 1 ? 'product' : 'products'}`
+            : `${rows.length} ${unitWord(t, rows.length === 1 ? 'product' : 'products')}`
         }
         flush
       >

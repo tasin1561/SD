@@ -27,6 +27,7 @@ import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import type { MessageKey } from '@/i18n/catalog';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit } from '@/components/easy/units';
 
 /**
  * The rows your upload could not turn into orders.
@@ -333,7 +334,7 @@ export function PendingOrdersIndex(): ReactElement {
             }
             icon={<ListChecks size={14} />}
             value={list.length}
-            unit={list.length === 1 ? 'row' : 'rows'}
+            unit={<Unit w={list.length === 1 ? 'row' : 'rows'} />}
             tone="pending"
           />
           <KpiCard
@@ -345,7 +346,7 @@ export function PendingOrdersIndex(): ReactElement {
             }
             icon={<FileWarning size={14} />}
             value={broken}
-            unit={broken === 1 ? 'row' : 'rows'}
+            unit={<Unit w={broken === 1 ? 'row' : 'rows'} />}
             tone={broken > 0 ? 'debit' : 'neutral'}
           />
           <KpiCard
@@ -357,7 +358,7 @@ export function PendingOrdersIndex(): ReactElement {
             }
             icon={<CopyCheck size={14} />}
             value={duplicates}
-            unit={duplicates === 1 ? 'row' : 'rows'}
+            unit={<Unit w={duplicates === 1 ? 'row' : 'rows'} />}
             tone={duplicates > 0 ? 'pending' : 'neutral'}
           />
         </div>

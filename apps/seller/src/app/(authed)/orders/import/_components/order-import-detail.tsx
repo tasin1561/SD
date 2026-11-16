@@ -34,6 +34,7 @@ import {
 import { useT, useLocale } from '@/i18n/client';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
+import { Unit } from '@/components/easy/units';
 
 /**
  * One order CSV import, by id.
@@ -227,14 +228,14 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
               label={t('orderImport.rowsInFile')}
               icon={<FileSpreadsheet size={14} />}
               value={job.rowCount}
-              unit={job.rowCount === 1 ? 'row' : 'rows'}
+              unit={<Unit w={job.rowCount === 1 ? 'row' : 'rows'} />}
               tone="neutral"
             />
             <KpiCard
               label={t('orderImport.ordersCreated')}
               icon={<PackagePlus size={14} />}
               value={job.ordersCreated}
-              unit={job.ordersCreated === 1 ? 'order' : 'orders'}
+              unit={<Unit w={job.ordersCreated === 1 ? 'order' : 'orders'} />}
               tone={job.ordersCreated > 0 ? 'credit' : 'neutral'}
               hint={running ? t('orderImport.stillCounting') : undefined}
             />
@@ -242,7 +243,7 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
               label={t('orderImport.rowsRefused')}
               icon={<XCircle size={14} />}
               value={job.rowsFailed}
-              unit={job.rowsFailed === 1 ? 'row' : 'rows'}
+              unit={<Unit w={job.rowsFailed === 1 ? 'row' : 'rows'} />}
               tone={job.rowsFailed > 0 ? 'debit' : 'neutral'}
               hint={job.rowsFailed > 0 ? t('orderImport.listedInTheError') : undefined}
             />
@@ -250,7 +251,7 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
               label={t('orderImport.rowsSkipped')}
               icon={<SkipForward size={14} />}
               value={job.rowsSkipped}
-              unit={job.rowsSkipped === 1 ? 'row' : 'rows'}
+              unit={<Unit w={job.rowsSkipped === 1 ? 'row' : 'rows'} />}
               tone="neutral"
               hint={job.rowsSkipped > 0 ? t('orderImport.alreadySentUnderThe') : undefined}
             />
@@ -262,7 +263,7 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
               items={[
                 {
                   label: t('orderImport.status'),
-                  value: <span className="sk-ident">{job.status}</span>,
+                  value: uploadStatusLabel(job.status, locale),
                 },
                 { label: t('orderImport.uploaded'), value: stamp(job.createdAt) },
                 { label: t('orderImport.started'), value: stamp(job.startedAt) },

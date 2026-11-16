@@ -813,3 +813,29 @@ a.ez-jump__link:focus-visible {
     inset: -10px -6px;
   }
 }
+
+/* ── Fact lists on a phone: two to a row, empty facts left out ──────────── */
+@media (max-width: 559.98px) {
+  .ez-phone .inv-dl[data-cols='2'],
+  .ez-phone .inv-dl[data-cols='3'],
+  .ez-phone .rs-facts-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3);
+  }
+  .ez-phone .inv-dl__row[data-ez-empty],
+  .ez-phone .rs-facts-list__item[data-ez-empty] {
+    display: none;
+  }
+}
+
+/* A progress card never runs off a phone: its status drops under its label. */
+@media (max-width: 559.98px) {
+  .ez-phone .ord-card,
+  .ez-phone .sk-chute {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .ez-phone .sk-chute__head {
+    flex-wrap: wrap;
+  }
+}

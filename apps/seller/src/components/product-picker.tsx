@@ -141,10 +141,12 @@ export function ProductCatalogue({
               return (
                 <li
                   key={h.id}
-                  className="border-border-subtle hover:bg-surface-hover flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0"
+                  className="border-border-subtle hover:bg-surface-hover flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b px-4 py-2.5 last:border-b-0 sm:flex-nowrap"
                 >
                   <ProductThumb src={h.primaryImageUrl} size={40} />
-                  <div className={`min-w-0 flex-1 ${none ? 'opacity-60' : ''}`}>
+                  <div
+                    className={`min-w-0 flex-1 basis-[calc(100%-3.5rem)] sm:basis-0 ${none ? 'opacity-60' : ''}`}
+                  >
                     <p className="text-text-body truncate text-sm leading-snug">
                       {h.productName}
                       {h.variantLabel === null ? '' : ` — ${h.variantLabel}`}
@@ -166,7 +168,7 @@ export function ProductCatalogue({
                       </span>
                     </p>
                   </div>
-                  <span className="text-text-body shrink-0 font-mono text-sm tabular-nums">
+                  <span className="text-text-body ml-auto shrink-0 font-mono text-sm tabular-nums sm:ml-0">
                     {h.effectiveDeclaredValueInr === null ? (
                       <span className="text-text-faint text-xs">{t('productPicker.noPrice')}</span>
                     ) : (
@@ -182,7 +184,7 @@ export function ProductCatalogue({
                     onClick={() => onAdd(h)}
                     disabled={already}
                     aria-label={t('productPicker.add', { skuCode: h.skuCode })}
-                    className={`skydrop-hit inline-flex h-8 shrink-0 items-center gap-1 rounded-[4px] px-2.5 text-xs font-medium ${
+                    className={`skydrop-hit inline-flex h-10 shrink-0 items-center gap-1 rounded-[4px] px-3 text-xs font-medium sm:h-8 sm:px-2.5 ${
                       already
                         ? 'bg-[var(--status-delivered-bg)] text-[var(--status-delivered-fg)]'
                         : 'border-accent text-accent hover:bg-[var(--color-accent-tint)] border'
@@ -212,7 +214,7 @@ export function ProductCatalogue({
                         skuCode: h.skuCode,
                       },
                     )}
-                    className={`skydrop-hit flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] ${
+                    className={`skydrop-hit flex h-10 w-10 shrink-0 items-center justify-center rounded-[4px] sm:h-8 sm:w-8 ${
                       h.isFavourite
                         ? 'text-[var(--status-pending-fg)]'
                         : 'text-text-faint hover:text-text-muted'

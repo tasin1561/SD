@@ -30,6 +30,7 @@ import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit } from '@/components/easy/units';
 
 const crumbsOf = (t: Translate<MessageKey>) => [
   { label: t('settingsStores.clientConsole') },
@@ -200,7 +201,7 @@ export function StoresIndex(): ReactElement {
               icon={<StoreIcon size={14} />}
               value={rows.length}
               format={String}
-              unit={rows.length === 1 ? 'store' : 'stores'}
+              unit={<Unit w={rows.length === 1 ? 'store' : 'stores'} />}
               tone="neutral"
               hint={t('settingsStores.openClosed', {
                 open: open.length,
@@ -217,7 +218,7 @@ export function StoresIndex(): ReactElement {
               icon={<PackageCheck size={14} />}
               value={totalOrders}
               format={String}
-              unit={totalOrders === 1 ? 'order' : 'orders'}
+              unit={<Unit w={totalOrders === 1 ? 'order' : 'orders'} />}
               tone="neutral"
             />
             <KpiCard

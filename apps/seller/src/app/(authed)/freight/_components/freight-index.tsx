@@ -20,6 +20,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { dateTag } from '@/i18n/format';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit, unitWord } from '@/components/easy/units';
 
 /** The filter tab that means "no status filter". */
 const ALL = 'all';
@@ -104,7 +105,7 @@ export function SellerFreightIndex(): ReactElement {
           !loaded ? undefined : (
             <span className="frt-meta">
               <span className="frt-fact" data-tone="accent">
-                {rows.length} {rows.length === 1 ? 'bill' : 'bills'}
+                {rows.length} {unitWord(t, rows.length === 1 ? 'bill' : 'bills')}
               </span>
               {Number(outstanding) > 0 && (
                 <span className="frt-fact" data-tone="warn">
@@ -163,7 +164,7 @@ export function SellerFreightIndex(): ReactElement {
             label={t('freight.consignmentsBilled')}
             icon={<PlaneTakeoff size={14} />}
             value={rows.length}
-            unit={rows.length === 1 ? 'bill' : 'bills'}
+            unit={<Unit w={rows.length === 1 ? 'bill' : 'bills'} />}
             tone="neutral"
             hint={filtered ? humanise(status) : t('freight.everyStatus')}
           />
@@ -207,7 +208,7 @@ export function SellerFreightIndex(): ReactElement {
           title={t('freight.freightBills')}
           note={
             loaded
-              ? `${rows.length} ${rows.length === 1 ? 'bill' : 'bills'}${filtered ? ' matching' : ''}`
+              ? `${rows.length} ${unitWord(t, rows.length === 1 ? 'bill' : 'bills')}${filtered ? ` ${unitWord(t, 'matching')}` : ''}`
               : undefined
           }
           action={

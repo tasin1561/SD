@@ -38,6 +38,7 @@ import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
 import type { Locale } from '@skydrop/ui/app/i18n';
+import { Unit } from '@/components/easy/units';
 
 /**
  * One catalog import, opened.
@@ -129,7 +130,7 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
             icon={<FileSpreadsheet size={14} />}
             value={job.rowCount}
             format={rawCount}
-            unit={job.rowCount === 1 ? 'row' : 'rows'}
+            unit={<Unit w={job.rowCount === 1 ? 'row' : 'rows'} />}
             tone="neutral"
           />
         )}
@@ -161,7 +162,7 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
           icon={<XCircle size={14} />}
           value={job.rowsFailed}
           format={rawCount}
-          unit={job.rowsFailed === 1 ? 'row' : 'rows'}
+          unit={<Unit w={job.rowsFailed === 1 ? 'row' : 'rows'} />}
           tone={job.rowsFailed > 0 ? 'debit' : 'neutral'}
           hint={
             job.rowsSkipped > 0

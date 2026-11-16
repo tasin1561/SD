@@ -38,6 +38,7 @@ import { richMessage } from '@/i18n/rich';
 import { dateTag } from '@/i18n/format';
 import type { Locale } from '@skydrop/ui/app/i18n';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit, unitWord } from '@/components/easy/units';
 
 function day(iso: string, locale: Locale = 'en'): string {
   return new Date(iso).toLocaleDateString(dateTag(locale, 'en-IN'), { dateStyle: 'medium' });
@@ -152,7 +153,7 @@ export default function ResellerStoresPage(): ReactElement {
           }
           icon={<Store size={14} />}
           value={all.length}
-          unit={all.length === 1 ? 'store' : 'stores'}
+          unit={<Unit w={all.length === 1 ? 'store' : 'stores'} />}
           tone="neutral"
         />
         <KpiCard
@@ -164,14 +165,14 @@ export default function ResellerStoresPage(): ReactElement {
           }
           icon={<UserCheck size={14} />}
           value={active}
-          unit="active"
+          unit={<Unit w="active" />}
           tone={active > 0 ? 'credit' : 'neutral'}
         />
         <KpiCard
           label={t('resellerStores.waitingForYou')}
           icon={<Pause size={14} />}
           value={pending.length}
-          unit={pending.length === 1 ? 'store' : 'stores'}
+          unit={<Unit w={pending.length === 1 ? 'store' : 'stores'} />}
           tone={pending.length > 0 ? 'pending' : 'neutral'}
           hint={
             pending.length > 0
@@ -188,7 +189,7 @@ export default function ResellerStoresPage(): ReactElement {
           }
           icon={<Users size={14} />}
           value={people}
-          unit={people === 1 ? 'person' : 'people'}
+          unit={<Unit w={people === 1 ? 'person' : 'people'} />}
           tone="neutral"
         />
       </div>
@@ -205,7 +206,7 @@ export default function ResellerStoresPage(): ReactElement {
 
       <RsSection
         title={t('resellerStores.yourMemberStores')}
-        note={`${rest.length} ${rest.length === 1 ? 'store' : 'stores'}`}
+        note={`${rest.length} ${unitWord(t, rest.length === 1 ? 'store' : 'stores')}`}
         action={<RsLink href="/reseller-stores/reports">{t('resellerStores.reports')}</RsLink>}
         flush
       >

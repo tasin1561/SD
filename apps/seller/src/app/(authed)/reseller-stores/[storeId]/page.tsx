@@ -68,6 +68,7 @@ import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
 import type { Locale } from '@skydrop/ui/app/i18n';
+import { Unit } from '@/components/easy/units';
 
 type StoreTab = 'overview' | 'catalogue' | 'terms' | 'actions';
 
@@ -297,7 +298,7 @@ export default function ResellerStorePage(): ReactElement {
           label={t('resellerStoreDetail.team')}
           icon={<Users size={14} />}
           value={s.memberCount}
-          unit={s.memberCount === 1 ? 'person' : 'people'}
+          unit={<Unit w={s.memberCount === 1 ? 'person' : 'people'} />}
           tone="neutral"
           hint={
             invited === 0

@@ -404,7 +404,9 @@ export function InboundIndex(): ReactElement {
             </>
           )}
         </Panel>
-        <Note>{t('inbound.openAConsignmentTo')}</Note>
+        <Note>
+          <AboutThis kind="list" text={t('inbound.openAConsignmentTo')} />
+        </Note>
       </AreaSection>
 
       <AnnounceConsignment open={announcing} onClose={() => setAnnouncing(false)} />

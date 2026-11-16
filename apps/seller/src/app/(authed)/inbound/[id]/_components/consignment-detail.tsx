@@ -79,6 +79,8 @@ import {
 } from '../../_components/consignment-words';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
+import { Unit } from '@/components/easy/units';
+import { AboutThis } from '@/components/easy/about';
 
 /** The server's floor for a cancellation reason. Cosmetic — it refuses
  *  a short one regardless, and that refusal is shown verbatim. */
@@ -152,7 +154,7 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
         ]}
         Link={Link}
         title={<span className="sk-ident">{consignment.consignmentNumber}</span>}
-        subtitle={routeWords(consignment.route, t).blurb}
+        subtitle={<AboutThis text={routeWords(consignment.route, t).blurb} />}
         meta={
           <MetaFacts>
             <MetaFact tone="accent">{routeWords(consignment.route, t).title}</MetaFact>
@@ -211,7 +213,7 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
               icon={<PackageCheck size={14} />}
               value={progress.receivedInIndia}
               format={rawCount}
-              unit="units"
+              unit={<Unit w="units" />}
               tone={
                 progress.receivedInIndia > 0 && progress.stillToCome === 0 ? 'credit' : 'neutral'
               }
@@ -239,7 +241,7 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
               icon={<Plane size={14} />}
               value={progress.stillToCome}
               format={rawCount}
-              unit="units"
+              unit={<Unit w="units" />}
               tone={progress.stillToCome > 0 ? 'pending' : 'neutral'}
               /*
                 A counted leg that came up short is a LOSS, not something

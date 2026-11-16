@@ -43,6 +43,7 @@ import { richMessage } from '@/i18n/rich';
 import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit } from '@/components/easy/units';
 
 /**
  * Everything about what Skydrop sends you, on one page.
@@ -200,7 +201,7 @@ export function NotificationSettingsView(): ReactElement {
               icon={<Landmark size={14} />}
               value={rows.length}
               format={String}
-              unit="categories"
+              unit={<Unit w="categories" />}
               tone="neutral"
             />
           ))}

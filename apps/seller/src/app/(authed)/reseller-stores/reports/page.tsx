@@ -32,6 +32,7 @@ import { RsFact, RsFacts, RsLink, RsSection, RsStrip, RsStripFact } from '../_co
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit, unitWord } from '@/components/easy/units';
 
 const pct = (v: string | null): string => (v === null ? '—' : `${v}%`);
 
@@ -90,7 +91,7 @@ export default function ResellerReportsPage(): ReactElement {
           !loaded ? undefined : (
             <RsFacts>
               <RsFact tone="accent">
-                {stores.length} {stores.length === 1 ? 'store' : 'stores'}
+                {stores.length} {unitWord(t, stores.length === 1 ? 'store' : 'stores')}
               </RsFact>
               <RsFact>
                 {istDateLabel(window.from, locale)} – {istDateLabel(window.to, locale)}
@@ -134,7 +135,7 @@ export default function ResellerReportsPage(): ReactElement {
             }
             icon={<Package size={14} />}
             figure={loaded ? <Num value={placed} /> : dash}
-            unit={loaded ? (placed === 1 ? 'order' : 'orders') : undefined}
+            unit={<Unit w={loaded ? (placed === 1 ? 'order' : 'orders') : undefined} />}
             tone="neutral"
           />
           <KpiCard
@@ -146,7 +147,7 @@ export default function ResellerReportsPage(): ReactElement {
             }
             icon={<TrendingUp size={14} />}
             figure={loaded ? <Num value={units} /> : dash}
-            unit={loaded ? 'units' : undefined}
+            unit={<Unit w={loaded ? 'units' : undefined} />}
             tone="neutral"
           />
           <KpiCard

@@ -10,9 +10,16 @@ import './easy.css';
  * now one press away. The page opens on the work; the explanation is
  * still there for whoever wants it.
  */
-export function AboutThis({ text }: { readonly text: string }): ReactElement {
+export function AboutThis({
+  text,
+  kind = 'page',
+}: {
+  readonly text: string;
+  /** What the sentence is about: the page (default) or the list above it. */
+  readonly kind?: 'page' | 'list';
+}): ReactElement {
   const t = useT();
-  const label = t('easy.aboutThisPage');
+  const label = t(kind === 'list' ? 'easy.aboutThisList' : 'easy.aboutThisPage');
   return (
     <span className="ez-about">
       <InfoButton title={label} text={text} />
@@ -53,4 +60,19 @@ export function InfoLabel({
 export function HintInfo({ text }: { readonly text: string }): ReactElement {
   const t = useT();
   return <InfoButton className="ez-hint" title={t('easy.aboutThis')} text={text} />;
+}
+
+/**
+ * A section's title and note, with an explanatory note moved behind an "i"
+ * beside the title. A short note with a number in it is a fact ("4 tickets")
+ * and stays where it is; a sentence is an explanation and waits to be asked for.
+ */
+export function foldNote(
+  title: ReactNode,
+  note: ReactNode,
+): { readonly title: ReactNode; readonly note: ReactNode } {
+  if (typeof note !== 'string' || note === '') return { title, note };
+  // A count ("4 tickets") is a fact and stays; a sentence is an explanation.
+  if (/\d/.test(note) && note.length <= 40) return { title, note };
+  return { title: <InfoLabel label={title} info={note} />, note: undefined };
 }

@@ -45,6 +45,7 @@ import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
 import type { Locale } from '@skydrop/ui/app/i18n';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit } from '@/components/easy/units';
 
 function when(iso: string, locale: Locale = 'en'): string {
   return new Date(iso).toLocaleString(dateTag(locale, 'en-IN'), {
@@ -155,7 +156,7 @@ export default function StoreRequestsPage(): ReactElement {
         }
         icon={<MessageSquareWarning size={14} />}
         value={orderCount ?? 0}
-        unit={orderCount === 1 ? 'request' : 'requests'}
+        unit={<Unit w={orderCount === 1 ? 'request' : 'requests'} />}
         tone={(orderCount ?? 0) > 0 ? 'pending' : 'neutral'}
       />
       <KpiCard
@@ -167,7 +168,7 @@ export default function StoreRequestsPage(): ReactElement {
         }
         icon={<Truck size={14} />}
         value={actionCount ?? 0}
-        unit={actionCount === 1 ? 'ask' : 'asks'}
+        unit={<Unit w={actionCount === 1 ? 'ask' : 'asks'} />}
         tone={(actionCount ?? 0) > 0 ? 'pending' : 'neutral'}
       />
       <KpiCard
@@ -179,7 +180,7 @@ export default function StoreRequestsPage(): ReactElement {
         }
         icon={<MapPin size={14} />}
         value={addressCount ?? 0}
-        unit={addressCount === 1 ? 'change' : 'changes'}
+        unit={<Unit w={addressCount === 1 ? 'change' : 'changes'} />}
         tone={(addressCount ?? 0) > 0 ? 'pending' : 'neutral'}
       />
     </div>

@@ -23,6 +23,7 @@ import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit } from '@/components/easy/units';
 
 const PAGE_SIZE = 25;
 
@@ -148,7 +149,7 @@ export function CustomersIndex(): ReactElement {
             icon={<Users size={14} />}
             value={total}
             format={String}
-            unit="people"
+            unit={<Unit w="people" />}
             tone="neutral"
           />
         )}
@@ -158,7 +159,7 @@ export function CustomersIndex(): ReactElement {
             icon={<PackageCheck size={14} />}
             value={orderTotal}
             format={String}
-            unit="orders"
+            unit={<Unit w="orders" />}
             tone="neutral"
             foot={[
               { label: t('customers.delivered'), value: deliveredTotal },
@@ -179,7 +180,7 @@ export function CustomersIndex(): ReactElement {
             icon={<RotateCcw size={14} />}
             value={rtoTotal}
             format={String}
-            unit="orders"
+            unit={<Unit w="orders" />}
             tone={rtoTotal > 0 ? 'pending' : 'neutral'}
             hint={answered ? rtoHint(t, rtoTotal) : undefined}
             foot={
@@ -203,7 +204,7 @@ export function CustomersIndex(): ReactElement {
             icon={<ShieldAlert size={14} />}
             value={flagged.length}
             format={String}
-            unit="people"
+            unit={<Unit w="people" />}
             tone={flagged.length > 0 ? 'debit' : 'neutral'}
             hint={answered ? flaggedHint(t, flagged.length) : undefined}
           />

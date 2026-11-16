@@ -46,6 +46,7 @@ import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit, unitWord } from '@/components/easy/units';
 
 // The hardcoded six are gone: roles are rows now, so the options come
 // from the server and include anything created under Team → Roles.
@@ -237,7 +238,8 @@ export function TeamManagementIndex(): ReactElement {
           members.data === undefined ? undefined : (
             <span className="set-meta">
               <SetFact tone="accent">
-                {activeMembers.length} active {activeMembers.length === 1 ? 'member' : 'members'}
+                {activeMembers.length} {unitWord(t, 'active')}{' '}
+                {unitWord(t, activeMembers.length === 1 ? 'member' : 'members')}
               </SetFact>
               {openInvites.length > 0 && (
                 <SetFact tone="warn" dot>
@@ -281,7 +283,7 @@ export function TeamManagementIndex(): ReactElement {
             icon={<Users size={14} />}
             value={activeMembers.length}
             format={String}
-            unit={activeMembers.length === 1 ? 'person' : 'people'}
+            unit={<Unit w={activeMembers.length === 1 ? 'person' : 'people'} />}
             tone="neutral"
             hint={
               memberRows.length === activeMembers.length
@@ -313,7 +315,7 @@ export function TeamManagementIndex(): ReactElement {
             icon={<MailPlus size={14} />}
             value={openInvites.length}
             format={String}
-            unit={openInvites.length === 1 ? 'invite' : 'invites'}
+            unit={<Unit w={openInvites.length === 1 ? 'invite' : 'invites'} />}
             tone={openInvites.length > 0 ? 'pending' : 'neutral'}
           />
         )}
@@ -330,7 +332,7 @@ export function TeamManagementIndex(): ReactElement {
             icon={<ShieldCheck size={14} />}
             value={roles.data.length}
             format={String}
-            unit={roles.data.length === 1 ? 'role' : 'roles'}
+            unit={<Unit w={roles.data.length === 1 ? 'role' : 'roles'} />}
             tone="neutral"
           />
         )}
@@ -352,7 +354,7 @@ export function TeamManagementIndex(): ReactElement {
           note={
             members.data === undefined
               ? undefined
-              : `${memberRows.length} ${memberRows.length === 1 ? 'person' : 'people'}`
+              : `${memberRows.length} ${unitWord(t, memberRows.length === 1 ? 'person' : 'people')}`
           }
         />
         <div className="set-card" data-flush>

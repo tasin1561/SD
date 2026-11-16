@@ -29,6 +29,7 @@ import {
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { AboutThis } from '@/components/easy/about';
+import { Unit } from '@/components/easy/units';
 
 const PAGE_SIZE = 25;
 
@@ -148,7 +149,7 @@ export function InventoryView(): ReactElement {
             icon={<Boxes size={14} />}
             value={s.totalQtyOnHand}
             format={rawCount}
-            unit="units"
+            unit={<Unit w="units" />}
             tone="neutral"
             foot={[
               { label: t('inventory.sellableNow'), value: s.totalQtyAvailable },
@@ -168,7 +169,7 @@ export function InventoryView(): ReactElement {
             icon={<Plane size={14} />}
             value={s.totalQtyInTransit}
             format={rawCount}
-            unit="units"
+            unit={<Unit w="units" />}
             tone="info"
             /*
               A HINT IS A CLAIM, so it waits for the figure it explains.

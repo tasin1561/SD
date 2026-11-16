@@ -11,6 +11,7 @@ import { statusLabel, stockUnitStatusKind } from '@skydrop/ui/status';
 import type { StockUnitStatus } from '@skydrop/db';
 import './stock-ui.css';
 import { useT, useLocale } from '@/i18n/client';
+import { foldNote } from '@/components/easy/about';
 
 /**
  * The presentational pieces shared by the stock area of the seller
@@ -53,7 +54,7 @@ export function AreaSection({
 }): ReactElement {
   return (
     <section className="inv-section" aria-labelledby={id}>
-      <SectionHeading title={title} note={note} action={action} id={id} />
+      <SectionHeading {...foldNote(title, note)} action={action} id={id} />
       {children}
     </section>
   );

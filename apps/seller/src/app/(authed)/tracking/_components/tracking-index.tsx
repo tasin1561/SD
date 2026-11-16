@@ -24,6 +24,7 @@ import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit } from '@/components/easy/units';
 /**
  * Every parcel that has left, and where it got to.
  *
@@ -126,14 +127,14 @@ export function TrackingIndex(): ReactElement {
             }
             icon={<Truck size={14} />}
             value={moving}
-            unit="parcels"
+            unit={<Unit w="parcels" />}
             tone="info"
           />
           <KpiCard
             label={t('tracking.deliveryFailed')}
             icon={<PackageX size={14} />}
             value={failed}
-            unit="parcels"
+            unit={<Unit w="parcels" />}
             tone={failed > 0 ? 'debit' : 'neutral'}
             hint={
               failed > 0 ? t('tracking.theCourierTriedAnd') : t('tracking.nothingShownHasFailed')
@@ -143,7 +144,7 @@ export function TrackingIndex(): ReactElement {
             label={t('tracking.comingBack2')}
             icon={<RotateCcw size={14} />}
             value={comingBack}
-            unit="parcels"
+            unit={<Unit w="parcels" />}
             tone={comingBack > 0 ? 'pending' : 'neutral'}
             hint={
               comingBack > 0 ? t('tracking.onTheirWayTo') : t('tracking.nothingShownIsReturning')

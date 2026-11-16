@@ -24,6 +24,7 @@ import {
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit } from '@/components/easy/units';
 
 /**
  * How long the stock your reseller stores sell will last (RS-9), at the
@@ -104,7 +105,7 @@ export default function ResellerStockForecastPage(): ReactElement {
               label={t('resellerForecast.toReorder2')}
               icon={<TriangleAlert size={14} />}
               value={reorder}
-              unit={reorder === 1 ? 'product' : 'products'}
+              unit={<Unit w={reorder === 1 ? 'product' : 'products'} />}
               tone={reorder > 0 ? 'debit' : 'neutral'}
               hint={t('resellerForecast.fewerThanDaysOf', {
                 reorderDays: forecast.data.reorderDays,
@@ -153,7 +154,7 @@ export default function ResellerStockForecastPage(): ReactElement {
             }
             icon={<Boxes size={14} />}
             figure={loaded ? <Num value={available} /> : dash}
-            unit={loaded ? 'units' : undefined}
+            unit={<Unit w={loaded ? 'units' : undefined} />}
             tone="neutral"
           />
         </div>

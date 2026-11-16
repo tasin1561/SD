@@ -27,6 +27,7 @@ import type { Translate } from '@skydrop/ui/app/i18n';
 import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
+import { Unit, unitWord } from '@/components/easy/units';
 
 /**
  * The seller's ticket list.
@@ -114,7 +115,8 @@ export function SellerTicketsIndex(): ReactElement {
                   : t('tickets.awaitingADecision', { open })}
               </Fact>
               <Fact>
-                {rows.length} {rows.length === 1 ? 'ticket' : 'tickets'} shown
+                {rows.length} {unitWord(t, rows.length === 1 ? 'ticket' : 'tickets')}{' '}
+                {unitWord(t, 'shown')}
               </Fact>
             </span>
           )
@@ -152,7 +154,7 @@ export function SellerTicketsIndex(): ReactElement {
             icon={<CircleDot size={14} />}
             value={open}
             format={String}
-            unit={open === 1 ? 'ticket' : 'tickets'}
+            unit={<Unit w={open === 1 ? 'ticket' : 'tickets'} />}
             tone={open > 0 ? 'pending' : 'neutral'}
           />
         ) : (
@@ -195,7 +197,7 @@ export function SellerTicketsIndex(): ReactElement {
             icon={<LifeBuoy size={14} />}
             value={rows.length}
             format={String}
-            unit={rows.length === 1 ? 'ticket' : 'tickets'}
+            unit={<Unit w={rows.length === 1 ? 'ticket' : 'tickets'} />}
             tone="neutral"
             hint={filtered ? t('tickets.matchingYourFilterAnd') : t('tickets.everyTicketOnYour')}
           />
@@ -215,7 +217,7 @@ export function SellerTicketsIndex(): ReactElement {
           title={t('tickets.ticketRegister')}
           note={
             loaded
-              ? `${rows.length} ${rows.length === 1 ? 'ticket' : 'tickets'}${filtered ? ' matching' : ''}`
+              ? `${rows.length} ${unitWord(t, rows.length === 1 ? 'ticket' : 'tickets')}${filtered ? ` ${unitWord(t, 'matching')}` : ''}`
               : undefined
           }
         />
