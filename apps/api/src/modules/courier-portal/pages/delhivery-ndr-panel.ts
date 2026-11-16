@@ -1,5 +1,6 @@
 import type { Page } from 'playwright';
-import { judgeClickNdr } from '../services/portal-read-only-guard';
+import { judgeNavigation } from '../services/portal-read-only-guard';
+import { gotoPortal } from './navigate';
 
 /**
  * What Delhivery One's shipment page says about an NDR that the tracking
@@ -87,16 +88,14 @@ export function parseNdrDrawerText(raw: string): string | null {
 
 /**
  * Read the NDR facts off the shipment page that is ALREADY open. No
- * navigation. The only clicks are "View NDRs" and its close control,
- * each judged by `judgeClickNdr` (the allow-list) on the element's own
- * label. NEVER "Resolve now", "Activate now" or an edit pencil.
+ * navigation and NO clicks: "View NDRs" turned out to be a link to the
+ * NDR page (read separately by `readNeedActionRow`), not a window.
  *
  * Selectors (owner's screenshot of AWB 38061110627384, unverified live):
  *   - header chip : text "N/M delivery attempts failed", "Deadline: N Days"
  *   - banner      : text "Action needed to ensure timely delivery"
  *   - block       : text "NDR (N)", "NDR Remark is not verified" + "Not Verified"
- *   - drawer      : role=button/link name /^view ndrs?$/i, then role=dialog
- *   - close       : role=button name /^(close|dismiss|×|✕)$/i, Escape fallback
+ *   - "View NDRs" : role=button/link name /^view ndrs?$/i — presence only
  *
  * Never throws: any failure is `null`.
  */
@@ -118,45 +117,81 @@ export async function readNdrPanel(page: Page): Promise<NdrPanelRead | null> {
       .then(() => true)
       .catch(() => false);
 
-    const parsed = parseNdrPanelText(text, hasButton);
-    if (parsed === null) return null;
-    if (parsed.open !== true || !hasButton) return parsed;
-    const reasonText = await readDrawer(page, button).catch(() => null);
-    return { ...parsed, reasonText };
+    // "View NDRs" navigates to the NDR page rather than opening a window,
+    // so nothing is clicked here: the caller reads that page by address
+    // (readNeedActionRow) once it has finished with this one.
+    return parseNdrPanelText(text, hasButton);
   } catch {
     return null;
   }
 }
 
-async function readDrawer(
-  page: Page,
-  button: ReturnType<Page['getByRole']>,
-): Promise<string | null> {
-  const label = ((await button.innerText().catch(() => '')) || 'View NDRs').trim();
-  if (!judgeClickNdr({ label, tag: 'button', type: '', inForm: false }).allowed) return null;
-  await button.click({ timeout: 5_000 });
-  const dialog = page.getByRole('dialog').first();
-  const shown = await dialog
-    .waitFor({ state: 'visible', timeout: 5_000 })
-    .then(() => true)
-    .catch(() => false);
-  if (!shown) {
-    await page.keyboard.press('Escape').catch(() => undefined);
-    return null;
+/** The NDR page "View NDRs" links to, filtered to one AWB. */
+export const NEED_ACTION_URL = (awb: string): string =>
+  `https://one.delhivery.com/v2/exceptions/ndr/need-action?filter_awb=${encodeURIComponent(awb)}`;
+
+const PAYMENT = /^(cod|prepaid|pre-paid)$/i;
+const ATTEMPT_LINE = /^(\d+)\s+attempts?$/i;
+const UPDATED_LINE = /\|\s*\d{1,2}:\d{2}\s*(am|pm)?$/i;
+const ROW_ACTIONS = /^(consignee details|reattempt|re-attempt|return|view|download|bulk actions)/i;
+
+/**
+ * Pure: the NDR page's visible text to one line, e.g.
+ * "Consignee Unavailable · 1 attempt · Nov 16 | 11:38 AM · Proof: Call not connected".
+ * Layout from the owner's screenshot (2026-11-16): after the AWB come the
+ * product, price, payment mode, NDR TYPE, "N attempt(s)", last updated,
+ * then "Proofs" and the proof labels, then the row's action buttons.
+ * Null when the AWB's row or its NDR type cannot be found.
+ */
+export function parseNeedActionText(raw: string, awb: string): string | null {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\s+/g, ' ').trim())
+    .filter((l) => l !== '');
+  const at = lines.findIndex((l) => l.includes(awb));
+  if (at < 0) return null;
+  const rest = lines.slice(at + 1);
+  const pay = rest.findIndex((l) => PAYMENT.test(l));
+  const att = rest.findIndex((l) => ATTEMPT_LINE.test(l));
+  if (pay < 0 || att < 0 || att - pay !== 2) return null;
+  const type = rest[pay + 1] ?? '';
+  if (type === '' || ROW_ACTIONS.test(type)) return null;
+  const parts = [type, rest[att] ?? ''];
+  const upd = rest[att + 1];
+  if (upd !== undefined && UPDATED_LINE.test(upd)) parts.push(upd);
+  const pi = rest.findIndex((l, i) => i > att && /^proofs?$/i.test(l));
+  if (pi >= 0) {
+    const proofs: string[] = [];
+    for (const l of rest.slice(pi + 1)) {
+      if (ROW_ACTIONS.test(l) || l.includes(awb) || proofs.length >= 4) break;
+      proofs.push(l);
+    }
+    if (proofs.length > 0) parts.push(`Proof: ${proofs.join(', ')}`);
   }
+  const joined = parts.join(' · ');
+  return joined.length > REASON_CAP ? `${joined.slice(0, REASON_CAP - 1)}…` : joined;
+}
+
+/**
+ * Open the NDR page for one AWB BY ADDRESS and read its row. Read-only:
+ * the address passes `judgeNavigation`, and nothing on the page is
+ * clicked — it carries "Reattempt" and "Return". Never throws.
+ */
+export async function readNeedActionRow(page: Page, awb: string): Promise<string | null> {
   try {
-    const raw = await dialog.innerText().catch(() => null);
-    return raw === null ? null : parseNdrDrawerText(raw);
-  } finally {
-    const close = dialog.getByRole('button', { name: /^(close|dismiss|×|✕)$/i }).first();
-    const closeLabel = ((await close.innerText().catch(() => '')) || 'Close').trim();
-    const ok =
-      judgeClickNdr({ label: closeLabel, tag: 'button', type: '', inForm: false }).allowed &&
-      (await close
-        .click({ timeout: 3_000 })
-        .then(() => true)
-        .catch(() => false));
-    if (!ok) await page.keyboard.press('Escape').catch(() => undefined);
-    await dialog.waitFor({ state: 'hidden', timeout: 3_000 }).catch(() => undefined);
+    const url = NEED_ACTION_URL(awb);
+    if (!judgeNavigation(url).allowed) return null;
+    await gotoPortal(page, url);
+    const ok = await page
+      .getByText(awb, { exact: false })
+      .first()
+      .waitFor({ state: 'visible', timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!ok) return null;
+    const text = await page.locator('body').innerText({ timeout: 5_000 });
+    return parseNeedActionText(text, awb);
+  } catch {
+    return null;
   }
 }
