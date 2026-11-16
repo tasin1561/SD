@@ -839,3 +839,15 @@ a.ez-jump__link:focus-visible {
     flex-wrap: wrap;
   }
 }
+
+/* More client portal links, finger-sized on touch. */
+@media (pointer: coarse) {
+  .ez-touch a.frt-cons__link,
+  .ez-touch a.db-link,
+  .ez-touch td a.ord-link,
+  .ez-touch button.ord-ctl {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
