@@ -75,7 +75,8 @@ export class CourierWhatsappReadService {
         message: 'No order found with that reference',
       });
     }
-    return this.forShipment(order.orderShipments[0]?.shipmentId ?? null);
+    // Staff (no seller scope) see the courier's words whole; a client does not.
+    return this.forShipment(order.orderShipments[0]?.shipmentId ?? null, scope.sellerId !== null);
   }
 
   /** For callers whose scope is already proven (store / associate). */
@@ -85,10 +86,13 @@ export class CourierWhatsappReadService {
       orderBy: { shipmentSequence: 'desc' },
       select: { shipmentId: true },
     });
-    return this.forShipment(link?.shipmentId ?? null);
+    return this.forShipment(link?.shipmentId ?? null, true);
   }
 
-  private async forShipment(shipmentId: string | null): Promise<CourierWhatsappView> {
+  private async forShipment(
+    shipmentId: string | null,
+    maskOtp: boolean,
+  ): Promise<CourierWhatsappView> {
     const enabled =
       (
         await this.prisma.client.systemSetting.findUnique({
@@ -155,7 +159,7 @@ export class CourierWhatsappReadService {
       awbNumber: ship?.awbNumber ?? null,
       lastCheckedAt: ship?.courierWhatsappCheck?.lastAttemptAt.toISOString() ?? null,
       messages: (ship?.courierWhatsappMessages ?? []).map((m) => ({
-        text: m.text,
+        text: maskOtp ? maskDeliveryOtp(m.text) : m.text,
         sentLabel: m.sentLabel,
         sentAt: m.sentAt?.toISOString() ?? null,
       })),
@@ -189,4 +193,14 @@ export class CourierWhatsappReadService {
     });
     return latest !== null && Date.now() - latest.eventAt.getTime() < WHATSAPP_TAIL_MS;
   }
+}
+
+/**
+ * Delhivery's out-for-delivery message carries the CUSTOMER's delivery
+ * OTP ("Share OTP 7397 only when they arrive"). Owner, 2026-11-16: only
+ * staff may see it — a client, member store or associate sees "OTP ••••".
+ * The stored message is untouched (insert-only); this is display only.
+ */
+export function maskDeliveryOtp(text: string): string {
+  return text.replace(/(\bOTP\b[^0-9]{0,12})\d{3,8}/gi, '$1••••');
 }
