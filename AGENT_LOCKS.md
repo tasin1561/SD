@@ -35,6 +35,8 @@ Admin "easy pages" redesign (owner's list of 31 admin pages, 2026-11-13): light 
 
 - `apps/seller/src/components/easy/**`, `apps/seller/src/i18n/messages/easy.ts`, `apps/seller/src/components/product-picker.tsx`, and every screen under `apps/seller/src/app/(authed)/**` EXCEPT `tickets/[id]/**` (Claude Code's, below). The order page's cards (`orders/_components/detail/**`) are left as they are on purpose: their note line is meant to stay visible. — 2026-11-16 — owner asked for the whole client portal redesigned (phone-first, hints behind an "i", nothing removed). Screen-only: no amount, endpoint, permission or request body changes. Existing seller message files: keys added only. If Claude Code needs one of these screens, say so and the claim is narrowed.
 
+- `packages/ui/src/app/status-chip/index.tsx` — 2026-11-16 — one small fix: a status chip keeps the capital on Skydrop / Delhivery / Shiprocket. No export added, renamed or removed. Released when merged.
+
 ## Claimed by Claude Code
 
 - `apps/api/src/modules/assistant/**` — 2026-11-13 — assistant Phase D (privacy e2e, raise-a-ticket, 80% budget alert; branch `feat/assistant-phase-d`), then 2.5× billing, AI control panel, monitor

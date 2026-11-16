@@ -75,7 +75,31 @@ echo "  built:   ${LAST_DEPLOYED:-<unknown — will rebuild>}"
 # ── 1. Pull ──────────────────────────────────────────────────────────
 echo "── git pull ──"
 git fetch --quiet origin main
-git merge --ff-only origin/main
+# Move git to EXACTLY the commit whose artifacts were shipped, never to
+# whatever origin/main is by now (2026-11-16). Two overlapping deploys:
+# the older one pulled origin/main AFTER a newer commit had merged,
+# installed its OWN (older) build, and wrote the NEWER sha to the marker.
+# The newer deploy then diffed marker..HEAD, saw "no app changed", and
+# shipped nothing — production stayed on old code while every run
+# reported success. With no target (a manual run) origin/main is kept.
+if [ -n "$EXPECTED_SHA" ]; then
+  if ! git cat-file -e "${EXPECTED_SHA}^{commit}" 2>/dev/null; then
+    echo "  ✗ target $EXPECTED_SHA is not in origin/main; refusing."
+    exit 1
+  fi
+  if [ "$(git rev-parse HEAD)" != "$EXPECTED_SHA" ] &&
+    git merge-base --is-ancestor "$EXPECTED_SHA" HEAD; then
+    # HEAD is already past the target: a newer deploy got here first and
+    # its artifacts are the ones installed. Installing this older build
+    # over them would be a silent rollback.
+    echo "  a newer commit ($(git rev-parse --short HEAD)) is already checked out;"
+    echo "  this artifact ($EXPECTED_SHA) is older — nothing to do."
+    exit 0
+  fi
+  git merge --ff-only "$EXPECTED_SHA"
+else
+  git merge --ff-only origin/main
+fi
 NEW_SHA="$(git rev-parse HEAD)"
 echo "  now at:  $NEW_SHA"
 if [ "$NEW_SHA" = "$LAST_DEPLOYED" ]; then
