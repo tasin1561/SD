@@ -15,6 +15,8 @@ interface CourierMessagesView {
   readonly lastCheckedAt: string | null;
   readonly checking: boolean;
   readonly pausedUntil: string | null;
+  /** Delhivery took the conversation off its panel; these are our saved copy. */
+  readonly closed?: boolean;
   readonly messages: readonly { text: string; sentLabel: string; sentAt: string | null }[];
 }
 
@@ -93,11 +95,13 @@ export function CourierWhatsappSection({
         messages={data.messages}
         note={t('courierWhatsapp.note')}
         status={
-          data.pausedUntil !== null && when !== null
-            ? t('courierWhatsapp.paused', { when })
-            : data.checking
-              ? t('courierWhatsapp.checking')
-              : null
+          data.closed === true
+            ? t('courierWhatsapp.closed')
+            : data.pausedUntil !== null && when !== null
+              ? t('courierWhatsapp.paused', { when })
+              : data.checking
+                ? t('courierWhatsapp.checking')
+                : null
         }
         footer={note ?? (when === null ? null : t('courierWhatsapp.checked', { when }))}
         onRefresh={canAsk ? () => refresh.mutate() : undefined}

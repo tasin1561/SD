@@ -64,4 +64,9 @@ export const courierWhatsapp = defineMessages({
     'হোয়াটসঅ্যাপ দেখা সাময়িক বন্ধ — {when} পর্যন্ত বার্তা দেখানো হচ্ছে',
     'व्हाट्सऐप जाँच रुकी है — {when} तक के संदेश दिख रहे हैं',
   ],
+  'courierWhatsapp.closed': [
+    'Conversation closed — Delhivery no longer shows it. This is our saved copy.',
+    'কথোপকথন বন্ধ — Delhivery আর এটি দেখাচ্ছে না। এটি আমাদের সংরক্ষিত কপি।',
+    'बातचीत बंद — Delhivery अब इसे नहीं दिखाता। यह हमारी सहेजी हुई प्रति है।',
+  ],
 });

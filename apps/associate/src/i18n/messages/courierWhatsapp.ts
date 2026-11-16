@@ -32,4 +32,8 @@ export const courierWhatsapp = defineMessages({
     'WhatsApp check paused — showing messages up to {when}',
     'হোয়াটসঅ্যাপ দেখা সাময়িক বন্ধ — {when} পর্যন্ত বার্তা দেখানো হচ্ছে',
   ],
+  'courierWhatsapp.closed': [
+    'Conversation closed — Delhivery no longer shows it. This is our saved copy.',
+    'কথোপকথন বন্ধ — Delhivery আর এটি দেখাচ্ছে না। এটি আমাদের সংরক্ষিত কপি।',
+  ],
 });
