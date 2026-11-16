@@ -1,4 +1,5 @@
 'use client';
+// Redeploy marker 2026-11-16: #46 was skipped by an overlapping deploy.
 
 import { useQuery } from '@tanstack/react-query';
 import { useRef, type ReactElement } from 'react';
