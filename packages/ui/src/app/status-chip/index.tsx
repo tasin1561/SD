@@ -67,6 +67,17 @@ const ACRONYMS = new Set([
 ]);
 
 /**
+ * Names that keep their capital wherever they fall in a label. Without
+ * this, "Waiting for Skydrop to see it" was drawn "Waiting for skydrop to
+ * see it" (2026-11-16).
+ */
+const PROPER_NAMES: ReadonlyMap<string, string> = new Map([
+  ['skydrop', 'Skydrop'],
+  ['delhivery', 'Delhivery'],
+  ['shiprocket', 'Shiprocket'],
+]);
+
+/**
  * The chip shows a status in SENTENCE case. The words are the vocabulary's
  * own (`statusLabel` and friends in `@skydrop/ui/status`, unchanged); only
  * the casing is presentation. The legacy badge hid the Title Case of those
@@ -84,6 +95,8 @@ export function chipWords(label: ReactNode): ReactNode {
       const upper = word.toUpperCase();
       if (ACRONYMS.has(upper.replace(/[^A-Z]/g, ''))) return upper;
       const lower = word.toLowerCase();
+      const proper = PROPER_NAMES.get(lower.replace(/[^a-z]/g, ''));
+      if (proper !== undefined) return lower.replace(proper.toLowerCase(), proper);
       return i === 0 ? lower.charAt(0).toUpperCase() + lower.slice(1) : lower;
     })
     .join(' ');
