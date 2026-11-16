@@ -11,6 +11,7 @@ import { AdminNsaController } from './controllers/admin-nsa.controller';
 import { SellerNsaController } from './controllers/seller-nsa.controller';
 import { NsaSweepWorker } from './queue/nsa-sweep.worker';
 import { OrderAttentionService } from './services/order-attention.service';
+import { SellerFailedAttemptsService } from './services/seller-failed-attempts.service';
 
 /**
  * NSA — Needs Seller Attention.
@@ -44,6 +45,12 @@ import { OrderAttentionService } from './services/order-attention.service';
     OrderModule,
   ],
   controllers: [AdminNsaController, SellerNsaController],
-  providers: [OrderAttentionService, NsaSweepWorker, StaffJwtGuard, SellerJwtGuard],
+  providers: [
+    OrderAttentionService,
+    SellerFailedAttemptsService,
+    NsaSweepWorker,
+    StaffJwtGuard,
+    SellerJwtGuard,
+  ],
 })
 export class OrderAttentionModule {}

@@ -54,6 +54,7 @@ export type {
   CustomerDeliveryFeeView,
   ListSellerOrdersQuery,
   SellerOrderEventView,
+  SellerFailedAttemptView,
 } from './endpoints/seller-orders';
 export type {
   SystemSettingView,

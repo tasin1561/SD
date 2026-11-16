@@ -105,6 +105,27 @@ const SETTING_ENABLED = 'ops.nsa_enabled';
 const SETTING_CUTOFF_HOUR = 'ops.nsa_cutoff_hour';
 const SETTING_MAX_DAYS = 'ops.nsa_max_days';
 
+/**
+ * Shipment statuses meaning the parcel is no longer "out for delivery and
+ * late": delivered, on its way back / back, lost, damaged or cancelled.
+ * Shared with the seller's failed-attempts list.
+ */
+export const NSA_PARCEL_GONE_STATUSES: ReadonlySet<ShipmentStatus> = new Set([
+  ShipmentStatus.DELIVERED,
+  ShipmentStatus.RTO_INITIATED,
+  ShipmentStatus.RTO_IN_TRANSIT,
+  ShipmentStatus.RTO_DELIVERED,
+  ShipmentStatus.LOST,
+  ShipmentStatus.DAMAGED,
+  ShipmentStatus.CANCELLED,
+]);
+
+/** The gone statuses plus a failed attempt: not "out for delivery and late". */
+export const NSA_NOT_OVERDUE_STATUSES: ReadonlySet<ShipmentStatus> = new Set([
+  ...NSA_PARCEL_GONE_STATUSES,
+  ShipmentStatus.DELIVERY_ATTEMPTED,
+]);
+
 export interface NsaOrderView {
   readonly orderId: string;
   readonly orderNumber: string;
@@ -393,12 +414,27 @@ export class OrderAttentionService {
 
     const candidates = await this.prisma.client.order.findMany({
       where: { status: OrderStatus.OUT_FOR_DELIVERY, deletedAt: null },
-      select: { id: true, sellerId: true, orderNumber: true, nsaDayCount: true },
+      select: {
+        id: true,
+        sellerId: true,
+        orderNumber: true,
+        nsaDayCount: true,
+        orderShipments: {
+          select: { shipment: { select: { status: true } } },
+          orderBy: { shipmentSequence: 'desc' },
+          take: 1,
+        },
+      },
     });
     summary.examined = candidates.length;
 
     for (const order of candidates) {
       try {
+        // The order row can lag its parcel: one whose shipment is already
+        // delivered, returning, lost or failed-attempt is not overdue, and
+        // re-raising it would also undo clearMoved's tidy.
+        const shipStatus = order.orderShipments?.[0]?.shipment.status;
+        if (shipStatus !== undefined && NSA_NOT_OVERDUE_STATUSES.has(shipStatus)) continue;
         const outAt = await this.outForDeliveryAt(order.id);
         if (outAt === null) continue;
         const evening = OrderAttentionService.evenings(outAt, now, cutoffHour);
@@ -1593,7 +1629,45 @@ export class OrderAttentionService {
       },
       data: { nsaClearedAt: new Date() },
     });
-    return res.count;
+
+    // Self-healing for a LAGGING order row: still OUT_FOR_DELIVERY while
+    // its latest shipment is delivered / returning / lost / cancelled /
+    // failed-attempt (TRK-4 skips a scan whose edge the order has not
+    // reached). The latest shipment cannot be expressed in an updateMany,
+    // so the ids are chosen here and the write re-asserts the flag and the
+    // status, so a parcel that went back out in between is not cleared.
+    const flagged = await this.prisma.client.order.findMany({
+      where: {
+        nsaRaisedAt: { not: null },
+        nsaClearedAt: null,
+        status: OrderStatus.OUT_FOR_DELIVERY,
+      },
+      select: {
+        id: true,
+        orderShipments: {
+          select: { shipment: { select: { status: true } } },
+          orderBy: { shipmentSequence: 'desc' },
+          take: 1,
+        },
+      },
+    });
+    const stale = flagged
+      .filter((o) => {
+        const st = o.orderShipments?.[0]?.shipment.status;
+        return st !== undefined && NSA_NOT_OVERDUE_STATUSES.has(st);
+      })
+      .map((o) => o.id);
+    if (stale.length === 0) return res.count;
+    const healed = await this.prisma.client.order.updateMany({
+      where: {
+        id: { in: stale },
+        nsaRaisedAt: { not: null },
+        nsaClearedAt: null,
+        status: OrderStatus.OUT_FOR_DELIVERY,
+      },
+      data: { nsaClearedAt: new Date() },
+    });
+    return res.count + healed.count;
   }
 
   /** How many nights, said the way a person would say it. */
@@ -1787,7 +1861,9 @@ export class OrderAttentionService {
         nsaNote: true,
         seller: { select: { companyName: true } },
         orderShipments: {
-          select: { shipment: { select: { awbNumber: true, courierCode: true } } },
+          select: {
+            shipment: { select: { awbNumber: true, courierCode: true, status: true } },
+          },
           orderBy: { shipmentSequence: 'desc' },
           take: 1,
         },
@@ -1800,6 +1876,11 @@ export class OrderAttentionService {
     const out: NsaOrderView[] = [];
     for (const r of rows) {
       const ship = r.orderShipments[0]?.shipment ?? null;
+      // The order status can LAG the parcel (a scan whose edge the order
+      // had not reached yet is skipped, TRK-4). A parcel that is already
+      // delivered, coming back, lost or cancelled is not overdue, whatever
+      // the order row still says.
+      if (ship?.status !== undefined && NSA_NOT_OVERDUE_STATUSES.has(ship.status)) continue;
       out.push({
         orderId: r.id,
         orderNumber: r.orderNumber,

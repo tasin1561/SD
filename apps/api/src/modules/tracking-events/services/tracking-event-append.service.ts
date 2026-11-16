@@ -236,6 +236,57 @@ export class TrackingEventAppendService {
     return out;
   }
 
+  /**
+   * Failed delivery attempts per shipment: how many DELIVERY_ATTEMPTED
+   * scans, and the latest one (the courier's own scan time, TRK-3). One
+   * query for the whole set; a shipment with none is ABSENT from the map.
+   */
+  async failedAttemptsFor(shipmentIds: readonly string[]): Promise<
+    Map<
+      string,
+      {
+        count: number;
+        latest: { eventAt: Date; description: string | null; location: string | null };
+      }
+    >
+  > {
+    const out = new Map<
+      string,
+      {
+        count: number;
+        latest: { eventAt: Date; description: string | null; location: string | null };
+      }
+    >();
+    if (shipmentIds.length === 0) return out;
+    const rows = await this.prisma.client.trackingEvent.findMany({
+      where: { shipmentId: { in: [...shipmentIds] }, status: ShipmentStatus.DELIVERY_ATTEMPTED },
+      orderBy: { eventAt: 'desc' },
+      select: {
+        shipmentId: true,
+        eventAt: true,
+        description: true,
+        locationName: true,
+        locationCity: true,
+      },
+    });
+    for (const r of rows) {
+      const seen = out.get(r.shipmentId);
+      if (seen !== undefined) {
+        seen.count += 1;
+        continue;
+      }
+      out.set(r.shipmentId, {
+        count: 1,
+        latest: {
+          eventAt: r.eventAt,
+          description: r.description,
+          location: r.locationName ?? r.locationCity ?? null,
+        },
+      });
+    }
+    return out;
+  }
+
   async latestForShipment(shipmentId: string): Promise<TrackingEventRow | null> {
     return this.prisma.client.trackingEvent.findFirst({
       where: { shipmentId },

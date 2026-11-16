@@ -49,3 +49,27 @@ export interface CustomerDeliveryFeeView {
   /** true when the seller set it; false when it is the platform default. */
   readonly isOwnValue: boolean;
 }
+
+/**
+ * GET /seller/nsa/failed-attempts — parcels the courier tried to deliver
+ * and failed, still with the courier. NDR panel fields are null until the
+ * courier panel has been read; `reasonText` is staff-only and never here.
+ */
+export interface SellerFailedAttemptView {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly recipientName: string;
+  readonly recipientPhoneE164: string;
+  readonly codAmountInr: string | null;
+  readonly awbNumber: string | null;
+  readonly courierCode: string | null;
+  /** ISO instant of the latest failed-attempt scan. */
+  readonly failedAt: string | null;
+  readonly attemptCount: number;
+  readonly lastRemark: string | null;
+  readonly lastLocation: string | null;
+  readonly attemptsFailed: number | null;
+  readonly attemptsMax: number | null;
+  readonly deadlineDays: number | null;
+  readonly remarkVerified: boolean | null;
+}
