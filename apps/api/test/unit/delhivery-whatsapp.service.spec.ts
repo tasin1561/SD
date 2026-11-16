@@ -1,9 +1,7 @@
 import { DelhiveryWhatsappService } from '../../src/modules/courier-portal/services/delhivery-whatsapp.service';
-import { CourierPortalMode } from '@skydrop/db';
 import { WhatsappLoggedOutError } from '../../src/modules/courier-portal/pages/delhivery-whatsapp.page';
 import { CourierWhatsappRequestService } from '../../src/modules/courier-whatsapp/services/courier-whatsapp-request.service';
 
-const CHANNEL = { get: async () => ({ portalMode: CourierPortalMode.SHADOW }) };
 jest.mock('../../src/modules/courier-whatsapp/guards', () => ({
   ...jest.requireActual('../../src/modules/courier-whatsapp/guards'),
   availableMemoryMb: () => 4096,
@@ -61,7 +59,6 @@ describe('setting OFF', () => {
     const svc = new DelhiveryWhatsappService(
       prisma,
       session as never,
-      CHANNEL as never,
       REQUESTS as never,
       breaker(),
     );
@@ -124,7 +121,6 @@ describe('insert-only', () => {
     const svc = new DelhiveryWhatsappService(
       prisma,
       { page: async () => page, readerPage: async () => page } as never,
-      CHANNEL as never,
       REQUESTS as never,
       breaker(),
     );
@@ -155,7 +151,6 @@ describe('logged out', () => {
     const svc = new DelhiveryWhatsappService(
       prisma,
       session as never,
-      CHANNEL as never,
       REQUESTS as never,
       breaker(),
     );
@@ -166,18 +161,17 @@ describe('logged out', () => {
     expect(new WhatsappLoggedOutError().name).toBe('WhatsappLoggedOutError');
   });
 
-  it('portal mode OFF opens nothing', async () => {
-    const { prisma } = prismaFake(true);
+  it('master switch OFF opens nothing (portalMode is not consulted: a read)', async () => {
+    const { prisma } = prismaFake(false);
     const session = { page: jest.fn(), readerPage: jest.fn() };
-    const off = { get: async () => ({ portalMode: CourierPortalMode.OFF }) };
     const svc = new DelhiveryWhatsappService(
       prisma,
       session as never,
-      off as never,
       REQUESTS as never,
       breaker(),
     );
     expect((await svc.fetchOne('s1')).outcome).toBe('DISABLED');
     expect(session.page).not.toHaveBeenCalled();
+    expect(session.readerPage).not.toHaveBeenCalled();
   });
 });
