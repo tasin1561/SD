@@ -35,7 +35,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { dateTag } from '@/i18n/format';
 import { PhoneFold } from '@/components/easy/phone-fold';
-import { AboutThis } from '@/components/easy/about';
+import { AboutThis, foldNote } from '@/components/easy/about';
 
 type WalletTab = 'ledger' | 'withdrawals' | 'topups';
 
@@ -320,20 +320,18 @@ export default function WalletPage(): ReactElement {
           navigation problem. */}
       <section className="wal-section">
         <SectionHeading
-          title={
+          {...foldNote(
             tab === 'ledger'
               ? t('wallet.ledger')
               : tab === 'topups'
                 ? t('wallet.topUps')
-                : t('wallet.withdrawalRequests')
-          }
-          note={
+                : t('wallet.withdrawalRequests'),
             tab === 'ledger'
               ? t('wallet.everyMovementOldestLast')
               : tab === 'topups'
                 ? t('wallet.moneyYouHaveTold')
-                : t('wallet.moneyYouHaveAsked')
-          }
+                : t('wallet.moneyYouHaveAsked'),
+          )}
           action={
             <span className="wal-actions">
               <Link href="/wallet/limits" className="wal-link">

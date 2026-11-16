@@ -45,6 +45,7 @@ import { can } from '@/lib/page-access';
 import { useT, useLocale } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { AboutThis } from '@/components/easy/about';
+import { PhoneFold } from '@/components/easy/phone-fold';
 
 /**
  * The seller dashboard.
@@ -381,7 +382,7 @@ export function DashboardView(): ReactElement {
               description={t('dashboard.yourMostRecentOrders2')}
             />
           ) : (
-            <div className="ez-wrap ez-cards ez-then-4">
+            <PhoneFold first={3} className="ez-cards ez-then-4">
               <Table caption={t('dashboard.recentOrders')}>
                 <THead>
                   <Tr>
@@ -436,7 +437,7 @@ export function DashboardView(): ReactElement {
                   ))}
                 </TBody>
               </Table>
-            </div>
+            </PhoneFold>
           )}
         </DashSection>
       )}

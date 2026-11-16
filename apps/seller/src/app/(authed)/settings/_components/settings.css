@@ -716,3 +716,15 @@ tr[data-dead] > td {
     flex-wrap: nowrap;
   }
 }
+
+/* The settings list on a phone: each area keeps its name and one line of
+   what it is, so the whole list is two screens instead of three. The full
+   sentence is on the page it opens, and on any wider screen. */
+@media (max-width: 559.98px) {
+  .set-hub .sk-lrow__desc {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    overflow: hidden;
+  }
+}

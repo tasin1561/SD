@@ -226,7 +226,9 @@ export default function ResellerPriceListPage(): ReactElement {
               <Tr>
                 <Th>{t('resellerPriceList.product')}</Th>
                 <Th align="right">{t('resellerPriceList.available')}</Th>
-                <Th align="right">
+                {/* The phone card's label is the term alone, not the term plus
+                    its explanation (which the header's text content holds). */}
+                <Th align="right" data-label={t('resellerPriceList.transferPrice')}>
                   <GlossaryTerm
                     title={t('resellerPriceList.transferPrice')}
                     description={t('resellerPriceList.whatAMemberStore')}
