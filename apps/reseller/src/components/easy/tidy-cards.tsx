@@ -23,7 +23,9 @@ export function TidyCards(): ReactElement {
     if (root === null || root === undefined) return;
     const mark = (): void => {
       // A fact list: a fact with nothing in it is left out on a phone too.
-      for (const row of root.querySelectorAll('.inv-dl__row, .rs-facts-list__item, .rc-cst-facts__item')) {
+      for (const row of root.querySelectorAll(
+        '.inv-dl__row, .rs-facts-list__item, .rc-cst-facts__item',
+      )) {
         const value = row.querySelector('dd');
         const text = (value?.textContent ?? '').trim();
         const empty =
