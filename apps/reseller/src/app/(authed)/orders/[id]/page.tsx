@@ -72,6 +72,7 @@ import {
 } from '../_components/orders-parts';
 import { cloneHref } from '@/lib/clone-order';
 import { CourierWhatsappSection } from './_components/courier-whatsapp-section';
+import { JumpBar } from '@/components/easy/jump-bar';
 
 /**
  * RS-5 — one of this store's orders: who it is going to, what is in it,
@@ -209,8 +210,19 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
         </Notice>
       ) : null}
 
+      {/* The order page is long on a phone; this row goes straight to a part. */}
+      <JumpBar
+        label={t('easy.jumpTo')}
+        items={[
+          ['od-customer', t('ordd.customer')],
+          ['od-money', t('ordd.money')],
+          ['od-products', t('ordd.products')],
+          ...(parcels.length > 0 ? [['od-parcel', t('ordd.parcel')] as const] : []),
+          ['od-timeline', t('ordd.timeline')],
+        ]}
+      />
       <div className="ro-split">
-        <RoSection title={t('ordd.customer')}>
+        <RoSection id="od-customer" title={t('ordd.customer')}>
           <Facts
             items={[
               { label: t('ordd.name'), value: o.recipient.name },
@@ -245,7 +257,7 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
           />
         </RoSection>
 
-        <RoSection title={t('ordd.money')}>
+        <RoSection id="od-money" title={t('ordd.money')}>
           <div className="ro-stack ro-stack--tight">
             <Facts
               items={[
@@ -296,7 +308,7 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
           absent on an order that was never checked. */}
       <OrderAddressCheckPanel orderId={o.id} />
 
-      <RoSection title={t('ordd.products')} flush>
+      <RoSection id="od-products" title={t('ordd.products')} flush>
         <Table caption={t('ordd.products')}>
           <THead>
             <Tr>
@@ -348,7 +360,7 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
       </RoSection>
 
       {parcels.length > 0 ? (
-        <RoSection title={t('ordd.parcel')}>
+        <RoSection id="od-parcel" title={t('ordd.parcel')}>
           <ul className="ro-offers">
             {parcels.map((s) => (
               <li key={s.awbNumber ?? s.courierCode} className="ro-offer">
@@ -734,7 +746,7 @@ function OrderTimeline({
   const locale = useLocale();
   const events = useStoreOrderEvents(orderId);
   return (
-    <RoSection title={t('ordd.timeline')} bare>
+    <RoSection id="od-timeline" title={t('ordd.timeline')} bare>
       {events.isPending ? (
         <SkeletonRows rows={3} cols={2} label={t('ordd.timeline.loading')} />
       ) : events.isError ? (

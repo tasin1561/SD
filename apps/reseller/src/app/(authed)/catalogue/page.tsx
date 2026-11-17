@@ -13,6 +13,7 @@ import { richMessage, useT } from '@/i18n/client';
 import { verdict } from '@/i18n/verdict';
 import { useStoreCatalogue, type StoreCatalogueItem } from '@/lib/catalogue-hooks';
 import { RmSection } from '../wallet/_components/rm-parts';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * RS-3 — the products this store may sell: what it pays the seller for
@@ -37,7 +38,12 @@ export default function CataloguePage(): ReactElement {
       : all.filter((i) => i.title.toLowerCase().includes(q) || i.skuCode.toLowerCase().includes(q));
   }, [catalogue.data, search]);
 
-  const header = <PageHeader title={t('cat.title')} subtitle={t('cat.subtitle', { seller })} />;
+  const header = (
+    <PageHeader
+      title={t('cat.title')}
+      subtitle={<AboutThis text={t('cat.subtitle', { seller })} />}
+    />
+  );
 
   if (catalogue.isPending) {
     return (

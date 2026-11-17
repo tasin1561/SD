@@ -873,3 +873,18 @@ a.ez-jump__link:focus-visible {
     display: none;
   }
 }
+
+/* ── Member store portal links, finger-sized on touch ───────────────────── */
+@media (pointer: coarse) {
+  .ez-touch td a.ro-link,
+  .ez-touch td a.ro-order-link,
+  .ez-touch td a.rc-cst-name,
+  .ez-touch td a.rm-ref,
+  .ez-touch td a.rc-tkt-cell,
+  .ez-touch a.rd-link,
+  .ez-touch button.ro-search-btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}

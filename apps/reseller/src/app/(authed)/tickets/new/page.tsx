@@ -13,6 +13,7 @@ import { useStoreActionPolicy } from '@/lib/order-hooks';
 import { useRaiseStoreDispute, useRaiseStoreSkydropIssue } from '@/lib/ticket-hooks';
 import { NewTicketForm, type TicketAudience } from './_components/new-ticket-form';
 import '../_components/tickets.css';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * RS-7 + the 2026-09-16 Skydrop issue — raising something about one of
@@ -48,7 +49,7 @@ function NewTicket(): ReactElement {
         breadcrumbs={[{ label: tr('tkt.d.crumb'), href: '/tickets' }, { label: tr('tktn.crumb') }]}
         Link={Link}
         title={tr('tktn.title')}
-        subtitle={tr('tktn.subtitle')}
+        subtitle={<AboutThis text={tr('tktn.subtitle')} />}
       />
       <NewTicketForm
         initialOrderId={params?.get('orderId') ?? ''}

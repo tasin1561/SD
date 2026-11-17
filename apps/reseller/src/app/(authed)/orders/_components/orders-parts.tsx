@@ -5,6 +5,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { SectionHeading } from '@skydrop/ui/app/page-header';
 import { buttonClassName, type ButtonSize, type ButtonVariant } from '@skydrop/ui/app/button';
 import './orders.css';
+import { foldNote } from '@/components/easy/about';
 
 /**
  * Display-only pieces shared by the store's orders area (list, place an
@@ -35,7 +36,7 @@ export function RoSection({
 }): ReactElement {
   return (
     <section id={id} className="ro-section">
-      <SectionHeading title={title} note={note} action={action} />
+      <SectionHeading {...foldNote(title, note)} action={action} />
       {bare ? (
         children
       ) : (

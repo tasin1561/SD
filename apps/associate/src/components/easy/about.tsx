@@ -15,11 +15,17 @@ export function AboutThis({
   kind = 'page',
 }: {
   readonly text: string;
-  /** What the sentence is about: the page (default) or the list above it. */
-  readonly kind?: 'page' | 'list';
+  /** What the sentence is about: the page (default), the list above it, or the card it sits in. */
+  readonly kind?: 'page' | 'list' | 'this';
 }): ReactElement {
   const t = useT();
-  const label = t(kind === 'list' ? 'easy.aboutThisList' : 'easy.aboutThisPage');
+  const label = t(
+    kind === 'list'
+      ? 'easy.aboutThisList'
+      : kind === 'this'
+        ? 'easy.aboutThis'
+        : 'easy.aboutThisPage',
+  );
   return (
     <span className="ez-about">
       <InfoButton title={label} text={text} />

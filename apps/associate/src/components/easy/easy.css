@@ -863,3 +863,13 @@ a.ez-jump__link:focus-visible {
     order: -1;
   }
 }
+
+/* ── Associate portal links, finger-sized on touch ──────────────────────── */
+@media (pointer: coarse) {
+  .ez-touch td a.as-link,
+  .ez-touch a.as-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}

@@ -211,7 +211,7 @@ function YourTopics({
     <SettingsCard
       icon={<UserRound size={14} />}
       title={t('rnts.yours.title')}
-      subtitle={<AboutThis text={t('rnts.yours.sub')} />}
+      subtitle={<AboutThis kind="this" text={t('rnts.yours.sub')} />}
     >
       {error !== null && <p className="rc-ntf-error">{error}</p>}
       {loading ? (
@@ -308,7 +308,10 @@ function StoreCategories({
       icon={<Store size={14} />}
       title={t('rnts.store.title')}
       subtitle={
-        <AboutThis text={mayManage ? t('rnts.store.sub.manage') : t('rnts.store.sub.view')} />
+        <AboutThis
+          kind="this"
+          text={mayManage ? t('rnts.store.sub.manage') : t('rnts.store.sub.view')}
+        />
       }
     >
       {error !== null && <p className="rc-ntf-error">{error}</p>}
@@ -416,7 +419,7 @@ function AlwaysOn(): ReactElement {
     <SettingsCard
       icon={<Lock size={14} />}
       title={t('rnts.always.title')}
-      subtitle={<AboutThis text={t('rnts.always.sub')} />}
+      subtitle={<AboutThis kind="this" text={t('rnts.always.sub')} />}
     >
       <ul className="rc-ntf-always">
         {items.map(({ Icon, title, body }) => (
