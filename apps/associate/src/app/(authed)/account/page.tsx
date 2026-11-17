@@ -15,6 +15,7 @@ import { ordersPaused, seesOwnOnly } from '@/lib/orders-paused';
 import { useRequestEmailVerification, useSignOutEverywhere } from '@/lib/store-hooks';
 import { Facts, Notice, Section } from '../_components/parts';
 import '../_components/as.css';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * The signed-in person's own account — open to everyone here, because it
@@ -37,7 +38,10 @@ export default function AccountPage(): ReactElement {
 
   return (
     <div className="as-page" data-width="narrow">
-      <PageHeader title={t('account.title')} subtitle={t('account.subtitle')} />
+      <PageHeader
+        title={t('account.title')}
+        subtitle={<AboutThis text={t('account.subtitle')} />}
+      />
 
       {/* The pause belongs on this page too: somebody who finds the order
           form refusing them looks here next, and "your store did this"

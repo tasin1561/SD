@@ -1,6 +1,7 @@
 import { toCatalogs } from './define';
 import { courierWhatsapp } from './messages/courierWhatsapp';
 import { account } from './messages/account';
+import { easy } from './messages/easy';
 import { addressCorrection } from './messages/addressCorrection';
 import { associates } from './messages/associates';
 import { auth } from './messages/auth';
@@ -38,6 +39,7 @@ import { wallet } from './messages/wallet';
 export const NAMESPACES = [
   courierWhatsapp,
   account,
+  easy,
   addressCorrection,
   associates,
   auth,
@@ -71,6 +73,7 @@ export const NAMESPACES = [
 const ALL = {
   ...courierWhatsapp,
   ...account,
+  ...easy,
   ...addressCorrection,
   ...associates,
   ...auth,

@@ -32,6 +32,7 @@ import {
   pct,
 } from '../_components/associate-parts';
 import '../_components/associates.css';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /** What each sortable column reads. Null is "we do not know", and sorts LAST. */
 const SORTS: Record<string, (r: AssociateAnalysisRow) => number | string | null> = {
@@ -129,7 +130,7 @@ export default function AssociateAnalysisPage(): ReactElement {
   const header = (
     <PageHeader
       title={t('assoca.title')}
-      subtitle={t('assoca.subtitle')}
+      subtitle={<AboutThis text={t('assoca.subtitle')} />}
       action={
         <Link href="/associates" className={buttonClassName('secondary', 'md')}>
           <span className="sk-btn__fx" aria-hidden />
@@ -216,7 +217,9 @@ export default function AssociateAnalysisPage(): ReactElement {
           </AsSection>
 
           <AsSection>
-            <SectionHeading title={t('assoca.by')} note={t('assoca.byNote')} />
+            <SectionHeading
+              title={<InfoLabel label={t('assoca.by')} info={t('assoca.byNote')} />}
+            />
             {rows.length === 0 ? (
               <EmptyState
                 icon={<Users size={22} />}

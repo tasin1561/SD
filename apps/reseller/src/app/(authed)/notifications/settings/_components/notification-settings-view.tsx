@@ -24,6 +24,7 @@ import type { MessageKey } from '@/i18n/catalog';
 import { useT } from '@/i18n/client';
 import { verdict } from '@/i18n/verdict';
 import '../../_components/notifications.css';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /** What each category means, in words a person reads. */
 const CATEGORY_LABEL: Record<string, { title: MessageKey; description: MessageKey }> = {
@@ -108,35 +109,34 @@ export function NotificationSettingsView(): ReactElement {
         ]}
         Link={Link}
         title={t('rnts.title')}
-        subtitle={mayReadStoreHalf ? t('rnts.subtitle.store') : t('rnts.subtitle.own')}
+        subtitle={
+          <AboutThis text={mayReadStoreHalf ? t('rnts.subtitle.store') : t('rnts.subtitle.own')} />
+        }
       />
 
       <div className="rc-ntf-kpis">
         <KpiCard
-          label={t('rnts.kpi.reaching')}
+          label={<InfoLabel label={t('rnts.kpi.reaching')} info={t('rnts.kpi.reachingHint')} />}
           icon={<BellRing size={14} />}
           figure={
             topics.isLoading
               ? '—'
               : t('rnts.kpi.reachingFigure', { on: onCount, total: allTopics.length })
           }
-          hint={t('rnts.kpi.reachingHint')}
           tone="credit"
         />
         {mayReadStoreHalf && (
           <KpiCard
-            label={t('rnts.kpi.storeWide')}
+            label={<InfoLabel label={t('rnts.kpi.storeWide')} info={t('rnts.kpi.storeWideHint')} />}
             icon={<Store size={14} />}
             figure={categories.isLoading ? '—' : String(categories.data?.length ?? 0)}
-            hint={t('rnts.kpi.storeWideHint')}
             tone="info"
           />
         )}
         <KpiCard
-          label={t('rnts.kpi.always')}
+          label={<InfoLabel label={t('rnts.kpi.always')} info={t('rnts.kpi.alwaysHint')} />}
           icon={<Lock size={14} />}
           figure={topics.isLoading ? '—' : String(lockedCount)}
-          hint={t('rnts.kpi.alwaysHint')}
           tone="pending"
         />
       </div>
@@ -167,7 +167,7 @@ function SettingsCard({
 }: {
   readonly icon: ReactNode;
   readonly title: string;
-  readonly subtitle: string;
+  readonly subtitle: ReactNode;
   readonly children: ReactNode;
 }): ReactElement {
   return (
@@ -211,7 +211,7 @@ function YourTopics({
     <SettingsCard
       icon={<UserRound size={14} />}
       title={t('rnts.yours.title')}
-      subtitle={t('rnts.yours.sub')}
+      subtitle={<AboutThis text={t('rnts.yours.sub')} />}
     >
       {error !== null && <p className="rc-ntf-error">{error}</p>}
       {loading ? (
@@ -307,7 +307,9 @@ function StoreCategories({
     <SettingsCard
       icon={<Store size={14} />}
       title={t('rnts.store.title')}
-      subtitle={mayManage ? t('rnts.store.sub.manage') : t('rnts.store.sub.view')}
+      subtitle={
+        <AboutThis text={mayManage ? t('rnts.store.sub.manage') : t('rnts.store.sub.view')} />
+      }
     >
       {error !== null && <p className="rc-ntf-error">{error}</p>}
       {loading ? (
@@ -414,7 +416,7 @@ function AlwaysOn(): ReactElement {
     <SettingsCard
       icon={<Lock size={14} />}
       title={t('rnts.always.title')}
-      subtitle={t('rnts.always.sub')}
+      subtitle={<AboutThis text={t('rnts.always.sub')} />}
     >
       <ul className="rc-ntf-always">
         {items.map(({ Icon, title, body }) => (

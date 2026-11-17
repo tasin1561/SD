@@ -14,6 +14,7 @@ import { formatDateTime } from '@/i18n/format';
 import { verdict } from '@/i18n/verdict';
 import { useStoreWalletEntries } from '@/lib/store-wallet-hooks';
 import { RmAlert, RmDir, RmSection } from './rm-parts';
+import { InfoLabel } from '@/components/easy/about';
 
 /**
  * Every movement of the store's wallet, newest first, a page at a time.
@@ -41,7 +42,7 @@ export function LedgerSection({
 
   return (
     <RmSection>
-      <SectionHeading title={t('walled.title')} note={t('walled.note')} />
+      <SectionHeading title={<InfoLabel label={t('walled.title')} info={t('walled.note')} />} />
       {entries.isPending ? (
         <SkeletonRows rows={4} cols={4} label={t('walled.loading')} />
       ) : entries.isError ? (
@@ -53,46 +54,48 @@ export function LedgerSection({
         <EmptyState title={t('walled.empty')} description={emptyDescription} />
       ) : (
         <>
-          <Table caption={t('walled.caption')}>
-            <THead>
-              <Tr>
-                <Th>{t('walled.col.when')}</Th>
-                <Th>{t('walled.col.what')}</Th>
-                <Th align="right">{t('walled.col.amount')}</Th>
-                <Th align="right">{t('walled.col.balance')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {items.map((e) => {
-                const credit = isStoreWalletCredit(e.direction);
-                return (
-                  <Tr key={e.id}>
-                    <Td className="rm-when sk-figure">{formatDateTime(e.createdAt, locale)}</Td>
-                    <Td>
-                      <div className="rm-type">
-                        <RmDir credit={credit} />
-                        <div className="rm-type__text">
-                          <div>{storeWalletDirectionLabel(e.direction, sellerCompanyName)}</div>
-                          {e.linkedOrderId !== null ? (
-                            <Link href={`/orders/${e.linkedOrderId}`} className="rm-ref">
-                              {t('walled.seeOrder')}
-                            </Link>
-                          ) : null}
-                          {e.note !== null ? <div className="rm-faint">{e.note}</div> : null}
+          <div className="ez-wrap ez-cards ez-lead-2 ez-then-3">
+            <Table caption={t('walled.caption')}>
+              <THead>
+                <Tr>
+                  <Th>{t('walled.col.when')}</Th>
+                  <Th>{t('walled.col.what')}</Th>
+                  <Th align="right">{t('walled.col.amount')}</Th>
+                  <Th align="right">{t('walled.col.balance')}</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {items.map((e) => {
+                  const credit = isStoreWalletCredit(e.direction);
+                  return (
+                    <Tr key={e.id}>
+                      <Td className="rm-when sk-figure">{formatDateTime(e.createdAt, locale)}</Td>
+                      <Td>
+                        <div className="rm-type">
+                          <RmDir credit={credit} />
+                          <div className="rm-type__text">
+                            <div>{storeWalletDirectionLabel(e.direction, sellerCompanyName)}</div>
+                            {e.linkedOrderId !== null ? (
+                              <Link href={`/orders/${e.linkedOrderId}`} className="rm-ref">
+                                {t('walled.seeOrder')}
+                              </Link>
+                            ) : null}
+                            {e.note !== null ? <div className="rm-faint">{e.note}</div> : null}
+                          </div>
                         </div>
-                      </div>
-                    </Td>
-                    <Td align="right">
-                      <Money amount={e.amountInr} direction={credit ? 'credit' : 'debit'} />
-                    </Td>
-                    <Td align="right">
-                      <Money amount={e.runningBalanceAfterInr} />
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
+                      </Td>
+                      <Td align="right">
+                        <Money amount={e.amountInr} direction={credit ? 'credit' : 'debit'} />
+                      </Td>
+                      <Td align="right">
+                        <Money amount={e.runningBalanceAfterInr} />
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </TBody>
+            </Table>
+          </div>
           <div className="rm-more">
             <p className="rm-muted">
               {entries.hasNextPage

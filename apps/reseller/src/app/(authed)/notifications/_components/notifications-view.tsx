@@ -25,6 +25,7 @@ import {
 } from '@/lib/notification-hooks';
 import { useLocale, useT } from '@/i18n/client';
 import './notifications.css';
+import { AboutThis } from '@/components/easy/about';
 
 /** The tab id that means "every group" — a group name is never empty. */
 const ALL_GROUPS = '__all';
@@ -141,7 +142,7 @@ export function NotificationsView(): ReactElement {
     <div className="rc-ntf-page">
       <PageHeader
         title={t('rntf.title')}
-        subtitle={t('rntf.subtitle')}
+        subtitle={<AboutThis text={t('rntf.subtitle')} />}
         action={
           <div className="rc-ntf-actions">
             <Button

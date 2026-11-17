@@ -27,6 +27,7 @@ import { useMyOrders } from '@/lib/order-hooks';
 import { LinkButton } from '../_components/parts';
 import { cloneHref } from '@/lib/clone-order';
 import '../_components/as.css';
+import { AboutThis } from '@/components/easy/about';
 
 const PAGE_SIZE = 20;
 const STATUSES = Object.values(OrderStatus);
@@ -94,7 +95,9 @@ function OrdersList(): ReactElement {
     <div className="as-page">
       <PageHeader
         title={t('orders.title')}
-        subtitle={seesOwnOnly(me) ? t('orders.subtitle.own') : t('orders.subtitle.all')}
+        subtitle={
+          <AboutThis text={seesOwnOnly(me) ? t('orders.subtitle.own') : t('orders.subtitle.all')} />
+        }
         action={
           mayPlace ? (
             <div className="as-row">

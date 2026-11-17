@@ -34,6 +34,8 @@ import { NotificationBellContainer } from '@/components/notification-bell-contai
 import { useStoreCallReviews } from '@/lib/review-hooks';
 import { TermsBanner } from './terms-banner';
 import { ImpersonationBanner } from './impersonation-banner';
+import { TidyCards } from '@/components/easy/tidy-cards';
+import '@/components/easy/easy.css';
 
 /**
  * The reseller shell — the brand `Shell` (apps restyle, Phase 4), as in seller;
@@ -170,7 +172,13 @@ export function AuthedShell({
           <ImpersonationBanner identity={identity} />
           {/* RS-4: stays until the terms in force are accepted. */}
           <TermsBanner enabled={can(identity, 'terms.view')} />
-          {children}
+          {/* Every page is worked from a phone: finger-sized controls, and a
+              table row reads as a card with its head line first and no empty
+              lines. `ez-wrap` adds no box of its own. */}
+          <div className="ez-wrap ez-phone ez-cards ez-touch">
+            <TidyCards />
+            {children}
+          </div>
         </Shell>
         <AssistantWidget
           console="reseller"

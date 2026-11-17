@@ -23,6 +23,8 @@ import { useT } from '@/i18n/client';
 import { canSeePath } from '@/lib/page-access';
 import { PrefsControl } from '@/components/prefs-control';
 import { NotificationBellContainer } from '@/components/notification-bell-container';
+import { TidyCards } from '@/components/easy/tidy-cards';
+import '@/components/easy/easy.css';
 
 /**
  * The associate shell — the shared brand `Shell` (FE-7); only the nav,
@@ -128,7 +130,13 @@ export function AuthedShell({
           signingOut={signingOut}
           themeControl={<PrefsControl />}
         >
-          {children}
+          {/* Every page is worked from a phone: finger-sized controls, and a
+              table row reads as a card with its head line first and no empty
+              lines. `ez-wrap` adds no box of its own. */}
+          <div className="ez-wrap ez-phone ez-cards ez-touch">
+            <TidyCards />
+            {children}
+          </div>
         </Shell>
         <AssistantWidget
           console="associate"

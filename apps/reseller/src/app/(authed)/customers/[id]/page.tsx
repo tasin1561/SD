@@ -28,6 +28,7 @@ import {
   type StoreCustomer,
 } from '@/lib/order-hooks';
 import '../_components/customers.css';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /**
  * One of THIS store's customers (RS-5, ORD-7 per owner) and every order the
@@ -214,7 +215,7 @@ function CustomerBody({ customer: c }: { customer: StoreCustomer }): ReactElemen
         ]}
         Link={Link}
         title={c.name ?? t('cst.noName')}
-        subtitle={t('cst.d.subtitle')}
+        subtitle={<AboutThis text={t('cst.d.subtitle')} />}
         action={<EditCustomer customer={c} />}
       />
       <div className="rc-cst-card">
@@ -239,8 +240,7 @@ function CustomerBody({ customer: c }: { customer: StoreCustomer }): ReactElemen
       </div>
       <section className="rc-cst-section">
         <SectionHeading
-          title={t('cst.d.theirOrders')}
-          note={t('cst.d.newestFirst')}
+          title={<InfoLabel label={t('cst.d.theirOrders')} info={t('cst.d.newestFirst')} />}
           action={
             <Link href={allOrdersHref} className="rc-cst-open">
               {t('cst.d.openInOrders')} <ArrowRight size={14} aria-hidden />

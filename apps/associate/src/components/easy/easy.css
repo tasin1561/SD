@@ -1,0 +1,865 @@
+/* Easy pages — the small shared pieces of the light, plain-words admin
+   screens: the "i" info button and its bubble.
+   Tokens only (FE-6). Motion is transform/opacity; the global
+   reduced-motion rule in brand/app.css switches it off. */
+
+/* ── The "i" button ───────────────────────────────────────────────────── */
+.ez-info {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  vertical-align: middle;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+/* A 44px touch target without growing the line it sits on. */
+.ez-info::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+.ez-info:hover,
+.ez-info[aria-expanded='true'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.ez-info:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── The bubble ───────────────────────────────────────────────────────── */
+.ez-bubble {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  gap: var(--sp-2);
+  width: min(20rem, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--elev-3);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  line-height: 1.55;
+  text-align: start;
+  white-space: normal;
+  animation: ez-rise var(--dur-fast) var(--ease-out);
+}
+.ez-bubble__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.ez-bubble__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.ez-bubble__text {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.ez-bubble__facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--sp-1) var(--sp-3);
+  margin: 0;
+}
+.ez-bubble__facts dt {
+  color: var(--fg-muted);
+}
+.ez-bubble__facts dd {
+  margin: 0;
+  color: var(--fg-strong);
+  overflow-wrap: anywhere;
+}
+.ez-bubble__close {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin: -4px -6px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.ez-bubble__close:hover {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+}
+.ez-bubble__close:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+/* On a phone the bubble is a sheet along the bottom edge: nothing to aim
+   at, nothing cut off by the side of the screen. */
+@media (max-width: 639px) {
+  .ez-bubble {
+    inset: auto 8px calc(8px + env(safe-area-inset-bottom, 0px)) 8px !important;
+    width: auto;
+    padding: var(--sp-4);
+    font-size: var(--fs-md);
+    animation-name: ez-sheet;
+  }
+  .ez-bubble__close {
+    width: 44px;
+    height: 44px;
+    margin: -10px -10px 0 0;
+  }
+}
+@keyframes ez-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@keyframes ez-sheet {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+/* ── A title with its "i" beside it ───────────────────────────────────── */
+.ez-titled {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+/* ── Filter pills ───────────────────────────────────────────────────────
+   `button.` on purpose: the app-wide touch floor is
+   `button:not(.skydrop-hit) { min-height: 32px }`, which outranks a bare
+   class and would shrink these to 32px on exactly the screens that need 44. */
+.ez-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+button.ez-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-height: 40px;
+  padding: var(--sp-1) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-body);
+  font: inherit;
+  font-size: var(--fs-md);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.ez-pill:hover {
+  border-color: var(--line-strong);
+}
+.ez-pill:active {
+  transform: scale(0.98);
+}
+.ez-pill:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.ez-pill[aria-pressed='true'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+  font-weight: var(--fw-semibold);
+}
+.ez-pill__num {
+  color: var(--fg-strong);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.ez-pill[data-tone='info'] .ez-pill__num {
+  color: var(--blue-text);
+}
+.ez-pill[data-tone='warn'] .ez-pill__num {
+  color: var(--saffron-text);
+}
+.ez-pill[data-tone='bad'] .ez-pill__num {
+  color: var(--red-text);
+}
+.ez-pill[data-tone='good'] .ez-pill__num {
+  color: var(--green-text);
+}
+@media (pointer: coarse) {
+  button.ez-pill {
+    min-height: 44px;
+  }
+}
+
+/* ── A light list: thin lines between rows, no boxes ──────────────────── */
+.ez-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+.ez-list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-5) 0;
+  border-bottom: 1px solid var(--line);
+}
+.ez-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  min-width: 0;
+}
+.ez-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.ez-lead {
+  max-width: 48rem;
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-lg);
+  line-height: 1.55;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.ez-note {
+  margin: 0;
+  color: var(--fg-body);
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.ez-note__label {
+  color: var(--fg-muted);
+}
+/* A row's own link (an order number) is the way into the record, so on a
+   touch screen it is finger-sized. */
+@media (pointer: coarse) {
+  .ez-row-head a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+@media (max-width: 639px) {
+  .ez-list > li {
+    padding: var(--sp-4) 0;
+  }
+  .ez-row-actions > button,
+  .ez-row-actions > .ez-titled {
+    flex: 1 1 auto;
+  }
+  .ez-row-actions > .ez-titled {
+    display: flex;
+  }
+  .ez-row-actions > .ez-titled > :first-child {
+    flex: 1 1 auto;
+  }
+}
+
+/* ── Choice guide: "What does each choice do?" ────────────────────────── */
+.ez-guide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+}
+button.ez-guide__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--blue-on-tint);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.ez-guide__trigger:hover,
+.ez-guide[data-open] .ez-guide__trigger {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+}
+.ez-guide__trigger:focus-visible,
+.ez-guide__pick:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.ez-guide__chev {
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.ez-guide[data-open] .ez-guide__chev {
+  transform: rotate(180deg);
+}
+.ez-guide__list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  overflow: hidden;
+  animation: ez-rise var(--dur-fast) var(--ease-out);
+}
+.ez-guide__item + .ez-guide__item {
+  border-top: 1px solid var(--line);
+}
+.ez-guide__pick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: var(--sp-3) var(--sp-4);
+  border: 0;
+  background: transparent;
+  color: var(--fg-body);
+  font: inherit;
+  text-align: start;
+}
+button.ez-guide__pick {
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+button.ez-guide__pick:hover {
+  background: var(--surface-3);
+}
+.ez-guide__item[data-chosen] .ez-guide__pick {
+  background: var(--blue-tint);
+}
+.ez-guide__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+.ez-guide__chosen {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--blue-on-tint);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.ez-guide__what {
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+@media (pointer: coarse) {
+  button.ez-guide__trigger {
+    min-height: 44px;
+    padding: 0 var(--sp-4);
+  }
+}
+
+/* ── A page worked from a phone ───────────────────────────────────────────
+   Put `ez-touch` on a page's root. On a touch screen every button, link
+   styled as a button, dropdown and text field inside it is finger-sized
+   (44px), and a long value — an email, a company name — wraps inside its
+   card instead of pushing the page sideways. The selectors are qualified
+   with the tag because the global coarse-pointer rule in legacy.css
+   (`button:not(.skydrop-hit)`) outranks a bare class. */
+/* `ez-wrap` puts the rule around a page whose root element is owned by a
+   shared helper, without adding a box of its own. */
+.ez-wrap {
+  display: contents;
+}
+@media (max-width: 767px) {
+  .ez-touch td,
+  .ez-touch dd {
+    overflow-wrap: anywhere;
+  }
+  /* A long reference inside a facts list must wrap, not push the page sideways. */
+  .ez-touch dd .sk-ident {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+@media (pointer: coarse) {
+  .ez-touch button.sk-btn,
+  .ez-touch a.sk-btn,
+  .ez-touch button.sk-filter__reset,
+  .ez-touch button.oo-search-btn,
+  .ez-touch button.sk-tabs__tab,
+  .ez-touch button.tr-account,
+  .ez-touch button.sk-drop__btn,
+  .ez-touch button.sk-th__sort,
+  .ez-touch button.af-disclose,
+  .ez-touch button.wh-seg__btn,
+  .ez-touch select.sk-select__native {
+    min-height: 44px;
+  }
+  /* The shared text field has a fixed height, so it is set, not floored. */
+  .ez-touch input.sk-field__input,
+  .ez-touch input.sk-toolbar__search-input {
+    height: 44px;
+    min-height: 44px;
+  }
+  .ez-touch a.sk-ident,
+  .ez-touch td a.mk-name,
+  .ez-touch td a.mk-inline-link,
+  .ez-touch td a.ac-link,
+  .ez-touch td a.mo-link,
+  .ez-touch td button.mk-inline-link,
+  .ez-touch td a.oo-link,
+  .ez-touch a.nsa-call,
+  .ez-touch h2 a.ac-link,
+  .ez-touch a.mk-link,
+  .ez-touch a.mo-back,
+  .ez-touch a.sk-tabs__tab {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  /* The pager sizes its buttons and its sliding marker from one variable. */
+  .ez-touch .sk-pg {
+    --tap: 44px;
+  }
+  /* The client picker and a row's "show more" are tapped as often as any button. */
+  .ez-touch button.mk-pick,
+  .ez-touch button.mk-toggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  /* The tick box keeps its drawn size; its touch area grows around it. */
+  .ez-touch input.sk-check__input,
+  .ez-touch input.wh-check {
+    position: relative;
+  }
+  .ez-touch input.sk-check__input::after,
+  .ez-touch input.wh-check::after {
+    content: '';
+    position: absolute;
+    inset: -12px;
+  }
+  /* Stays a 24px circle (the global rule would stretch it to an oval);
+     its ::after already gives it a 44px touch area. */
+  button.ez-info.ez-info {
+    min-height: 24px;
+  }
+}
+
+/* ── Phone cards: who and how much first ──────────────────────────────
+   A table becomes one card per row on a phone, top to bottom in column
+   order. On a queue of requests the first column is the date, but the
+   person deciding looks for WHO is asking and HOW MUCH. These move those
+   two lines to the top of the card. The table on a wide screen, and the
+   order a screen reader reads, are unchanged. */
+@media (max-width: 767.98px) {
+  .ez-lead-2 .sd-table-cards tbody > tr {
+    display: flex;
+    flex-direction: column;
+  }
+  .ez-lead-2 .sd-table-cards tbody > tr > td:nth-child(2) {
+    order: -2;
+  }
+  .ez-then-3 .sd-table-cards tbody > tr > td:nth-child(3),
+  .ez-then-4 .sd-table-cards tbody > tr > td:nth-child(4) {
+    order: -1;
+  }
+}
+
+/* ── Phone cards: a head line, the key figure, then the facts ────────────────────
+   Opt in with `ez-cards` on the page wrapper. On a phone every table row
+   is already a card; this gives the card a shape a person can scan:
+
+     1. a HEAD line  — who or what the row is (first column, or the column
+                       named by `ez-lead-N`), with no label in front of it
+     2. a KEY figure — the amount that matters (`ez-then-N`), larger
+     3. the facts    — the rest, in their usual order, minus empty lines
+                       (see tidy-cards.tsx)
+     4. the actions  — on their own line at the foot
+
+   Only the phone layout changes. The table on a wide screen, the columns,
+   the values and the order a screen reader reads are the same. */
+@media (max-width: 767.98px) {
+  .ez-cards .sd-table-cards tbody > tr {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: var(--sp-3);
+    padding: 0 0 var(--sp-1);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+  }
+  .ez-cards .sd-table-cards tbody > tr > td[data-ez-empty] {
+    display: none;
+  }
+  .ez-cards:not(.ez-lead-2, .ez-lead-3, .ez-lead-4, .ez-lead-5, .ez-lead-6)
+    .sd-table-cards:not([class*='ez-lead-'] .sd-table-cards)
+    tbody
+    > tr
+    > td:first-child,
+  .ez-cards.ez-lead-2 .sd-table-cards tbody > tr > td:nth-child(2):not([colspan]),
+  .ez-cards.ez-lead-3 .sd-table-cards tbody > tr > td:nth-child(3):not([colspan]),
+  .ez-cards.ez-lead-4 .sd-table-cards tbody > tr > td:nth-child(4):not([colspan]),
+  .ez-cards.ez-lead-5 .sd-table-cards tbody > tr > td:nth-child(5):not([colspan]),
+  .ez-cards.ez-lead-6 .sd-table-cards tbody > tr > td:nth-child(6):not([colspan]) {
+    order: -2;
+    justify-content: flex-start;
+    margin-bottom: var(--sp-1);
+    padding: var(--sp-3);
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--fg-strong);
+    font-weight: var(--fw-semibold);
+    text-align: left;
+  }
+  .ez-cards:not(.ez-lead-2, .ez-lead-3, .ez-lead-4, .ez-lead-5, .ez-lead-6)
+    .sd-table-cards:not([class*='ez-lead-'] .sd-table-cards)
+    tbody
+    > tr
+    > td:first-child::before,
+  .ez-cards.ez-lead-2 .sd-table-cards tbody > tr > td:nth-child(2):not([colspan])::before,
+  .ez-cards.ez-lead-3 .sd-table-cards tbody > tr > td:nth-child(3):not([colspan])::before,
+  .ez-cards.ez-lead-4 .sd-table-cards tbody > tr > td:nth-child(4):not([colspan])::before,
+  .ez-cards.ez-lead-5 .sd-table-cards tbody > tr > td:nth-child(5):not([colspan])::before,
+  .ez-cards.ez-lead-6 .sd-table-cards tbody > tr > td:nth-child(6):not([colspan])::before {
+    content: none;
+  }
+  .ez-cards.ez-then-2 .sd-table-cards tbody > tr > td:nth-child(2):not([colspan]),
+  .ez-cards.ez-then-3 .sd-table-cards tbody > tr > td:nth-child(3):not([colspan]),
+  .ez-cards.ez-then-4 .sd-table-cards tbody > tr > td:nth-child(4):not([colspan]),
+  .ez-cards.ez-then-5 .sd-table-cards tbody > tr > td:nth-child(5):not([colspan]),
+  .ez-cards.ez-then-6 .sd-table-cards tbody > tr > td:nth-child(6):not([colspan]),
+  .ez-cards.ez-then-7 .sd-table-cards tbody > tr > td:nth-child(7):not([colspan]) {
+    order: -1;
+    color: var(--fg-strong);
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-semibold);
+  }
+  /* The actions: a line of their own at the foot of the card. */
+  .ez-cards .sd-table-cards tbody > tr > td:last-child:has(button, a.sk-btn) {
+    order: 99;
+    justify-content: flex-end;
+    margin-top: var(--sp-1);
+    padding-top: var(--sp-2);
+    border-top: 1px solid var(--line);
+  }
+  .ez-cards .sd-table-cards tbody > tr > td:last-child:has(button, a.sk-btn)::before {
+    content: none;
+  }
+  .ez-cards .sd-table-cards tbody > tr > td:last-child:has(button, a.sk-btn) > :first-child {
+    margin-left: auto;
+  }
+}
+
+/* The headline numbers: two to a row on a phone, so the list they sit
+   above starts on the first screen instead of the third. */
+@media (max-width: 559.98px) {
+  .ez-phone .mk-kpis,
+  .ez-phone .mo-kpis,
+  .ez-phone .af-kpis,
+  .ez-phone .ac-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-2);
+  }
+  .ez-phone .mk-kpis > :last-child:nth-child(odd),
+  .ez-phone .mo-kpis > :last-child:nth-child(odd),
+  .ez-phone .af-kpis > :last-child:nth-child(odd),
+  .ez-phone .ac-kpis > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  .ez-phone .sk-kpi {
+    padding: var(--sp-3);
+    gap: var(--sp-2);
+  }
+  .ez-phone .sk-kpi__icon {
+    display: none;
+  }
+  .ez-phone .sk-kpi__figure {
+    font-size: var(--fs-lg);
+  }
+  .ez-phone .sk-kpi__hint,
+  .ez-phone .sk-kpi__secondary,
+  .ez-phone .sk-kpi__foot {
+    font-size: var(--fs-xs);
+  }
+}
+
+/* A table at tablet width: the client column holds text that may break
+   anywhere (an email, an id), so the other columns could squeeze it to a
+   single letter per line. It keeps a readable width, and the table
+   scrolls sideways inside its own frame if the screen is too narrow. */
+@media (min-width: 768px) {
+  .ez-touch td .mk-seller,
+  .ez-touch td .ac-cell-stack,
+  .ez-touch td .mk-cell {
+    min-width: min(220px, 40vw);
+  }
+}
+
+/* ── Jump to a section ─────────────────────────────────────────────────
+   One row of links, scrolled sideways inside itself when it does not fit. */
+.ez-jump {
+  display: flex;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin: 0 calc(-1 * var(--sp-1));
+  padding: var(--sp-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ez-jump::-webkit-scrollbar {
+  display: none;
+}
+a.ez-jump__link {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+a.ez-jump__link:hover {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+}
+a.ez-jump__link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* A jumped-to heading clears the bar that stays at the top of the page. */
+.ez-touch section[id^='cd-'],
+.ez-touch [id^='jp-'] {
+  scroll-margin-top: 88px;
+}
+
+@media (pointer: coarse) {
+  a.ez-jump__link {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  a.ez-jump__link {
+    transition: none;
+  }
+}
+
+/* ── A long list on a phone: six cards, then "Show all N" (phone-fold.tsx) ── */
+.ez-fold__more {
+  display: none;
+}
+@media (max-width: 767.98px) {
+  .ez-fold:not([data-open]) .sd-table-cards > tbody > tr:nth-child(n + 7),
+  .ez-fold[data-first='3']:not([data-open]) .sd-table-cards > tbody > tr:nth-child(n + 4) {
+    display: none;
+  }
+  button.ez-fold__more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 44px;
+    margin-top: var(--sp-2);
+    padding: 0 var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    background: var(--surface);
+    color: var(--fg-strong);
+    font: inherit;
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    cursor: pointer;
+  }
+  button.ez-fold__more:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+/* ── "About this page" under a page title (about.tsx) ───────────────────── */
+.ez-about {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.ez-about__label {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.ez-about__label:hover {
+  color: var(--fg-strong);
+}
+
+/* ── Headline numbers, wherever they sit ────────────────────────────────
+   Any row of number cards is two to a row on a phone, so the list under
+   it starts on the first screen. */
+@media (max-width: 559.98px) {
+  .ez-phone :where(div, section, ul):has(> .sk-kpi + .sk-kpi) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-2);
+  }
+  .ez-phone :where(div, section, ul):has(> .sk-kpi + .sk-kpi) > .sk-kpi:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+/* A number card's explanation sits in its corner (HintInfo in about.tsx). */
+.sk-kpi:has(> .sk-kpi__hint > .ez-hint) {
+  position: relative;
+}
+.sk-kpi__hint:has(> .ez-hint) {
+  position: absolute;
+  right: var(--sp-3);
+  bottom: var(--sp-3);
+  line-height: 0;
+}
+@media (max-width: 559.98px) {
+  .sk-kpi__hint:has(> .ez-hint) {
+    top: var(--sp-2);
+    right: var(--sp-2);
+    bottom: auto;
+  }
+  /* A card that carries its own small table needs the full width. */
+  .ez-phone :where(div, section, ul):has(> .sk-kpi + .sk-kpi) > .sk-kpi:has(.sk-kpi__foot) {
+    grid-column: 1 / -1;
+  }
+}
+/* An odd card out does not leave a hole beside it. */
+@media (max-width: 559.98px) {
+  .ez-phone :where(div, section, ul):has(> .sk-kpi + .sk-kpi) {
+    grid-auto-flow: dense;
+  }
+}
+
+/* ── Client portal links and small buttons, finger-sized on touch ───────── */
+@media (pointer: coarse) {
+  .ez-touch td a.tkt-subject,
+  .ez-touch td a.inv-strong-link,
+  .ez-touch td a.rs-name-link,
+  .ez-touch a.set-link,
+  .ez-touch button.ord-expand,
+  .ez-touch button.imp-chip,
+  .ez-touch button.imp-guide__toggle {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  /* The switch keeps its drawn size; its touch area grows around it. */
+  .ez-touch .sk-switch__track {
+    position: relative;
+  }
+  .ez-touch .sk-switch__track::after {
+    content: '';
+    position: absolute;
+    inset: -10px -6px;
+  }
+}
+
+/* ── Fact lists on a phone: two to a row, empty facts left out ──────────── */
+@media (max-width: 559.98px) {
+  .ez-phone .inv-dl[data-cols='2'],
+  .ez-phone .inv-dl[data-cols='3'],
+  .ez-phone .rs-facts-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3);
+  }
+  .ez-phone .inv-dl__row[data-ez-empty],
+  .ez-phone .rs-facts-list__item[data-ez-empty] {
+    display: none;
+  }
+}
+
+/* A progress card never runs off a phone: its status drops under its label. */
+@media (max-width: 559.98px) {
+  .ez-phone .ord-card,
+  .ez-phone .sk-chute {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .ez-phone .sk-chute__head {
+    flex-wrap: wrap;
+  }
+}
+
+/* More client portal links, finger-sized on touch. */
+@media (pointer: coarse) {
+  .ez-touch a.frt-cons__link,
+  .ez-touch a.db-link,
+  .ez-touch td a.ord-link,
+  .ez-touch button.ord-ctl {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
+/* ── A pending order row on a phone: the values that need fixing first ───
+   (orders/pending). The rest are behind "Show all N". */
+@media (max-width: 767.98px) {
+  .pend-fields[data-all='false'] > .pend-field[data-ok] {
+    display: none;
+  }
+  /* The flagged values come before the ones that are only empty. */
+  .pend-fields > .pend-field[data-bad] {
+    order: -1;
+  }
+}

@@ -21,6 +21,7 @@ import {
   useUploadStoreLogo,
 } from '@/lib/store-hooks';
 import { RdCallout, RdCard, RdDl, phaseOf } from './_components/rd-parts';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * How the store presents itself (RS-1 / RS-10): the name customers will
@@ -39,7 +40,7 @@ export default function StoreSettingsPage(): ReactElement {
   if (profile.isPending || profile.isError) {
     return (
       <div className="rd-page" data-width="narrow">
-        <PageHeader title={t('setg.title')} subtitle={t('setg.subtitle')} />
+        <PageHeader title={t('setg.title')} subtitle={<AboutThis text={t('setg.subtitle')} />} />
         {profile.isPending ? (
           <SkeletonRows label={t('setg.loading')} rows={4} cols={2} />
         ) : (
@@ -52,7 +53,7 @@ export default function StoreSettingsPage(): ReactElement {
 
   return (
     <div className="rd-page" data-width="narrow">
-      <PageHeader title={t('setg.title')} subtitle={t('setg.subtitle')} />
+      <PageHeader title={t('setg.title')} subtitle={<AboutThis text={t('setg.subtitle')} />} />
       {manage ? (
         <ProfileForm
           initial={{

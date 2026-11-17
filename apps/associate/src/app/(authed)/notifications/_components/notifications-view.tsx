@@ -24,6 +24,7 @@ import {
   type FeedItem,
 } from '@/lib/notification-hooks';
 import '../../_components/as.css';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * Everything Skydrop and this store have sent this person — the daily
@@ -108,7 +109,7 @@ export function NotificationsView(): ReactElement {
     <div className="as-page" data-width="narrow">
       <PageHeader
         title={t('ntf.title')}
-        subtitle={t('ntf.subtitle')}
+        subtitle={<AboutThis text={t('ntf.subtitle')} />}
         action={
           <div className="as-row">
             <Button

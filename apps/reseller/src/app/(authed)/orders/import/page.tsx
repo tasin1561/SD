@@ -23,6 +23,7 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { richMessage, useLocale, useT } from '@/i18n/client';
 import { verdict } from '@/i18n/verdict';
 import { BackLink, Notice, RoSection } from '../_components/orders-parts';
+import { AboutThis } from '@/components/easy/about';
 
 const BASE = '/api/store/order-imports';
 const UPLOADS_PAGE_SIZE = 10;
@@ -227,7 +228,7 @@ export default function StoreOrderImportPage(): ReactElement {
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
         {t('ordimp.back')}
       </BackLink>
-      <PageHeader title={t('ordimp.title')} subtitle={t('ordimp.subtitle')} />
+      <PageHeader title={t('ordimp.title')} subtitle={<AboutThis text={t('ordimp.subtitle')} />} />
 
       <RoSection
         title={t('ordimp.upload')}

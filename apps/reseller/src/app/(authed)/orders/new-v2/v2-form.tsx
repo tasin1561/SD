@@ -39,6 +39,7 @@ import { BackLink, LinkButton, Notice, RoSection } from '../_components/orders-p
 import { CloneBanner } from '../_components/clone-banner';
 import { useCloneSeed } from '@/lib/clone-order-hooks';
 import { useUatField } from '@skydrop/ui/app/uat-fields';
+import { AboutThis } from '@/components/easy/about';
 
 interface Line {
   readonly key: number;
@@ -226,7 +227,12 @@ export function NewStoreOrderPageForm(): ReactElement {
     setConfirmPlace(true);
   }
 
-  const header = <PageHeader title={t('neworder.title')} subtitle={t('neworder.subtitle')} />;
+  const header = (
+    <PageHeader
+      title={t('neworder.title')}
+      subtitle={<AboutThis text={t('neworder.subtitle')} />}
+    />
+  );
 
   // The picker IS the catalogue: without `catalogue.view` the query never
   // runs, and `isPending` would stay true for ever.

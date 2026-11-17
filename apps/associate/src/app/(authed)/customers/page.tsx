@@ -15,6 +15,7 @@ import { seesOwnOnly } from '@/lib/orders-paused';
 import { verdict } from '@/i18n/verdict';
 import { useMyCustomers } from '@/lib/order-hooks';
 import '../_components/as.css';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * ASSOC-1 — the people THIS person has sold to.
@@ -42,7 +43,11 @@ export default function CustomersPage(): ReactElement {
     <div className="as-page">
       <PageHeader
         title={t('customers.title')}
-        subtitle={seesOwnOnly(me) ? t('customers.subtitle.own') : t('customers.subtitle.all')}
+        subtitle={
+          <AboutThis
+            text={seesOwnOnly(me) ? t('customers.subtitle.own') : t('customers.subtitle.all')}
+          />
+        }
       />
       <section className="as-section">
         <SectionHeading

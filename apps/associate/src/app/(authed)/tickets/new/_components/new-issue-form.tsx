@@ -15,6 +15,7 @@ import { useMyOrders } from '@/lib/order-hooks';
 import { useRaiseTicket } from '@/lib/ticket-hooks';
 import { BackLink, LinkButton, Notice, Section } from '../../../_components/parts';
 import '../../../_components/as.css';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * An issue always hangs off ONE order — that is what makes it findable
@@ -57,7 +58,12 @@ export function NewIssueForm(): ReactElement {
     }
   }
 
-  const header = <PageHeader title={t('ticketNew.title')} subtitle={t('ticketNew.subtitle')} />;
+  const header = (
+    <PageHeader
+      title={t('ticketNew.title')}
+      subtitle={<AboutThis text={t('ticketNew.subtitle')} />}
+    />
+  );
 
   if (orders.isPending) {
     return (

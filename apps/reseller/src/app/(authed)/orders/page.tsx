@@ -27,6 +27,7 @@ import { verdict } from '@/i18n/verdict';
 import { useStoreOrders } from '@/lib/order-hooks';
 import { LinkButton } from './_components/orders-parts';
 import { cloneHref } from '@/lib/clone-order';
+import { AboutThis } from '@/components/easy/about';
 
 const PAGE_SIZE = 20;
 const STATUSES = Object.values(OrderStatus);
@@ -117,7 +118,7 @@ function OrdersList(): ReactElement {
     <div className="ro-page">
       <PageHeader
         title={t('orders.title')}
-        subtitle={t('orders.subtitle')}
+        subtitle={<AboutThis text={t('orders.subtitle')} />}
         action={
           mayPlace ? (
             <div className="ro-row">

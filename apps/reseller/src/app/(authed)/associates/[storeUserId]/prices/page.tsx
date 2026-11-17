@@ -38,6 +38,7 @@ import {
 import { RdCallout, phaseOf } from '../../../settings/_components/rd-parts';
 import { AsSection } from '../../_components/associate-parts';
 import '../../_components/associates.css';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * ASSOC-1 — what ONE associate sells each product at.
@@ -92,7 +93,7 @@ export default function AssociatePricesPage(): ReactElement {
           ? t('assocp.titleUnknown')
           : t('assocp.title', { name: prices.data.fullName })
       }
-      subtitle={t('assocp.subtitle')}
+      subtitle={<AboutThis text={t('assocp.subtitle')} />}
       action={
         <div className="as-row-actions">
           <Link href="/associates" className={buttonClassName('secondary', 'md')}>

@@ -99,3 +99,15 @@
 .rd-db-shortcut:focus-visible .rd-db-shortcut__go {
   transform: translateX(3px);
 }
+
+/* On a phone the shortcuts sit two to a row, each a compact tile, so the
+   whole set fits one screen instead of four. */
+@media (max-width: 559.98px) {
+  .rd-db-shortcuts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-2);
+  }
+  .rd-db-shortcut {
+    padding: var(--sp-3);
+  }
+}

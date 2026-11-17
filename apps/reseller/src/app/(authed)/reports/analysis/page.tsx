@@ -26,6 +26,7 @@ import { useStoreAnalysis, useStoreCashFlow } from '@/lib/report-hooks';
 import { richMessage, useT } from '@/i18n/client';
 import { verdict } from '@/i18n/verdict';
 import { RmSection } from '../../wallet/_components/rm-parts';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 const pct = (v: string | null): string => (v === null ? '—' : `${v}%`);
 
@@ -48,7 +49,7 @@ export default function StoreAnalysisPage(): ReactElement {
     <div className="rm-page">
       <PageHeader
         title={t('repa.title')}
-        subtitle={t('repa.subtitle')}
+        subtitle={<AboutThis text={t('repa.subtitle')} />}
         action={
           <Link href="/reports" className={buttonClassName('secondary', 'md')}>
             <span className="sk-btn__fx" aria-hidden />
@@ -81,7 +82,9 @@ export default function StoreAnalysisPage(): ReactElement {
       {analysis.data !== undefined && (
         <>
           <RmSection>
-            <SectionHeading title={t('repa.orders.title')} note={t('repa.orders.note')} />
+            <SectionHeading
+              title={<InfoLabel label={t('repa.orders.title')} info={t('repa.orders.note')} />}
+            />
             <div className="rm-kpis">
               <KpiCard
                 label={t('repa.placed')}
@@ -122,7 +125,9 @@ export default function StoreAnalysisPage(): ReactElement {
           </RmSection>
 
           <RmSection>
-            <SectionHeading title={t('repa.roas.title')} note={t('repa.roas.note')} />
+            <SectionHeading
+              title={<InfoLabel label={t('repa.roas.title')} info={t('repa.roas.note')} />}
+            />
             <div className="rm-kpis">
               <KpiCard
                 label={t('repa.adSpend')}
@@ -141,18 +146,19 @@ export default function StoreAnalysisPage(): ReactElement {
                 figure={analysis.data.roas.roas === null ? '—' : `${analysis.data.roas.roas}×`}
               />
               <KpiCard
-                label={t('repa.marginRoas')}
+                label={<InfoLabel label={t('repa.marginRoas')} info={t('repa.marginRoasHint')} />}
                 icon={<Target size={14} />}
                 figure={
                   analysis.data.roas.marginRoas === null ? '—' : `${analysis.data.roas.marginRoas}×`
                 }
-                hint={t('repa.marginRoasHint')}
               />
             </div>
           </RmSection>
 
           <RmSection>
-            <SectionHeading title={t('repa.products.title')} note={t('repa.products.note')} />
+            <SectionHeading
+              title={<InfoLabel label={t('repa.products.title')} info={t('repa.products.note')} />}
+            />
             {analysis.data.products.length === 0 ? (
               <EmptyState
                 bare
@@ -197,7 +203,9 @@ export default function StoreAnalysisPage(): ReactElement {
           </RmSection>
 
           <RmSection>
-            <SectionHeading title={t('repa.pin.title')} note={t('repa.pin.note')} />
+            <SectionHeading
+              title={<InfoLabel label={t('repa.pin.title')} info={t('repa.pin.note')} />}
+            />
             {analysis.data.pincodes.length === 0 ? (
               <EmptyState bare title={t('repa.pin.empty')} />
             ) : (
@@ -233,7 +241,9 @@ export default function StoreAnalysisPage(): ReactElement {
       )}
 
       <RmSection>
-        <SectionHeading title={t('repa.cash.title')} note={t('repa.cash.note')} />
+        <SectionHeading
+          title={<InfoLabel label={t('repa.cash.title')} info={t('repa.cash.note')} />}
+        />
         {cash.isPending && <SkeletonRows rows={3} cols={3} label={t('repa.cash.loading')} />}
         {cash.isError && (
           <ErrorState message={verdict(cash.error, t)} retry={() => void cash.refetch()} />

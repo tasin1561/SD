@@ -42,6 +42,7 @@ import {
 import { richMessage, useLocale, useT } from '@/i18n/client';
 import { verdict } from '@/i18n/verdict';
 import { RmCallout, RmSection } from '../wallet/_components/rm-parts';
+import { AboutThis, InfoLabel, foldNote } from '@/components/easy/about';
 
 /** The month select's value for "pick your own dates". */
 const CUSTOM = 'custom';
@@ -77,7 +78,7 @@ export default function StoreReportsPage(): ReactElement {
     <div className="rm-page">
       <PageHeader
         title={t('rep.title')}
-        subtitle={t('rep.subtitle')}
+        subtitle={<AboutThis text={t('rep.subtitle')} />}
         action={
           <Link href="/reports/analysis" className={buttonClassName('secondary', 'md')}>
             <span className="sk-btn__fx" aria-hidden />
@@ -261,10 +262,9 @@ function PositionTiles(): ReactElement {
       />
       {p.withdrawableInr !== null ? (
         <KpiCard
-          label={t('rep.pos.withdraw')}
+          label={<InfoLabel label={t('rep.pos.withdraw')} info={t('rep.pos.withdrawHint')} />}
           icon={<HandCoins size={14} />}
           figure={<Money amount={p.withdrawableInr} size="lg" />}
-          hint={t('rep.pos.withdrawHint')}
         />
       ) : null}
       <KpiCard
@@ -287,10 +287,9 @@ function PositionTiles(): ReactElement {
         })}
       />
       <KpiCard
-        label={t('rep.pos.negative')}
+        label={<InfoLabel label={t('rep.pos.negative')} info={t('rep.pos.negativeHint')} />}
         icon={<Gauge size={14} />}
         figure={<Money amount={p.negativeLimit.effectiveInr} size="lg" />}
-        hint={t('rep.pos.negativeHint')}
       />
     </div>
   );
@@ -304,7 +303,7 @@ function ReportBody({ report }: { report: StorePnlReport }): ReactElement {
   return (
     <>
       <RmSection>
-        <SectionHeading title={t('rep.pnl.title')} note={t('rep.pnl.note')} />
+        <SectionHeading title={<InfoLabel label={t('rep.pnl.title')} info={t('rep.pnl.note')} />} />
         <Accordion type="multiple">
           {report.lines.map((l) => (
             <PnlLine key={l.key} line={l} />
@@ -314,7 +313,9 @@ function ReportBody({ report }: { report: StorePnlReport }): ReactElement {
 
       {report.expensesByCategory.length > 0 ? (
         <RmSection>
-          <SectionHeading title={t('rep.exp.title')} note={t('rep.exp.note')} />
+          <SectionHeading
+            title={<InfoLabel label={t('rep.exp.title')} info={t('rep.exp.note')} />}
+          />
           <Table caption={t('rep.exp.title')}>
             <THead>
               <Tr>
@@ -337,7 +338,9 @@ function ReportBody({ report }: { report: StorePnlReport }): ReactElement {
       ) : null}
 
       <RmSection>
-        <SectionHeading title={t('rep.cash.title')} note={t('rep.cash.note')} />
+        <SectionHeading
+          title={<InfoLabel label={t('rep.cash.title')} info={t('rep.cash.note')} />}
+        />
         <p className="rm-cash">
           <span className="rm-cash__fact">
             <ArrowDownLeft size={14} aria-hidden />
@@ -469,7 +472,7 @@ function CarryTable({
   const locale = useLocale();
   return (
     <RmSection>
-      <SectionHeading title={title} note={subtitle} />
+      <SectionHeading {...foldNote(title, subtitle)} />
       {rows.length === 0 ? (
         <EmptyState bare title={t('rep.carry.none')} description={t('rep.carry.noneBody')} />
       ) : (

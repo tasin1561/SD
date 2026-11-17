@@ -37,6 +37,7 @@ import {
   AssociatePerson,
 } from './_components/associate-parts';
 import './_components/associates.css';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /**
  * ASSOC-1 — the people who sell for this store.
@@ -81,7 +82,7 @@ export default function AssociatesPage(): ReactElement {
   const header = (
     <PageHeader
       title={t('assoc.title')}
-      subtitle={t('assoc.subtitle')}
+      subtitle={<AboutThis text={t('assoc.subtitle')} />}
       action={
         <div className="as-row-actions">
           <Link href="/associates/analysis" className={buttonClassName('secondary', 'md')}>
@@ -139,7 +140,9 @@ export default function AssociatesPage(): ReactElement {
     <div className="as-page">
       {header}
       <AsSection>
-        <SectionHeading title={t('assoc.section')} note={t('assoc.sectionNote')} />
+        <SectionHeading
+          title={<InfoLabel label={t('assoc.section')} info={t('assoc.sectionNote')} />}
+        />
         <TableToolbar
           search={{
             value: search,

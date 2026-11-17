@@ -13,6 +13,7 @@ import { formatDate } from '@/i18n/format';
 import { verdict } from '@/i18n/verdict';
 import { useStoreCustomers } from '@/lib/order-hooks';
 import './_components/customers.css';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * RS-5 (ORD-7 generalised) — the people THIS store has sold to.
@@ -46,7 +47,7 @@ export default function CustomersPage(): ReactElement {
 
   return (
     <div className="rc-cst-page">
-      <PageHeader title={t('cst.title')} subtitle={t('cst.subtitle')} />
+      <PageHeader title={t('cst.title')} subtitle={<AboutThis text={t('cst.subtitle')} />} />
       <section className="rc-cst-section">
         <SectionHeading title={t('cst.section')} />
         <form

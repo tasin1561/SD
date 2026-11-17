@@ -37,6 +37,7 @@ import { CloneBanner } from '../../_components/clone-banner';
 import { useCloneSeed } from '@/lib/clone-order-hooks';
 import { useUatField } from '@skydrop/ui/app/uat-fields';
 import { richMessage, useT } from '@/i18n/client';
+import { AboutThis } from '@/components/easy/about';
 
 interface Line {
   readonly key: number;
@@ -187,7 +188,12 @@ export function NewOrderPageForm(): ReactElement {
     }
   }
 
-  const header = <PageHeader title={t('neworder.title')} subtitle={t('neworder.subtitle')} />;
+  const header = (
+    <PageHeader
+      title={t('neworder.title')}
+      subtitle={<AboutThis text={t('neworder.subtitle')} />}
+    />
+  );
 
   if (catalogue.isPending) {
     return (

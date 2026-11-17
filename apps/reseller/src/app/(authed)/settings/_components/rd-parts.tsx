@@ -8,6 +8,7 @@ import { SectionHeading } from '@skydrop/ui/app/page-header';
 import { useToast } from '@skydrop/ui/app/toast';
 import { useT } from '@/i18n/client';
 import './rd.css';
+import { foldNote } from '@/components/easy/about';
 
 /**
  * The presentational pieces shared by the reseller's setup pages (store
@@ -32,7 +33,7 @@ export function RdCard({
 }): ReactElement {
   return (
     <section className="rd-card" data-tone={tone}>
-      {title !== undefined ? <SectionHeading title={title} note={note} action={action} /> : null}
+      {title !== undefined ? <SectionHeading {...foldNote(title, note)} action={action} /> : null}
       {children}
     </section>
   );
@@ -52,7 +53,7 @@ export function RdSection({
 }): ReactElement {
   return (
     <section className="rd-section">
-      <SectionHeading title={title} note={note} action={action} />
+      <SectionHeading {...foldNote(title, note)} action={action} />
       {children}
     </section>
   );

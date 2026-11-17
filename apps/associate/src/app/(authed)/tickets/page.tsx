@@ -18,6 +18,7 @@ import { verdict } from '@/i18n/verdict';
 import { useMyTickets, type TicketStage } from '@/lib/ticket-hooks';
 import { LinkButton } from '../_components/parts';
 import '../_components/as.css';
+import { AboutThis } from '@/components/easy/about';
 
 /** The tab id for "every stage" — a tab needs a non-empty id. */
 const ALL_STAGES = 'ALL';
@@ -45,7 +46,7 @@ export default function TicketsPage(): ReactElement {
     <div className="as-page">
       <PageHeader
         title={t('tickets.title')}
-        subtitle={t('tickets.subtitle')}
+        subtitle={<AboutThis text={t('tickets.subtitle')} />}
         action={
           mayRaise ? (
             <LinkButton href="/tickets/new" variant="primary" icon={<Plus size={15} />}>

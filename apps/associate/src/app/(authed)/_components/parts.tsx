@@ -5,6 +5,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { SectionHeading } from '@skydrop/ui/app/page-header';
 import { buttonClassName, type ButtonSize, type ButtonVariant } from '@skydrop/ui/app/button';
 import './as.css';
+import { foldNote } from '@/components/easy/about';
 
 /**
  * Display-only pieces shared by this app's screens. Nothing here
@@ -34,7 +35,7 @@ export function Section({
 }): ReactElement {
   return (
     <section id={id} className="as-section">
-      <SectionHeading title={title} note={note} action={action} />
+      <SectionHeading {...foldNote(title, note)} action={action} />
       {bare ? (
         children
       ) : (

@@ -1,6 +1,7 @@
 import { toCatalogs } from './define';
 import { courierWhatsapp } from './messages/courierWhatsapp';
 import { account } from './messages/account';
+import { easy } from './messages/easy';
 import { auth } from './messages/auth';
 import { cancelRequest } from './messages/cancelRequest';
 import { common } from './messages/common';
@@ -26,6 +27,7 @@ export const NAMESPACES = [
   shell,
   notifications,
   account,
+  easy,
   tickets,
   orders,
   orderImport,
@@ -42,6 +44,7 @@ const ALL = {
   ...shell,
   ...notifications,
   ...account,
+  ...easy,
   ...tickets,
   ...orders,
   ...orderImport,

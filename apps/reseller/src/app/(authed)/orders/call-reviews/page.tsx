@@ -21,6 +21,7 @@ import { useStoreCallReviews, type StoreCallReview } from '@/lib/review-hooks';
 import { useStoreActionPolicy, useStoreOrders, type StoreOrderListItem } from '@/lib/order-hooks';
 import { CallReviewDecision } from '@/components/call-review-decision';
 import { LinkButton, Notice, RoSection } from '../_components/orders-parts';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 const CONTEXT_PAGE_SIZE = 100;
 
@@ -82,7 +83,7 @@ export default function CallReviewsPage(): ReactElement {
     <div className="ro-page">
       <PageHeader
         title={t('callq.title')}
-        subtitle={t('callq.subtitle')}
+        subtitle={<AboutThis text={t('callq.subtitle')} />}
         action={
           <LinkButton href="/orders" variant="ghost" icon={<ArrowRight size={15} />}>
             {t('callq.allOrders')}
@@ -92,18 +93,16 @@ export default function CallReviewsPage(): ReactElement {
 
       <div className="ro-kpis">
         <KpiCard
-          label={t('callq.kpi.units')}
+          label={<InfoLabel label={t('callq.kpi.units')} info={t('callq.kpi.unitsHint')} />}
           icon={<Boxes size={14} />}
           tone={heldUnits > 0 ? 'pending' : 'credit'}
           figure={reviews.isPending ? '—' : <Num value={heldUnits} />}
-          hint={t('callq.kpi.unitsHint')}
         />
         <KpiCard
-          label={t('callq.kpi.orders')}
+          label={<InfoLabel label={t('callq.kpi.orders')} info={t('callq.kpi.ordersHint')} />}
           icon={<PhoneMissed size={14} />}
           tone="neutral"
           figure={reviews.isPending ? '—' : <Num value={rows.length} />}
-          hint={t('callq.kpi.ordersHint')}
         />
       </div>
 

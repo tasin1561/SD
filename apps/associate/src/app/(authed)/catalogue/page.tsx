@@ -12,6 +12,7 @@ import { verdict } from '@/i18n/verdict';
 import { itemThumb, useSellCatalogue } from '@/lib/catalogue-hooks';
 import { LinkButton, Notice } from '../_components/parts';
 import '../_components/as.css';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * What this person may sell, and for how much.
@@ -60,7 +61,7 @@ export default function CataloguePage(): ReactElement {
   const header = (
     <PageHeader
       title={t('catalogue.title')}
-      subtitle={t('catalogue.subtitle')}
+      subtitle={<AboutThis text={t('catalogue.subtitle')} />}
       action={
         <LinkButton href="/orders/new" variant="primary">
           {t('catalogue.newOrder')}

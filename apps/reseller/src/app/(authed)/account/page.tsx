@@ -13,6 +13,7 @@ import { useT } from '@/i18n/client';
 import { verdict } from '@/i18n/verdict';
 import { useRequestEmailVerification, useSignOutEverywhere } from '@/lib/store-hooks';
 import { RdCard, RdDl } from '../settings/_components/rd-parts';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * The signed-in person's own account — open to every store user (it is
@@ -33,7 +34,7 @@ export default function AccountPage(): ReactElement {
 
   return (
     <div className="rd-page" data-width="narrow">
-      <PageHeader title={t('acct.title')} subtitle={t('acct.subtitle')} />
+      <PageHeader title={t('acct.title')} subtitle={<AboutThis text={t('acct.subtitle')} />} />
       <RdCard title={t('acct.you')}>
         <RdDl
           items={[

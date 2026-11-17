@@ -30,6 +30,7 @@ import type { MessageKey } from '@/i18n/catalog';
 import { richMessage, useT } from '@/i18n/client';
 import { verdict } from '@/i18n/verdict';
 import { RmSection } from '../wallet/_components/rm-parts';
+import { AboutThis } from '@/components/easy/about';
 
 /**
  * The store's OWN expense book (RS-8) — what it spent on ads, staff,
@@ -71,7 +72,7 @@ export default function StoreExpensesPage(): ReactElement {
 
   return (
     <div className="rm-page">
-      <PageHeader title={t('exp.title')} subtitle={t('exp.subtitle')} />
+      <PageHeader title={t('exp.title')} subtitle={<AboutThis text={t('exp.subtitle')} />} />
       {mayRecord && <RecordExpense />}
       <div className="rm-filters">
         <DateField
@@ -111,59 +112,61 @@ export default function StoreExpensesPage(): ReactElement {
               description={mayRecord ? t('exp.empty.record') : t('exp.empty.permission')}
             />
           ) : (
-            <Table caption={t('exp.caption')}>
-              <THead>
-                <Tr>
-                  <Th>{t('exp.col.date')}</Th>
-                  <Th>{t('exp.col.category')}</Th>
-                  <Th>{t('exp.col.what')}</Th>
-                  <Th align="right">{t('exp.col.amount')}</Th>
-                  {mayRecord && <Th />}
-                </Tr>
-              </THead>
-              <TBody>
-                {list.data.items.map((x) => (
-                  <Tr key={x.id}>
-                    <Td className="rm-when sk-figure">{x.expenseDate}</Td>
-                    <Td>{categoryName(x.category, x.categoryLabel, t)}</Td>
-                    <Td>
-                      <span className={x.deletedAt === null ? '' : 'rm-struck'}>
-                        {x.description}
-                      </span>
-                      {x.reference !== null && (
-                        <span className="rm-faint rm-block">
-                          {richMessage(t('exp.ref'), {
-                            ref: <span className="sk-ident">{x.reference}</span>,
-                          })}
+            <div className="ez-wrap ez-cards ez-lead-3 ez-then-4">
+              <Table caption={t('exp.caption')}>
+                <THead>
+                  <Tr>
+                    <Th>{t('exp.col.date')}</Th>
+                    <Th>{t('exp.col.category')}</Th>
+                    <Th>{t('exp.col.what')}</Th>
+                    <Th align="right">{t('exp.col.amount')}</Th>
+                    {mayRecord && <Th />}
+                  </Tr>
+                </THead>
+                <TBody>
+                  {list.data.items.map((x) => (
+                    <Tr key={x.id}>
+                      <Td className="rm-when sk-figure">{x.expenseDate}</Td>
+                      <Td>{categoryName(x.category, x.categoryLabel, t)}</Td>
+                      <Td>
+                        <span className={x.deletedAt === null ? '' : 'rm-struck'}>
+                          {x.description}
                         </span>
-                      )}
-                      {x.deleteReason !== null && (
-                        <span className="rm-faint rm-block">
-                          {t('exp.removedWhy', { reason: x.deleteReason })}
-                        </span>
-                      )}
-                    </Td>
-                    <Td align="right">
-                      <Money amount={x.amountInr} />
-                    </Td>
-                    {mayRecord && (
-                      <Td align="right">
-                        {x.deletedAt === null && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            icon={<Trash2 size={14} />}
-                            onClick={() => setRemoving(x)}
-                          >
-                            {t('exp.remove')}
-                          </Button>
+                        {x.reference !== null && (
+                          <span className="rm-faint rm-block">
+                            {richMessage(t('exp.ref'), {
+                              ref: <span className="sk-ident">{x.reference}</span>,
+                            })}
+                          </span>
+                        )}
+                        {x.deleteReason !== null && (
+                          <span className="rm-faint rm-block">
+                            {t('exp.removedWhy', { reason: x.deleteReason })}
+                          </span>
                         )}
                       </Td>
-                    )}
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
+                      <Td align="right">
+                        <Money amount={x.amountInr} />
+                      </Td>
+                      {mayRecord && (
+                        <Td align="right">
+                          {x.deletedAt === null && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              icon={<Trash2 size={14} />}
+                              onClick={() => setRemoving(x)}
+                            >
+                              {t('exp.remove')}
+                            </Button>
+                          )}
+                        </Td>
+                      )}
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
           )}
         </RmSection>
       )}

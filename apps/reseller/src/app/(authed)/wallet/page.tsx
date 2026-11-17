@@ -34,6 +34,7 @@ import {
 import { LedgerSection } from './_components/ledger-section';
 import { WithdrawCard } from './_components/withdraw-card';
 import { RmAlert, RmSection, RmStateChip } from './_components/rm-parts';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 const TOPUP_WORDS: Record<string, MessageKey> = {
   PENDING: 'wal.req.state.PENDING',
@@ -56,7 +57,10 @@ export default function WalletPage(): ReactElement {
   if (summary.isPending || summary.isError) {
     return (
       <div className="rm-page">
-        <PageHeader title={t('wal.title')} subtitle={t('wal.headerSubtitle')} />
+        <PageHeader
+          title={t('wal.title')}
+          subtitle={<AboutThis text={t('wal.headerSubtitle')} />}
+        />
         {summary.isPending ? (
           <>
             <div className="rm-kpis">
@@ -97,10 +101,9 @@ export default function WalletPage(): ReactElement {
         />
         {s.withdrawableInr !== null ? (
           <KpiCard
-            label={t('wal.kpi.withdraw')}
+            label={<InfoLabel label={t('wal.kpi.withdraw')} info={t('wal.kpi.withdrawHint')} />}
             icon={<HandCoins size={14} />}
             figure={<Money amount={s.withdrawableInr} size="lg" convert={false} />}
-            hint={t('wal.kpi.withdrawHint')}
           />
         ) : null}
         <KpiCard
@@ -111,12 +114,11 @@ export default function WalletPage(): ReactElement {
         />
         {skydrop ? (
           <KpiCard
-            label={t('wal.kpi.waiting')}
+            label={<InfoLabel label={t('wal.kpi.waiting')} info={t('wal.kpi.waitingHint')} />}
             icon={<Clock size={14} />}
             tone="pending"
             value={s.pendingTopups.count + s.pendingWithdrawals.count}
             format={(n) => `${n}`}
-            hint={t('wal.kpi.waitingHint')}
           />
         ) : null}
       </div>

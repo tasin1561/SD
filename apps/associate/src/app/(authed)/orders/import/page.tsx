@@ -33,6 +33,7 @@ import { verdict } from '@/i18n/verdict';
 import { ordersPaused } from '@/lib/orders-paused';
 import { BackLink, Notice, Section } from '../../_components/parts';
 import '../../_components/as.css';
+import { AboutThis } from '@/components/easy/about';
 
 const BASE = '/api/store/order-imports';
 const UPLOADS_PAGE_SIZE = 10;
@@ -235,7 +236,7 @@ export default function OrderImportPage(): ReactElement {
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
         {t('nav.myOrders')}
       </BackLink>
-      <PageHeader title={t('import.title')} subtitle={t('import.subtitle')} />
+      <PageHeader title={t('import.title')} subtitle={<AboutThis text={t('import.subtitle')} />} />
 
       {/* Importing creates orders, so the same pause applies. The form
           stays usable and the server's refusal is the honest one. */}

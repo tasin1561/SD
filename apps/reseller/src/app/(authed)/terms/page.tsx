@@ -18,6 +18,7 @@ import { formatDateTime } from '@/i18n/format';
 import { verdict } from '@/i18n/verdict';
 import { useAcceptTerms, useStoreTerms, type StoreTermsView } from '@/lib/terms-hooks';
 import { RmAlert, RmCallout, RmSection } from '../wallet/_components/rm-parts';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /**
  * RS-4 — the seller's terms for this store, in plain words: who pays which
@@ -32,7 +33,10 @@ export default function TermsPage(): ReactElement {
   if (terms.isPending || terms.isError) {
     return (
       <div className="rm-page">
-        <PageHeader title={t('terms.title')} subtitle={t('terms.subtitle.loading')} />
+        <PageHeader
+          title={t('terms.title')}
+          subtitle={<AboutThis text={t('terms.subtitle.loading')} />}
+        />
         {terms.isPending ? (
           <>
             <Skeleton className="rm-kpi-skel" height={180} rounded="md" />
@@ -236,7 +240,9 @@ function HistorySection({ terms }: { terms: StoreTermsView }): ReactElement {
   const when = (iso: string): string => formatDateTime(iso, locale);
   return (
     <RmSection>
-      <SectionHeading title={t('terms.history.title')} note={t('terms.history.note')} />
+      <SectionHeading
+        title={<InfoLabel label={t('terms.history.title')} info={t('terms.history.note')} />}
+      />
       {terms.history.length === 0 ? (
         <EmptyState icon={<History size={22} />} title={t('terms.history.empty')} />
       ) : (

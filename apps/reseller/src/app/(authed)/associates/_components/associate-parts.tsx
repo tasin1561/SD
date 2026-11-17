@@ -8,6 +8,7 @@ import { useT } from '@/i18n/client';
 import { verdict } from '@/i18n/verdict';
 import { usePauseAssociateOrders, type AssociateSummary, type Rate } from '@/lib/associate-hooks';
 import './associates.css';
+import { InfoButton } from '@/components/easy/info-button';
 
 /**
  * The associates area's presentational pieces. Nothing here decides a
@@ -127,27 +128,34 @@ export function AssociatePauseSwitch({
   const pause = usePauseAssociateOrders();
   const canPlace = associate.ordersPausedAt === null;
   return (
-    <Switch
-      checked={canPlace}
-      disabled={pause.isPending}
-      onText={t('assoc.switch.on')}
-      offText={t('assoc.switch.off')}
-      label={t('assoc.switch.label')}
-      description={canPlace ? t('assoc.switch.descOn') : t('assoc.switch.descOff')}
-      onCheckedChange={(next) => {
-        void (async () => {
-          try {
-            await pause.mutateAsync({ storeUserId: associate.storeUserId, paused: !next });
-            toast.success(
-              next
-                ? t('assoc.switch.toastOn', { name: associate.fullName })
-                : t('assoc.switch.toastOff', { name: associate.fullName }),
-            );
-          } catch (err) {
-            toast.error(verdict(err, t));
-          }
-        })();
-      }}
-    />
+    // What the switch does is the same sentence on every row, so it sits
+    // behind an "i" beside the switch instead of under each one.
+    <span className="ez-titled">
+      <Switch
+        checked={canPlace}
+        disabled={pause.isPending}
+        onText={t('assoc.switch.on')}
+        offText={t('assoc.switch.off')}
+        label={t('assoc.switch.label')}
+        onCheckedChange={(next) => {
+          void (async () => {
+            try {
+              await pause.mutateAsync({ storeUserId: associate.storeUserId, paused: !next });
+              toast.success(
+                next
+                  ? t('assoc.switch.toastOn', { name: associate.fullName })
+                  : t('assoc.switch.toastOff', { name: associate.fullName }),
+              );
+            } catch (err) {
+              toast.error(verdict(err, t));
+            }
+          })();
+        }}
+      />
+      <InfoButton
+        title={t('assoc.switch.label')}
+        text={canPlace ? t('assoc.switch.descOn') : t('assoc.switch.descOff')}
+      />
+    </span>
   );
 }

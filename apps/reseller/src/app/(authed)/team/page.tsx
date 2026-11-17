@@ -27,6 +27,7 @@ import {
 } from '@/lib/store-hooks';
 import { RdCallout, RdSection, phaseOf } from '../settings/_components/rd-parts';
 import { RoleList, RolePicker, type StoreRoleOption } from './_components/role-picker';
+import { AboutThis } from '@/components/easy/about';
 
 /** The roles only an owner may grant, take away, or touch somebody who holds. */
 const OWNER_ONLY = ['owner'] as const;
@@ -50,7 +51,7 @@ export default function TeamPage(): ReactElement {
   if (team.isPending || team.isError) {
     return (
       <div className="rd-page">
-        <PageHeader title={t('team.title')} subtitle={t('team.subtitle')} />
+        <PageHeader title={t('team.title')} subtitle={<AboutThis text={t('team.subtitle')} />} />
         {team.isPending ? (
           <SkeletonRows label={t('team.loading')} rows={4} cols={5} />
         ) : (
@@ -65,7 +66,7 @@ export default function TeamPage(): ReactElement {
     <div className="rd-page">
       <PageHeader
         title={t('team.title')}
-        subtitle={t('team.subtitle')}
+        subtitle={<AboutThis text={t('team.subtitle')} />}
         action={
           manage ? (
             <Button

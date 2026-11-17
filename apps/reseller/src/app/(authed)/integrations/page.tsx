@@ -48,6 +48,7 @@ import {
   phaseOf,
 } from '../settings/_components/rd-parts';
 import { DEFAULT_EVENTS, EditWebhookModal, EventPicker } from './_components/webhook-form';
+import { AboutThis } from '@/components/easy/about';
 
 /** Choices for how long a new key works. `''` = until revoked. */
 const EXPIRY_CHOICES: ReadonlyArray<{ value: string; label: MessageKey }> = [
@@ -69,7 +70,7 @@ export default function IntegrationsPage(): ReactElement {
   const t = useT();
   return (
     <div className="rd-page">
-      <PageHeader title={t('intg.title')} subtitle={t('intg.subtitle')} />
+      <PageHeader title={t('intg.title')} subtitle={<AboutThis text={t('intg.subtitle')} />} />
       <ApiKeysSection />
       <WebhooksSection />
     </div>
