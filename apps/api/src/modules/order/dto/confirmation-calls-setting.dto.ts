@@ -13,4 +13,16 @@ export class SetConfirmationCallsDto {
   @Min(1)
   @Max(168)
   ttlHours?: number;
+
+  @ApiPropertyOptional({
+    minimum: 5,
+    maximum: 10080,
+    description:
+      'Auto-confirm delay in minutes (5 min to 7 days). Wins over ttlHours if both sent.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(10080)
+  ttlMinutes?: number;
 }
