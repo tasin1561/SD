@@ -1901,6 +1901,7 @@ export const PORTAL_TEXT_SELLER: ReadonlyArray<TextRow> = [
   ["productImport.theImportStoppedBefore","The import stopped before it finished. Anything counted below was already written and stands — re-uploading the file updates those rows rather than duplicating them."],
   ["productImport.thisImportWasCancelled","This import was cancelled. Anything counted below was written."],
   ["productList.yourCatalogueProductsTheir","Your catalogue: products, their variants and the pictures customers see."],
+  ["productList.searchProductsByName","Search products by name, reference or SKU"],
   ["productList.tryADifferentName","Try a different name or reference, or reset the filters."],
   ["productList.addOneByHand","Add one by hand, or bring a whole catalogue in with the CSV import."],
   ["productNew.keepAtLeastOne","Keep at least one variant — a product with none cannot be sold."],

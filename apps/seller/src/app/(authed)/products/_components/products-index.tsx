@@ -35,6 +35,7 @@ import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/rich';
 import { AboutThis } from '@/components/easy/about';
 import { Unit } from '@/components/easy/units';
+import { ProductSkus } from './product-skus';
 
 /**
  * Seller catalogue list — the LIST pattern for the console redesign.
@@ -439,6 +440,7 @@ export function ProductsIndex(): ReactElement {
                             {p.description !== null && p.description !== '' && (
                               <span className="inv-sub inv-truncate">{p.description}</span>
                             )}
+                            <ProductSkus productId={p.id} skus={p.skus} />
                           </Td>
                           <Td>
                             <span className="sk-ident inv-muted">{p.externalRef ?? '—'}</span>

@@ -31,10 +31,15 @@ export const productList = defineMessages({
   'productList.unitsWithNoCost': ['Units with no cost', 'ক্রয়মূল্য নেই এমন ইউনিট'],
   'productList.catalogueRegister': ['Catalogue register', 'ক্যাটালগ রেজিস্টার'],
   'productList.searchProductsByName': [
-    'Search products by name or reference',
-    'নাম বা রেফারেন্স দিয়ে পণ্য খুঁজুন',
+    'Search products by name, reference or SKU',
+    'নাম, রেফারেন্স বা SKU দিয়ে পণ্য খুঁজুন',
   ],
-  'productList.nameOrRef': ['Name or ref…', 'নাম বা রেফ…'],
+  'productList.nameOrRef': ['Name, ref or SKU…', 'নাম, রেফ বা SKU…'],
+  // The SKU chips under a product's name (product-skus.tsx).
+  'productList.skuList': ['SKUs', 'SKU'],
+  'productList.moreSkus': ['+{n} more', 'আরও {n}টি'],
+  'productList.skuDraft': ['Draft', 'খসড়া'],
+  'productList.skuArchived': ['Archived', 'আর্কাইভ করা'],
   'productList.productStatus': ['Product status', 'পণ্যের স্ট্যাটাস'],
   'productList.allProducts': ['All products', 'সব পণ্য'],
   'productList.reset': ['Reset', 'রিসেট'],
