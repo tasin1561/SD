@@ -1,4 +1,4 @@
-import type { PDFDocument} from 'pdf-lib';
+import type { PDFDocument } from 'pdf-lib';
 import { StandardFonts, rgb } from 'pdf-lib';
 
 export interface NotIncluded {
