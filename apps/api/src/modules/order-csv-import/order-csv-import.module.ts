@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { StoreJwtGuard } from '../../common/guards/store-jwt.guard';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
+import { BulkModule } from '../../common/bulk/bulk.module';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
 import { OrderCoreModule } from '../order/order-core.module';
@@ -11,6 +12,7 @@ import { StoreOrderCsvImportService } from './services/store-order-csv-import.se
 import { SellerOrderCsvImportController } from './seller-order-csv-import.controller';
 import { OrderCsvParserService } from './services/order-csv-parser.service';
 import { OrderCsvImportService } from './services/order-csv-import.service';
+import { StagedOrderBulkFixService } from './services/staged-order-bulk-fix.service';
 import { StagedOrderRowService } from './services/staged-order-row.service';
 import { SellerStagedOrderController } from './controllers/seller-staged-order.controller';
 import { OrderCsvImportProcessorService } from './services/order-csv-import-processor.service';
@@ -36,6 +38,7 @@ import { OrderCsvImportWorker } from './queue/order-csv-import.worker';
   // same shape warehouse-pack and courier-dispatch use for the first.
   imports: [
     AuthCommonModule,
+    BulkModule,
     CatalogReadModule,
     InventorySharedModule,
     OrderCoreModule,
@@ -53,6 +56,7 @@ import { OrderCsvImportWorker } from './queue/order-csv-import.worker';
     OrderCsvImportProcessorService,
     OrderCsvStockCheckService,
     StagedOrderRowService,
+    StagedOrderBulkFixService,
     OrderCsvImportQueue,
     OrderCsvImportWorker,
     SellerJwtGuard,

@@ -99,6 +99,22 @@ function normalizeStateKey(raw: string): string {
     .trim();
 }
 
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(
+        (prev[j] ?? 0) + 1,
+        (cur[j - 1] ?? 0) + 1,
+        (prev[j - 1] ?? 0) + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    prev = cur;
+  }
+  return prev[b.length] ?? 0;
+}
+
 export interface RecipientAddressInput {
   recipientPhoneE164: string;
   recipientAltPhoneE164?: string | null;
@@ -162,6 +178,35 @@ export class AddressValidationService {
     }
     this.statesCache = { expiresAt: now + STATES_CACHE_TTL_MS, byLower };
     return byLower;
+  }
+
+  /**
+   * Up to `max` allowed states a mistyped one is probably meant to be
+   * (prefix/containment, then edit distance ≤ 2). Read-only; used by the
+   * pending-orders bulk fixer to PROPOSE a spelling, never to accept one.
+   */
+  async suggestStates(typed: string, max = 3): Promise<string[]> {
+    const key = normalizeStateKey(typed);
+    if (key === '') return [];
+    const canon = [...new Set((await this.allowedStates()).values())];
+    const scored: Array<{ name: string; score: number }> = [];
+    for (const name of canon) {
+      const k = normalizeStateKey(name);
+      let score: number;
+      if (k === key) score = 0;
+      else if (k.startsWith(key) || key.startsWith(k)) score = 1;
+      else if (key.length >= 3 && (k.includes(key) || key.includes(k))) score = 2;
+      else {
+        const d = editDistance(k, key);
+        if (d > 2) continue;
+        score = 2 + d;
+      }
+      scored.push({ name, score });
+    }
+    return scored
+      .sort((a, b) => a.score - b.score || a.name.localeCompare(b.name))
+      .slice(0, max)
+      .map((s) => s.name);
   }
 
   /** Drop the memoised list (admin edited the setting). */

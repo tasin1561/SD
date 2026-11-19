@@ -57,6 +57,22 @@ export type {
   SellerFailedAttemptView,
 } from './endpoints/seller-orders';
 export type {
+  BulkFixField,
+  BulkFixKind,
+  BulkFixSuggestion,
+  BulkFixGroup,
+  BulkFixSummary,
+  BulkFixApplyRequest,
+  BulkFixRowResult,
+  BulkFixApplyResult,
+  PendingSetField,
+  PendingCompactRow,
+  PendingBulkRowResult,
+  PendingBulkResponse,
+  PendingBulkSetFieldRequest,
+  PendingBulkIdsRequest,
+} from './endpoints/seller-staged-bulk-fix';
+export type {
   SystemSettingView,
   SystemSettingFull,
   SystemSettingsCategoryGroup,
