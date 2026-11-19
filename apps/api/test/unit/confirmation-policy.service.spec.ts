@@ -5,9 +5,9 @@ function make(opts: { required?: boolean; ttl?: number; settingThrows?: boolean 
   const orderUpdateMany = jest.fn(async (_a: Record<string, unknown>) => ({ count: 1 }));
   const resolve = jest.fn(async (_sellerId: string, key: string) => {
     if (opts.settingThrows) throw new Error('boom');
-    return key === 'ops.call_confirmation_required'
-      ? { value: opts.required ?? true }
-      : { value: opts.ttl ?? 24 };
+    if (key === 'ops.call_confirmation_required') return { value: opts.required ?? true };
+    if (key === 'ops.call_auto_confirm_ttl_minutes') return { value: null, source: 'SYSTEM_DEFAULT' };
+    return { value: opts.ttl ?? 24, source: 'SELLER_OVERRIDE' };
   });
   const enqueueOrder = jest.fn(async () => ({ entry: {}, created: true }));
   const svc = new ConfirmationPolicyService(
@@ -100,5 +100,31 @@ describe('ConfirmationPolicyService.queueForCall', () => {
     }, new Date());
     await expect(svc.queueForCall('o1')).rejects.toThrow('queue down');
     expect(order).toEqual(['clear', 'enqueue', 'restore']);
+  });
+});
+
+import { effectiveTtlMinutes } from '../../src/modules/confirmation-policy/confirmation-policy.service';
+
+describe('effectiveTtlMinutes', () => {
+  const own = (value: number) => ({ value, source: 'SELLER_OVERRIDE' });
+  const sys = (value: number | null) => ({ value, source: 'SYSTEM_DEFAULT' });
+  it('hours-only override: minutes = hours x 60', () => {
+    expect(effectiveTtlMinutes(sys(null), own(6))).toBe(360);
+  });
+  it('minutes override wins over an hours override', () => {
+    expect(effectiveTtlMinutes(own(45), own(6))).toBe(45);
+  });
+  it('neither overridden: system minutes, else system hours x 60, else 24h', () => {
+    expect(effectiveTtlMinutes(sys(90), sys(24))).toBe(90);
+    expect(effectiveTtlMinutes(sys(null), sys(24))).toBe(1440);
+    expect(effectiveTtlMinutes(null, null)).toBe(1440);
+  });
+  it('minutes mean minutes at the deadline', async () => {
+    const { svc, orderUpdateMany } = make({ required: false, ttl: 1 });
+    const before = Date.now();
+    await svc.enqueueOrDefer('o1');
+    const d = (orderUpdateMany.mock.calls[0]![0] as { data: { confirmationDeadlineAt: Date } }).data
+      .confirmationDeadlineAt;
+    expect(d.getTime() - before).toBeGreaterThanOrEqual(60 * 60_000);
   });
 });

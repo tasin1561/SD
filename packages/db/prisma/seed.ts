@@ -304,6 +304,17 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMaxInt: 168,
   },
   {
+    key: 'ops.call_auto_confirm_ttl_minutes',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    displayName: 'Auto-Confirm After (minutes)',
+    description:
+      'Minutes version of the auto-confirm delay, used only while confirmation calls are OFF. When a client has their own minutes value it wins; else their own hours value x 60; else this default if set; else the hours default x 60. From 5 minutes to 10080 (7 days).',
+    sellerOverridable: true,
+    overrideMinInt: 5,
+    overrideMaxInt: 10080,
+  },
+  {
     key: 'ops.stock_reservation_ttl_hours',
     category: 'ops',
     valueType: SettingValueType.INT,

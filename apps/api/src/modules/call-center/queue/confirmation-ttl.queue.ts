@@ -5,7 +5,7 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 export const CONFIRMATION_TTL_QUEUE_NAME = 'order-confirmation-ttl';
 export const JOB_SWEEP_CONFIRMATION_TTL = 'sweep-confirmation-ttl';
 
-/** Every minute: the TTL is measured in hours, so a minute of lag is invisible. */
+/** Every minute: the delay is measured in minutes (min 5), so a minute of lag is the finest grain that matters. */
 export const CONFIRMATION_TTL_CRON = '* * * * *';
 
 const DEFAULT_JOB_OPTIONS: JobsOptions = {

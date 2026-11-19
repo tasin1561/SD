@@ -7,16 +7,21 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
+import { effectiveTtlMinutes } from '../../confirmation-policy/confirmation-policy.service';
 import { SetConfirmationCallsDto } from '../dto/confirmation-calls-setting.dto';
 import { SetCustomerDeliveryFeeDto } from '../dto/customer-delivery-fee.dto';
 
 const KEY = 'orders.default_customer_delivery_fee_inr';
 const KEY_CALLS = 'ops.call_confirmation_required';
 const KEY_TTL = 'ops.call_auto_confirm_ttl_hours';
+const KEY_TTL_MIN = 'ops.call_auto_confirm_ttl_minutes';
 
 export interface ConfirmationCallsView {
   readonly callsRequired: boolean;
+  /** Whole hours, rounded up from `ttlMinutes` (kept for older clients). */
   readonly ttlHours: number;
+  /** The effective auto-confirm delay in minutes. */
+  readonly ttlMinutes: number;
   /** true when this client (or an admin for them) has set their own; false = our default. */
   readonly isOwnValue: boolean;
 }
@@ -83,14 +88,20 @@ export class SellerOrderDefaultsController {
   async getConfirmationCalls(
     @CurrentSeller() seller: AuthenticatedSeller,
   ): Promise<ConfirmationCallsView> {
-    const [calls, ttl] = await Promise.all([
+    const [calls, ttl, ttlMin] = await Promise.all([
       this.settings.resolve(seller.id, KEY_CALLS),
       this.settings.resolve(seller.id, KEY_TTL),
+      this.settings.resolve(seller.id, KEY_TTL_MIN).catch(() => null),
     ]);
+    const minutes = effectiveTtlMinutes(ttlMin, ttl);
     return {
       callsRequired: calls.value !== false,
-      ttlHours: Number(ttl.value),
-      isOwnValue: calls.source === 'SELLER_OVERRIDE' || ttl.source === 'SELLER_OVERRIDE',
+      ttlHours: Math.max(1, Math.ceil(minutes / 60)),
+      ttlMinutes: minutes,
+      isOwnValue:
+        calls.source === 'SELLER_OVERRIDE' ||
+        ttl.source === 'SELLER_OVERRIDE' ||
+        ttlMin?.source === 'SELLER_OVERRIDE',
     };
   }
 
@@ -114,11 +125,22 @@ export class SellerOrderDefaultsController {
       { valueType: 'BOOLEAN', value: body.callsRequired },
       { sellerActor: true },
     );
-    if (body.ttlHours !== undefined) {
+    // Minutes win. An hours-only write also moves the minutes override (h x 60),
+    // so a stale minutes value can never shadow the newer hours choice.
+    const minutes = body.ttlMinutes ?? (body.ttlHours !== undefined ? body.ttlHours * 60 : undefined);
+    if (body.ttlHours !== undefined && body.ttlMinutes === undefined) {
       await this.settings.setOverride(
         seller.id,
         KEY_TTL,
         { valueType: 'INT', value: body.ttlHours },
+        { sellerActor: true },
+      );
+    }
+    if (minutes !== undefined) {
+      await this.settings.setOverride(
+        seller.id,
+        KEY_TTL_MIN,
+        { valueType: 'INT', value: minutes },
         { sellerActor: true },
       );
     }

@@ -706,6 +706,13 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     example:
       'Set to 24: an order placed at 10 am confirms itself at 10 am the next day unless staff send it for a call first.',
   },
+  'ops.call_auto_confirm_ttl_minutes': {
+    name: 'Auto-confirm after (minutes)',
+    group: 'Customer calls',
+    what: 'The same wait as the hours setting, in minutes, from 5 minutes to 10080 (7 days). Leave empty to use the hours value. A client who sets minutes uses it instead of hours.',
+    example:
+      'Set to 90: an order placed at 10:00 confirms itself at 11:30 unless staff send it for a call first.',
+  },
   'ops.call_retry_interval_hours': {
     name: 'Wait before calling again (hours)',
     group: 'Customer calls',

@@ -7,7 +7,39 @@ import type { ClientContext } from '../seller-auth/seller-auth.service';
 
 export const SETTING_CALL_CONFIRMATION_REQUIRED = 'ops.call_confirmation_required';
 export const SETTING_CALL_AUTO_CONFIRM_TTL_HOURS = 'ops.call_auto_confirm_ttl_hours';
+/** Minutes twin of the hours key (additive; the hours key stays). Allowed 5..10080. */
+export const SETTING_CALL_AUTO_CONFIRM_TTL_MINUTES = 'ops.call_auto_confirm_ttl_minutes';
+export const TTL_MINUTES_MIN = 5;
+export const TTL_MINUTES_MAX = 10_080;
 const DEFAULT_TTL_HOURS = 24;
+
+interface ResolvedLike {
+  readonly value: unknown;
+  readonly source?: string;
+}
+
+function positiveInt(v: unknown): number | null {
+  const n = Number(v);
+  return v !== null && v !== undefined && Number.isFinite(n) && n >= 1 ? Math.floor(n) : null;
+}
+
+/**
+ * The auto-confirm delay in minutes. A client's own minutes override wins;
+ * else a client's own hours override (x60, so every existing override keeps
+ * its meaning exactly); else an admin-set system minutes value; else the
+ * system hours value x60.
+ */
+export function effectiveTtlMinutes(
+  minutes: ResolvedLike | null,
+  hours: ResolvedLike | null,
+): number {
+  const m = positiveInt(minutes?.value);
+  const h = positiveInt(hours?.value);
+  if (m !== null && minutes?.source === 'SELLER_OVERRIDE') return m;
+  if (h !== null && hours?.source === 'SELLER_OVERRIDE') return h * 60;
+  if (m !== null) return m;
+  return (h ?? DEFAULT_TTL_HOURS) * 60;
+}
 
 export type EnqueueOrDeferResult = 'ENQUEUED' | 'DEFERRED';
 
@@ -62,6 +94,15 @@ export class ConfirmationPolicyService {
     }
   }
 
+  /** The delay before an order auto-confirms, in minutes (see `effectiveTtlMinutes`). */
+  async ttlMinutes(sellerId: string): Promise<number> {
+    const [minutes, hours] = await Promise.all([
+      this.settings.resolve(sellerId, SETTING_CALL_AUTO_CONFIRM_TTL_MINUTES).catch(() => null),
+      this.settings.resolve(sellerId, SETTING_CALL_AUTO_CONFIRM_TTL_HOURS).catch(() => null),
+    ]);
+    return effectiveTtlMinutes(minutes, hours);
+  }
+
   /**
    * The CC-6 post-commit entry step. Calls ON (default) → exactly the old
    * behaviour: enqueue, and make sure no stale deadline survives. Calls
@@ -74,10 +115,10 @@ export class ConfirmationPolicyService {
       select: { sellerId: true },
     });
     if (order && !(await this.callsRequired(order.sellerId))) {
-      const ttl = await this.ttlHours(order.sellerId);
+      const ttlMin = await this.ttlMinutes(order.sellerId);
       await this.prisma.client.order.updateMany({
         where: { id: orderId, status: OrderStatus.PENDING_CONFIRMATION },
-        data: { confirmationDeadlineAt: new Date(Date.now() + ttl * 3_600_000) },
+        data: { confirmationDeadlineAt: new Date(Date.now() + ttlMin * 60_000) },
       });
       return 'DEFERRED';
     }
