@@ -39,6 +39,8 @@ Admin "easy pages" redesign (owner's list of 31 admin pages, 2026-11-13): light 
 
 ## Claimed by Claude Code
 
+- `apps/api/src/modules/order-csv-import/{controllers/seller-staged-order.controller.ts,dto/staged-order-row.dto.ts,order-csv-import.module.ts,services/staged-order-bulk-fix.service.ts}`, `apps/api/src/modules/order/services/address-validation.service.ts` (one added read method `suggestStates`), `packages/api-client/src/endpoints/seller-staged-bulk-fix.ts` + index export (additive), `apps/api/test/unit/staged-order-bulk-fix.spec.ts` — 2026-11-19 — pending-rows bulk fixer + selection actions (branch `feat/csv-bulk-fixer`)
+
 - `apps/api/src/modules/courier-portal/**` (NDR panel reader only), `apps/api/src/modules/courier-whatsapp/**`, `apps/api/test/unit/*ndr-panel*.spec.ts`, `packages/db/prisma/migrations/*_courier_ndr_panel_*/`, `packages/db/prisma/schema.prisma` (CourierNdrPanelSnapshot only), and the four `courier-whatsapp-section.tsx` files (admin order detail, seller order detail, reseller/associate order [id]) + their i18n message files — 2026-11-16 — Delhivery NDR panel facts (branch `feat/delhivery-ndr-panel`)
 - `apps/api/src/modules/order-attention/**` (seller failed-attempts endpoint + NSA gone-parcel filter), `apps/api/src/modules/tracking-events/services/tracking-event-append.service.ts` (one added read method), `packages/api-client/src/endpoints/seller-orders.ts` + index export (additive), `apps/api/test/unit/*seller-failed-attempts*.spec.ts` — 2026-11-16 — client NSA failed-attempts (branch `feat/client-nsa-failed-attempts`)
 - `apps/api/src/modules/assistant/**` — 2026-11-13 — assistant Phase D (privacy e2e, raise-a-ticket, 80% budget alert; branch `feat/assistant-phase-d`), then 2.5× billing, AI control panel, monitor

@@ -16,7 +16,20 @@ import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { StagedOrderRowService, type StagedRowView } from '../services/staged-order-row.service';
-import { ListStagedRowsQueryDto, PatchStagedRowDto } from '../dto/staged-order-row.dto';
+import {
+  StagedOrderBulkFixService,
+  type BulkFixGroup,
+  type BulkFixRowResult,
+  type SelectionResult,
+  type StagedCompactRow,
+} from '../services/staged-order-bulk-fix.service';
+import {
+  BulkFixApplyDto,
+  PendingBulkIdsDto,
+  PendingBulkSetFieldDto,
+  ListStagedRowsQueryDto,
+  PatchStagedRowDto,
+} from '../dto/staged-order-row.dto';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 
 /**
@@ -33,7 +46,10 @@ import { RequireSellerPermissions } from '../../../common/auth/require-seller-pe
 @RequireSellerPermissions('orders.pending.manage')
 @Controller('seller/orders-pending')
 export class SellerStagedOrderController {
-  constructor(private readonly svc: StagedOrderRowService) {}
+  constructor(
+    private readonly svc: StagedOrderRowService,
+    private readonly bulkFix: StagedOrderBulkFixService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Rows waiting on you — oldest upload first' })
@@ -42,6 +58,74 @@ export class SellerStagedOrderController {
     @Query() query: ListStagedRowsQueryDto,
   ): Promise<StagedRowView[]> {
     return this.svc.list(seller.id, query.uploadId);
+  }
+
+  @Get('compact')
+  @ApiOperation({ summary: 'One compact line per pending row, for the list-first table' })
+  compact(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Query() query: ListStagedRowsQueryDto,
+  ): Promise<StagedCompactRow[]> {
+    return this.bulkFix.compactList(seller.id, query.uploadId);
+  }
+
+  @Post('bulk/set-field')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Set one field on up to 500 selected pending rows; each is re-validated. One result per row.',
+  })
+  bulkSetField(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Body() body: PendingBulkSetFieldDto,
+  ): Promise<SelectionResult> {
+    return this.bulkFix.setFieldMany(seller, body);
+  }
+
+  @Post('bulk/import')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Import the selected pending rows, each as "Import as order" would. One result per row.',
+  })
+  bulkImport(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Body() body: PendingBulkIdsDto,
+  ): Promise<SelectionResult> {
+    return this.bulkFix.importMany(seller, body);
+  }
+
+  @Post('bulk/discard')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Discard the selected pending rows. One result per row.' })
+  bulkDiscard(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Body() body: PendingBulkIdsDto,
+  ): Promise<SelectionResult> {
+    return this.bulkFix.discardMany(seller, body);
+  }
+
+  @Get('bulk-fix')
+  @ApiOperation({
+    summary: 'Groups of the same problem with the same bad value, with suggested fixes',
+  })
+  bulkFixSummary(
+    @CurrentSeller() seller: AuthenticatedSeller,
+  ): Promise<{ groups: BulkFixGroup[] }> {
+    return this.bulkFix.summary(seller.id);
+  }
+
+  @Post('bulk-fix/apply')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Set one field on every matching pending row of yours, re-validate each, optionally import the clean ones. Repeating it is a no-op.',
+  })
+  bulkFixApply(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Body() body: BulkFixApplyDto,
+  ): Promise<{ matched: number; results: BulkFixRowResult[] }> {
+    return this.bulkFix.apply(seller.id, body);
   }
 
   @Post(':rowId')
