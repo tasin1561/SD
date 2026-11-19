@@ -185,7 +185,17 @@ describe('seller permission surface', () => {
     //     and producing the invoice for them is one act to a seller, the
     //     call is idempotent per order, and it is scoped to their own
     //     order inside the service.
-    const VIEW_GATED_WRITES = new Set(['seller-invoice.controller.ts generate']);
+    //
+    //   bulk-order-actions Phase A (2026-11-19): the CSV / merged-PDF downloads
+    //     are POST only because the selection (up to 5000 ids, or a whole
+    //     filter) does not fit a URL. They change nothing — they read what
+    //     that console's order list already shows, under the same scope — so
+    //     they are gated on the same read key as the list.
+    const VIEW_GATED_WRITES = new Set([
+      'seller-invoice.controller.ts generate',
+      'seller-order-bulk.controller.ts export',
+      'seller-invoice-bulk.controller.ts invoices',
+    ]);
 
     const loose = SELLER_HANDLERS.filter(
       (h) =>

@@ -12,6 +12,8 @@ import { StoreApiKeyController } from './controllers/store-api-key.controller';
 import { StoreApiOrderController } from './controllers/store-api-order.controller';
 import { SellerAddressChangeController } from './controllers/seller-address-change.controller';
 import { StoreCustomerController } from './controllers/store-customer.controller';
+import { BulkOrderActionsModule } from '../bulk-order-actions/bulk-order-actions.module';
+import { StoreOrderBulkController } from './controllers/store-order-bulk.controller';
 import { StoreOrderController } from './controllers/store-order.controller';
 import { StoreOrderEditController } from './controllers/store-order-edit.controller';
 import { StoreWebhookController } from './controllers/store-webhook.controller';
@@ -68,9 +70,13 @@ import { StoreWebhookService } from './services/store-webhook.service';
     // notifier, so this module has its own of the same shape.
     NotificationAudienceModule,
     NotificationLedgerModule,
+    // The order CSV for the bulk export route (Phase A).
+    BulkOrderActionsModule,
   ],
   controllers: [
     StoreOrderController,
+    // Bulk order actions, Phase A: the CSV of a store's / associate's own orders.
+    StoreOrderBulkController,
     StoreOrderEditController,
     StoreCustomerController,
     StoreApiKeyController,

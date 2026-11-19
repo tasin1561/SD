@@ -18,6 +18,10 @@ import { OrderWriteService } from './services/order-write.service';
 import { OrderRecipientCorrectionService } from './services/order-recipient-correction.service';
 import { OrderAssistantReadService } from './services/order-assistant-read.service';
 import { AwaitingConfirmationService } from './services/awaiting-confirmation.service';
+import { BulkOrderConfirmationService } from './services/bulk-order-confirmation.service';
+import { BulkOrderActionsModule } from '../bulk-order-actions/bulk-order-actions.module';
+import { SellerOrderBulkController } from './controllers/seller-order-bulk.controller';
+import { AdminOrderBulkController } from './controllers/admin-order-bulk.controller';
 import { CallQueueModule } from '../call-queue/call-queue.module';
 import { CancelRequestModule } from '../cancel-request/cancel-request.module';
 import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-policy.module';
@@ -86,6 +90,8 @@ import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-po
     ConfirmationPolicyModule,
     // The client's cancel button past the packing window (2026-11-15): read-only R3 primitive.
     CancelRequestModule,
+    // The order CSV for the bulk export routes (Phase A).
+    BulkOrderActionsModule,
   ],
   controllers: [
     SellerOrderController,
@@ -93,6 +99,9 @@ import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-po
     SellerRecipientAddressController,
     AdminOrderController,
     SellerOrderDefaultsController,
+    // Bulk order actions, Phase A (2026-11-19).
+    SellerOrderBulkController,
+    AdminOrderBulkController,
   ],
   providers: [
     OrderReadService,
@@ -101,6 +110,7 @@ import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-po
     // The in-app assistant's narrow, scope-as-argument order read.
     OrderAssistantReadService,
     AwaitingConfirmationService,
+    BulkOrderConfirmationService,
     SellerJwtGuard,
     StaffJwtGuard,
   ],

@@ -226,7 +226,7 @@ export function viewerFor(user: {
  * half and a screen that builds its own `where` is a screen that will
  * eventually be built without it.
  */
-function ownedBy(storeId: string, viewer: StoreOrderViewer): Prisma.OrderWhereInput {
+export function ownedBy(storeId: string, viewer: StoreOrderViewer): Prisma.OrderWhereInput {
   return {
     storeId,
     storeKind: SellerStoreKind.RESELLER,

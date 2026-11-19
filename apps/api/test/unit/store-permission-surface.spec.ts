@@ -168,11 +168,18 @@ describe('store permission surface (RS-2)', () => {
       'orders.cancel',
       'orders.actions',
     ]);
+    //
+    // bulk-order-actions Phase A (2026-11-19): `store-order-bulk.controller.ts
+    // export` is a POST only because the selection does not fit a URL. It
+    // downloads what the order list already shows, in the caller's scope,
+    // under the list's own key (`orders.view`).
+    const READ_ONLY_POSTS = new Set(['store-order-bulk.controller.ts export']);
     const loose = HANDLERS.filter(
       (h) =>
         h.method !== 'Get' &&
         h.permissions !== 'self-service' &&
         h.permissions !== null &&
+        !READ_ONLY_POSTS.has(`${h.file} ${h.name}`) &&
         !h.permissions.every((p) => p.endsWith('.manage') || WRITE_KEYS_NOT_MANAGE.has(p)),
     ).map((h) => `${h.file} ${h.method} ${h.name}()`);
     expect(loose).toEqual([]);
