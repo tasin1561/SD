@@ -8,6 +8,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
+import type { SellerFailedAttemptView } from '@skydrop/api-client';
 import type {
   Currency,
   EarlyReservationReviewStatus,
@@ -785,6 +786,19 @@ export function useMyNsaOrders(opts?: {
     enabled: opts?.enabled ?? true,
     queryKey: ['seller-nsa', 'list'],
     queryFn: () => client.request<readonly NsaOrderView[]>('/api/seller/nsa'),
+  });
+}
+
+/**
+ * Parcels the courier tried to deliver and could not, still with the
+ * courier. The seller's own only — the guard supplies the scope.
+ */
+export function useMyFailedAttempts(): UseQueryResult<readonly SellerFailedAttemptView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-nsa', 'failed-attempts'],
+    queryFn: () =>
+      client.request<readonly SellerFailedAttemptView[]>('/api/seller/nsa/failed-attempts'),
   });
 }
 

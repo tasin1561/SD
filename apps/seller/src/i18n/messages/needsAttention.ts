@@ -103,6 +103,25 @@ export const needsAttention = defineMessages({
     'This list fills in the evening, so it is normally empty during the day.',
     'এই তালিকা সন্ধ্যায় ভরে ওঠে, তাই দিনের বেলা সাধারণত ফাঁকা থাকে।',
   ],
+  'needsAttention.failedTitle': ['Delivery attempt failed', 'ডেলিভারির চেষ্টা ব্যর্থ হয়েছে'],
+  'needsAttention.failedInfo': [
+    'The courier tried to deliver these and could not. The parcel is still with the courier. Open an order to see what you can ask for next.',
+    'কুরিয়ার এগুলো ডেলিভারি দেওয়ার চেষ্টা করেছিল, কিন্তু পারেনি। পার্সেলটি এখনো কুরিয়ারের কাছে আছে। এরপর কী চাইতে পারেন তা দেখতে একটি অর্ডার খুলুন।',
+  ],
+  'needsAttention.failedAttempt': ['Attempt {n} failed', '{n} নম্বর চেষ্টা ব্যর্থ'],
+  'needsAttention.failedDeadline': [
+    'Delhivery deadline: {n} days',
+    'Delhivery-র সময়সীমা: {n} দিন',
+  ],
+  'needsAttention.failedDeadlineOne': ['Delhivery deadline: 1 day', 'Delhivery-র সময়সীমা: 1 দিন'],
+  'needsAttention.failedDeadlineToday': [
+    'Delhivery deadline: under a day',
+    'Delhivery-র সময়সীমা: এক দিনের কম',
+  ],
+  'needsAttention.failedOfMax': ['{a} of {m} attempts', '{m}টির মধ্যে {a}টি চেষ্টা'],
+  'needsAttention.failedRemarkNotVerified': ['Remark not verified', 'মন্তব্য যাচাই হয়নি'],
+  'needsAttention.failedFact': ['{n} failed delivery attempts', '{n}টি ডেলিভারির চেষ্টা ব্যর্থ'],
+  'needsAttention.failedFactOne': ['1 failed delivery attempt', '1টি ডেলিভারির চেষ্টা ব্যর্থ'],
   'needsAttention.weChaseTheCourier': [
     'We chase the courier on these. You do not have to.',
     'এগুলোতে কুরিয়ারের পেছনে আমরা লাগি। আপনাকে লাগতে হবে না।',

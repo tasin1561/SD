@@ -11,7 +11,7 @@ import { ListRow, ListRows, type ListRowSeverity } from '@skydrop/ui/app/list-ro
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { OrderStatus } from '@skydrop/db';
-import { useMyNsaOrders } from '@/lib/ops-hooks';
+import { useMyFailedAttempts, useMyNsaOrders } from '@/lib/ops-hooks';
 import { useOrdersList } from '@/lib/api-hooks';
 import { verdict } from '@/i18n/verdict';
 import './needs-attention.css';
@@ -22,6 +22,7 @@ import type { MessageKey } from '@/i18n/catalog';
 import { dateTag } from '@/i18n/format';
 import { AboutThis, InfoLabel } from '@/components/easy/about';
 import { Unit } from '@/components/easy/units';
+import { FailedAttemptsSection } from './failed-attempts-section';
 
 /**
  * THE SELLER'S side of the NSA worklist.
@@ -74,6 +75,11 @@ export function NeedsAttentionIndex(): ReactElement {
   const t = useT();
   const list = useMyNsaOrders();
   const rows = list.data ?? [];
+  // Parcels the courier tried to deliver and could not. A read that fails
+  // leaves this group out: the two lists below still answer the page's
+  // question, and the order page carries the same facts.
+  const failedAttempts = useMyFailedAttempts();
+  const failed = failedAttempts.data ?? [];
 
   /*
     Two statuses, two queries — the list endpoint takes one status.
@@ -102,7 +108,8 @@ export function NeedsAttentionIndex(): ReactElement {
    * precisely to find out whether something needs them. The claims wait
    * for their own evidence; the figures read "—" until then.
    */
-  const answered = awaiting.isSuccess && rejected.isSuccess && list.isSuccess;
+  const answered =
+    awaiting.isSuccess && rejected.isSuccess && list.isSuccess && !failedAttempts.isLoading;
   // Three nights is where our own worklist stops treating a parcel as
   // "still moving". Said here so the tile matches the red figure on the
   // rows below rather than inventing a second threshold.
@@ -132,7 +139,7 @@ export function NeedsAttentionIndex(): ReactElement {
         meta={
           answered ? (
             <span className="nat-meta">
-              {unconfirmed.length === 0 && rows.length === 0 ? (
+              {unconfirmed.length === 0 && rows.length === 0 && failed.length === 0 ? (
                 <Fact tone="good" dot>
                   {t('needsAttention.nothingNeedsYou')}
                 </Fact>
@@ -145,6 +152,13 @@ export function NeedsAttentionIndex(): ReactElement {
                   )}
                   {letGo > 0 && (
                     <Fact dot>{richMessage(t('needsAttention.letGoAfterThe'), { letGo })}</Fact>
+                  )}
+                  {failed.length > 0 && (
+                    <Fact tone="warn">
+                      {failed.length === 1
+                        ? t('needsAttention.failedFactOne')
+                        : t('needsAttention.failedFact', { n: failed.length })}
+                    </Fact>
                   )}
                   {rows.length > 0 && (
                     <Fact tone="bad">
@@ -323,6 +337,8 @@ export function NeedsAttentionIndex(): ReactElement {
         </section>
       )}
 
+      <FailedAttemptsSection rows={failed} />
+
       <section className="nat-section">
         <SectionHeading
           title={
@@ -337,7 +353,7 @@ export function NeedsAttentionIndex(): ReactElement {
         ) : list.isError ? (
           <ErrorState message={verdict(list.error, t)} retry={() => void list.refetch()} />
         ) : rows.length === 0 ? (
-          unconfirmed.length > 0 ? (
+          unconfirmed.length > 0 || failed.length > 0 ? (
             // The page is NOT empty — saying "nothing of yours is stuck"
             // directly under a list of orders that need them reads as a
             // page arguing with itself.

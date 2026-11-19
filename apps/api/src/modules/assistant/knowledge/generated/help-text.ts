@@ -1639,6 +1639,7 @@ export const PORTAL_TEXT_SELLER: ReadonlyArray<TextRow> = [
   ["needsAttention.weHaveFlaggedThis","We have flagged this and will chase the courier. Nobody has picked it up yet."],
   ["needsAttention.weAreChasingThis","We are chasing this — picked up {acknowledgedAt}{span}"],
   ["needsAttention.thisListFillsIn","This list fills in the evening, so it is normally empty during the day."],
+  ["needsAttention.failedInfo","The courier tried to deliver these and could not. The parcel is still with the courier. Open an order to see what you can ask for next."],
   ["needsAttention.weChaseTheCourier","We chase the courier on these. You do not have to."],
   ["notificationSettings.twoSeparateChoicesWhat","Two separate choices: what reaches YOU, and what this COMPANY is emailed about. Both only ever remove a message — neither can turn one on that the other switched off. Messages about your account and credentials are in neither list: they always go to your email and cannot be silenced."],
   ["notificationSettings.whatReachesYourInbox","What reaches YOUR inbox. Messages about your account and credentials are not listed — they only ever go to your email, and cannot be silenced."],

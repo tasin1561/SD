@@ -118,3 +118,15 @@
   color: var(--fg-muted);
   font-size: var(--fs-sm);
 }
+
+/* ── Failed delivery attempts: facts on one line, a dot between them ───── */
+.nat-attempt {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Running text, so a long courier remark wraps like a sentence and the dot
+   stays beside the words it separates. */
+.nat-attempt__part::before {
+  content: '\00a0· ';
+  color: var(--fg-faint);
+}
