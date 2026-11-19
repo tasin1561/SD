@@ -184,8 +184,8 @@ export class UpdateOrderDto {
   discountInr?: number;
 
   /**
-   * The seller's own reference. `(sellerId, storeId, sellerOrderRef)` is
-   * UNIQUE, so a clash is a real 409 rather than a silent overwrite.
+   * The seller's own reference. NOT unique (owner rule 2026-11-19): another
+   * order may already carry the same reference.
    */
   @ApiProperty({ required: false, maxLength: 100 })
   @IsOptional()

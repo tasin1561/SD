@@ -89,6 +89,12 @@ export function rowFailureForSeller(err: unknown): { sellerSafe: boolean; reason
  * report and never half-writes (OrderService.create / applyBulkPatch
  * are individually tx-wrapped).
  */
+/** The id of whatever a create call returned, or null when it did not say. */
+function idOf(created: unknown): string | null {
+  const id = (created as { id?: unknown } | null | undefined)?.id;
+  return typeof id === 'string' ? id : null;
+}
+
 @Injectable()
 export class OrderCsvImportProcessorService {
   private readonly logger = new Logger(OrderCsvImportProcessorService.name);
@@ -170,6 +176,10 @@ export class OrderCsvImportProcessorService {
       file sellers already have.
     */
     const { groups, rowErrors } = this.parser.groupRows(parsed.rows, mapping);
+    // Orders this upload already created or patched. Several groups may
+    // share a reference (owner 2026-11-19); one must never be matched to,
+    // and so patch, an order a sibling group just placed.
+    const handledIds: string[] = [];
 
     for (const bad of rowErrors) {
       for (const e of bad.errors) {
@@ -222,24 +232,30 @@ export class OrderCsvImportProcessorService {
             sellerId,
             row.externalRef,
             storeId,
+            this.matchOf(row, handledIds),
           );
-          if (existing === null) {
-            await this.createStoreOrder(sellerId, storeId, storeUserId, uploadId, row, ctx);
-            counters.ordersCreated += 1;
-          } else if (
-            existing.status === OrderStatus.DRAFT ||
-            existing.status === OrderStatus.PENDING_CONFIRMATION
+          if (
+            existing !== null &&
+            (existing.status === OrderStatus.DRAFT ||
+              existing.status === OrderStatus.PENDING_CONFIRMATION)
           ) {
             await this.patchStoreOrder(sellerId, storeId, storeUserId, existing.id, row, ctx);
+            handledIds.push(existing.id);
             counters.rowsSkipped += rowsInOrder; // matched an existing order (patched/unchanged)
           } else {
-            errorRows.push({
-              rowNumber,
-              errorField: 'externalRef',
-              errorReason: `externalRef "${row.externalRef}" matches an order of this store in ${existing.status}; a CSV cannot change a confirmed-or-later order`,
-              original: raw,
-            });
-            counters.rowsFailed += rowsInOrder;
+            // No editable order carries this reference (none, or only
+            // CONFIRMED-or-later ones): owner rule 2026-11-19 — place a NEW
+            // order rather than an error row.
+            const madeId = await this.createStoreOrder(
+              sellerId,
+              storeId,
+              storeUserId,
+              uploadId,
+              row,
+              ctx,
+            );
+            if (madeId !== null) handledIds.push(madeId);
+            counters.ordersCreated += 1;
           }
         } catch (err) {
           const failure = rowFailureForSeller(err);
@@ -256,24 +272,26 @@ export class OrderCsvImportProcessorService {
       }
 
       try {
-        const existing = await this.orders.getBySellerOrderRef(sellerId, row.externalRef);
-        if (!existing) {
-          await this.createOrder(sellerId, uploadId, row, actor, ctx);
-          counters.ordersCreated += 1;
-        } else if (
-          existing.status === OrderStatus.DRAFT ||
-          existing.status === OrderStatus.PENDING_CONFIRMATION
+        const existing = await this.orders.getBySellerOrderRef(
+          sellerId,
+          row.externalRef,
+          undefined,
+          this.matchOf(row, handledIds),
+        );
+        if (
+          existing &&
+          (existing.status === OrderStatus.DRAFT ||
+            existing.status === OrderStatus.PENDING_CONFIRMATION)
         ) {
           await this.orders.applyBulkPatch(sellerId, existing.id, await this.toPatch(row), actor);
+          handledIds.push(existing.id);
           counters.rowsSkipped += rowsInOrder; // matched an existing order (patched/unchanged)
         } else {
-          errorRows.push({
-            rowNumber,
-            errorField: 'externalRef',
-            errorReason: `externalRef "${row.externalRef}" matches an order in ${existing.status}; CSV cannot update a confirmed-or-later order`,
-            original: raw,
-          });
-          counters.rowsFailed += rowsInOrder;
+          // No editable order carries this reference: a NEW order, never
+          // an error row (owner rule 2026-11-19, ORD-9 amended).
+          const madeId = await this.createOrder(sellerId, uploadId, row, actor, ctx);
+          if (madeId !== null) handledIds.push(madeId);
+          counters.ordersCreated += 1;
         }
       } catch (err) {
         // A suspected duplicate is not a malformed row — it is a
@@ -355,7 +373,7 @@ export class OrderCsvImportProcessorService {
     uploadId: string,
     row: CoercedOrderGroup,
     ctx: { ipAddress: null; userAgent: null; requestId: string },
-  ): Promise<void> {
+  ): Promise<string | null> {
     const items = await Promise.all(
       row.lines.map(async (l) => {
         const resolved = await this.catalog.getVariantBySku(sellerId, l.productSku);
@@ -402,13 +420,19 @@ export class OrderCsvImportProcessorService {
     if (row.state !== undefined) dto.recipientStateProvince = row.state;
     if (row.codAmount !== undefined && row.codAmount > 0) dto.codAmountInr = row.codAmount;
 
-    await this.resellerOrders.create({ kind: 'STORE_USER', storeId, storeUserId }, dto, ctx, {
-      source: OrderSource.BULK_UPLOAD,
-      bulkUploadId: uploadId,
-      ...(row.csvExtras === undefined
-        ? {}
-        : { csvExtras: row.csvExtras as unknown as Prisma.InputJsonValue }),
-    });
+    const created = await this.resellerOrders.create(
+      { kind: 'STORE_USER', storeId, storeUserId },
+      dto,
+      ctx,
+      {
+        source: OrderSource.BULK_UPLOAD,
+        bulkUploadId: uploadId,
+        ...(row.csvExtras === undefined
+          ? {}
+          : { csvExtras: row.csvExtras as unknown as Prisma.InputJsonValue }),
+      },
+    );
+    return idOf(created);
   }
 
   /**
@@ -521,7 +545,7 @@ export class OrderCsvImportProcessorService {
     row: CoercedOrderGroup,
     actor: { type: ActorType; id: string },
     ctx: { ipAddress: null; userAgent: null; requestId: string },
-  ): Promise<void> {
+  ): Promise<string | null> {
     const items = await Promise.all(
       row.lines.map(async (l) => {
         const resolved = await this.catalog.getVariantBySku(sellerId, l.productSku);
@@ -611,7 +635,7 @@ export class OrderCsvImportProcessorService {
     // default: it is the parcel that will actually be handed over.
     if (row.totalWeightGrams !== undefined) dto.totalWeightGrams = row.totalWeightGrams;
 
-    await this.orders.create(sellerId, dto, actor, ctx, {
+    const created = await this.orders.create(sellerId, dto, actor, ctx, {
       source: OrderSource.BULK_UPLOAD,
       initialStatus: OrderStatus.PENDING_CONFIRMATION,
       bulkUploadId: uploadId,
@@ -619,6 +643,15 @@ export class OrderCsvImportProcessorService {
         ? {}
         : { csvExtras: row.csvExtras as unknown as Prisma.InputJsonValue }),
     });
+    return idOf(created);
+  }
+
+  /** What, besides the reference, a row must share with an existing order to PATCH it. */
+  private matchOf(
+    row: CoercedOrderGroup,
+    handledIds: readonly string[],
+  ): { phoneE164: string; postalCode: string; excludeIds: readonly string[] } {
+    return { phoneE164: row.customerPhone, postalCode: row.pinCode, excludeIds: handledIds };
   }
 
   private async toPatch(row: CoercedOrderGroup): Promise<BulkOrderPatchInput> {

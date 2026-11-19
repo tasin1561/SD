@@ -506,22 +506,24 @@ export class OrderCsvParserService {
    * PATCHED it, so a two-item order silently became a one-item order
    * carrying the LAST row's SKU.
    *
-   * ── AN INCONSISTENT ORDER IS REFUSED WHOLE ──────────────────────────
-   * Order-level columns are expected to agree across a group (a file that
-   * repeats the customer block repeats it identically; one that states it
-   * once leaves the rest blank — first stated wins, and blanks never
-   * overwrite). A row stating a DIFFERENT non-empty value is a file that
-   * contradicts itself about one order, and there is no honest way to
-   * pick a winner. When any row of a group fails — for that, or for its
-   * own coercion — EVERY row of the group is refused, because importing
-   * the readable ones would place an order the seller believes has more
-   * lines than it does.
+   * ── ROWS THAT DISAGREE ARE SEPARATE ORDERS (owner, 2026-11-19) ───────
+   * References may repeat, and a client once typed the CUSTOMER NAME as
+   * the reference, so "Susmita" on three rows can be three different
+   * parcels. Rows sharing a reference are ONE order only while every
+   * order-level column they state agrees (a file that repeats the
+   * customer block repeats it identically; one that states it once leaves
+   * the rest blank — first stated wins, blanks never overwrite and never
+   * split). A row stating a DIFFERENT value opens a NEW order under the
+   * same reference; line-level columns (SKU, quantity, price) never
+   * split. This replaces the old "contradiction refuses the whole group".
+   * A group that is itself broken (an unreadable row, a missing required
+   * field) is still refused whole: half an order is worse than none.
    */
   groupRows(
     rows: Array<Record<string, string>>,
     mapping: Partial<Record<OrderCsvField, string>>,
   ): GroupedCsv {
-    const byRef = new Map<string, PendingGroup>();
+    const byRef = new Map<string, PendingGroup[]>();
     const rowErrors: GroupedCsv['rowErrors'] = [];
 
     for (let i = 0; i < rows.length; i++) {
@@ -538,7 +540,7 @@ export class OrderCsvParserService {
           rowErrors.push({ rowNumber, raw, errors });
           continue;
         }
-        const g = this.pendingFor(byRef, ref);
+        const g = this.groupsFor(byRef, ref)[0] ?? this.openFirst(byRef, ref);
         g.rowNumbers.push(rowNumber);
         g.raws.push(raw);
         g.failures.set(rowNumber, errors);
@@ -549,27 +551,24 @@ export class OrderCsvParserService {
         continue;
       }
 
-      const g = this.pendingFor(byRef, row.externalRef);
+      // OWNER RULE 2026-11-19: references may repeat, so rows sharing a
+      // reference are ONE order only while their order-level fields
+      // agree. A row that contradicts every group already opened under
+      // this reference starts a NEW order (a client who typed the customer
+      // name as the reference). Line-level fields never split.
+      const siblings = this.groupsFor(byRef, row.externalRef);
+      let g = siblings.find((c) => this.conflictsWith(c, row).length === 0);
+      if (g === undefined) {
+        g = this.newPending(row.externalRef);
+        siblings.push(g);
+      }
       g.rowNumbers.push(rowNumber);
       g.raws.push(raw);
 
-      const conflicts: CoerceError[] = [];
       for (const field of GROUPED_FIELDS) {
         const v = row[field];
         if (v === undefined) continue; // a blank never overwrites
-        const held = g.order[field];
-        if (held === undefined) {
-          g.order[field] = v;
-        } else if (held !== v) {
-          conflicts.push({
-            field,
-            reason: `${field} disagrees with an earlier row of order "${row.externalRef}": "${String(held)}" vs "${String(v)}"`,
-          });
-        }
-      }
-      if (conflicts.length > 0) {
-        g.failures.set(rowNumber, conflicts);
-        continue;
+        if (g.order[field] === undefined) g.order[field] = v;
       }
 
       const line: CoercedOrderLine = { productSku: row.productSku, quantity: row.quantity };
@@ -578,7 +577,7 @@ export class OrderCsvParserService {
     }
 
     const groups: CoercedOrderGroup[] = [];
-    for (const g of byRef.values()) {
+    for (const g of [...byRef.values()].flat()) {
       const problems = new Map(g.failures);
 
       // Completeness is judged HERE, on the assembled order.
@@ -688,10 +687,23 @@ export class OrderCsvParserService {
     return t === '' ? null : t;
   }
 
-  private pendingFor(byRef: Map<string, PendingGroup>, ref: string): PendingGroup {
-    const existing = byRef.get(ref);
-    if (existing !== undefined) return existing;
-    const created: PendingGroup = {
+  private groupsFor(byRef: Map<string, PendingGroup[]>, ref: string): PendingGroup[] {
+    let list = byRef.get(ref);
+    if (list === undefined) {
+      list = [];
+      byRef.set(ref, list);
+    }
+    return list;
+  }
+
+  private openFirst(byRef: Map<string, PendingGroup[]>, ref: string): PendingGroup {
+    const created = this.newPending(ref);
+    this.groupsFor(byRef, ref).push(created);
+    return created;
+  }
+
+  private newPending(ref: string): PendingGroup {
+    return {
       ref,
       rowNumbers: [],
       raws: [],
@@ -700,8 +712,20 @@ export class OrderCsvParserService {
       failures: new Map(),
       stated: new Set(),
     };
-    byRef.set(ref, created);
-    return created;
+  }
+
+  /** Order-level fields where `row` states a value different from the group's. */
+  private conflictsWith(g: PendingGroup, row: CoercedOrderRow): CoerceError[] {
+    const out: CoerceError[] = [];
+    for (const field of GROUPED_FIELDS) {
+      const v = row[field];
+      if (v === undefined) continue;
+      const held = g.order[field];
+      if (held !== undefined && held !== v) {
+        out.push({ field, reason: `${field} differs: "${String(held)}" vs "${String(v)}"` });
+      }
+    }
+    return out;
   }
 
   private assemble(

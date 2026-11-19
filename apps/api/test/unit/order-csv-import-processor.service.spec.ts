@@ -135,15 +135,32 @@ describe('OrderCsvImportProcessorService.process', () => {
     expect(lastUpdateData(update).rowsSkipped).toBe(1);
   });
 
-  it('errors (no silent update) when externalRef matches CONFIRMED+', async () => {
-    const { svc, update, spaces } = makeService({
+  it('creates a NEW order (no error row) when externalRef matches CONFIRMED+', async () => {
+    const { svc, update, orders } = makeService({
       existing: { id: 'o9', status: OrderStatus.CONFIRMED },
     });
     await svc.process('u1', MAPPING);
     const data = lastUpdateData(update);
-    expect(data.rowsFailed).toBe(1);
-    expect(data.status).toBe(BulkUploadStatus.FAILED); // only row failed
-    expect(spaces.putObject).toHaveBeenCalledTimes(2); // error report: the CSV and its .xlsx twin
+    expect(orders.applyBulkPatch).not.toHaveBeenCalled();
+    expect(orders.create).toHaveBeenCalledTimes(1);
+    expect(data.rowsFailed).toBe(0);
+    expect(data.ordersCreated).toBe(1);
+  });
+
+  it('two customers sharing a reference become TWO orders, matched on reference + phone + PIN', async () => {
+    const row2 =
+      'SKU-1,1,Bina,+919811100000,5 Park St,Near Metro,Kolkata,West Bengal,700016,1250,EXT-1';
+    const { svc, update, orders } = makeService({
+      existing: null,
+      csv: `${HEADER}\n${ROW}\n${row2}\n`,
+    });
+    await svc.process('u1', MAPPING);
+    expect(orders.create).toHaveBeenCalledTimes(2);
+    expect(lastUpdateData(update).ordersCreated).toBe(2);
+    expect(lastUpdateData(update).rowsFailed).toBe(0);
+    const matches = orders.getBySellerOrderRef.mock.calls.map((c) => c[3] as AnyArgs);
+    expect(matches[0]).toMatchObject({ phoneE164: '+919876543210', postalCode: '560001' });
+    expect(matches[1]).toMatchObject({ phoneE164: '+919811100000', postalCode: '700016' });
   });
 
   it('writes an error row for an unresolvable SKU', async () => {
@@ -271,14 +288,15 @@ describe('OrderCsvImportProcessorService.process — a RESELLER STORE upload (RS
     expect(spaces.putObject).toHaveBeenCalledTimes(2); // the CSV report and its .xlsx twin
   });
 
-  it('a reference already CONFIRMED is an error row, never a patch', async () => {
-    const { svc, orders, update } = makeService({
+  it('a reference already CONFIRMED places a NEW store order, never a patch', async () => {
+    const { svc, orders, storeCreate, update } = makeService({
       store: true,
       existing: { id: 'o9', status: OrderStatus.CONFIRMED },
       csv: `${STORE_HEADER}\n${ROW},499\n`,
     });
     await svc.process('u1', storeMapping());
     expect(orders.edit).not.toHaveBeenCalled();
-    expect(lastUpdateData(update).rowsFailed).toBe(1);
+    expect(storeCreate).toHaveBeenCalledTimes(1);
+    expect(lastUpdateData(update).rowsFailed).toBe(0);
   });
 });
