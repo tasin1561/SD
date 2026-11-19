@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Optional,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -7,6 +8,11 @@ import {
 import { ActorType, OrderSource, OrderStatus, Prisma, StagedRowStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { OrderService } from '../../order/services/order.service';
+import {
+  CatalogReadService,
+  suggestSkusSafe,
+  withSkuHint,
+} from '../../catalog-read/services/catalog-read.service';
 
 /**
  * The queue of CSV rows that could not become orders on their own.
@@ -67,6 +73,7 @@ export class StagedOrderRowService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orders: OrderService,
+    @Optional() private readonly catalog?: CatalogReadService,
   ) {}
 
   /**
@@ -159,7 +166,55 @@ export class StagedOrderRowService {
       orderBy: [{ createdAt: 'asc' }, { rowNumber: 'asc' }],
       take: 500,
     });
-    return rows.map((r) => this.toView(r));
+    return this.recheck(
+      sellerId,
+      rows.map((r) => this.toView(r)),
+    );
+  }
+
+  /**
+   * The queue shows what is wrong NOW, not what was wrong at upload
+   * (owner, 2026-11-19). A row's stored problems are a snapshot of the
+   * importer's rules on the day of the upload — rows parked before
+   * repeated references were allowed still said "another row of order …
+   * has a problem" and "… disagrees with an earlier row", although
+   * "Import as order" (which re-validates) no longer refuses for either.
+   * So the list re-runs the same field checks `importRow` runs, plus the
+   * one it would refuse on next: a SKU this client does not have, with
+   * the SKU they probably meant.
+   */
+  private async recheck(sellerId: string, views: StagedRowView[]): Promise<StagedRowView[]> {
+    if (views.length === 0) return views;
+    const skuOf = (v: StagedRowView): string =>
+      String((v.data as Record<string, unknown>)['productSku'] ?? '').trim();
+    const wanted = [...new Set(views.map(skuOf).filter((s) => s !== ''))];
+    const found = new Set(
+      (
+        await this.prisma.client.productVariant.findMany({
+          where: { sellerId, skuCode: { in: wanted }, deletedAt: null },
+          select: { skuCode: true },
+        })
+      ).map((r) => r.skuCode),
+    );
+    const hints = new Map<string, string>();
+    for (const sku of wanted) {
+      if (found.has(sku)) continue;
+      hints.set(
+        sku,
+        withSkuHint(
+          `No product with SKU "${sku}"`,
+          this.catalog ? await suggestSkusSafe(this.catalog, sellerId, sku) : [],
+        ),
+      );
+    }
+    return views.map((v) => {
+      const problems: RowProblem[] = this.validate(v.data as Record<string, unknown>);
+      const sku = skuOf(v);
+      if (sku !== '' && hints.has(sku) && !problems.some((p) => p.field === 'productSku')) {
+        problems.push({ field: 'productSku', reason: hints.get(sku) as string });
+      }
+      return { ...v, problems };
+    });
   }
 
   /**
