@@ -761,7 +761,7 @@ Central order record.
 **Key fields:**
 - `orderNumber` (unique, "SD-2026-05-000001")
 - `sellerId`, `customerId?` (resolved via phone on save)
-- `sellerOrderRef` (seller's own ID; unique scoped to seller)
+- `sellerOrderRef` (seller's own ID; NOT unique since 2026-11-19, plain index)
 - `source: OrderSource`, `bulkUploadId?`
 - **Recipient (immutable snapshot):** `recipientName`, `recipientPhoneE164`, `recipientAltPhoneE164`, `recipientEmail`, `recipientAddressLine1/2`, `recipientLandmark`, `recipientCity`, `recipientStateProvince`, `recipientPostalCode`, `recipientCountryCode`
 - **Economics:** `paymentMode: PaymentMode`, `codAmountInr`, `declaredValueInr`
@@ -775,7 +775,7 @@ Central order record.
 - `placedAt`
 - **RS-5 reseller orders:** `storeKind` (composite FK with `storeId` → `seller_stores (id, kind)`), `resellerTermsVersionId`, the six `reseller*StorePercent` shares, `resellerStoreCreditTrigger/Days`, `resellerSellerCreditTrigger/Days` — all NULL on a channel order, all set on a reseller one (CHECK). See "Reseller store orders — RS-5".
 
-**Constraints:** `@@unique([sellerId, sellerOrderRef])`
+**Constraints:** `@@index([sellerId, storeId, sellerOrderRef])` (was unique until 2026-11-19)
 **Indexes:** `(sellerId, status)`, `customerId`, `orderNumber`, `recipientPhoneE164`, `recipientPostalCode`, `(status, placedAt)`, `placedAt`, `confirmedAt`, `deletedAt`
 
 **OrderSource enum:** `MANUAL`, `BULK_UPLOAD`, `API`, `ADMIN`

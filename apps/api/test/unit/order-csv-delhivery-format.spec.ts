@@ -252,20 +252,41 @@ describe('judgement call 1 — a repeated Sale Order Number is ONE order with se
     expect(groups[0]?.customerName).toBe('Asha Verma');
   });
 
-  it('refuses the WHOLE order when two of its rows contradict each other', () => {
-    // Half an order placed is worse than none: the seller believes the
-    // parcel holds what the file said.
+  it('splits rows that disagree on the customer into SEPARATE orders (owner 2026-11-19)', () => {
+    // A client who typed the customer name as the reference: the same
+    // reference on rows for different people is different parcels.
     const rows = [
       delhiveryRow(),
       delhiveryRow({ '*Item Sku Code': 'SKU456', '*Customer Phone': '9888877777' }),
     ];
     const { groups, rowErrors } = svc.groupRows(rows, mapping);
-    expect(groups).toEqual([]);
-    expect(rowErrors.map((r) => r.rowNumber)).toEqual([2, 3]);
-    expect(rowErrors.find((r) => r.rowNumber === 3)?.errors[0]?.reason).toMatch(/disagrees/);
-    expect(rowErrors.find((r) => r.rowNumber === 2)?.errors[0]?.reason).toMatch(
-      /another row of order/,
-    );
+    expect(rowErrors).toEqual([]);
+    expect(groups).toHaveLength(2);
+    expect(groups.map((g) => g.rowNumbers)).toEqual([[2], [3]]);
+    expect(groups.every((g) => g.externalRef === 'SO1191')).toBe(true);
+  });
+
+  it('Susmita x3 with two different COD amounts becomes two orders; a repeat of the first joins it', () => {
+    const rows = [
+      delhiveryRow({ '*Sale Order Number': 'Susmita (S. RO)', 'COD Amount': '1050' }),
+      delhiveryRow({
+        '*Sale Order Number': 'Susmita (S. RO)',
+        'COD Amount': '1250',
+        '*Item Sku Code': 'SKU456',
+      }),
+      delhiveryRow({
+        '*Sale Order Number': 'Susmita (S. RO)',
+        'COD Amount': '1050',
+        '*Item Sku Code': 'SKU789',
+      }),
+    ];
+    const { groups, rowErrors } = svc.groupRows(rows, mapping);
+    expect(rowErrors).toEqual([]);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]?.rowNumbers).toEqual([2, 4]);
+    expect(groups[0]?.codAmount).toBe(1050);
+    expect(groups[1]?.rowNumbers).toEqual([3]);
+    expect(groups[1]?.codAmount).toBe(1250);
   });
 
   it('keeps two different references as two separate orders', () => {

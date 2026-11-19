@@ -194,7 +194,6 @@ export const ERROR_CODES: ReadonlyArray<readonly [string, string, string | null]
   ["DISPUTE_CLAIM_REQUIRED","ticket","Say what you think is owed and who owes it. “The figures are wrong” with no figure in it is not something anybody can settle."],
   ["DUPLICATE_ORDER_SUSPECTED","order","This customer already has {…} order(s) not yet packed. Re-submit with acknowledgeDuplicate to place it anyway."],
   ["DUPLICATE_SCAN","system-issues","{…} is already {…}. Scanning is now stopped for you at both benches — put this box aside, check whether there are two of them, and get an admin to clear it on the system issues board."],
-  ["DUPLICATE_SELLER_ORDER_REF","order","An order with sellerOrderRef \"{…}\" already exists for this client"],
   ["EARLY_RESERVATION_REVIEW_NOT_FOUND","early-reservation,early-reservation-decision","Review {…} not found"],
   ["EMAIL_ALREADY_REGISTERED","reseller-store,seller-auth,seller-invitation,seller-team,staff-invitation,store-auth","A client account already exists for this email"],
   ["EMPTY_AUDIENCE","notification-audience","That audience is empty right now — nobody would receive this."],

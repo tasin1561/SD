@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ActorType, OrderSource, OrderStatus, PaymentMode, Prisma } from '@skydrop/db';
 import { OrderService } from '../../src/modules/order/services/order.service';
 import { OrderStateMachineService } from '../../src/modules/order/services/order-state-machine.service';
@@ -454,17 +454,22 @@ describe('OrderService.create', () => {
     ).rejects.toMatchObject({ response: { code: 'COD_AMOUNT_NOT_ALLOWED' } });
   });
 
-  it('maps a duplicate sellerOrderRef (P2002) to a 409', async () => {
+  it('creates a new order when the sellerOrderRef repeats (owner rule 2026-11-19)', async () => {
+    const { svc } = makeService();
+    const a = await svc.create('s1', baseDto({ sellerOrderRef: 'REF-1' }), ACTOR, CTX);
+    const b = await svc.create('s1', baseDto({ sellerOrderRef: 'REF-1' }), ACTOR, CTX);
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+  });
+
+  it('never throws DUPLICATE_SELLER_ORDER_REF, even on a stray P2002', async () => {
     const { svc, orderCreate } = makeService();
     orderCreate.mockRejectedValueOnce(
-      new Prisma.PrismaClientKnownRequestError('dup', {
-        code: 'P2002',
-        clientVersion: 'x',
-      }),
+      new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: 'x' }),
     );
     await expect(
       svc.create('s1', baseDto({ sellerOrderRef: 'REF-1' }), ACTOR, CTX),
-    ).rejects.toBeInstanceOf(ConflictException);
+    ).rejects.not.toMatchObject({ response: { code: 'DUPLICATE_SELLER_ORDER_REF' } });
   });
 
   it('propagates address-validation failure before any write', async () => {
@@ -531,12 +536,47 @@ describe('OrderService.submit', () => {
   });
 });
 
+describe('OrderService.getBySellerOrderRef', () => {
+  it('asks for the NEWEST still-editable order sharing the reference', async () => {
+    const { svc, orderFindFirst } = makeService({ existing: { id: 'o2', status: 'DRAFT' } });
+    const r = await svc.getBySellerOrderRef('s1', 'REF-1', 'store-1');
+    expect(r).toMatchObject({ id: 'o2' });
+    const args = (orderFindFirst.mock.calls as unknown as AnyArgs[][])[0]![0] as AnyArgs;
+    expect(args.orderBy).toEqual({ createdAt: 'desc' });
+    expect((args['where'] as AnyArgs)['status']).toEqual({
+      in: [OrderStatus.DRAFT, OrderStatus.PENDING_CONFIRMATION],
+    });
+    expect((args['where'] as AnyArgs)['storeId']).toBe('store-1');
+  });
+
+  it('with a CSV match also requires the phone and PIN, and skips orders this upload handled', async () => {
+    const { svc, orderFindFirst } = makeService({ existing: null });
+    await svc.getBySellerOrderRef('s1', 'REF-1', undefined, {
+      phoneE164: '+919876543210',
+      postalCode: '560001',
+      excludeIds: ['o1'],
+    });
+    const args = (orderFindFirst.mock.calls as unknown as AnyArgs[][])[0]![0] as AnyArgs;
+    expect(args['where']).toMatchObject({
+      recipientPhoneE164: '+919876543210',
+      recipientPostalCode: '560001',
+      id: { notIn: ['o1'] },
+    });
+  });
+});
+
 describe('OrderService.edit', () => {
   it('edits a DRAFT note and writes a note event', async () => {
     const { svc, orderUpdate, events } = makeService({ existing: existingOrder() });
     await svc.edit('s1', 'o1', { sellerNotes: 'rush' }, ACTOR, CTX);
     expect(orderUpdate.mock.calls[0]![0].data).toMatchObject({ sellerNotes: 'rush' });
     expect(events.note).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets an edit set a reference another order already has (owner rule 2026-11-19)', async () => {
+    const { svc, orderUpdate } = makeService({ existing: existingOrder() });
+    await svc.edit('s1', 'o1', { sellerOrderRef: 'DUP-1' }, ACTOR, CTX);
+    expect(orderUpdate.mock.calls[0]![0].data).toMatchObject({ sellerOrderRef: 'DUP-1' });
   });
 
   it('revalidates the address and persists canonical state on recipient edit', async () => {

@@ -3588,12 +3588,12 @@ model Order {
   /// from the old page has none.
   addressCheck           AddressCheck?
 
-  /// Per STORE, not per seller. Two shopfronts each running their own
-  /// Shopify will both produce order `#1001`, and under the old
-  /// seller-wide key the second one silently PATCHED the first store's
-  /// order instead of creating its own (ORD-9). That is data
-  /// corruption, not an inconvenience.
-  @@unique([sellerId, storeId, sellerOrderRef])
+  /// Per STORE, not per seller (ORD-9): two shopfronts each running their
+  /// own Shopify both produce `#1001`. AMENDED 2026-11-19 (owner): the
+  /// reference is NOT unique any more — "the order ref can be the same,
+  /// don't raise any issue". This is a plain index so the CSV importer's
+  /// lookup by reference stays fast; it matches the newest editable order.
+  @@index([sellerId, storeId, sellerOrderRef])
   @@index([storeId])
   @@index([resellerTermsVersionId])
   @@index([sellerId, storeId, status])

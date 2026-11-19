@@ -612,72 +612,73 @@ export class OrderService {
     // Read once, before the transaction (cached reader, fails to OFF).
     const namePrefixOn = await this.uatFields.isShown('recipientNamePrefix');
 
-    let created;
-    try {
-      created = await this.prisma.client.$transaction(async (tx) => {
-        // RS-5 FIRST: lock the reseller store row FOR SHARE and re-check
-        // it is still ACTIVE — before a number is allocated, so a store
-        // closed or paused a moment ago burns none. A close takes the row
-        // for UPDATE, so the two cannot interleave: whichever commits
-        // first, the other sees it (RS-1).
-        const resellerTerms = reseller === null ? null : await reseller.lockAndReadTerms(tx);
-        const orderNumber = await this.numbering.nextOrderNumber(tx, now);
+    // OWNER RULE 2026-11-19: a repeated sellerOrderRef is NOT an error
+    // (ORD-9 amended): the key is a plain index, so no P2002 comes from it
+    // and DUPLICATE_SELLER_ORDER_REF is never thrown.
+    const created = await this.prisma.client.$transaction(async (tx) => {
+      // RS-5 FIRST: lock the reseller store row FOR SHARE and re-check
+      // it is still ACTIVE — before a number is allocated, so a store
+      // closed or paused a moment ago burns none. A close takes the row
+      // for UPDATE, so the two cannot interleave: whichever commits
+      // first, the other sees it (RS-1).
+      const resellerTerms = reseller === null ? null : await reseller.lockAndReadTerms(tx);
+      const orderNumber = await this.numbering.nextOrderNumber(tx, now);
 
-        // The stored recipient name carries the seller's code. Composed
-        // HERE rather than in the form so every entry path gets it —
-        // CSV import calls this same method, and an order placed by API
-        // would otherwise be the one parcel on the bench with no code.
-        //
-        // EXCEPT a reseller store's order (RS-10, decision 4): the stored
-        // name is what the courier prints on the label, and the customer
-        // must see the STORE, never a code naming the seller behind it.
-        const seller = await tx.seller.findUnique({
-          where: { id: sellerId },
-          select: { initials: true },
-        });
-        const prefixedRecipientName =
-          reseller === null && namePrefixOn
-            ? composeSellerPrefixedName(seller?.initials, input.recipientName)
-            : input.recipientName.trim();
+      // The stored recipient name carries the seller's code. Composed
+      // HERE rather than in the form so every entry path gets it —
+      // CSV import calls this same method, and an order placed by API
+      // would otherwise be the one parcel on the bench with no code.
+      //
+      // EXCEPT a reseller store's order (RS-10, decision 4): the stored
+      // name is what the courier prints on the label, and the customer
+      // must see the STORE, never a code naming the seller behind it.
+      const seller = await tx.seller.findUnique({
+        where: { id: sellerId },
+        select: { initials: true },
+      });
+      const prefixedRecipientName =
+        reseller === null && namePrefixOn
+          ? composeSellerPrefixedName(seller?.initials, input.recipientName)
+          : input.recipientName.trim();
 
-        const customer = await this.customers.findOrCreate(tx, {
+      const customer = await this.customers.findOrCreate(tx, {
+        sellerId,
+        // RS-5 (ORD-7 generalised): a reseller order's customer is the
+        // STORE's, a separate identity from the seller's own customer
+        // with the same phone.
+        resellerStoreId: reseller?.storeId ?? null,
+        phoneE164: input.recipientPhoneE164.trim(),
+        // The CUSTOMER record stays clean — it is a person, and the
+        // same person may buy from two sellers.
+        name: stripSellerPrefix(seller?.initials, input.customerName ?? input.recipientName),
+        email: input.customerEmail ?? input.recipientEmail ?? null,
+        altPhoneE164: input.recipientAltPhoneE164 ?? null,
+        preferredLanguage: input.preferredLanguage ?? 'en',
+      });
+
+      const order = await tx.order.create({
+        data: {
+          orderNumber,
           sellerId,
-          // RS-5 (ORD-7 generalised): a reseller order's customer is the
-          // STORE's, a separate identity from the seller's own customer
-          // with the same phone.
-          resellerStoreId: reseller?.storeId ?? null,
-          phoneE164: input.recipientPhoneE164.trim(),
-          // The CUSTOMER record stays clean — it is a person, and the
-          // same person may buy from two sellers.
-          name: stripSellerPrefix(seller?.initials, input.customerName ?? input.recipientName),
-          email: input.customerEmail ?? input.recipientEmail ?? null,
-          altPhoneE164: input.recipientAltPhoneE164 ?? null,
-          preferredLanguage: input.preferredLanguage ?? 'en',
-        });
-
-        const order = await tx.order.create({
-          data: {
-            orderNumber,
-            sellerId,
-            customerId: customer.id,
-            storeId: store.id,
-            // RS-5: the composite FK makes this the store's own kind; the
-            // CHECK then demands the whole snapshot on a reseller order.
-            storeKind: reseller === null ? SellerStoreKind.CHANNEL : SellerStoreKind.RESELLER,
-            // ASSOC-1 — WHO placed it. Null is "no store user placed
-            // this": a seller's own order, staff, a CSV on the seller
-            // side, or a store's API key. Never "unknown", and never
-            // backfilled — a guess here is a claim about who sold
-            // something.
-            placedByStoreUserId: reseller?.placedByStoreUserId ?? null,
-            ...(resellerTerms === null ? {} : resellerOrderColumns(resellerTerms)),
-            // ORD-6: the NAME as it was. Renaming the store later must
-            // not rewrite what a past customer was told, and the live
-            // row cannot answer what it used to be called.
-            storeNameSnapshot: store.name,
-            sellerOrderRef: input.sellerOrderRef ?? null,
-            source,
-            /*
+          customerId: customer.id,
+          storeId: store.id,
+          // RS-5: the composite FK makes this the store's own kind; the
+          // CHECK then demands the whole snapshot on a reseller order.
+          storeKind: reseller === null ? SellerStoreKind.CHANNEL : SellerStoreKind.RESELLER,
+          // ASSOC-1 — WHO placed it. Null is "no store user placed
+          // this": a seller's own order, staff, a CSV on the seller
+          // side, or a store's API key. Never "unknown", and never
+          // backfilled — a guess here is a claim about who sold
+          // something.
+          placedByStoreUserId: reseller?.placedByStoreUserId ?? null,
+          ...(resellerTerms === null ? {} : resellerOrderColumns(resellerTerms)),
+          // ORD-6: the NAME as it was. Renaming the store later must
+          // not rewrite what a past customer was told, and the live
+          // row cannot answer what it used to be called.
+          storeNameSnapshot: store.name,
+          sellerOrderRef: input.sellerOrderRef ?? null,
+          source,
+          /*
               WHICH SCREEN placed it (order page v2, 2026-10-25).
 
               Derived from the presence of an address-check reference
@@ -689,153 +690,140 @@ export class OrderService {
               `source` is untouched — it answers "how did this reach
               us", and a v2 order is still MANUAL by that reckoning.
             */
-            createdVia: input.addressCheckReferenceId === undefined ? null : 'order_page_v2',
-            status: initialStatus,
-            bulkUploadId: options.bulkUploadId ?? null,
-            ...(options.csvExtras === undefined ? {} : { csvExtras: options.csvExtras }),
-            recipientName: prefixedRecipientName,
-            recipientPhoneE164: input.recipientPhoneE164.trim(),
-            recipientAltPhoneE164: input.recipientAltPhoneE164 ?? null,
-            // Recorded, not just honoured — see the column comment.
-            duplicateAcknowledgedAt: input.acknowledgeDuplicate === true ? new Date() : null,
-            recipientEmail: input.recipientEmail ?? null,
-            recipientAddressLine1: input.recipientAddressLine1,
-            recipientAddressLine2: input.recipientAddressLine2 ?? null,
-            recipientLandmark: input.recipientLandmark ?? null,
-            recipientCity: input.recipientCity ?? '',
-            recipientStateProvince: canonicalState,
-            recipientPostalCode: input.recipientPostalCode.trim(),
-            recipientCountryCode: (input.recipientCountryCode ?? 'IN').toUpperCase(),
-            paymentMode: input.paymentMode,
-            codAmountInr:
-              input.paymentMode === PaymentMode.COD && input.codAmountInr !== undefined
-                ? new Prisma.Decimal(input.codAmountInr)
-                : null,
-            // The three figures the collectable was built from. Kept
-            // whatever the payment mode: a prepaid order still has an
-            // advance and a delivery fee worth being able to read back.
-            advanceAmountInr:
-              input.advanceAmountInr === undefined
-                ? null
-                : new Prisma.Decimal(input.advanceAmountInr),
-            deliveryFeeInr:
-              input.deliveryFeeInr === undefined ? null : new Prisma.Decimal(input.deliveryFeeInr),
-            discountInr:
-              input.discountInr === undefined ? null : new Prisma.Decimal(input.discountInr),
-            declaredValueInr,
-            totalWeightGrams,
-            packageType: input.packageType ?? null,
-            isUrgent: input.isUrgent ?? false,
-            sellerNotes: input.sellerNotes ?? null,
-            internalNotes: input.internalNotes ?? null,
-            placedAt: now,
-            items: {
-              create: lines.map((l, i) => {
-                // RS-5: the line's terms as placed. Retail is ALSO the
-                // unit price, so every reader that already shows one is
-                // right without knowing about stores.
-                const terms = reseller?.lines[i];
-                return {
-                  variantId: l.variantId,
-                  skuCode: l.skuCode,
-                  productName: l.productName,
-                  variantLabel: l.variantLabel,
-                  imageUrl: l.imageUrl,
-                  quantity: l.quantity,
-                  unitWeightGrams: l.unitWeightGrams,
-                  unitLengthCm: l.unitLengthCm,
-                  unitWidthCm: l.unitWidthCm,
-                  unitHeightCm: l.unitHeightCm,
-                  unitDeclaredValueInr: l.unitDeclaredValueInr,
-                  unitPriceInr: terms?.retailUnitInr ?? l.unitPriceInr,
-                  ...(terms === undefined
-                    ? {}
-                    : {
-                        resellerTransferPriceInr: terms.transferPriceInr,
-                        resellerRetailUnitInr: terms.retailUnitInr,
-                        resellerMinRetailInr: terms.minRetailInr,
-                        resellerMaxRetailInr: terms.maxRetailInr,
-                        resellerStockMode: terms.stockMode,
-                      }),
-                };
-              }),
-            },
+          createdVia: input.addressCheckReferenceId === undefined ? null : 'order_page_v2',
+          status: initialStatus,
+          bulkUploadId: options.bulkUploadId ?? null,
+          ...(options.csvExtras === undefined ? {} : { csvExtras: options.csvExtras }),
+          recipientName: prefixedRecipientName,
+          recipientPhoneE164: input.recipientPhoneE164.trim(),
+          recipientAltPhoneE164: input.recipientAltPhoneE164 ?? null,
+          // Recorded, not just honoured — see the column comment.
+          duplicateAcknowledgedAt: input.acknowledgeDuplicate === true ? new Date() : null,
+          recipientEmail: input.recipientEmail ?? null,
+          recipientAddressLine1: input.recipientAddressLine1,
+          recipientAddressLine2: input.recipientAddressLine2 ?? null,
+          recipientLandmark: input.recipientLandmark ?? null,
+          recipientCity: input.recipientCity ?? '',
+          recipientStateProvince: canonicalState,
+          recipientPostalCode: input.recipientPostalCode.trim(),
+          recipientCountryCode: (input.recipientCountryCode ?? 'IN').toUpperCase(),
+          paymentMode: input.paymentMode,
+          codAmountInr:
+            input.paymentMode === PaymentMode.COD && input.codAmountInr !== undefined
+              ? new Prisma.Decimal(input.codAmountInr)
+              : null,
+          // The three figures the collectable was built from. Kept
+          // whatever the payment mode: a prepaid order still has an
+          // advance and a delivery fee worth being able to read back.
+          advanceAmountInr:
+            input.advanceAmountInr === undefined
+              ? null
+              : new Prisma.Decimal(input.advanceAmountInr),
+          deliveryFeeInr:
+            input.deliveryFeeInr === undefined ? null : new Prisma.Decimal(input.deliveryFeeInr),
+          discountInr:
+            input.discountInr === undefined ? null : new Prisma.Decimal(input.discountInr),
+          declaredValueInr,
+          totalWeightGrams,
+          packageType: input.packageType ?? null,
+          isUrgent: input.isUrgent ?? false,
+          sellerNotes: input.sellerNotes ?? null,
+          internalNotes: input.internalNotes ?? null,
+          placedAt: now,
+          items: {
+            create: lines.map((l, i) => {
+              // RS-5: the line's terms as placed. Retail is ALSO the
+              // unit price, so every reader that already shows one is
+              // right without knowing about stores.
+              const terms = reseller?.lines[i];
+              return {
+                variantId: l.variantId,
+                skuCode: l.skuCode,
+                productName: l.productName,
+                variantLabel: l.variantLabel,
+                imageUrl: l.imageUrl,
+                quantity: l.quantity,
+                unitWeightGrams: l.unitWeightGrams,
+                unitLengthCm: l.unitLengthCm,
+                unitWidthCm: l.unitWidthCm,
+                unitHeightCm: l.unitHeightCm,
+                unitDeclaredValueInr: l.unitDeclaredValueInr,
+                unitPriceInr: terms?.retailUnitInr ?? l.unitPriceInr,
+                ...(terms === undefined
+                  ? {}
+                  : {
+                      resellerTransferPriceInr: terms.transferPriceInr,
+                      resellerRetailUnitInr: terms.retailUnitInr,
+                      resellerMinRetailInr: terms.minRetailInr,
+                      resellerMaxRetailInr: terms.maxRetailInr,
+                      resellerStockMode: terms.stockMode,
+                    }),
+              };
+            }),
           },
-          include: ORDER_VIEW_INCLUDE,
-        });
-
-        await this.customers.recordNewOrder(tx, customer.id, now);
-
-        await this.events.created(
-          tx,
-          order.id,
-          actor,
-          { orderNumber, source, itemCount: lines.length },
-          initialStatus,
-        );
-
-        // Locked decision #4: feed the autocomplete cache for MANUAL
-        // entry only (bulk imports must not pollute suggestions). RS-5:
-        // never for a reseller order — the cache is read on the SELLER's
-        // form, and a store customer's address is not the seller's to see.
-        if (source === OrderSource.MANUAL && reseller === null) {
-          await this.addressCache.recordAddress(
-            tx,
-            customer.id,
-            {
-              line1: input.recipientAddressLine1,
-              line2: input.recipientAddressLine2 ?? null,
-              landmark: input.recipientLandmark ?? null,
-              city: input.recipientCity ?? '',
-              stateProvince: canonicalState,
-              postalCode: input.recipientPostalCode.trim(),
-            },
-            now,
-          );
-        }
-
-        await this.audit.log(
-          {
-            actorType: actor.type,
-            actorId: actor.id ?? null,
-            sellerId,
-            action: 'order.created',
-            entityType: 'order',
-            entityId: order.id,
-            metadata: {
-              orderNumber,
-              source,
-              itemCount: lines.length,
-              customerId: customer.id,
-              ...(reseller === null
-                ? {}
-                : {
-                    resellerStoreId: reseller.storeId,
-                    resellerTermsVersionId: resellerTerms?.termsVersionId ?? null,
-                  }),
-              ipAddress: ctx.ipAddress,
-              userAgent: ctx.userAgent,
-              requestId: ctx.requestId,
-            },
-          },
-          tx,
-        );
-
-        return order;
+        },
+        include: ORDER_VIEW_INCLUDE,
       });
-    } catch (e) {
-      // (sellerId, storeId, sellerOrderRef) is @@unique — surface a
-      // clean 409. Per STORE since 2026-09-07: two shopfronts each
-      // running their own Shopify both emit `#1001`, and the old
-      // seller-wide key made the second silently PATCH the first.
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        throw new ConflictException({
-          code: 'DUPLICATE_SELLER_ORDER_REF',
-          message: `An order with sellerOrderRef "${input.sellerOrderRef}" already exists for this client`,
-        });
+
+      await this.customers.recordNewOrder(tx, customer.id, now);
+
+      await this.events.created(
+        tx,
+        order.id,
+        actor,
+        { orderNumber, source, itemCount: lines.length },
+        initialStatus,
+      );
+
+      // Locked decision #4: feed the autocomplete cache for MANUAL
+      // entry only (bulk imports must not pollute suggestions). RS-5:
+      // never for a reseller order — the cache is read on the SELLER's
+      // form, and a store customer's address is not the seller's to see.
+      if (source === OrderSource.MANUAL && reseller === null) {
+        await this.addressCache.recordAddress(
+          tx,
+          customer.id,
+          {
+            line1: input.recipientAddressLine1,
+            line2: input.recipientAddressLine2 ?? null,
+            landmark: input.recipientLandmark ?? null,
+            city: input.recipientCity ?? '',
+            stateProvince: canonicalState,
+            postalCode: input.recipientPostalCode.trim(),
+          },
+          now,
+        );
       }
-      throw e;
-    }
+
+      await this.audit.log(
+        {
+          actorType: actor.type,
+          actorId: actor.id ?? null,
+          sellerId,
+          action: 'order.created',
+          entityType: 'order',
+          entityId: order.id,
+          metadata: {
+            orderNumber,
+            source,
+            itemCount: lines.length,
+            customerId: customer.id,
+            ...(reseller === null
+              ? {}
+              : {
+                  resellerStoreId: reseller.storeId,
+                  resellerTermsVersionId: resellerTerms?.termsVersionId ?? null,
+                }),
+            ipAddress: ctx.ipAddress,
+            userAgent: ctx.userAgent,
+            requestId: ctx.requestId,
+          },
+        },
+        tx,
+      );
+
+      return order;
+    });
 
     // CC-6: created straight into PENDING_CONFIRMATION (CSV submission
     // path / manual submit-on-create) → join the call queue post-commit.
@@ -1512,7 +1500,9 @@ export class OrderService {
     }
 
     let supersededAddressChanges = 0;
-    try {
+    // 2026-11-19 (owner): an edit may set a reference another order
+    // already has; the key is a plain index, nothing to translate.
+    {
       const saved = await this.prisma.client.$transaction(async (tx) => {
         if (phoneChanged && newPhone !== undefined) {
           const customer = await this.customers.findOrCreate(tx, {
@@ -1665,18 +1655,6 @@ export class OrderService {
         });
       }
       return saved;
-    } catch (e) {
-      // `(sellerId, storeId, sellerOrderRef)` is UNIQUE, and an edit can
-      // now set both the ref and the store — so the same clash create
-      // guards against is reachable here. Translated to the same 409
-      // rather than left to surface as a 500 with a Prisma code in it.
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        throw new ConflictException({
-          code: 'DUPLICATE_SELLER_ORDER_REF',
-          message: `Another order already uses the reference "${input.sellerOrderRef ?? ''}" in this shopfront`,
-        });
-      }
-      throw e;
     }
   }
 
@@ -2237,7 +2215,17 @@ export class OrderService {
     sellerId: string,
     ref: string,
     storeId?: string | null,
+    /**
+     * CSV import (owner 2026-11-19): a reference alone no longer names an
+     * order. When given, the order must ALSO carry this phone and PIN, and
+     * not be one the same upload already handled (`excludeIds`), so two
+     * different customers sharing a reference never patch each other.
+     */
+    match?: { phoneE164: string; postalCode: string; excludeIds?: readonly string[] },
   ): Promise<{ id: string; status: OrderStatus } | null> {
+    // 2026-11-19 (owner): references may repeat. Returns the NEWEST order
+    // that is still editable (DRAFT / PENDING_CONFIRMATION); null when
+    // none is, so the importer creates a new order instead of erroring.
     // Scoped to the STORE when one is given. Without it, a CSV row from
     // shopfront B carrying `#1001` matches shopfront A's order and the
     // importer PATCHES it (ORD-9) — the collision the unique key was
@@ -2247,6 +2235,16 @@ export class OrderService {
         sellerId,
         sellerOrderRef: ref,
         deletedAt: null,
+        status: { in: [OrderStatus.DRAFT, OrderStatus.PENDING_CONFIRMATION] },
+        ...(match === undefined
+          ? {}
+          : {
+              recipientPhoneE164: match.phoneE164,
+              recipientPostalCode: match.postalCode,
+              ...(match.excludeIds !== undefined && match.excludeIds.length > 0
+                ? { id: { notIn: [...match.excludeIds] } }
+                : {}),
+            }),
         // RS-5: with no store named, only the seller's OWN (channel)
         // orders — a seller's CSV row must never match, and so PATCH, an
         // order a reseller store placed under the same reference.
@@ -2254,6 +2252,7 @@ export class OrderService {
           ? { storeKind: SellerStoreKind.CHANNEL }
           : { storeId }),
       },
+      orderBy: { createdAt: 'desc' },
       select: { id: true, status: true },
     });
   }

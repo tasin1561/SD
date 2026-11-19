@@ -70,7 +70,7 @@ export class CreateOrderDto {
     required: false,
     maxLength: 120,
     description:
-      "Seller's own order id. Unique per STORE, not per seller: two shopfronts each running their own Shopify both emit `#1001`.",
+      "Seller's own order id. Not unique: a repeated reference simply creates another order (owner rule 2026-11-19).",
   })
   @IsOptional()
   @IsString()
