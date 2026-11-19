@@ -264,3 +264,13 @@ export type {
   ConfirmationCallsSetting,
   SetConfirmationCallsRequest,
 } from './endpoints/awaiting-confirmation';
+
+// Bulk order actions, Phase A (additive).
+export { BULK_MAX_ORDERS, BULK_MAX_EXPORT } from './endpoints/bulk-orders';
+export type {
+  BulkOutcome,
+  BulkOrderResult,
+  BulkOrderResponse,
+  BulkOrderIdsBody,
+  BulkExportBody,
+} from './endpoints/bulk-orders';

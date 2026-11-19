@@ -5,6 +5,8 @@ import { EmailModule } from '../email/email.module';
 import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
 import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 import { SellerInvoiceController } from './seller-invoice.controller';
+import { SellerInvoiceBulkController } from './seller-invoice-bulk.controller';
+import { BulkInvoiceService } from './services/bulk-invoice.service';
 import { InvoiceNumberingService } from './services/invoice-numbering.service';
 import { InvoicePdfService } from './services/invoice-pdf.service';
 import { InvoiceService } from './services/invoice.service';
@@ -19,9 +21,10 @@ import { OrderDeliveredInvoiceListener } from './services/order-delivered-invoic
  */
 @Module({
   imports: [LifecycleEventsModule, SpacesModule, EmailModule, NotificationAudienceModule],
-  controllers: [SellerInvoiceController],
+  controllers: [SellerInvoiceController, SellerInvoiceBulkController],
   providers: [
     InvoiceService,
+    BulkInvoiceService,
     InvoiceNumberingService,
     InvoicePdfService,
     OrderDeliveredInvoiceListener,

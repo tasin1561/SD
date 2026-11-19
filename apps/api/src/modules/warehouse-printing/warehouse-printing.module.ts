@@ -7,7 +7,9 @@ import { InventoryStockModule } from '../inventory-stock/inventory-stock.module'
 import { OrderModule } from '../order/order.module';
 import { PickAllocationModule } from '../pick-allocation/pick-allocation.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
+import { AdminOrderLabelBulkController } from './controllers/admin-order-label-bulk.controller';
 import { WarehousePrintingController } from './controllers/warehouse-printing.controller';
+import { BulkLabelService } from './services/bulk-label.service';
 import { LabelPrintService } from './services/label-print.service';
 import { LabelSheetService } from './services/label-sheet.service';
 import { ManualLabelPdfService } from './services/manual-label-pdf.service';
@@ -39,10 +41,11 @@ import { ProductLocationService } from './services/product-location.service';
     // The R3 primitive, not the leaf module that also uses it.
     PickAllocationModule,
   ],
-  controllers: [WarehousePrintingController],
+  controllers: [WarehousePrintingController, AdminOrderLabelBulkController],
   providers: [
     PrintQueueService,
     LabelPrintService,
+    BulkLabelService,
     LabelSheetService,
     ManualLabelPdfService,
     SkuLabelService,

@@ -188,7 +188,16 @@ describe('staff permission surface', () => {
     //     missed. Whoever can see it must be able to say they are on it;
     //     `.manage` would leave a warehouse supervisor staring at a
     //     problem they cannot claim. It closes nothing and moves no money.
-    const VIEW_GATED_WRITES = new Set(['admin-system-issue.controller.ts acknowledge']);
+    //
+    //   bulk-order-actions Phase A (2026-11-19): the CSV / merged-PDF downloads
+    //     are POST only because the selection (up to 5000 ids, or a whole
+    //     filter) does not fit a URL. They change nothing — they read what
+    //     that console's order list already shows, under the same scope — so
+    //     they are gated on the same read key as the list.
+    const VIEW_GATED_WRITES = new Set([
+      'admin-system-issue.controller.ts acknowledge',
+      'admin-order-bulk.controller.ts export',
+    ]);
 
     const loose = STAFF_HANDLERS.filter(
       (h) =>
