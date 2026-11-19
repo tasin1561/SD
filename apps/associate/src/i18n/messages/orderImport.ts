@@ -4,8 +4,8 @@ import { defineMessages } from '../define';
 export const orderImport = defineMessages({
   'import.title': ['Upload orders', 'অর্ডার আপলোড'],
   'import.subtitle': [
-    'One row is one product line — give two rows the same reference and they become one order with two items. You do not set a price in the file: each product is sold at the price your store set for you. A reference you have already used comes back as an error row; re-uploading never changes an order you have already placed.',
-    'একটি সারি মানে একটি পণ্যের লাইন — দুটি সারিতে একই রেফারেন্স দিলে সেগুলো দুটি আইটেমসহ একটি অর্ডার হয়ে যায়। ফাইলে দাম দিতে হয় না: প্রতিটি পণ্য আপনার স্টোরের ঠিক করা দামে বিক্রি হয়। আগে ব্যবহার করা রেফারেন্স ত্রুটির সারি হয়ে ফিরে আসে; আবার আপলোড করলে আপনার আগে দেওয়া কোনো অর্ডার বদলায় না।',
+    'One row is one product line — give two rows the same reference and they become one order with two items. You do not set a price in the file: each product is sold at the price your store set for you. A reference can repeat. Rows with the same reference and the same customer become one order; re-uploading the same file updates orders still waiting for confirmation instead of creating them twice.',
+    'একটি সারি মানে একটি পণ্যের লাইন — দুটি সারিতে একই রেফারেন্স দিলে সেগুলো দুটি আইটেমসহ একটি অর্ডার হয়ে যায়। ফাইলে দাম দিতে হয় না: প্রতিটি পণ্য আপনার স্টোরের ঠিক করা দামে বিক্রি হয়। একই রেফারেন্স আবার ব্যবহার করা যায়। একই রেফারেন্স ও একই গ্রাহকের সারিগুলো একটি অর্ডার হয়ে যায়; একই ফাইল আবার আপলোড করলে কনফার্মেশনের অপেক্ষায় থাকা অর্ডারগুলো আপডেট হয়, দ্বিতীয়বার তৈরি হয় না।',
   ],
   'import.paused.title': [
     'Your store has paused new orders from you',

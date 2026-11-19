@@ -5,8 +5,8 @@ export const orderImport = defineMessages({
   'ordimp.back': ['Orders', 'অর্ডার'],
   'ordimp.title': ['Upload orders', 'অর্ডার আপলোড করুন'],
   'ordimp.subtitle': [
-    'One row is one product line — give two rows the same reference and they become one order with two items. Retail Price is what you sell the product for; leave it blank and we use your client’s suggested price. A reference you have already used comes back as an error row — re-uploading never changes an order you have already placed.',
-    'একটি সারি মানে একটি পণ্যের লাইন — দুটি সারিকে একই রেফারেন্স দিলে সেগুলো দুটি আইটেমসহ একটি অর্ডার হয়ে যায়। Retail Price হলো যে দামে আপনি পণ্যটি বিক্রি করেন; ফাঁকা রাখলে আমরা আপনার ক্লায়েন্টের প্রস্তাবিত দাম ব্যবহার করি। আগে ব্যবহার করা রেফারেন্স এররের সারি হয়ে ফিরে আসে — আবার আপলোড করলেও আগে দেওয়া কোনো অর্ডার বদলায় না।',
+    'One row is one product line — give two rows the same reference and they become one order with two items. Retail Price is what you sell the product for; leave it blank and we use your client’s suggested price. A reference can repeat. Rows with the same reference and the same customer become one order; re-uploading the same file updates orders still waiting for confirmation instead of creating them twice.',
+    'একটি সারি মানে একটি পণ্যের লাইন — দুটি সারিকে একই রেফারেন্স দিলে সেগুলো দুটি আইটেমসহ একটি অর্ডার হয়ে যায়। Retail Price হলো যে দামে আপনি পণ্যটি বিক্রি করেন; ফাঁকা রাখলে আমরা আপনার ক্লায়েন্টের প্রস্তাবিত দাম ব্যবহার করি। একই রেফারেন্স আবার ব্যবহার করা যায়। একই রেফারেন্স ও একই গ্রাহকের সারিগুলো একটি অর্ডার হয়ে যায়; একই ফাইল আবার আপলোড করলে কনফার্মেশনের অপেক্ষায় থাকা অর্ডারগুলো আপডেট হয়, দ্বিতীয়বার তৈরি হয় না।',
   ],
   'ordimp.upload': ['Upload', 'আপলোড'],
   'ordimp.downloading': ['Downloading…', 'ডাউনলোড হচ্ছে…'],

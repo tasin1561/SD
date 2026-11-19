@@ -82,8 +82,8 @@ function save(text: string, fileName: string): void {
  * The same machinery and the same checks as the one-order form: each row
  * becomes one of YOUR orders, at YOUR price, and the file is checked
  * before anything is imported. Rows sharing a reference become one order
- * with several lines (ORD-9). A reference already used comes back as an
- * error row rather than changing an order you have already placed.
+ * with several lines (ORD-9). A reference can repeat: re-uploading the same
+ * file updates orders still waiting for confirmation, never creates twice.
  */
 export default function OrderImportPage(): ReactElement {
   const t = useT();
