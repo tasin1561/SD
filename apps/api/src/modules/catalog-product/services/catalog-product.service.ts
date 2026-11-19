@@ -14,10 +14,19 @@ import type { ListProductsQueryDto } from '../dto/list-products.dto';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { deriveThumbnailKey } from '../../catalog-image/image-key';
 
+/** One variant's SKU, for the product list. */
+export interface ProductSkuChip {
+  readonly skuCode: string;
+  readonly variantLabel: string | null;
+  readonly status: string;
+}
+
 export interface ProductView {
   /** Set only by the LIST — one picture so a product is recognisable
    *  without opening it. Null when no variant has an image. */
   primaryImageUrl?: string | null;
+  /** Set only by the LIST — every live SKU of the product (owner, 2026-11-19). */
+  skus?: readonly ProductSkuChip[];
   id: string;
   sellerId: string;
   name: string;
@@ -125,6 +134,12 @@ export class CatalogProductService {
       where.OR = [
         { name: { contains: query.search, mode: 'insensitive' } },
         { externalRef: { contains: query.search, mode: 'insensitive' } },
+        // A SKU finds its product too: the list now shows them.
+        {
+          variants: {
+            some: { deletedAt: null, skuCode: { contains: query.search, mode: 'insensitive' } },
+          },
+        },
       ];
     }
     const [items, total] = await Promise.all([
@@ -137,7 +152,27 @@ export class CatalogProductService {
       }),
       this.prisma.client.product.count({ where }),
     ]);
-    return { items: await this.withCoverImages(items), total, page, pageSize };
+    return { items: await this.withSkus(await this.withCoverImages(items)), total, page, pageSize };
+  }
+
+  /**
+   * Every live SKU per product, for the list — ONE query for the page.
+   * Oldest variant first, so the order matches the product's own page.
+   */
+  private async withSkus(items: ProductView[]): Promise<ProductView[]> {
+    if (items.length === 0) return items;
+    const rows = await this.prisma.client.productVariant.findMany({
+      where: { deletedAt: null, productId: { in: items.map((p) => p.id) } },
+      orderBy: [{ createdAt: 'asc' }, { skuCode: 'asc' }],
+      select: { productId: true, skuCode: true, variantLabel: true, status: true },
+    });
+    const by = new Map<string, ProductSkuChip[]>();
+    for (const r of rows) {
+      const list = by.get(r.productId) ?? [];
+      list.push({ skuCode: r.skuCode, variantLabel: r.variantLabel, status: r.status });
+      by.set(r.productId, list);
+    }
+    return items.map((p) => ({ ...p, skus: by.get(p.id) ?? [] }));
   }
 
   /**

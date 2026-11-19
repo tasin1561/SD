@@ -36,6 +36,15 @@ export interface SellerProductView {
    * it, because that page loads the variants and their images anyway.
    */
   readonly primaryImageUrl?: string | null;
+  /**
+   * Every live SKU of the product, oldest variant first. Set by the LIST
+   * endpoint only (2026-11-19).
+   */
+  readonly skus?: readonly {
+    readonly skuCode: string;
+    readonly variantLabel: string | null;
+    readonly status: string;
+  }[];
   readonly sellerId: string;
   readonly name: string;
   readonly description: string | null;
