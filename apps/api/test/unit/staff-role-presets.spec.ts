@@ -250,7 +250,13 @@ describe('staff access tiers (Admin / Support / Read-only)', () => {
       // A regex that stopped matching would make this pass vacuously.
       expect(literal).toBeDefined();
       const exceptions = [...(literal ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1] ?? '');
-      expect(exceptions).toEqual(['admin-system-issue.controller.ts acknowledge']);
+      // 2026-11-19: the bulk CSV export is a POST only because its
+      // selection does not fit a URL; it reads exactly what the order list
+      // shows. Read-only staff may read it — still no real write.
+      expect(exceptions).toEqual([
+        'admin-system-issue.controller.ts acknowledge',
+        'admin-order-bulk.controller.ts export',
+      ]);
     });
   });
 
