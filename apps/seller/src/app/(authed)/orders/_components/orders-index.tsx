@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { OrderStatus } from '@skydrop/db';
-import { useSellerIdentity } from '@skydrop/auth/client';
+import { useApiClient, useSellerIdentity } from '@skydrop/auth/client';
 import { useOrderStatusSummary, usePendingRows, useOrdersList } from '@/lib/api-hooks';
 import { can, canSeePath } from '@/lib/page-access';
 import { useResellerStores } from '@/lib/reseller-store-hooks';
@@ -12,7 +12,27 @@ import { Copy, Hourglass, Package, Plus, Search, Upload } from 'lucide-react';
 import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
 import { Select } from '@skydrop/ui/app/select';
 import { Tabs, type TabItem } from '@skydrop/ui/app/tabs';
-import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import {
+  SelectAllTh,
+  SelectTd,
+  Table,
+  TBody,
+  THead,
+  Td,
+  Th,
+  Tr,
+  useRowSelection,
+} from '@skydrop/ui/app/data-table';
+import {
+  BulkActions,
+  BulkSelectStrip,
+  orderBulkActions,
+  type BulkResponse,
+  type BulkTransport,
+} from '@skydrop/ui/app/bulk-actions';
+import { useUiT } from '@skydrop/ui/app/i18n-client';
+import { verdict } from '@/i18n/verdict';
+import { InfoButton } from '@/components/easy/info-button';
 import { Pagination } from '@skydrop/ui/app/pagination';
 import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { chipWords, StatusChip } from '@skydrop/ui/app/status-chip';
@@ -55,9 +75,9 @@ import type { MessageKey } from '@/i18n/catalog';
  *   - A date-range filter and a "More Filters (2)" button. The list
  *     endpoint takes status and search; a filter control that cannot
  *     filter is worse than an absent one.
- *   - A selection checkbox column. There is no bulk action for a
- *     seller to apply to a selection, so it would be a column of
- *     checkboxes that do nothing.
+ *   - A selection checkbox column. (True then; since 2026-11-19 the
+ *     server has bulk actions, so the column and its sticky bar exist —
+ *     see `BulkActions`. Only actions this person may run are offered.)
  *   - An "Export Manifest" action. A manifest is OUR record of what
  *     went on a van (CUR-4); it is not the seller's to export.
  *
@@ -269,15 +289,34 @@ export function OrdersIndex(): ReactElement {
   const placedTo =
     custom && params.to !== '' ? new Date(`${params.to}T23:59:59.999`).toISOString() : undefined;
 
-  const list = useOrdersList({
+  // The list's own filter, WITHOUT the page: "all N matching" exports send
+  // exactly this, so the file holds what the list is showing.
+  const listFilter = {
     ...(params.status ? { status: params.status } : {}),
     ...(params.search ? { search: params.search } : {}),
     ...(params.storeId ? { storeId: params.storeId } : {}),
     ...(placedFrom === undefined ? {} : { placedFrom }),
     ...(placedTo === undefined ? {} : { placedTo }),
-    page: params.page,
-    pageSize: params.pageSize,
-  });
+  };
+  const list = useOrdersList({ ...listFilter, page: params.page, pageSize: params.pageSize });
+
+  // ── Bulk actions: tick rows on this page, then act on them ──────────
+  const uiT = useUiT();
+  const client = useApiClient();
+  const pageIds = useMemo(() => (list.data?.items ?? []).map((o) => o.id), [list.data]);
+  const selection = useRowSelection(pageIds);
+  const bulkActions = useMemo(
+    () => orderBulkActions({ console: 'seller', t: uiT, may: (p) => can(identity, p) }),
+    [uiT, identity],
+  );
+  const bulkTransport = useMemo<BulkTransport>(
+    () => ({
+      post: (path, body) => client.request<BulkResponse>(path, { method: 'POST', body }),
+      download: (path, body) => client.requestStream(path, { method: 'POST', body }),
+    }),
+    [client],
+  );
+  const mayBulk = bulkActions.length > 0;
 
   const filtered =
     params.status !== '' || params.search !== '' || params.range !== '' || params.storeId !== '';
@@ -582,10 +621,21 @@ export function OrdersIndex(): ReactElement {
             }
           />
         ) : (
-          <div className="ord-card ord-card--list" data-flush="1">
+          <div
+            className={
+              mayBulk
+                ? 'ord-card ord-card--list ez-cards ez-lead-2 sk-bulk-table'
+                : 'ord-card ord-card--list'
+            }
+            data-flush="1"
+          >
+            {mayBulk && <BulkSelectStrip selection={selection} />}
             <Table caption={t('orderList.orders')}>
               <THead>
                 <Tr>
+                  {mayBulk && (
+                    <SelectAllTh selection={selection} label={uiT('ui.bulk.selectPage')} />
+                  )}
                   <Th>{t('orderList.order')}</Th>
                   <Th>{t('orderList.recipient')}</Th>
                   <Th className="ord-col-phone">{t('orderList.phone')}</Th>
@@ -623,7 +673,18 @@ export function OrdersIndex(): ReactElement {
                     .filter((v) => v !== '' && v !== null)
                     .join('\n');
                   return (
-                    <Tr key={o.id} onActivate={() => router.push(`/orders/${o.id}`)}>
+                    <Tr
+                      key={o.id}
+                      selected={mayBulk && selection.isSelected(o.id)}
+                      onActivate={() => router.push(`/orders/${o.id}`)}
+                    >
+                      {mayBulk && (
+                        <SelectTd
+                          selection={selection}
+                          id={o.id}
+                          label={uiT('ui.bulk.selectRow', { name: o.orderNumber })}
+                        />
+                      )}
                       <Td>
                         <Link href={`/orders/${o.id}`} className="ord-order-link sk-ident">
                           {o.orderNumber}
@@ -701,6 +762,18 @@ export function OrdersIndex(): ReactElement {
                 })}
               </TBody>
             </Table>
+            {mayBulk && (
+              <BulkActions
+                selection={selection}
+                actions={bulkActions}
+                transport={bulkTransport}
+                labelFor={(id) => list.data?.items.find((o) => o.id === id)?.orderNumber}
+                explain={(e) => verdict(e, t)}
+                onDone={() => void list.refetch()}
+                matching={{ total: list.data.total, filter: listFilter }}
+                info={<InfoButton title={uiT('ui.bulk.region')} text={uiT('ui.bulk.info')} />}
+              />
+            )}
             <div className="ord-table-foot">
               <Pagination
                 page={params.page}

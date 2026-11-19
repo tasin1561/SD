@@ -1,7 +1,7 @@
 'use client';
 
 import { AwbCopy } from '@skydrop/ui/app/awb-copy';
-import { useState, type ReactElement } from 'react';
+import { useMemo, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Truck } from 'lucide-react';
 import { PageHeader } from '@skydrop/ui/app/page-header';
@@ -13,7 +13,26 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { TextArea } from '@skydrop/ui/app/text-field';
-import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import {
+  SelectAllTh,
+  SelectTd,
+  Table,
+  TBody,
+  THead,
+  Td,
+  Th,
+  Tr,
+  useRowSelection,
+} from '@skydrop/ui/app/data-table';
+import {
+  BulkActions,
+  BulkSelectStrip,
+  deliveryDecisionBulkActions,
+  type BulkResponse,
+  type BulkTransport,
+} from '@skydrop/ui/app/bulk-actions';
+import { useUiT } from '@skydrop/ui/app/i18n-client';
+import { useApiClient } from '@skydrop/auth/client';
 import {
   useDecideDeliveryAction,
   useDeliveryActionQueue,
@@ -133,6 +152,34 @@ export function DeliveryActionsIndex(): ReactElement {
 
   const rows = queue.data ?? [];
 
+  // ── Decide many at once: only requests that are waiting on US ───────
+  // A decided request, and one the client's own staff decide, get no tick:
+  // the server would refuse them, so they are not offered.
+  const uiT = useUiT();
+  const client = useApiClient();
+  const decidable = useMemo(
+    () =>
+      canDecide
+        ? (queue.data ?? [])
+            .filter((r) => r.status === 'PENDING' && !r.waitingOnSeller)
+            .map((r) => r.id)
+        : [],
+    [queue.data, canDecide],
+  );
+  const selection = useRowSelection(decidable);
+  const bulkActions = useMemo(
+    () => deliveryDecisionBulkActions({ t: uiT, may: () => canDecide }),
+    [uiT, canDecide],
+  );
+  const bulkTransport = useMemo<BulkTransport>(
+    () => ({
+      post: (path, body) => client.request<BulkResponse>(path, { method: 'POST', body }),
+      download: (path, body) => client.requestStream(path, { method: 'POST', body }),
+    }),
+    [client],
+  );
+  const mayBulk = bulkActions.length > 0 && decidable.length > 0;
+
   return (
     <div className="oo-page ez-touch">
       <PageHeader
@@ -199,155 +246,182 @@ export function DeliveryActionsIndex(): ReactElement {
             }
           />
         ) : (
-          <Table caption={t('deliveryActionsDeliveryActionsIndex.failedDeliveryRequests')}>
-            <THead>
-              <Tr>
-                <Th>{t('deliveryActionsDeliveryActionsIndex.order')}</Th>
-                <Th>{t('deliveryActionsDeliveryActionsIndex.client')}</Th>
-                <Th>
-                  <span className="ez-titled">
-                    {t('deliveryActionsDeliveryActionsIndex.askedFor')}
-                    {/* What approving each kind of request does. */}
-                    <InfoButton
-                      title={t('deliveryActionsDeliveryActionsIndex.askedFor')}
-                      text={t('deliveryActionsDeliveryActionsIndex.approvingAReAttemptSends')}
-                      facts={[
-                        {
-                          label: t('deliveryActionsDeliveryActionsIndex.reAttemptDelivery'),
-                          value: t('ezDelivery.doReattempt'),
-                        },
-                        {
-                          label: t('deliveryActionsDeliveryActionsIndex.callTheCustomer'),
-                          value: t('deliveryActionsDeliveryActionsIndex.queuesTheOrderForOne'),
-                        },
-                        {
-                          label: t('deliveryActionsDeliveryActionsIndex.returnToUs'),
-                          value: t('ezDelivery.doReturn'),
-                        },
-                      ]}
-                    />
-                  </span>
-                </Th>
-                <Th>{t('deliveryActionsDeliveryActionsIndex.why')}</Th>
-                <Th>
-                  <span className="ez-titled">
-                    {t('deliveryActionsDeliveryActionsIndex.state')}
-                    <InfoButton
-                      title={t('deliveryActionsDeliveryActionsIndex.state')}
-                      facts={[
-                        { label: t('ezDelivery.stPending'), value: t('ezDelivery.isPending') },
-                        { label: t('ezDelivery.stApproved'), value: t('ezDelivery.isApproved') },
-                        { label: t('ezDelivery.stExecuted'), value: t('ezDelivery.isExecuted') },
-                        { label: t('ezDelivery.stFailed'), value: t('ezDelivery.isFailed') },
-                        { label: t('ezDelivery.stRejected'), value: t('ezDelivery.isRejected') },
-                        { label: t('ezDelivery.stExpired'), value: t('ezDelivery.isExpired') },
-                      ]}
-                    />
-                  </span>
-                </Th>
-                <Th align="right">{t('deliveryActionsDeliveryActionsIndex.decide')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.map((r) => (
-                <Tr key={r.id}>
-                  <Td>
-                    <Link
-                      href={`/orders?q=${r.order?.orderNumber ?? ''}`}
-                      className="oo-link sk-ident"
-                    >
-                      {r.order?.orderNumber ?? '—'}
-                    </Link>
-                    {r.shipment?.awbNumber != null && r.shipment.awbNumber !== '' ? (
-                      <span className="oo-sub">
-                        <AwbCopy awb={r.shipment.awbNumber} />
-                      </span>
-                    ) : (
-                      <span className="oo-sub sk-ident">{r.shipment?.shipmentNumber ?? ''}</span>
-                    )}
-                  </Td>
-                  <Td className="oo-muted">
-                    {r.seller?.companyName ?? '—'}
-                    {r.resellerStore !== null && (
-                      <span className="oo-sub">
-                        {t('deliveryActionsDeliveryActionsIndex.memberStore', {
-                          value: r.resellerStore.displayName ?? r.resellerStore.name,
-                        })}
-                      </span>
-                    )}
-                  </Td>
-                  <Td>
-                    <span className="oo-strong">{actionLabel(t, r.action)}</span>
-                    {r.action === 'RECALL' && (
-                      <span className="oo-sub">
-                        {t('deliveryActionsDeliveryActionsIndex.noCourierInvolved')}
-                      </span>
-                    )}
-                  </Td>
-                  <Td className="oo-muted oo-clip">{r.reason}</Td>
-                  <Td>
-                    <div className="oo-stack oo-stack--tight">
-                      <span className="oo-row">
-                        <StatusChip
-                          size="sm"
-                          kind={statusKind(r.status)}
-                          label={statusLabel(t, r.status)}
-                        />
-                        <AgeChip
-                          title={t('deliveryActionsDeliveryActionsIndex.asked', {
-                            value: formatDateTime(r.createdAt, locale),
-                          })}
-                        >
-                          {elapsedSince(r.createdAt)}
-                        </AgeChip>
-                      </span>
-                      {r.executionError !== null && (
-                        <span className="oo-error">{r.executionError}</span>
-                      )}
-                      {r.decisionNote !== null && (
-                        <span className="oo-faint">{r.decisionNote}</span>
-                      )}
-                    </div>
-                  </Td>
-                  <Td align="right">
-                    {r.waitingOnSeller ? (
-                      // Seller staff decide this one — the Reseller
-                      // store's policy says so. Skydrop admin can see it,
-                      // and the server refuses a decision here anyway.
-                      <span className="oo-muted">
-                        {t('deliveryActionsDeliveryActionsIndex.waitingOnClientStaff')}
-                      </span>
-                    ) : r.status === 'PENDING' && canDecide ? (
-                      <div className="oo-row oo-row--end">
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={() => {
-                            setDeciding({ row: r, decision: 'approve' });
-                            setNote('');
-                          }}
-                        >
-                          {t('deliveryActionsDeliveryActionsIndex.approve')}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setDeciding({ row: r, decision: 'reject' });
-                            setNote('');
-                          }}
-                        >
-                          {t('deliveryActionsDeliveryActionsIndex.decline')}
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="oo-faint">—</span>
-                    )}
-                  </Td>
+          <div className={mayBulk ? 'sk-bulk-table' : undefined}>
+            {mayBulk && <BulkSelectStrip selection={selection} />}
+            <Table caption={t('deliveryActionsDeliveryActionsIndex.failedDeliveryRequests')}>
+              <THead>
+                <Tr>
+                  {mayBulk && (
+                    <SelectAllTh selection={selection} label={uiT('ui.bulk.selectPage')} />
+                  )}
+                  <Th>{t('deliveryActionsDeliveryActionsIndex.order')}</Th>
+                  <Th>{t('deliveryActionsDeliveryActionsIndex.client')}</Th>
+                  <Th>
+                    <span className="ez-titled">
+                      {t('deliveryActionsDeliveryActionsIndex.askedFor')}
+                      {/* What approving each kind of request does. */}
+                      <InfoButton
+                        title={t('deliveryActionsDeliveryActionsIndex.askedFor')}
+                        text={t('deliveryActionsDeliveryActionsIndex.approvingAReAttemptSends')}
+                        facts={[
+                          {
+                            label: t('deliveryActionsDeliveryActionsIndex.reAttemptDelivery'),
+                            value: t('ezDelivery.doReattempt'),
+                          },
+                          {
+                            label: t('deliveryActionsDeliveryActionsIndex.callTheCustomer'),
+                            value: t('deliveryActionsDeliveryActionsIndex.queuesTheOrderForOne'),
+                          },
+                          {
+                            label: t('deliveryActionsDeliveryActionsIndex.returnToUs'),
+                            value: t('ezDelivery.doReturn'),
+                          },
+                        ]}
+                      />
+                    </span>
+                  </Th>
+                  <Th>{t('deliveryActionsDeliveryActionsIndex.why')}</Th>
+                  <Th>
+                    <span className="ez-titled">
+                      {t('deliveryActionsDeliveryActionsIndex.state')}
+                      <InfoButton
+                        title={t('deliveryActionsDeliveryActionsIndex.state')}
+                        facts={[
+                          { label: t('ezDelivery.stPending'), value: t('ezDelivery.isPending') },
+                          { label: t('ezDelivery.stApproved'), value: t('ezDelivery.isApproved') },
+                          { label: t('ezDelivery.stExecuted'), value: t('ezDelivery.isExecuted') },
+                          { label: t('ezDelivery.stFailed'), value: t('ezDelivery.isFailed') },
+                          { label: t('ezDelivery.stRejected'), value: t('ezDelivery.isRejected') },
+                          { label: t('ezDelivery.stExpired'), value: t('ezDelivery.isExpired') },
+                        ]}
+                      />
+                    </span>
+                  </Th>
+                  <Th align="right">{t('deliveryActionsDeliveryActionsIndex.decide')}</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {rows.map((r) => (
+                  <Tr key={r.id} selected={mayBulk && selection.isSelected(r.id)}>
+                    {mayBulk &&
+                      (decidable.includes(r.id) ? (
+                        <SelectTd
+                          selection={selection}
+                          id={r.id}
+                          label={uiT('ui.bulk.selectRow', {
+                            name: r.order?.orderNumber ?? r.id.slice(0, 8),
+                          })}
+                        />
+                      ) : (
+                        <td className="sk-td sk-td--select" aria-hidden />
+                      ))}
+                    <Td>
+                      <Link
+                        href={`/orders?q=${r.order?.orderNumber ?? ''}`}
+                        className="oo-link sk-ident"
+                      >
+                        {r.order?.orderNumber ?? '—'}
+                      </Link>
+                      {r.shipment?.awbNumber != null && r.shipment.awbNumber !== '' ? (
+                        <span className="oo-sub">
+                          <AwbCopy awb={r.shipment.awbNumber} />
+                        </span>
+                      ) : (
+                        <span className="oo-sub sk-ident">{r.shipment?.shipmentNumber ?? ''}</span>
+                      )}
+                    </Td>
+                    <Td className="oo-muted">
+                      {r.seller?.companyName ?? '—'}
+                      {r.resellerStore !== null && (
+                        <span className="oo-sub">
+                          {t('deliveryActionsDeliveryActionsIndex.memberStore', {
+                            value: r.resellerStore.displayName ?? r.resellerStore.name,
+                          })}
+                        </span>
+                      )}
+                    </Td>
+                    <Td>
+                      <span className="oo-strong">{actionLabel(t, r.action)}</span>
+                      {r.action === 'RECALL' && (
+                        <span className="oo-sub">
+                          {t('deliveryActionsDeliveryActionsIndex.noCourierInvolved')}
+                        </span>
+                      )}
+                    </Td>
+                    <Td className="oo-muted oo-clip">{r.reason}</Td>
+                    <Td>
+                      <div className="oo-stack oo-stack--tight">
+                        <span className="oo-row">
+                          <StatusChip
+                            size="sm"
+                            kind={statusKind(r.status)}
+                            label={statusLabel(t, r.status)}
+                          />
+                          <AgeChip
+                            title={t('deliveryActionsDeliveryActionsIndex.asked', {
+                              value: formatDateTime(r.createdAt, locale),
+                            })}
+                          >
+                            {elapsedSince(r.createdAt)}
+                          </AgeChip>
+                        </span>
+                        {r.executionError !== null && (
+                          <span className="oo-error">{r.executionError}</span>
+                        )}
+                        {r.decisionNote !== null && (
+                          <span className="oo-faint">{r.decisionNote}</span>
+                        )}
+                      </div>
+                    </Td>
+                    <Td align="right">
+                      {r.waitingOnSeller ? (
+                        // Seller staff decide this one — the Reseller
+                        // store's policy says so. Skydrop admin can see it,
+                        // and the server refuses a decision here anyway.
+                        <span className="oo-muted">
+                          {t('deliveryActionsDeliveryActionsIndex.waitingOnClientStaff')}
+                        </span>
+                      ) : r.status === 'PENDING' && canDecide ? (
+                        <div className="oo-row oo-row--end">
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => {
+                              setDeciding({ row: r, decision: 'approve' });
+                              setNote('');
+                            }}
+                          >
+                            {t('deliveryActionsDeliveryActionsIndex.approve')}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setDeciding({ row: r, decision: 'reject' });
+                              setNote('');
+                            }}
+                          >
+                            {t('deliveryActionsDeliveryActionsIndex.decline')}
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="oo-faint">—</span>
+                      )}
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+            <BulkActions
+              selection={selection}
+              actions={bulkActions}
+              transport={bulkTransport}
+              labelFor={(id) => rows.find((r) => r.id === id)?.order?.orderNumber}
+              explain={(e) => serverVerdict(e)}
+              onDone={() => void queue.refetch()}
+              info={<InfoButton title={uiT('ui.bulk.region')} text={uiT('ui.bulk.info')} />}
+            />
+          </div>
         )}
       </OoSection>
 

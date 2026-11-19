@@ -15,7 +15,26 @@ import { FilterBar, FilterField } from '@skydrop/ui/app/filter-bar';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { Select } from '@skydrop/ui/app/select';
 import { DateField } from '@skydrop/ui/app/date-field';
-import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import {
+  SelectAllTh,
+  SelectTd,
+  Table,
+  TBody,
+  THead,
+  Td,
+  Th,
+  Tr,
+  useRowSelection,
+} from '@skydrop/ui/app/data-table';
+import {
+  BulkActions,
+  BulkSelectStrip,
+  orderBulkActions,
+  type BulkResponse,
+  type BulkTransport,
+} from '@skydrop/ui/app/bulk-actions';
+import { useUiT } from '@skydrop/ui/app/i18n-client';
+import { hasPermission, useApiClient, useStaffIdentity } from '@skydrop/auth/client';
 import { Pagination } from '@skydrop/ui/app/pagination';
 import { chipWords, StatusChip } from '@skydrop/ui/app/status-chip';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
@@ -110,16 +129,36 @@ export function OrdersIndex(): ReactElement {
       ? undefined
       : new Date(new Date(istDayRange(params.to, params.to).to).getTime() - 1).toISOString();
 
-  const list = useOrdersList({
+  // The list's own filter, WITHOUT the page: "all N matching" exports send
+  // exactly this, so the file holds what the list is showing.
+  const listFilter = {
     ...(params.status ? { status: params.status } : {}),
     ...(params.source ? { source: params.source } : {}),
     ...(params.search ? { search: params.search } : {}),
     ...(params.sellerId ? { sellerId: params.sellerId } : {}),
     ...(placedFrom === undefined ? {} : { placedFrom }),
     ...(placedTo === undefined ? {} : { placedTo }),
-    page: params.page,
-    pageSize: PAGE_SIZE,
-  });
+  };
+  const list = useOrdersList({ ...listFilter, page: params.page, pageSize: PAGE_SIZE });
+
+  // ── Bulk actions: tick rows on this page, then act on them ──────────
+  const uiT = useUiT();
+  const client = useApiClient();
+  const staff = useStaffIdentity();
+  const pageIds = useMemo(() => (list.data?.items ?? []).map((o) => o.id), [list.data]);
+  const selection = useRowSelection(pageIds);
+  const bulkActions = useMemo(
+    () => orderBulkActions({ console: 'admin', t: uiT, may: (p) => hasPermission(staff, p) }),
+    [uiT, staff],
+  );
+  const bulkTransport = useMemo<BulkTransport>(
+    () => ({
+      post: (path, body) => client.request<BulkResponse>(path, { method: 'POST', body }),
+      download: (path, body) => client.requestStream(path, { method: 'POST', body }),
+    }),
+    [client],
+  );
+  const mayBulk = bulkActions.length > 0;
 
   const sellerOptions = sellers.data?.items ?? [];
   // A deep link from seller detail can name a seller beyond the first
@@ -293,67 +332,96 @@ export function OrdersIndex(): ReactElement {
         />
       ) : (
         <OoCard flush>
-          <Table caption={t('ordersList.table.caption')}>
-            <THead>
-              <Tr>
-                <Th>{t('ordersList.col.order')}</Th>
-                <Th>{t('ordersList.col.recipient')}</Th>
-                <Th>{t('ordersList.col.phone')}</Th>
-                <Th>{t('ordersList.col.status')}</Th>
-                <Th>{t('ordersList.col.source')}</Th>
-                <Th align="right">{t('ordersList.col.cod')}</Th>
-                <Th>{t('ordersList.col.placed')}</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {list.data.items.map((o) => (
-                <Tr key={o.id} onActivate={() => router.push(`/orders/${o.id}`)}>
-                  <Td>
-                    <Link href={`/orders/${o.id}`} className="oc-order-link sk-ident">
-                      {o.orderNumber}
-                    </Link>
-                    {/* The waybill, with a copy button, under the order number.
+          <div className={mayBulk ? 'sk-bulk-table' : undefined}>
+            {mayBulk && <BulkSelectStrip selection={selection} />}
+            <Table caption={t('ordersList.table.caption')}>
+              <THead>
+                <Tr>
+                  {mayBulk && (
+                    <SelectAllTh selection={selection} label={uiT('ui.bulk.selectPage')} />
+                  )}
+                  <Th>{t('ordersList.col.order')}</Th>
+                  <Th>{t('ordersList.col.recipient')}</Th>
+                  <Th>{t('ordersList.col.phone')}</Th>
+                  <Th>{t('ordersList.col.status')}</Th>
+                  <Th>{t('ordersList.col.source')}</Th>
+                  <Th align="right">{t('ordersList.col.cod')}</Th>
+                  <Th>{t('ordersList.col.placed')}</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {list.data.items.map((o) => (
+                  <Tr
+                    key={o.id}
+                    selected={mayBulk && selection.isSelected(o.id)}
+                    onActivate={() => router.push(`/orders/${o.id}`)}
+                  >
+                    {mayBulk && (
+                      <SelectTd
+                        selection={selection}
+                        id={o.id}
+                        label={uiT('ui.bulk.selectRow', { name: o.orderNumber })}
+                      />
+                    )}
+                    <Td>
+                      <Link href={`/orders/${o.id}`} className="oc-order-link sk-ident">
+                        {o.orderNumber}
+                      </Link>
+                      {/* The waybill, with a copy button, under the order number.
                         Nothing is shown until a parcel has one. */}
-                    {o.shipment?.awbNumber != null && o.shipment.awbNumber !== '' && (
-                      <span className="oo-sub">
-                        <AwbCopy awb={o.shipment.awbNumber} />
-                      </span>
-                    )}
-                    {o.sellerOrderRef && (
-                      <span className="oo-sub">
-                        {t('ordersList.ref')} <span className="sk-ident">{o.sellerOrderRef}</span>
-                      </span>
-                    )}
-                  </Td>
-                  <Td>{o.recipientName}</Td>
-                  <Td className="oo-muted oo-nowrap">
-                    {/* Was City, blank on every order placed since the seller
+                      {o.shipment?.awbNumber != null && o.shipment.awbNumber !== '' && (
+                        <span className="oo-sub">
+                          <AwbCopy awb={o.shipment.awbNumber} />
+                        </span>
+                      )}
+                      {o.sellerOrderRef && (
+                        <span className="oo-sub">
+                          {t('ordersList.ref')} <span className="sk-ident">{o.sellerOrderRef}</span>
+                        </span>
+                      )}
+                    </Td>
+                    <Td>{o.recipientName}</Td>
+                    <Td className="oo-muted oo-nowrap">
+                      {/* Was City, blank on every order placed since the seller
                         form stopped asking (ORD-5: Delhivery resolves the
                         locality from the PIN) — so the column was a run of
                         dashes. The phone identifies the recipient and is
                         what the search box matches on. */}
-                    <span className="sk-figure">{o.recipientPhoneE164 || '—'}</span>
-                  </Td>
-                  <Td>
-                    <StatusChip
-                      kind={orderStatusKind(o.status)}
-                      label={statusLabel(o.status, locale)}
-                      size="sm"
-                    />
-                  </Td>
-                  <Td>
-                    <span className="oc-source">{chipWords(o.source.replace(/_/g, ' '))}</span>
-                  </Td>
-                  <Td align="right">
-                    <span className="sk-figure">{o.codAmountInr ?? '—'}</span>
-                  </Td>
-                  <Td className="oo-muted oo-nowrap">
-                    <span className="sk-figure">{formatDateTime(o.placedAt, locale)}</span>
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
+                      <span className="sk-figure">{o.recipientPhoneE164 || '—'}</span>
+                    </Td>
+                    <Td>
+                      <StatusChip
+                        kind={orderStatusKind(o.status)}
+                        label={statusLabel(o.status, locale)}
+                        size="sm"
+                      />
+                    </Td>
+                    <Td>
+                      <span className="oc-source">{chipWords(o.source.replace(/_/g, ' '))}</span>
+                    </Td>
+                    <Td align="right">
+                      <span className="sk-figure">{o.codAmountInr ?? '—'}</span>
+                    </Td>
+                    <Td className="oo-muted oo-nowrap">
+                      <span className="sk-figure">{formatDateTime(o.placedAt, locale)}</span>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
+          {mayBulk && (
+            <BulkActions
+              selection={selection}
+              actions={bulkActions}
+              transport={bulkTransport}
+              labelFor={(id) => list.data?.items.find((o) => o.id === id)?.orderNumber}
+              explain={(e) => serverVerdict(e)}
+              onDone={() => void list.refetch()}
+              matching={{ total: list.data.total, filter: listFilter }}
+              info={<InfoButton title={uiT('ui.bulk.region')} text={uiT('ui.bulk.info')} />}
+            />
+          )}
           <div className="oo-card__foot">
             <Pagination
               page={params.page}

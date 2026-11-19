@@ -3,17 +3,36 @@
 import Link from 'next/link';
 import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useState, type ReactElement } from 'react';
+import { Suspense, useMemo, useState, type ReactElement } from 'react';
 import { Copy, Package, Search, Upload } from 'lucide-react';
 import { OrderStatus } from '@skydrop/db';
-import { useStoreIdentity } from '@skydrop/auth/client';
+import { useApiClient, useStoreIdentity } from '@skydrop/auth/client';
 import { Money } from '@skydrop/ui/components';
 import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
 import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
 import { FilterBar, FilterField } from '@skydrop/ui/app/filter-bar';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { Select } from '@skydrop/ui/app/select';
-import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import {
+  SelectAllTh,
+  SelectTd,
+  Table,
+  TBody,
+  THead,
+  Td,
+  Th,
+  Tr,
+  useRowSelection,
+} from '@skydrop/ui/app/data-table';
+import {
+  BulkActions,
+  BulkSelectStrip,
+  orderBulkActions,
+  type BulkResponse,
+  type BulkTransport,
+} from '@skydrop/ui/app/bulk-actions';
+import { useUiT } from '@skydrop/ui/app/i18n-client';
+import { InfoButton } from '@/components/easy/info-button';
 import { Pagination } from '@skydrop/ui/app/pagination';
 import { chipWords, StatusChip } from '@skydrop/ui/app/status-chip';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
@@ -82,12 +101,31 @@ function OrdersList(): ReactElement {
     router.replace(qs === '' ? base : `${base}?${qs}`);
   }
 
-  const list = useMyOrders({
+  // The list's own filter, WITHOUT the page: "all N matching" exports send
+  // exactly this, so the file holds what the list is showing.
+  const listFilter = {
     ...(status === '' ? {} : { status }),
     ...(search === '' ? {} : { search }),
-    page,
-    pageSize: PAGE_SIZE,
-  });
+  };
+  const list = useMyOrders({ ...listFilter, page, pageSize: PAGE_SIZE });
+
+  // ── Bulk actions: tick rows on this page, then act on them ──────────
+  const uiT = useUiT();
+  const client = useApiClient();
+  const pageIds = useMemo(() => (list.data?.items ?? []).map((o) => o.id), [list.data]);
+  const selection = useRowSelection(pageIds);
+  const bulkActions = useMemo(
+    () => orderBulkActions({ console: 'store', t: uiT, may: (p) => can(me, p) }),
+    [uiT, me],
+  );
+  const bulkTransport = useMemo<BulkTransport>(
+    () => ({
+      post: (path, body) => client.request<BulkResponse>(path, { method: 'POST', body }),
+      download: (path, body) => client.requestStream(path, { method: 'POST', body }),
+    }),
+    [client],
+  );
+  const mayBulk = bulkActions.length > 0;
   const mayPlace = can(me, 'orders.create');
   const filtered = status !== '' || search !== '';
 
@@ -201,10 +239,17 @@ function OrdersList(): ReactElement {
             }
           />
         ) : (
-          <div className="as-card" data-flush="1">
+          <div
+            className={mayBulk ? 'as-card ez-cards ez-lead-2 sk-bulk-table' : 'as-card'}
+            data-flush="1"
+          >
+            {mayBulk && <BulkSelectStrip selection={selection} />}
             <Table caption={t('orders.table.caption')}>
               <THead>
                 <Tr>
+                  {mayBulk && (
+                    <SelectAllTh selection={selection} label={uiT('ui.bulk.selectPage')} />
+                  )}
                   <Th>{t('orders.col.order')}</Th>
                   <Th>{t('orders.col.customer')}</Th>
                   <Th>{t('orders.col.status')}</Th>
@@ -230,7 +275,18 @@ function OrdersList(): ReactElement {
               </THead>
               <TBody>
                 {list.data.items.map((o) => (
-                  <Tr key={o.id} onActivate={() => router.push(`/orders/${o.id}`)}>
+                  <Tr
+                    key={o.id}
+                    selected={mayBulk && selection.isSelected(o.id)}
+                    onActivate={() => router.push(`/orders/${o.id}`)}
+                  >
+                    {mayBulk && (
+                      <SelectTd
+                        selection={selection}
+                        id={o.id}
+                        label={uiT('ui.bulk.selectRow', { name: o.orderNumber })}
+                      />
+                    )}
                     <Td>
                       <Link href={`/orders/${o.id}`} className="as-link sk-ident">
                         {o.orderNumber}
@@ -293,6 +349,18 @@ function OrdersList(): ReactElement {
                 ))}
               </TBody>
             </Table>
+            {mayBulk && (
+              <BulkActions
+                selection={selection}
+                actions={bulkActions}
+                transport={bulkTransport}
+                labelFor={(id) => list.data?.items.find((o) => o.id === id)?.orderNumber}
+                explain={(e) => verdict(e, t)}
+                onDone={() => void list.refetch()}
+                matching={{ total: list.data.total, filter: listFilter }}
+                info={<InfoButton title={uiT('ui.bulk.region')} text={uiT('ui.bulk.info')} />}
+              />
+            )}
             <div className="as-table-foot">
               <Pagination
                 page={page}

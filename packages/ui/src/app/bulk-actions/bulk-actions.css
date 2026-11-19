@@ -1,0 +1,274 @@
+/* Bulk actions — the sticky bar, the results sheet, the phone select strip.
+   Tokens only (FE-6). Only transform and opacity animate. */
+
+/* ── The bar ────────────────────────────────────────────────────────────
+   In the flow at the END of the list and stuck to the bottom of the screen
+   while the list is taller than it, so appearing never moves a row. The
+   outer box is the measured "bottom bar" (the assistant button lifts itself
+   above it); the card inside carries the look. */
+.sk-bulk {
+  position: sticky;
+  bottom: 0;
+  z-index: 12;
+  padding: var(--sp-2) 0 calc(var(--sp-2) + env(safe-area-inset-bottom));
+  min-width: 0;
+}
+.sk-bulk__card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--elev-2);
+  animation: sk-bulk-in var(--dur) var(--ease-out) both;
+}
+@keyframes sk-bulk-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.sk-bulk__lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  min-width: 0;
+}
+.sk-bulk__count {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.sk-bulk__tag {
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--saffron-line);
+  border-radius: var(--r-pill);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.sk-bulk__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sky);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  text-align: left;
+}
+.sk-bulk__link:hover {
+  text-decoration: underline;
+}
+.sk-bulk__link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+.sk-bulk__clear {
+  margin-left: auto;
+  color: var(--fg-muted);
+}
+.sk-bulk__faint {
+  color: var(--fg-faint);
+  font-weight: var(--fw-regular);
+}
+.sk-bulk__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+/* A destructive action is quiet on the bar (red words, not a red slab):
+   the red, filled button is the one inside its confirm dialog. */
+.sk-bulk__danger {
+  border-color: var(--red-line);
+  color: var(--red-text);
+}
+.sk-bulk__status {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.sk-bulk__status[data-tone='ok'] {
+  color: var(--green-text);
+}
+.sk-bulk__status[data-tone='bad'] {
+  color: var(--red-text);
+}
+.sk-bulk__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+}
+
+/* On a phone the actions are ONE row that slides sideways: a bar that wraps
+   to four lines would cover the list it acts on. */
+@media (max-width: 767px) {
+  .sk-bulk__card {
+    padding: var(--sp-3);
+  }
+  .sk-bulk__actions {
+    flex-wrap: nowrap;
+    margin: 0 calc(-1 * var(--sp-3));
+    padding: 2px var(--sp-3);
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+  .sk-bulk__actions::-webkit-scrollbar {
+    display: none;
+  }
+  .sk-bulk__actions > * {
+    flex: none;
+    min-height: 44px;
+    scroll-snap-align: start;
+  }
+  .sk-bulk__link {
+    min-height: 44px;
+  }
+}
+
+/* ── "Select all on this page", phones only ─────────────────────────────── */
+.sk-bulk-strip {
+  display: none;
+}
+@media (max-width: 767px) {
+  .sk-bulk-strip {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 var(--sp-1);
+  }
+}
+
+/* ── A list with a select column, as phone cards ────────────────────────
+   The tick sits in the card's top corner instead of taking a line of its
+   own, and the card's first line leaves room for it. Scoped to lists that
+   ask for it (`sk-bulk-table`), so other select tables are untouched. */
+@media (max-width: 767px) {
+  .sk-bulk-table .sd-table-cards tbody > .sk-tr {
+    position: relative;
+  }
+  .sk-bulk-table .sd-table-cards tbody > .sk-tr > .sk-td--select {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+  }
+  .sk-bulk-table .sd-table-cards tbody > .sk-tr > .sk-td--select::before {
+    display: none;
+  }
+  .sk-bulk-table .sd-table-cards tbody > .sk-tr > .sk-td:nth-child(2) {
+    padding-right: 48px;
+  }
+}
+
+/* ── Results sheet ──────────────────────────────────────────────────────── */
+.sk-bulk-res {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.sk-bulk-res__totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.sk-bulk-res__totals > span,
+.sk-bulk-res__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+.sk-bulk-res [data-outcome='DONE']:not(li) {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.sk-bulk-res [data-outcome='SKIPPED']:not(li) {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.sk-bulk-res [data-outcome='FAILED']:not(li) {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.sk-bulk-res__note {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.sk-bulk-res__list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.sk-bulk-res__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  min-width: 0;
+}
+.sk-bulk-res__row + .sk-bulk-res__row {
+  border-top: 1px solid var(--line);
+}
+.sk-bulk-res__name {
+  min-width: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.sk-bulk-res__why {
+  grid-column: 1 / -1;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.sk-bulk-res__code {
+  color: var(--fg-faint);
+  font-family: var(--font-mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk-bulk__card {
+    animation: none;
+  }
+}
