@@ -510,12 +510,20 @@ const DELIBERATELY_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   ],
   ['/seller/orders/:orderId/reattempt-request', 'The same: a request to us.'],
   [
+    '/seller/bulk/orders',
+    'Bulk cancel / request cancellation / delivery actions (2026-11-19): a loop over the single-order routes allowed above — the same rules per order, nothing a session could not already do one order at a time.',
+  ],
+  [
     '/seller/orders/:orderId/consignee',
     'Asks the courier to deliver somewhere else. The commonest support call there is.',
   ],
 
   // ── The store side of the same ────────────────────────────────────
   ['/store/orders', 'Orders are the work.'],
+  [
+    '/store/bulk/orders',
+    'Bulk cancel / request cancellation: the single store routes, once per order.',
+  ],
   ['/store/order-imports', 'Uploading a CSV of their orders.'],
   ['/store/customers', 'Correcting a customer record.'],
   ['/store/profile', 'Display name and logo.'],

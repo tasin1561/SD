@@ -19,6 +19,9 @@ import { SellerStoreActionDecisionService } from './services/seller-store-action
 import { StoreActionNotifier } from './services/store-action-notifier.service';
 import { DeliveryFailedListener } from './services/delivery-failed-listener.service';
 import { SellerCallHistoryService } from './services/seller-call-history.service';
+import { SellerBulkDeliveryActionController } from './controllers/seller-bulk-delivery-action.controller';
+import { AdminBulkDeliveryActionController } from './controllers/admin-bulk-delivery-action.controller';
+import { BulkModule } from '../../common/bulk/bulk.module';
 
 /**
  * What a seller can ask for when a delivery fails, and the operator who
@@ -31,6 +34,7 @@ import { SellerCallHistoryService } from './services/seller-call-history.service
  */
 @Module({
   imports: [
+    BulkModule,
     AuthCommonModule,
     CallQueueModule,
     CourierOpsModule,
@@ -50,6 +54,8 @@ import { SellerCallHistoryService } from './services/seller-call-history.service
     NotificationLedgerModule,
   ],
   controllers: [
+    SellerBulkDeliveryActionController,
+    AdminBulkDeliveryActionController,
     SellerDeliveryActionController,
     AdminDeliveryActionController,
     // 2026-09-16 — the store asks; the seller decides the ones their

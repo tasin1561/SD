@@ -29,6 +29,8 @@ import { StoreApiKeyService } from './services/store-api-key.service';
 import { StoreCustomersService } from './services/store-customers.service';
 import { StoreOrdersService } from './services/store-orders.service';
 import { StoreWebhookService } from './services/store-webhook.service';
+import { StoreBulkOrderCancelController } from './controllers/store-bulk-order-cancel.controller';
+import { BulkModule } from '../../common/bulk/bulk.module';
 
 /**
  * RS-5 — reseller store ORDERS: the store's portal (orders, customers,
@@ -45,6 +47,7 @@ import { StoreWebhookService } from './services/store-webhook.service';
  */
 @Module({
   imports: [
+    BulkModule,
     AuthCommonModule,
     CatalogReadModule,
     OrderCoreModule,
@@ -74,6 +77,7 @@ import { StoreWebhookService } from './services/store-webhook.service';
     BulkOrderActionsModule,
   ],
   controllers: [
+    StoreBulkOrderCancelController,
     StoreOrderController,
     // Bulk order actions, Phase A: the CSV of a store's / associate's own orders.
     StoreOrderBulkController,

@@ -25,6 +25,9 @@ import { AdminOrderBulkController } from './controllers/admin-order-bulk.control
 import { CallQueueModule } from '../call-queue/call-queue.module';
 import { CancelRequestModule } from '../cancel-request/cancel-request.module';
 import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-policy.module';
+import { SellerBulkOrderCancelController } from './controllers/seller-bulk-order-cancel.controller';
+import { AdminBulkOrderCancelController } from './controllers/admin-bulk-order-cancel.controller';
+import { BulkModule } from '../../common/bulk/bulk.module';
 
 /**
  * Module 6 — Order Management (PUBLIC facade).
@@ -61,6 +64,7 @@ import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-po
  */
 @Module({
   imports: [
+    BulkModule,
     OrderCoreModule,
     InventoryStockModule,
     // Module 9: OrderWriteService's DISPATCH_STOCK handler issues
@@ -94,6 +98,8 @@ import { ConfirmationPolicyModule } from '../confirmation-policy/confirmation-po
     BulkOrderActionsModule,
   ],
   controllers: [
+    SellerBulkOrderCancelController,
+    AdminBulkOrderCancelController,
     SellerOrderController,
     SellerCustomerController,
     SellerRecipientAddressController,
