@@ -1462,7 +1462,7 @@ export const PORTAL_TEXT_SELLER: ReadonlyArray<TextRow> = [
   ["authedShell.yourSessionIsIntact","Your session is intact — something on this page failed to load."],
   ["callConfirm.switchDesc","Our call agents phone the customer before the order goes to the warehouse."],
   ["callConfirm.rtoFact","With calls off, orders are not phoned: they wait in your list and confirm on their own once the time below runs out, unless you send them for a call. A parcel that comes back is charged to you at the usual RTO fee."],
-  ["callConfirm.ttlHint","Whole hours from {min} to {max} (up to 7 days). Used only while calls are off."],
+  ["callConfirm.ttlHint","From 5 minutes to 7 days. Used only while calls are off."],
   ["callConfirm.pageSubtitle","Send the orders that need a phone call to our agents. Anything left here confirms on its own when its time runs out."],
   ["callConfirm.confirmNowBody","Nobody will phone these customers. Your stock is claimed for each order straight away and they go on to packing. The confirmation call is what keeps COD returns down, and a parcel that comes back is charged to you at the usual RTO fee."],
   ["callConfirm.outOfStockNote","An out-of-stock order keeps its place and can be confirmed once the stock is in."],

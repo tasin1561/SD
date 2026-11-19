@@ -100,12 +100,16 @@ export interface ConfirmWithoutCallResponse {
 
 export interface ConfirmationCallsSetting {
   readonly callsRequired: boolean;
-  /** 1..168. */
+  /** 1..168. Whole hours, rounded up from `ttlMinutes` (kept for older screens). */
   readonly ttlHours: number;
+  /** 5..10080 (5 minutes to 7 days). The delay the server actually uses. */
+  readonly ttlMinutes: number;
   readonly isOwnValue: boolean;
 }
 
 export interface SetConfirmationCallsRequest {
   readonly callsRequired: boolean;
   readonly ttlHours?: number;
+  /** 5..10080. Wins over `ttlHours` when both are sent. */
+  readonly ttlMinutes?: number;
 }

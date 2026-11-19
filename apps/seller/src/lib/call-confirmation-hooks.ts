@@ -24,12 +24,17 @@ import { useApiClient } from '@skydrop/auth/client';
 
 export const TTL_MIN_HOURS = 1;
 export const TTL_MAX_HOURS = 168;
+/** The same limit in minutes: 5 minutes to 7 days. Stated, never enforced here (FE-2). */
+export const TTL_MIN_MINUTES = 5;
+export const TTL_MAX_MINUTES = 10080;
 
 export interface CallConfirmationSetting {
   /** `ops.call_confirmation_required` — true is the default and the safe state. */
   readonly callsRequired: boolean;
   /** `ops.call_auto_confirm_ttl_hours` — only meaningful while calls are off. */
   readonly ttlHours: number;
+  /** The delay in minutes (5..10080). Absent only from an older server. */
+  readonly ttlMinutes?: number;
   readonly isOwnValue: boolean;
 }
 
@@ -77,7 +82,7 @@ export function useCallConfirmationSetting(): UseQueryResult<CallConfirmationSet
 export function useSetCallConfirmationSetting(): UseMutationResult<
   CallConfirmationSetting,
   Error,
-  { callsRequired: boolean; ttlHours: number }
+  { callsRequired: boolean; ttlMinutes: number }
 > {
   const client = useApiClient();
   const queryClient = useQueryClient();

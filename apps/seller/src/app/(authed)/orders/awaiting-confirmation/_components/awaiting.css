@@ -8,6 +8,28 @@
   gap: var(--sp-4);
   min-width: 0;
 }
+/* The delay: a number and its unit side by side. The hint sits under the
+   number, so the row is aligned to the top and never shifts when it wraps. */
+.cc-ttl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(7.5rem, 9rem);
+  align-items: start;
+  gap: var(--sp-3);
+  max-width: 28rem;
+  min-width: 0;
+}
+@media (max-width: 479px) {
+  .cc-ttl {
+    grid-template-columns: minmax(0, 1fr) 7.25rem;
+    gap: var(--sp-2);
+  }
+}
+/* The narrowest phones: one under the other, so the label is never cut. */
+@media (max-width: 359px) {
+  .cc-ttl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .cc-fact {
   display: flex;
   align-items: flex-start;

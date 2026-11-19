@@ -52,7 +52,7 @@ describe('call confirmation setting', () => {
     );
     const ttl = await screen.findByLabelText(/auto-confirm after/i);
     expect(ttl).toBeDisabled();
-    expect(screen.getByText(/from 1 to 168/i)).toBeInTheDocument();
+    expect(screen.getByText(/from 5 minutes to 7 days/i)).toBeInTheDocument();
     expect(screen.getByText(/charged to you at the usual RTO fee/i)).toBeInTheDocument();
   });
 
@@ -69,6 +69,56 @@ describe('call confirmation setting', () => {
     const ttl = await screen.findByLabelText(/auto-confirm after/i);
     await waitFor(() => expect(ttl).toBeEnabled());
     expect(ttl).toHaveValue(48);
+  });
+
+  it('shows a stored delay as hours when it is whole hours, minutes otherwise', async () => {
+    const fetchImpl = buildFetchMock([
+      {
+        match: SETTING,
+        responses: many({ callsRequired: false, ttlHours: 1, ttlMinutes: 45, isOwnValue: true }),
+      },
+    ]);
+    renderWithProviders(
+      <ToastProvider>
+        <CallConfirmationPanel />
+      </ToastProvider>,
+      { fetchImpl },
+    );
+    const ttl = await screen.findByLabelText(/auto-confirm after/i);
+    await waitFor(() => expect(ttl).toHaveValue(45));
+    expect(screen.getByLabelText('Unit')).toHaveValue('minutes');
+  });
+
+  it('saves the delay in minutes: hours are multiplied by 60', async () => {
+    const fetchImpl = buildFetchMock([
+      {
+        match: SETTING,
+        responses: many({ callsRequired: false, ttlHours: 2, ttlMinutes: 120, isOwnValue: true }),
+      },
+    ]);
+    renderWithProviders(
+      <ToastProvider>
+        <CallConfirmationPanel />
+      </ToastProvider>,
+      { fetchImpl },
+    );
+    const ttl = await screen.findByLabelText(/auto-confirm after/i);
+    await waitFor(() => expect(ttl).toHaveValue(2));
+    expect(screen.getByLabelText('Unit')).toHaveValue('hours');
+    fireEvent.change(ttl, { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      const call = fetchImpl.mock.calls.find(
+        (c) => SETTING.test(String(c[0])) && (c[1] as RequestInit | undefined)?.method === 'PATCH',
+      );
+      expect(JSON.parse(String((call?.[1] as RequestInit).body))).toEqual({
+        callsRequired: false,
+        ttlMinutes: 180,
+      });
+    });
+    // Switching the unit keeps the same length of time.
+    fireEvent.change(screen.getByLabelText('Unit'), { target: { value: 'minutes' } });
+    expect(ttl).toHaveValue(180);
   });
 });
 
