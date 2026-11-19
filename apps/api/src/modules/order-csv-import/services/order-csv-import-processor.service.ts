@@ -14,7 +14,11 @@ import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { EnvService } from '../../../config/env.service';
 import { UatFieldsService } from '../../uat-settings/services/uat-fields.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
+import {
+  CatalogReadService,
+  suggestSkusSafe,
+  withSkuHint,
+} from '../../catalog-read/services/catalog-read.service';
 import { OrderService, type BulkOrderPatchInput } from '../../order/services/order.service';
 import { ResellerOrderService } from '../../order/services/reseller-order.service';
 import { StagedOrderRowService } from './staged-order-row.service';
@@ -364,7 +368,10 @@ export class OrderCsvImportProcessorService {
           // shows a 4xx of ours verbatim and hides everything else, and an
           // unrecognised SKU is the commonest thing a seller has to fix.
           throw new BadRequestException(
-            `Variant SKU "${l.productSku}" is not in this store's catalogue`,
+            withSkuHint(
+              `Variant SKU "${l.productSku}" is not in this store's catalogue`,
+              await suggestSkusSafe(this.catalog, sellerId, l.productSku),
+            ),
           );
         }
         return {
@@ -460,7 +467,10 @@ export class OrderCsvImportProcessorService {
           // shows a 4xx of ours verbatim and hides everything else, and an
           // unrecognised SKU is the commonest thing a seller has to fix.
           throw new BadRequestException(
-            `Variant SKU "${l.productSku}" is not in this store's catalogue`,
+            withSkuHint(
+              `Variant SKU "${l.productSku}" is not in this store's catalogue`,
+              await suggestSkusSafe(this.catalog, sellerId, l.productSku),
+            ),
           );
         }
         return {
@@ -527,7 +537,12 @@ export class OrderCsvImportProcessorService {
         const resolved = await this.catalog.getVariantBySku(sellerId, l.productSku);
         if (!resolved || resolved.sellerId !== sellerId) {
           // See above: the seller's own data, so the seller reads it.
-          throw new BadRequestException(`Variant SKU "${l.productSku}" not found for this client`);
+          throw new BadRequestException(
+            withSkuHint(
+              `Variant SKU "${l.productSku}" not found for this client`,
+              await suggestSkusSafe(this.catalog, sellerId, l.productSku),
+            ),
+          );
         }
         return {
           variantId: resolved.variantId,
