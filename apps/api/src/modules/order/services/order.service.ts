@@ -30,7 +30,11 @@ import {
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SellerRestrictionService } from '../../seller-restriction/services/seller-restriction.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
+import {
+  CatalogReadService,
+  suggestSkusSafe,
+  withSkuHint,
+} from '../../catalog-read/services/catalog-read.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { CustomerService } from './customer.service';
 import { CustomerReputationService } from './customer-reputation.service';
@@ -2421,7 +2425,10 @@ export class OrderService {
       if (!resolved || resolved.sellerId !== sellerId) {
         throw new BadRequestException({
           code: 'VARIANT_NOT_FOUND',
-          message: `Variant SKU "${l.productSku}" not found for this client`,
+          message: withSkuHint(
+            `Variant SKU "${l.productSku}" not found for this client`,
+            await suggestSkusSafe(this.catalog, sellerId, l.productSku),
+          ),
         });
       }
       resolvedBySku.set(l.productSku, resolved);

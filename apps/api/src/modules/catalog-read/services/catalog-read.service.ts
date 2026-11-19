@@ -25,6 +25,45 @@ const GST_FALLBACK = new Prisma.Decimal('18');
  * inheritance chain. Frozen so a cross-module consumer (pricing, orders,
  * shipments) cannot mutate catalog state by accident.
  */
+/**
+ * `suggestSkus`, but a hint can never replace the refusal it decorates: any
+ * failure (or a catalogue double without the method) reads as "no hint".
+ */
+export async function suggestSkusSafe(
+  catalog: Pick<CatalogReadService, 'suggestSkus'> | Partial<CatalogReadService>,
+  sellerId: string,
+  typed: string,
+): Promise<readonly SkuSuggestion[]> {
+  try {
+    return typeof catalog.suggestSkus === 'function'
+      ? await catalog.suggestSkus(sellerId, typed)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/** A real SKU the seller may have meant (see `suggestSkus`). */
+export interface SkuSuggestion {
+  readonly skuCode: string;
+  readonly productName: string;
+  readonly variantLabel: string | null;
+}
+
+/**
+ * "Variant SKU "X" not found for this client — did you mean "Coffee"
+ * (Elite Collagen)?" The base message is kept word for word so anything
+ * matching on it still matches; the hint is only appended.
+ */
+export function withSkuHint(base: string, suggestions: readonly SkuSuggestion[]): string {
+  if (suggestions.length === 0) return base;
+  const one = (x: SkuSuggestion): string =>
+    `"${x.skuCode}" (${x.productName}${x.variantLabel ? ` — ${x.variantLabel}` : ''})`;
+  return suggestions.length === 1
+    ? `${base} — did you mean ${one(suggestions[0] as SkuSuggestion)}?`
+    : `${base} — did you mean one of: ${suggestions.map(one).join(', ')}?`;
+}
+
 export interface ResolvedVariant {
   readonly variantId: string;
   readonly productId: string;
@@ -357,6 +396,45 @@ export class CatalogReadService {
       this.resolveGstDefault(),
     ]);
     return row ? this.resolve(row, gstDefault) : null;
+  }
+
+  /**
+   * What the seller probably MEANT by a SKU that resolves to nothing — the
+   * commonest import mistake is the PRODUCT NAME in the SKU column (owner,
+   * 2026-11-19: "Elite Collagen" typed where the SKU is "Coffee"). Read-only,
+   * this seller's live catalogue only, at most 3. Ranked: same SKU ignoring
+   * case/spaces/dashes, then exact product name, then product name + variant
+   * label, then a product name that contains what was typed.
+   */
+  async suggestSkus(sellerId: string, typed: string): Promise<readonly SkuSuggestion[]> {
+    const norm = (v: string): string => v.toLowerCase().replace(/[\s_\-./]+/g, '');
+    const want = norm(typed);
+    if (want === '') return [];
+    const rows = await this.prisma.client.productVariant.findMany({
+      where: { sellerId, deletedAt: null, product: { deletedAt: null } },
+      select: { skuCode: true, variantLabel: true, product: { select: { name: true } } },
+      take: 2000,
+    });
+    const scored: Array<{ s: SkuSuggestion; rank: number }> = [];
+    for (const r of rows) {
+      const name = r.product.name;
+      const label = r.variantLabel ?? '';
+      let rank = 0;
+      if (norm(r.skuCode) === want) rank = 1;
+      else if (norm(name) === want) rank = 2;
+      else if (label !== '' && norm(`${name}${label}`) === want) rank = 3;
+      else if (want.length >= 4 && norm(name).includes(want)) rank = 4;
+      if (rank > 0) {
+        scored.push({
+          s: { skuCode: r.skuCode, productName: name, variantLabel: r.variantLabel },
+          rank,
+        });
+      }
+    }
+    return scored
+      .sort((x, y) => x.rank - y.rank || x.s.skuCode.localeCompare(y.s.skuCode))
+      .slice(0, 3)
+      .map((x) => x.s);
   }
 
   /**
