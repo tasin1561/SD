@@ -24,6 +24,9 @@ import { StoreCancelRequestController } from './controllers/store-cancel-request
 import { TicketAssistantReadService } from './services/ticket-assistant-read.service';
 import { ResellerStoreModule } from '../reseller-store/reseller-store.module';
 import { StoreOrderRequestModule } from '../store-order-request/store-order-request.module';
+import { SellerBulkCancelRequestController } from './controllers/seller-bulk-cancel-request.controller';
+import { StoreBulkCancelRequestController } from './controllers/store-bulk-cancel-request.controller';
+import { BulkModule } from '../../common/bulk/bulk.module';
 
 /**
  * R7 — unified ticket system (scrap/damage + seller-raised issues).
@@ -32,6 +35,7 @@ import { StoreOrderRequestModule } from '../store-order-request/store-order-requ
  */
 @Module({
   imports: [
+    BulkModule,
     AuthCommonModule,
     SellerWalletModule,
     // A seller raising an issue now opens the courier conversation for
@@ -61,6 +65,8 @@ import { StoreOrderRequestModule } from '../store-order-request/store-order-requ
     ResellerOrderMoneyViewModule,
   ],
   controllers: [
+    SellerBulkCancelRequestController,
+    StoreBulkCancelRequestController,
     SellerTicketController,
     AdminTicketController,
     StoreTicketController,
