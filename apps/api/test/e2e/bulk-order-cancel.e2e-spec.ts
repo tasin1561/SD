@@ -114,13 +114,16 @@ describe('Bulk order cancel (e2e)', () => {
       .expect(200);
   }
 
+  let phoneSeq = 0;
   async function placeOrder(): Promise<string> {
     const res = await request(h.baseUrl)
       .post('/seller/orders')
       .set(sellerAuth)
       .send({
         recipientName: 'Cancel Customer',
-        recipientPhoneE164: `+9198765${String(Date.now()).slice(-5)}`,
+        // A distinct customer per order: four orders in one millisecond
+        // would otherwise share a phone and be refused as suspected duplicates.
+        recipientPhoneE164: `+91987${String(Date.now() % 100000).padStart(5, '0')}${String((phoneSeq += 1) % 100).padStart(2, '0')}`,
         recipientAddressLine1: '12 Test Road',
         recipientAddressLine2: 'Near City Hospital',
         recipientCity: 'New Delhi',
