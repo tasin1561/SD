@@ -127,7 +127,8 @@ export class SellerOrderDefaultsController {
     );
     // Minutes win. An hours-only write also moves the minutes override (h x 60),
     // so a stale minutes value can never shadow the newer hours choice.
-    const minutes = body.ttlMinutes ?? (body.ttlHours !== undefined ? body.ttlHours * 60 : undefined);
+    const minutes =
+      body.ttlMinutes ?? (body.ttlHours !== undefined ? body.ttlHours * 60 : undefined);
     if (body.ttlHours !== undefined && body.ttlMinutes === undefined) {
       await this.settings.setOverride(
         seller.id,

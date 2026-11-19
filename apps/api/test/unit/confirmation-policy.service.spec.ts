@@ -6,7 +6,8 @@ function make(opts: { required?: boolean; ttl?: number; settingThrows?: boolean 
   const resolve = jest.fn(async (_sellerId: string, key: string) => {
     if (opts.settingThrows) throw new Error('boom');
     if (key === 'ops.call_confirmation_required') return { value: opts.required ?? true };
-    if (key === 'ops.call_auto_confirm_ttl_minutes') return { value: null, source: 'SYSTEM_DEFAULT' };
+    if (key === 'ops.call_auto_confirm_ttl_minutes')
+      return { value: null, source: 'SYSTEM_DEFAULT' };
     return { value: opts.ttl ?? 24, source: 'SELLER_OVERRIDE' };
   });
   const enqueueOrder = jest.fn(async () => ({ entry: {}, created: true }));

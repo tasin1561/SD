@@ -17,7 +17,8 @@ export class SetConfirmationCallsDto {
   @ApiPropertyOptional({
     minimum: 5,
     maximum: 10080,
-    description: 'Auto-confirm delay in minutes (5 min to 7 days). Wins over ttlHours if both sent.',
+    description:
+      'Auto-confirm delay in minutes (5 min to 7 days). Wins over ttlHours if both sent.',
   })
   @IsOptional()
   @IsInt()
