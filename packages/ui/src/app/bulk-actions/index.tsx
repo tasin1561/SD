@@ -115,6 +115,14 @@ export interface BulkActionsProps {
   readonly max?: number;
   /** An (i) beside the count — the app's own info button. */
   readonly info?: ReactNode;
+  /**
+   * Take the answer instead of the results sheet — for a list that shows each
+   * row's result on the row itself. `names` is what the rows were called
+   * BEFORE the action (a row that left the list can still be named).
+   */
+  readonly onResults?:
+    | ((action: BulkActionDef, data: BulkResponse, names: ReadonlyMap<string, string>) => void)
+    | undefined;
 }
 
 function freshKey(): string {
@@ -156,6 +164,7 @@ export function BulkActions({
   matching,
   max = 200,
   info,
+  onResults,
 }: BulkActionsProps): ReactElement | null {
   const t = useUiT();
   const [allMatching, setAllMatching] = useState(false);
@@ -225,14 +234,15 @@ export function BulkActions({
           ...(def.withKey === true ? { idempotencyKey: keyRef.current || freshKey() } : {}),
           ...extra,
         });
-        setResults({ title: def.label, data, names });
+        if (onResults !== undefined) onResults(def, data, names);
+        else setResults({ title: def.label, data, names });
         selection.clear();
         onDone();
       } finally {
         setBusy(null);
       }
     },
-    [allMatching, ids, labelFor, matching, onDone, selection, t, transport],
+    [allMatching, ids, labelFor, matching, onDone, onResults, selection, t, transport],
   );
 
   function start(def: BulkActionDef): void {

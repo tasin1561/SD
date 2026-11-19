@@ -1,0 +1,358 @@
+/* Pending orders, list-first. Tokens only (FE-6). Only transform and opacity
+   animate; everything is still under `prefers-reduced-motion`. */
+
+/* ── The compact list ───────────────────────────────────────────────────── */
+.pend-rowno {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+.pend-name {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.pend-sku {
+  overflow-wrap: anywhere;
+}
+.pend-state {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pend-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.pend-chip[data-tone='good'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.pend-chip[data-tone='warn'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.pend-chip[data-tone='bad'] {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+
+.pend-chev-cell {
+  width: 52px;
+}
+.pend-chev {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.pend-chev:hover {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+}
+.pend-chev:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.pend-chev > svg {
+  transition: transform var(--dur) var(--ease-out);
+}
+.pend-line[data-open='1'] .pend-chev > svg {
+  transform: rotate(180deg);
+}
+.pend-line[data-open='1'] > .sk-td {
+  background: var(--surface-3);
+}
+
+/* The open row's editor, under its line. */
+.pend-open__cell {
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.pend-open__cell > .ord-section {
+  animation: pend-open var(--dur) var(--ease-out) both;
+}
+@keyframes pend-open {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pend-nav {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+}
+.pend-nav__at {
+  margin-right: var(--sp-1);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+.pend-pick {
+  min-width: min(18rem, 100%);
+}
+
+/* ── The last bulk step ─────────────────────────────────────────────────── */
+.pend-last {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--elev-1);
+}
+.pend-last__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-3);
+}
+.pend-last__title {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.pend-last__x {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.pend-last__x:hover {
+  color: var(--fg-strong);
+}
+.pend-last__x:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+.pend-last__rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px var(--sp-3);
+  max-height: 9.5rem;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+.pend-last__row {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.pend-last__n {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+/* ── Fix in bulk ────────────────────────────────────────────────────────── */
+.pend-fix {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pend-fix__group {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--sp-3) var(--sp-4);
+  padding: var(--sp-4) 0;
+  min-width: 0;
+}
+.pend-fix__group:first-child {
+  padding-top: 0;
+}
+.pend-fix__group:last-child {
+  padding-bottom: 0;
+}
+.pend-fix__group + .pend-fix__group {
+  border-top: 1px solid var(--line);
+}
+.pend-fix__what {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.pend-fix__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+  color: var(--sky);
+}
+.pend-fix__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.pend-fix__line {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.pend-fix__dot {
+  margin: 0 6px;
+  color: var(--fg-faint);
+}
+.pend-fix__now {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.pend-fix__to {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-2) var(--sp-3);
+  min-width: 0;
+}
+.pend-fix__to > :not(.pend-fix__arrow) {
+  grid-column: 2;
+}
+.pend-fix__arrow {
+  margin-top: 14px;
+  color: var(--fg-faint);
+}
+.pend-fix__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+.pend-fix__error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--red-text);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1023px) {
+  .pend-fix__group {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pend-fix__actions {
+    justify-content: flex-start;
+  }
+}
+
+/* ── Phones: every line is a card ───────────────────────────────────────── */
+@media (max-width: 767px) {
+  .pend-table .pend-open,
+  .pend-table .pend-open__cell {
+    display: block;
+    width: 100%;
+  }
+  .pend-open__cell {
+    padding: var(--sp-3) 0 var(--sp-2);
+    border-bottom: 0;
+    background: none;
+  }
+  /* The open/close button sits beside the tick in the card's top corner,
+     not on a line of its own at the bottom. */
+  .pend-table .sd-table-cards tbody > .sk-tr > .pend-chev-cell {
+    position: absolute;
+    top: 0;
+    right: 46px;
+    /* The card rules give every cell a row layout, a rule and a fill; this
+       one is a floating button, so those are switched off outright. */
+    display: grid !important;
+    place-items: center;
+    width: 44px;
+    height: 48px;
+    min-height: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+  .pend-table .sd-table-cards tbody > .sk-tr > .pend-chev-cell::before {
+    display: none;
+  }
+  .pend-table .sd-table-cards tbody > .sk-tr > .sk-td:nth-child(2) {
+    padding-right: 96px;
+  }
+  .pend-chev {
+    width: 44px;
+    height: 44px;
+  }
+  .pend-fix__to {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pend-fix__to > :not(.pend-fix__arrow) {
+    grid-column: 1;
+  }
+  .pend-fix__arrow {
+    display: none;
+  }
+  .pend-fix__actions > * {
+    min-height: 44px;
+  }
+  .pend-nav {
+    justify-content: flex-start;
+  }
+  .pend-last__x {
+    min-height: 44px;
+  }
+  .pend-pick {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pend-chev > svg {
+    transition: none;
+  }
+  .pend-open__cell > .ord-section {
+    animation: none;
+  }
+}
