@@ -166,9 +166,13 @@ describe('Bulk order cancel (e2e)', () => {
     });
   }
 
-  /** Debit the delivery fee (as AT_AWB would) and confirm — the money case. */
-  async function chargedAndConfirmed(): Promise<{ orderId: string; charged: string }> {
-    const orderId = await placeOrder();
+  /**
+   * Debit the delivery fee (as AT_AWB would) and confirm — the money case.
+   * Orders are PLACED first and charged after: the test seller's wallet
+   * starts at zero, and the wallet guard (correctly) refuses a new order
+   * once earlier charges have overdrawn it.
+   */
+  async function chargeAndConfirm(orderId: string): Promise<{ orderId: string; charged: string }> {
     const accrual = h.app.get(OrderChargesAccrualService);
     await h.prisma.$transaction(async (tx) => {
       await accrual.debitIfNeeded(tx, orderId, sellerId);
@@ -186,17 +190,22 @@ describe('Bulk order cancel (e2e)', () => {
     return { orderId, charged: debit!.amount.toString() };
   }
 
+  async function chargedAndConfirmed(): Promise<{ orderId: string; charged: string }> {
+    return chargeAndConfirm(await placeOrder());
+  }
+
   function summary(entries: Awaited<ReturnType<typeof walletEntries>>): string[] {
     return entries.map((e) => `${e.direction}:${e.amount.toString()}`).sort();
   }
 
   it('bulk cancel writes exactly the wallet rows and stock releases single cancels write', async () => {
     await receiveStock(20);
-    const control = await chargedAndConfirmed();
+    const ids = [await placeOrder(), await placeOrder(), await placeOrder(), await placeOrder()];
+    const control = await chargeAndConfirm(ids[0]!);
     const bulk = [
-      await chargedAndConfirmed(),
-      await chargedAndConfirmed(),
-      await chargedAndConfirmed(),
+      await chargeAndConfirm(ids[1]!),
+      await chargeAndConfirm(ids[2]!),
+      await chargeAndConfirm(ids[3]!),
     ];
 
     // The control order: cancelled the ordinary way.
