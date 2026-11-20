@@ -478,12 +478,13 @@ button.ez-guide__pick:hover {
     min-width: 44px;
     min-height: 44px;
   }
-  /* The tick box keeps its drawn size; its touch area grows around it. */
-  .ez-touch input.sk-check__input,
+  /* The tick box keeps its drawn size; its touch area grows around it.
+     Only the bare `wh-check` box: the shared `sk-check` input is laid over
+     its own drawn box (absolute) and its label is already the tap area —
+     making it `relative` pushed the tick mark out of the box on phones. */
   .ez-touch input.wh-check {
     position: relative;
   }
-  .ez-touch input.sk-check__input::after,
   .ez-touch input.wh-check::after {
     content: '';
     position: absolute;
