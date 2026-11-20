@@ -363,7 +363,7 @@ describe('Pack box session (e2e)', () => {
       .send({ awbNumber })
       .expect(409);
     expect(held.body.code).toBe('PARCEL_ON_HOLD');
-    expect(held.body.issueId).toBe(issue.id);
+    expect(held.body.details.issueId).toBe(issue.id);
 
     await request(h.baseUrl)
       .post(`/admin/system-issues/${issue.id}/resolve`)

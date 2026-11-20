@@ -147,6 +147,8 @@ export class ScanBlockService {
         `Carry on with the rest.`,
       issueId: row.id,
       shipmentNumber: meta?.shipmentNumber ?? null,
+      // The error filter forwards only `details`, so the id must be here too.
+      details: { issueId: row.id },
     });
   }
 

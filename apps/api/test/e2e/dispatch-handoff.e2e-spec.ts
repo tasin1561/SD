@@ -578,7 +578,7 @@ describe('Dispatch handoff endpoint (e2e)', () => {
       .send({ awbNumber })
       .expect(409);
     expect(held.body.code).toBe('PARCEL_ON_HOLD');
-    expect(held.body.issueId).toBe(issue.id);
+    expect(held.body.details.issueId).toBe(issue.id);
 
     // An admin resolves it with a note; the parcel is a normal duplicate again.
     await request(h.baseUrl)

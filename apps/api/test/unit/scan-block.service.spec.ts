@@ -75,6 +75,7 @@ describe('ScanBlockService — a repeated box stops the person who scanned it', 
       response: {
         code: 'PARCEL_ON_HOLD',
         issueId: 'issue-7',
+        details: { issueId: 'issue-7' },
         message: expect.stringContaining('SH-7'),
       },
     });
