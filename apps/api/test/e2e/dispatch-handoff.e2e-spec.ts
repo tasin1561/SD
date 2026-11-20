@@ -518,7 +518,7 @@ describe('Dispatch handoff endpoint (e2e)', () => {
     expect(packMovements).toHaveLength(1);
   });
 
-  it('A REPEATED BOX STOPS THE OPERATOR, and keeps them stopped until an admin clears it', async () => {
+  it('A REPEATED BOX HOLDS THE PARCEL, not the operator, until an admin clears it', async () => {
     await receiveStock(10);
     const { orderId, awbNumber } = await driveToPacked(2);
     // Packed UP FRONT, before the block exists: the stop covers both
@@ -556,33 +556,12 @@ describe('Dispatch handoff endpoint (e2e)', () => {
     const issue = await h.prisma.systemIssue.findFirstOrThrow({
       where: { kind: SystemIssueKind.WAREHOUSE_SCAN, resolvedAt: null },
     });
-    expect(issue.blocksScanForStaffId).toBe(staffId);
+    // AMENDED 2026-11-20: the PARCEL is held, the operator is not.
+    expect(issue.blocksScanForStaffId).toBeNull();
     expect(issue.severity).toBe(SystemIssueSeverity.HIGH);
+    expect(issue.metadata).toMatchObject({ awbNumber });
 
-    // STUCK: the NEXT parcel is refused too. The pile is in doubt, not
-    // just the box that tripped it.
-    const blocked = await request(h.baseUrl)
-      .post('/admin/courier/handover-scan')
-      .set(staffAuth)
-      .send({ awbNumber: other.awbNumber })
-      .expect(409);
-    expect(blocked.body.code).toBe('SCAN_BLOCKED');
-
-    // The bench can ask why it is stuck rather than guessing.
-    const why = await request(h.baseUrl)
-      .get('/admin/courier/scan-block')
-      .set(staffAuth)
-      .expect(200);
-    expect(why.body.issueId).toBe(issue.id);
-
-    // An admin resolves it — with a note, which is the whole record of
-    // what they found — and the bench is working again.
-    await request(h.baseUrl)
-      .post(`/admin/system-issues/${issue.id}/resolve`)
-      .set(staffAuth)
-      .send({ note: 'Two labels printed for the same parcel; the spare was destroyed.' })
-      .expect(200);
-
+    // The SAME operator carries on with a DIFFERENT parcel.
     await request(h.baseUrl)
       .post('/admin/courier/handover-scan')
       .set(staffAuth)
@@ -591,6 +570,28 @@ describe('Dispatch handoff endpoint (e2e)', () => {
     expect((await h.prisma.order.findUniqueOrThrow({ where: { id: other.orderId } })).status).toBe(
       OrderStatus.DISPATCHED,
     );
+
+    // The held parcel is refused PARCEL_ON_HOLD, with the issue named.
+    const held = await request(h.baseUrl)
+      .post('/admin/courier/handover-scan')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(409);
+    expect(held.body.code).toBe('PARCEL_ON_HOLD');
+    expect(held.body.issueId).toBe(issue.id);
+
+    // An admin resolves it with a note; the parcel is a normal duplicate again.
+    await request(h.baseUrl)
+      .post(`/admin/system-issues/${issue.id}/resolve`)
+      .set(staffAuth)
+      .send({ note: 'Two labels printed for the same parcel; the spare was destroyed.' })
+      .expect(200);
+    const after = await request(h.baseUrl)
+      .post('/admin/courier/handover-scan')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(409);
+    expect(after.body.code).toBe('DUPLICATE_SCAN');
   });
 
   it('does not stop the OTHER packers — the block is per operator', async () => {

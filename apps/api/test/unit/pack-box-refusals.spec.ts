@@ -205,7 +205,10 @@ function makeService(
   const svc = new PackBoxService(
     { client } as unknown as PrismaService,
     { log: jest.fn(async () => 'a') } as unknown as AuditLogService,
-    { assertNotBlocked: jest.fn(async () => undefined) } as unknown as ScanBlockService,
+    {
+      assertNotBlocked: jest.fn(async () => undefined),
+      assertParcelNotOnHold: jest.fn(async () => undefined),
+    } as unknown as ScanBlockService,
     { thumbnailUrlsByVariant: jest.fn(async () => new Map()) } as unknown as CatalogReadService,
   );
   return { svc, stockUnitFindFirst, productVariantFindFirst, client };
