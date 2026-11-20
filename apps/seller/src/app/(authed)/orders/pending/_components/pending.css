@@ -288,6 +288,10 @@
 
 /* ── Phones: every line is a card ───────────────────────────────────────── */
 @media (max-width: 767px) {
+  /* The first line here is plain text, not a 44px link: the tick sits at the top. */
+  .pend-table {
+    --sk-bulk-tick-top: 0px;
+  }
   .pend-table .pend-open,
   .pend-table .pend-open__cell {
     display: block;
@@ -298,18 +302,20 @@
     border-bottom: 0;
     background: none;
   }
-  /* The open/close button sits beside the tick in the card's top corner,
-     not on a line of its own at the bottom. */
+  /* The open/close button sits in the card's top-right corner (the tick has
+     the top-left), not on a line of its own at the bottom. It stays above
+     the tick's tap strip. */
   .pend-table .sd-table-cards tbody > .sk-tr > .pend-chev-cell {
     position: absolute;
+    z-index: 2;
     top: 0;
-    right: 46px;
+    right: 0;
     /* The card rules give every cell a row layout, a rule and a fill; this
        one is a floating button, so those are switched off outright. */
     display: grid !important;
     place-items: center;
     width: 44px;
-    height: 48px;
+    height: 44px;
     min-height: 0;
     padding: 0 !important;
     border: 0 !important;
@@ -318,8 +324,8 @@
   .pend-table .sd-table-cards tbody > .sk-tr > .pend-chev-cell::before {
     display: none;
   }
-  .pend-table .sd-table-cards tbody > .sk-tr > .sk-td:nth-child(2) {
-    padding-right: 96px;
+  .pend-table .sd-table-cards tbody > tr.sk-tr > td.sk-td:nth-child(2):not([colspan]) {
+    padding-right: 48px;
   }
   .pend-chev {
     width: 44px;
