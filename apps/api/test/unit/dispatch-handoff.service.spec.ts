@@ -27,6 +27,7 @@ function makeService(
     manifestShipments?: Array<{ id: string; status: ShipmentStatus }>;
     /** This operator is already stopped by an unresolved duplicate. */
     blockedStaff?: boolean;
+    heldParcel?: boolean;
   } = {},
 ) {
   const ships = opts.shipments ?? [{ id: 's1', orderId: 'o1' }];
@@ -127,6 +128,11 @@ function makeService(
     }),
     refuseDuplicate: jest.fn(async () => {
       throw new ConflictException({ code: 'DUPLICATE_SCAN', message: 'already with the courier' });
+    }),
+    assertParcelNotOnHold: jest.fn(async () => {
+      if (opts.heldParcel === true) {
+        throw new ConflictException({ code: 'PARCEL_ON_HOLD', message: 'on hold' });
+      }
     }),
     currentBlock: jest.fn(async () => null),
   };
@@ -450,6 +456,27 @@ describe('DispatchHandoffService.recordHandoverScan — the scan IS the handover
       response: { code: 'SCAN_BLOCKED' },
     });
     expect(client.shipment.findFirst).not.toHaveBeenCalled();
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('a parcel ON HOLD is refused at handover and never transitioned', async () => {
+    const { svc, transitionStatus, scanBlock } = makeService({
+      heldParcel: true,
+      scannedShipment: {
+        id: 's1',
+        shipmentNumber: 'SH-s1',
+        handoverScannedAt: null,
+        status: ShipmentStatus.CREATED,
+        manifestId: MAN,
+        orderShipments: [
+          { orderId: 'o1', order: { status: OrderStatus.PACKED, sellerId: 'seller-1' } },
+        ],
+      },
+    });
+    await expect(svc.recordHandoverScan('DLV-123', STAFF)).rejects.toMatchObject({
+      response: { code: 'PARCEL_ON_HOLD' },
+    });
+    expect(scanBlock.assertParcelNotOnHold).toHaveBeenCalledWith('s1', 'HANDOVER');
     expect(transitionStatus).not.toHaveBeenCalled();
   });
 

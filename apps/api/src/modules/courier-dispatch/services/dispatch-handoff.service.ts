@@ -290,6 +290,10 @@ export class DispatchHandoffService {
         message: `No live parcel carries AWB ${awb}`,
       });
     }
+    // AMENDED 2026-11-20 (owner): a parcel with an open duplicate-scan issue (pack or
+    // handover) cannot be handed over until an admin resolves it.
+    await this.scanBlock.assertParcelNotOnHold(shipment.id, 'HANDOVER');
+
     const orderId = shipment.orderShipments[0]?.orderId ?? null;
     const orderStatus = shipment.orderShipments[0]?.order.status ?? null;
     const sellerId = shipment.orderShipments[0]?.order.sellerId ?? null;

@@ -64,7 +64,38 @@ describe('ScanBlockService — a repeated box stops the person who scanned it', 
     await expect(svc.assertNotBlocked(STAFF)).resolves.toBeUndefined();
   });
 
-  it('refuseDuplicate raises a blocking HIGH issue and always throws', async () => {
+  it('assertParcelNotOnHold lets a parcel with no open issue through', async () => {
+    const { svc } = make(null);
+    await expect(svc.assertParcelNotOnHold('ship-1', 'PACK')).resolves.toBeUndefined();
+  });
+
+  it('assertParcelNotOnHold refuses a held parcel, names it and the issue', async () => {
+    const { svc, findFirst } = make({ id: 'issue-7', metadata: { shipmentNumber: 'SH-7' } });
+    await expect(svc.assertParcelNotOnHold('ship-7', 'HANDOVER')).rejects.toMatchObject({
+      response: {
+        code: 'PARCEL_ON_HOLD',
+        issueId: 'issue-7',
+        details: { issueId: 'issue-7' },
+        message: expect.stringContaining('SH-7'),
+      },
+    });
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          kind: SystemIssueKind.WAREHOUSE_SCAN,
+          resolvedAt: null,
+          metadata: { path: ['shipmentId'], equals: 'ship-7' },
+        }),
+      }),
+    );
+  });
+
+  it('assertParcelNotOnHold FAILS OPEN when the hold cannot be read', async () => {
+    const { svc } = make(null, true);
+    await expect(svc.assertParcelNotOnHold('ship-1', 'PACK')).resolves.toBeUndefined();
+  });
+
+  it('refuseDuplicate raises a HIGH issue that holds the PARCEL, not the operator, and always throws', async () => {
     const { svc, raise } = make(null);
     await expect(
       svc.refuseDuplicate({
@@ -84,8 +115,15 @@ describe('ScanBlockService — a repeated box stops the person who scanned it', 
         // Keyed on the PARCEL: the same box scanned twice by two people
         // is one problem seen twice, not two problems.
         dedupeKey: 'duplicate-scan:PACK:ship-1',
-        blocksScanForStaffId: STAFF,
+        metadata: expect.objectContaining({
+          shipmentId: 'ship-1',
+          awbNumber: 'DLV-1',
+          scannedByStaffId: STAFF,
+        }),
       }),
+    );
+    expect((raise.mock.calls as unknown as unknown[][])[0]?.[0]).not.toHaveProperty(
+      'blocksScanForStaffId',
     );
   });
 
@@ -101,7 +139,12 @@ describe('ScanBlockService — a repeated box stops the person who scanned it', 
         observed: 'with the courier',
       }),
     ).rejects.toMatchObject({
-      response: { code: 'DUPLICATE_SCAN', shipmentNumber: 'SH-9' },
+      response: {
+        code: 'DUPLICATE_SCAN',
+        shipmentNumber: 'SH-9',
+        message:
+          'Put this box aside. SH-9 is on hold until an admin checks it — carry on with the rest.',
+      },
     });
   });
 });

@@ -305,7 +305,7 @@ describe('Pack box session (e2e)', () => {
     expect(order.status).toBe(OrderStatus.PACKED);
   });
 
-  it('A REPEATED BOX at the pack bench stops the packer until an admin clears it', async () => {
+  it('A REPEATED BOX at the pack bench holds THAT PARCEL, not the packer, until an admin clears it', async () => {
     // Scanning the label of a parcel that is already boxed and sealed
     // means either two labels were printed for one parcel — and one of
     // those boxes will be delivered to nobody — or this pile has
@@ -344,30 +344,40 @@ describe('Pack box session (e2e)', () => {
     const issue = await h.prisma.systemIssue.findFirstOrThrow({
       where: { kind: SystemIssueKind.WAREHOUSE_SCAN, resolvedAt: null },
     });
-    expect(issue.blocksScanForStaffId).toBe(staffId);
+    // AMENDED 2026-11-20: the PARCEL is held, the operator is not.
+    expect(issue.blocksScanForStaffId).toBeNull();
+    expect(issue.metadata).toMatchObject({ shipmentId: expect.any(String), awbNumber });
 
-    // STUCK: the next parcel is refused too, because the pile is what
-    // is in doubt — not only the box that tripped it.
+    // The SAME packer carries on with a DIFFERENT parcel.
     const next = await pickedParcel(2);
-    const blocked = await request(h.baseUrl)
+    await request(h.baseUrl)
       .post('/warehouse/packs/boxes/open')
       .set(staffAuth)
       .send({ awbNumber: next.awbNumber })
-      .expect(409);
-    expect(blocked.body.code).toBe('SCAN_BLOCKED');
+      .expect(200);
 
-    // An admin resolves it with a note and the bench works again.
+    // The held parcel is refused PARCEL_ON_HOLD until an admin resolves it.
+    const held = await request(h.baseUrl)
+      .post('/warehouse/packs/boxes/open')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(409);
+    expect(held.body.code).toBe('PARCEL_ON_HOLD');
+    expect(held.body.details.issueId).toBe(issue.id);
+
     await request(h.baseUrl)
       .post(`/admin/system-issues/${issue.id}/resolve`)
       .set(staffAuth)
       .send({ note: 'Duplicate label found and destroyed; rest of the pile checked.' })
       .expect(200);
 
-    await request(h.baseUrl)
+    // Released: it is a normal already-packed duplicate again.
+    const after = await request(h.baseUrl)
       .post('/warehouse/packs/boxes/open')
       .set(staffAuth)
-      .send({ awbNumber: next.awbNumber })
-      .expect(200);
+      .send({ awbNumber })
+      .expect(409);
+    expect(after.body.code).toBe('DUPLICATE_SCAN');
   });
 
   it('a product that is not on the order is refused', async () => {

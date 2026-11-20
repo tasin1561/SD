@@ -256,6 +256,10 @@ export class PackBoxService {
       });
     }
 
+    // AMENDED 2026-11-20 (owner): a parcel with an open duplicate-scan issue is on
+    // hold; the operator is not. It must not be packed or re-raised.
+    await this.scanBlock.assertParcelNotOnHold(shipment.id, 'PACK');
+
     const link = shipment.orderShipments[0];
     if (link === undefined) {
       // The parcel's NUMBER and label, never its uuid: the packer is

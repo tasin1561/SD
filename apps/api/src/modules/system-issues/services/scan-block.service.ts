@@ -16,7 +16,9 @@ export interface ScanBlockView {
 }
 
 /**
- * A box scanned twice stops the person who scanned it.
+ * A box scanned twice puts THAT PARCEL on hold (AMENDED 2026-11-20, owner:
+ * it used to stop the operator; the old operator-block read path below is
+ * kept for blocks already in the DB, nothing new sets one).
  *
  * ── WHY A HARD STOP ──────────────────────────────────────────────────
  * Scanning the same parcel twice is not a harmless retry. It means one
@@ -110,6 +112,47 @@ export class ScanBlockService {
   }
 
   /**
+   * Refuse a parcel that has an unresolved duplicate-scan issue.
+   * AMENDED 2026-11-20 (owner): only the parcel is held; the operator
+   * may scan any other parcel. Fails OPEN on a read error.
+   */
+  async assertParcelNotOnHold(shipmentId: string, flow: ScanFlow): Promise<void> {
+    let row: { id: string; metadata: unknown } | null = null;
+    try {
+      row = await this.prisma.client.systemIssue.findFirst({
+        where: {
+          kind: SystemIssueKind.WAREHOUSE_SCAN,
+          resolvedAt: null,
+          metadata: { path: ['shipmentId'], equals: shipmentId },
+        },
+        orderBy: { lastSeenAt: 'desc' },
+        select: { id: true, metadata: true },
+      });
+    } catch (err) {
+      this.logger.error(
+        { shipmentId, flow, err: err instanceof Error ? err.message : String(err) },
+        'Could not read the parcel hold — failing open so the bench keeps working',
+      );
+      return;
+    }
+    if (row === null) return;
+    const meta = row.metadata as { shipmentNumber?: string } | null;
+    const name = meta?.shipmentNumber ?? 'This parcel';
+    throw new ConflictException({
+      code: 'PARCEL_ON_HOLD',
+      message:
+        `Put this box aside. ${name} is on hold because it was scanned twice. An admin has ` +
+        `to check it and resolve the issue on the system issues board (/system-issues) ` +
+        `before it can be ${flow === 'PACK' ? 'packed' : 'handed to the courier'}. ` +
+        `Carry on with the rest.`,
+      issueId: row.id,
+      shipmentNumber: meta?.shipmentNumber ?? null,
+      // The error filter forwards only `details`, so the id must be here too.
+      details: { issueId: row.id },
+    });
+  }
+
+  /**
    * A duplicate was scanned: raise the incident and stop the operator.
    *
    * ALWAYS throws — the caller does not decide whether this is fatal.
@@ -127,16 +170,16 @@ export class ScanBlockService {
     observed: string;
   }): Promise<never> {
     const where = input.flow === 'PACK' ? 'the packing bench' : 'the handover bench';
-    const title = `${input.shipmentNumber} was scanned again at ${where}`;
+    const title = `${input.shipmentNumber} was scanned again at ${where} — parcel on hold`;
     const detail =
       `This parcel is already ${input.observed}, and it has just been scanned again at ` +
       `${where}. That means either two boxes are carrying the same label — one of which ` +
       `will be delivered to nobody — or the operator is working from a pile that has ` +
       `already been done.\n\n` +
-      `Scanning is stopped for whoever scanned it, at both benches, until this is ` +
-      `resolved. Go and look at the physical box before clearing this: find out whether ` +
-      `there are two of them, and check the rest of that pile. Resolve this issue with a ` +
-      `note saying what you found — that note is the only record of it.`;
+      `The PARCEL is on hold at both benches until this is resolved; the operator carries ` +
+      `on with other parcels. Go and look at the physical box: find out whether there are ` +
+      `two of them, and check the rest of that pile. Resolve this issue with a note saying ` +
+      `what you found — that note is the only record of it, and it releases the parcel.`;
 
     await this.issues.raise({
       kind: SystemIssueKind.WAREHOUSE_SCAN,
@@ -145,7 +188,7 @@ export class ScanBlockService {
       detail,
       source: 'ScanBlockService',
       dedupeKey: `duplicate-scan:${input.flow}:${input.shipmentId}`,
-      blocksScanForStaffId: input.staffId,
+      // AMENDED 2026-11-20 (owner): the PARCEL is held, not the operator.
       metadata: {
         flow: input.flow,
         shipmentId: input.shipmentId,
@@ -159,9 +202,8 @@ export class ScanBlockService {
     throw new ConflictException({
       code: 'DUPLICATE_SCAN',
       message:
-        `${input.shipmentNumber} is already ${input.observed}. Scanning is now stopped for ` +
-        `you at both benches — put this box aside, check whether there are two of them, and ` +
-        `get an admin to clear it on the system issues board.`,
+        `Put this box aside. ${input.shipmentNumber} is on hold until an admin checks it — ` +
+        `carry on with the rest.`,
       shipmentNumber: input.shipmentNumber,
     });
   }
