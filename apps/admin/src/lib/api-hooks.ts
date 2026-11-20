@@ -749,7 +749,12 @@ export function usePackQueue(
   const client = useApiClient();
   return useQuery({
     queryKey: ['warehouse-pack', 'queue', courierCode ?? null],
-    refetchInterval: 30_000,
+    // Live enough for four packers on one queue (owner, 2026-11-20: a box
+    // another bench had packed stayed listed for up to 30 s). Every 5 s
+    // while the tab is visible — react-query does not poll a hidden tab —
+    // and at once when the packer comes back to it.
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: 'always',
     queryFn: () =>
       client
         .request<{
@@ -823,12 +828,17 @@ export function useClosePackBox(): UseMutationResult<
   { packBoxId: string; awbNumber: string }
 > {
   const client = useApiClient();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ packBoxId, awbNumber }) =>
       client.request<CompletePackResult>(`/api/warehouse/packs/boxes/${packBoxId}/close`, {
         method: 'POST',
         body: { awbNumber },
       }),
+    // Closing the box IS finishing the pack (the "scan label again" step):
+    // the parcel must leave the waiting list now, not at the next poll
+    // (owner, 2026-11-20 — it stayed listed after every pack).
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['warehouse-pack', 'queue'] }),
   });
 }
 
@@ -2808,6 +2818,7 @@ export function useForceCompletePack(): UseMutationResult<
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin-orders'] });
       void qc.invalidateQueries({ queryKey: ['admin-manifests'] });
+      void qc.invalidateQueries({ queryKey: ['warehouse-pack', 'queue'] });
     },
   });
 }
