@@ -21,7 +21,8 @@ export interface LabelSheetResult {
   readonly failed: ReadonlyArray<{ shipmentId: string; shipmentNumber: string; reason: string }>;
 }
 
-const MAX_PER_SHEET = 100;
+/** Owner, 2026-11-21: raised from 100 — a safety ceiling only (PDF size). */
+const MAX_PER_SHEET = 1000;
 /** A reprint is a handful of damaged labels, not a run. */
 const MAX_REPRINT = 25;
 
