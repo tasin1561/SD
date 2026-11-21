@@ -8,6 +8,7 @@ import {
   Info,
   MessageSquarePlus,
   Paperclip,
+  RotateCcw,
   Send,
   Sparkles,
   Volume2,
@@ -58,6 +59,7 @@ import {
 } from './ask-why';
 import { GreetingCard, explainQuestion, loadGreeting, type GreetingResult } from './greeting';
 import { useAssistantSound } from './sound';
+import { launcherPosKey, useLauncherDrag } from './launcher-position';
 import './assistant.css';
 
 export * from './attachments';
@@ -70,6 +72,7 @@ export * from './feedback';
 export * from './ask-why';
 export * from './greeting';
 export * from './ticket-photos';
+export * from './launcher-position';
 
 /** How the widget reaches the API: each app passes its `ApiClient` (bearer token, single-flight refresh, same-origin proxy). The widget never fetches by itself. */
 export interface AssistantTransport {
@@ -87,6 +90,8 @@ export interface AssistantWidgetProps {
   readonly transport: AssistantTransport;
   /** Client-side navigation for in-app links (next's `router.push`). */
   readonly navigate?: ((href: string) => void) | undefined;
+  /** The signed-in person, so the launcher remembers where THEY parked it. */
+  readonly userId?: string | null | undefined;
 }
 
 interface Notice {
@@ -223,6 +228,7 @@ export function AssistantWidget({
   pathname,
   transport,
   navigate,
+  userId,
 }: AssistantWidgetProps): ReactElement {
   const t = useUiT();
   const locale = useLocale();
@@ -270,6 +276,7 @@ export function AssistantWidget({
   // Every blob: URL made for a thumbnail, revoked when the chat is left.
   const blobUrls = useRef<string[]>([]);
   const isPhone = useIsPhone();
+  const drag = useLauncherDrag(launcherRef, launcherPosKey(consoleName, userId), lift);
   // The phone sheet covers the whole screen, so it is modal; the desktop side panel is not.
   const modal = open && isPhone;
   useInertBackground(panelRef, modal);
@@ -801,10 +808,17 @@ export function AssistantWidget({
         className="sk-ai-launcher"
         data-nudge={nudge ? '1' : undefined}
         data-hidden={open ? '1' : undefined}
-        style={{ ['--sk-ai-lift' as string]: `${lift}px` }}
+        data-placed={drag.pos ? drag.pos.side : undefined}
+        data-dragging={drag.dragging ? '1' : undefined}
+        style={{ ['--sk-ai-lift' as string]: `${lift}px`, ...drag.style }}
         aria-haspopup="dialog"
         aria-expanded={open}
-        onClick={openPanel}
+        aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown"
+        {...drag.handlers}
+        onClick={() => {
+          if (drag.consumeClick()) return;
+          openPanel();
+        }}
         tabIndex={open ? -1 : 0}
       >
         <Sparkles size={18} aria-hidden="true" />
@@ -897,6 +911,17 @@ export function AssistantWidget({
                   <Volume2 size={18} aria-hidden="true" />
                 )}
               </button>
+              {drag.pos ? (
+                <button
+                  type="button"
+                  className="sk-ai-icon"
+                  onClick={drag.reset}
+                  aria-label={t('ui.assistant.resetPos')}
+                  title={t('ui.assistant.resetPos')}
+                >
+                  <RotateCcw size={18} aria-hidden="true" />
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="sk-ai-icon"
