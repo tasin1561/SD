@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 /**
  * One file out of many labels.
@@ -22,6 +22,15 @@ import { PDFDocument } from 'pdf-lib';
 /** 4in x 6in at 72pt/in — the label stock the warehouse prints on. */
 const LABEL_W = 288;
 const LABEL_H = 432;
+/**
+ * A TAGGED label gives up a thin strip at the bottom of the page for the
+ * batch tag (e.g. "PB-2026-11-000042 · 7/67"). The label is drawn above
+ * the strip, never under it, so the tag cannot cover a barcode or an
+ * address whatever the courier's page looks like. Untagged labels are
+ * unchanged.
+ */
+export const TAG_STRIP_H = 14;
+const TAG_FONT_SIZE = 8;
 
 @Injectable()
 export class LabelSheetService {
@@ -29,11 +38,14 @@ export class LabelSheetService {
 
   async merge(
     parts: ReadonlyArray<{ shipmentId: string; bytes: Buffer }>,
+    /** Optional per-part tag, keyed by the part's `shipmentId`. */
+    opts?: { readonly tags?: ReadonlyMap<string, string> },
   ): Promise<{ pdf: Buffer; pageCount: number; failed: string[] }> {
     const out = await PDFDocument.create();
     out.setTitle('Shipping labels');
     out.setProducer('Skydrop');
 
+    const font = opts?.tags === undefined ? null : await out.embedFont(StandardFonts.Helvetica);
     const failed: string[] = [];
     for (const part of parts) {
       try {
@@ -53,12 +65,14 @@ export class LabelSheetService {
           a label distorts its barcode, and the bars are the part that has
           to survive.
         */
+        const tag = opts?.tags?.get(part.shipmentId);
+        const strip = tag === undefined || font === null ? 0 : TAG_STRIP_H;
         for (const index of src.getPageIndices()) {
           const embedded = await out.embedPage(src.getPage(index));
           const page = out.addPage([LABEL_W, LABEL_H]);
           const scale = Math.min(
             LABEL_W / embedded.width,
-            LABEL_H / embedded.height,
+            (LABEL_H - strip) / embedded.height,
             // Never scale UP past 1: a small label blown up to fill the
             // page prints a fuzzy barcode where the original was sharp.
             1,
@@ -67,8 +81,18 @@ export class LabelSheetService {
             xScale: scale,
             yScale: scale,
             x: (LABEL_W - embedded.width * scale) / 2,
-            y: (LABEL_H - embedded.height * scale) / 2,
+            y: strip + (LABEL_H - strip - embedded.height * scale) / 2,
           });
+          if (tag !== undefined && font !== null) {
+            const width = font.widthOfTextAtSize(tag, TAG_FONT_SIZE);
+            page.drawText(tag, {
+              x: Math.max(4, (LABEL_W - width) / 2),
+              y: 4,
+              size: TAG_FONT_SIZE,
+              font,
+              color: rgb(0, 0, 0),
+            });
+          }
         }
       } catch (err) {
         // A courier PDF we cannot parse is the one case worth being

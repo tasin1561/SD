@@ -7,6 +7,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Length,
   IsUUID,
   Max,
   MaxLength,
@@ -24,6 +25,26 @@ export class ShipmentSelectionDto {
   @ArrayMaxSize(1000)
   @IsUUID('7', { each: true })
   shipmentIds!: string[];
+}
+
+export class PrintLabelGroupsDto {
+  @ApiProperty({
+    type: [String],
+    description: "Union of the chosen groups' shipmentIds (max 1000)",
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  @IsUUID('7', { each: true })
+  shipmentIds!: string[];
+
+  @ApiProperty({
+    description:
+      'A fresh random value per click. Sending the same value again returns the first result (without the file) instead of making a second batch.',
+  })
+  @IsString()
+  @Length(8, 100)
+  idempotencyKey!: string;
 }
 
 export class ReprintLabelsDto {

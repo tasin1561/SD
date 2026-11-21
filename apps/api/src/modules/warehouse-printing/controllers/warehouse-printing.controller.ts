@@ -22,6 +22,11 @@ import { RequirePermissions } from '../../../common/auth/require-permissions.dec
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { PrintQueueService, type PrintQueueRow } from '../services/print-queue.service';
+import {
+  LabelGroupService,
+  type LabelGroupList,
+  type LabelGroupPrintResult,
+} from '../services/label-group.service';
 import { LabelPrintService, type LabelSheetResult } from '../services/label-print.service';
 import {
   PickBatchService,
@@ -34,6 +39,7 @@ import {
 } from '../services/product-location.service';
 import {
   PickBatchQueryDto,
+  PrintLabelGroupsDto,
   ProductLocationQueryDto,
   QueueQueryDto,
   RecordShortPickDto,
@@ -79,6 +85,7 @@ export class WarehousePrintingController {
     private readonly batches: PickBatchService,
     private readonly locations: ProductLocationService,
     private readonly skuLabels: SkuLabelService,
+    private readonly labelGroups: LabelGroupService,
   ) {}
 
   // ---------- tab 1: labels ----------
@@ -87,6 +94,29 @@ export class WarehousePrintingController {
   @ApiOperation({ summary: 'Parcels with a waybill whose label has not been printed' })
   labelQueue(@Query() q: QueueQueryDto): Promise<PrintQueueRow[]> {
     return this.queues.awaitingLabel(q.warehouseId);
+  }
+
+  @Get('label-groups')
+  @ApiOperation({
+    summary:
+      'The not-yet-printed parcels cut into automatic groups: by courier, then oldest order first, in groups of the warehouse.print_group_size setting. Computed live; the last group of a courier may be smaller',
+  })
+  labelGroupList(@Query() q: QueueQueryDto): Promise<LabelGroupList> {
+    return this.labelGroups.list(q.warehouseId);
+  }
+
+  @Post('label-groups/print')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Print the chosen groups as ONE walk: one pick batch holding every parcel and one merged label PDF (group order, then oldest first), each label tagged "<batch> · i/total". Idempotent per click. The operator still confirms the labels with labels/confirm-printed',
+  })
+  printLabelGroups(
+    @Body() body: PrintLabelGroupsDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<LabelGroupPrintResult> {
+    return this.labelGroups.print(body, staff.id, ctx);
   }
 
   @Post('labels/build')

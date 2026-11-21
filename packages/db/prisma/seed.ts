@@ -315,6 +315,15 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMaxInt: 10080,
   },
   {
+    key: 'warehouse.print_group_size',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 30,
+    displayName: 'Parcels per label group',
+    description:
+      'Shipping labels are offered in groups: sorted by courier, then oldest order first, cut into groups of this many parcels. The last group of a courier may be smaller. From 1 to 200.',
+  },
+  {
     key: 'ops.stock_reservation_ttl_hours',
     category: 'ops',
     valueType: SettingValueType.INT,

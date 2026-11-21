@@ -10,6 +10,7 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { AdminOrderLabelBulkController } from './controllers/admin-order-label-bulk.controller';
 import { WarehousePrintingController } from './controllers/warehouse-printing.controller';
 import { BulkLabelService } from './services/bulk-label.service';
+import { LabelGroupService } from './services/label-group.service';
 import { LabelPrintService } from './services/label-print.service';
 import { LabelSheetService } from './services/label-sheet.service';
 import { ManualLabelPdfService } from './services/manual-label-pdf.service';
@@ -45,6 +46,7 @@ import { ProductLocationService } from './services/product-location.service';
   providers: [
     PrintQueueService,
     LabelPrintService,
+    LabelGroupService,
     BulkLabelService,
     LabelSheetService,
     ManualLabelPdfService,

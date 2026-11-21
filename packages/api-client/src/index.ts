@@ -290,3 +290,9 @@ export type {
   BulkOrderIdsBody,
   BulkExportBody,
 } from './endpoints/bulk-orders';
+export type {
+  LabelGroup,
+  LabelGroupList,
+  PrintLabelGroupsRequest,
+  PrintLabelGroupsResult,
+} from './endpoints/warehouse-label-groups';
