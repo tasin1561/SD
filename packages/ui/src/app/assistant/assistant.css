@@ -38,6 +38,60 @@
     transform var(--dur) var(--ease-out),
     opacity var(--dur) var(--ease-out);
 }
+/* Parked by the person (dragged or Alt+arrows): the saved ratio places it, the viewport clamps it. */
+.sk-ai-launcher {
+  touch-action: none;
+  --sk-ai-h: 44px;
+}
+.sk-ai-launcher[data-placed] {
+  --sk-ai-top: calc(var(--sp-3, 12px) + env(safe-area-inset-top));
+  top: calc(
+    var(--sk-ai-top) + var(--sk-ai-y, 1) *
+      max(
+        0px,
+        100vh - var(--sk-ai-h) - 2 * var(--sp-3, 12px) - env(safe-area-inset-top) -
+          env(safe-area-inset-bottom) - var(--sk-ai-lift, 0px)
+      )
+  );
+  bottom: auto;
+}
+@supports (height: 100dvh) {
+  .sk-ai-launcher[data-placed] {
+    top: calc(
+      var(--sk-ai-top) + var(--sk-ai-y, 1) *
+        max(
+          0px,
+          100dvh - var(--sk-ai-h) - 2 * var(--sp-3, 12px) - env(safe-area-inset-top) -
+            env(safe-area-inset-bottom) - var(--sk-ai-lift, 0px)
+        )
+    );
+  }
+}
+.sk-ai-launcher[data-placed='left'] {
+  left: calc(var(--sp-3, 12px) + env(safe-area-inset-left));
+  right: auto;
+}
+.sk-ai-launcher[data-placed='right'] {
+  right: calc(var(--sp-3, 12px) + env(safe-area-inset-right));
+}
+.sk-ai-launcher[data-dragging='1'] {
+  cursor: grabbing;
+  transition: none;
+  user-select: none;
+  box-shadow:
+    var(--elev-3, var(--elev-2)),
+    0 16px 32px -12px var(--blue-glow);
+}
+@media (hover: hover) {
+  .sk-ai-launcher {
+    cursor: grab;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-ai-launcher {
+    transition: none;
+  }
+}
 .sk-ai-launcher:hover {
   transform: translateY(-2px);
 }
