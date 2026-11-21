@@ -182,7 +182,6 @@ export function AuthedShell({
         </Shell>
         <AssistantWidget
           console="reseller"
-          userId={identity.id}
           pathname={pathname}
           transport={client}
           navigate={(href) => router.push(href)}
