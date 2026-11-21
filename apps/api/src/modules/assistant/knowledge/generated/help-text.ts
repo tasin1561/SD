@@ -1430,6 +1430,13 @@ export const PORTAL_TEXT_ADMIN: ReadonlyArray<TextRow> = [
   ["warehouseAmendCount.bankedExplain","That count has already become stock, so the correction is a stock adjustment, not an edit."],
   ["scanSound.soundIsOn","Scan sounds are on — tap to mute this device"],
   ["scanSound.soundIsOff","Scan sounds are muted — tap to turn them on"],
+  ["warehousePrintingPrintingStation.groupsInfo","Parcels waiting for a label, sorted into groups: one courier, oldest order first, up to {size} in a group. Tick the groups you want and print them as one stack. A picking batch is made for that stack in the same step, and every label carries its tag, like “PB-2026-11-000042 · 7/67”, on a thin strip along the bottom: the batch, and this label's place in it."],
+  ["warehousePrintingPrintingStation.groupsChosen","{groups} groups ticked · {parcels} parcels"],
+  ["warehousePrintingPrintingStation.groupsTooMany","At most {max} parcels in one print. Untick a group, or the server will refuse it."],
+  ["warehousePrintingPrintingStation.groupsBatchCreatedBody","{n} labels across {pages} pages are in the downloaded file. Next, print this batch's picking list."],
+  ["warehousePrintingPrintingStation.groupsAlreadyPrintedBody","This print had already run, so no new file was made. If a label is missing, reprint it; otherwise go on to the picking list."],
+  ["warehousePrintingPrintingStation.groupsRefreshed","The groups are being refreshed. Tick them again."],
+  ["warehousePrintingPrintingStation.groupsSingleSub","The same parcels one by one, for printing a few labels on their own."],
 ];
 
 export const PORTAL_TEXT_SELLER: ReadonlyArray<TextRow> = [

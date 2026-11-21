@@ -2397,4 +2397,109 @@ export const wh = defineMessages({
     'স্ক্যানের শব্দ বন্ধ আছে — চালু করতে চাপ দিন',
     'स्कैन की आवाज़ बंद है — चालू करने के लिए दबाएं',
   ],
+  // Label groups on the printing bench (Shipping labels tab).
+  'warehousePrintingPrintingStation.groupsTitle': ['Label groups', 'লেবেলের গ্রুপ', 'लेबल के समूह'],
+  'warehousePrintingPrintingStation.groupsInfo': [
+    "Parcels waiting for a label, sorted into groups: one courier, oldest order first, up to {size} in a group. Tick the groups you want and print them as one stack. A picking batch is made for that stack in the same step, and every label carries its tag, like “PB-2026-11-000042 · 7/67”, on a thin strip along the bottom: the batch, and this label's place in it.",
+    'লেবেলের অপেক্ষায় থাকা পার্সেল, গ্রুপে সাজানো: এক কুরিয়ার, সবচেয়ে পুরোনো অর্ডার আগে, এক গ্রুপে সর্বোচ্চ {size}টি। যে গ্রুপগুলো চান বেছে নিন এবং এক স্তূপে ছাপুন। একই ধাপে ওই স্তূপের জন্য একটি পিকিং ব্যাচ তৈরি হয়, আর প্রতিটি লেবেলের নিচে একটি সরু ফালিতে তার ট্যাগ থাকে, যেমন “PB-2026-11-000042 · 7/67”: ব্যাচ, এবং তাতে এই লেবেলের অবস্থান।',
+    'लेबल के इंतज़ार में पार्सल, समूहों में बँटे हुए: एक कूरियर, सबसे पुराना ऑर्डर पहले, एक समूह में अधिकतम {size}। जो समूह चाहिए उन्हें चुनें और एक ढेर में छापें। उसी चरण में उस ढेर के लिए एक पिकिंग बैच बनता है, और हर लेबल पर नीचे की पतली पट्टी में उसका टैग होता है, जैसे “PB-2026-11-000042 · 7/67”: बैच, और उसमें इस लेबल की जगह।',
+  ],
+  'warehousePrintingPrintingStation.groupsSummary': [
+    '{groups} groups · {parcels} parcels',
+    '{groups}টি গ্রুপ · {parcels}টি পার্সেল',
+    '{groups} समूह · {parcels} पार्सल',
+  ],
+  'warehousePrintingPrintingStation.groupsChosen': [
+    '{groups} groups ticked · {parcels} parcels',
+    '{groups}টি গ্রুপ বাছাই করা · {parcels}টি পার্সেল',
+    '{groups} समूह चुने गए · {parcels} पार्सल',
+  ],
+  'warehousePrintingPrintingStation.groupsRefresh': ['Refresh', 'রিফ্রেশ', 'रीफ़्रेश'],
+  'warehousePrintingPrintingStation.groupsSelectAll': [
+    'Select all groups',
+    'সব গ্রুপ বেছে নিন',
+    'सभी समूह चुनें',
+  ],
+  'warehousePrintingPrintingStation.groupsParcelN': ['{n} parcels', '{n}টি পার্সেল', '{n} पार्सल'],
+  'warehousePrintingPrintingStation.groupsParcelOne': ['1 parcel', '1টি পার্সেল', '1 पार्सल'],
+  'warehousePrintingPrintingStation.groupsOldest': [
+    'oldest {when}',
+    'সবচেয়ে পুরোনো {when}',
+    'सबसे पुराना {when}',
+  ],
+  'warehousePrintingPrintingStation.groupsPrintN': [
+    'Print {n} labels',
+    '{n}টি লেবেল ছাপুন',
+    '{n} लेबल छापें',
+  ],
+  'warehousePrintingPrintingStation.groupsPrintOne': [
+    'Print 1 label',
+    '1টি লেবেল ছাপুন',
+    '1 लेबल छापें',
+  ],
+  'warehousePrintingPrintingStation.groupsTooMany': [
+    'At most {max} parcels in one print. Untick a group, or the server will refuse it.',
+    'এক ছাপায় সর্বোচ্চ {max}টি পার্সেল। একটি গ্রুপ বাদ দিন, নইলে সার্ভার এটি ফিরিয়ে দেবে।',
+    'एक छपाई में अधिकतम {max} पार्सल। एक समूह हटाएँ, वरना सर्वर इसे लौटा देगा।',
+  ],
+  'warehousePrintingPrintingStation.groupsBatchCreated': [
+    'Picking batch {batchNumber} created',
+    'পিকিং ব্যাচ {batchNumber} তৈরি হয়েছে',
+    'पिकिंग बैच {batchNumber} बन गया',
+  ],
+  'warehousePrintingPrintingStation.groupsBatchCreatedBody': [
+    "{n} labels across {pages} pages are in the downloaded file. Next, print this batch's picking list.",
+    'ডাউনলোড হওয়া ফাইলে {pages} পাতায় {n}টি লেবেল আছে। এরপর এই ব্যাচের পিকিং লিস্ট ছাপুন।',
+    'डाउनलोड हुई फ़ाइल में {pages} पेज पर {n} लेबल हैं। अब इस बैच की पिकिंग लिस्ट छापें।',
+  ],
+  'warehousePrintingPrintingStation.groupsAlreadyPrinted': [
+    'Already printed as {batchNumber}',
+    'আগেই {batchNumber} হিসেবে ছাপা হয়েছে',
+    'पहले ही {batchNumber} के रूप में छप चुका है',
+  ],
+  'warehousePrintingPrintingStation.groupsAlreadyPrintedBody': [
+    'This print had already run, so no new file was made. If a label is missing, reprint it; otherwise go on to the picking list.',
+    'এই ছাপা আগেই হয়ে গিয়েছিল, তাই নতুন ফাইল তৈরি হয়নি। কোনো লেবেল না থাকলে আবার ছাপুন; নইলে পিকিং লিস্টে যান।',
+    'यह छपाई पहले ही हो चुकी थी, इसलिए नई फ़ाइल नहीं बनी। कोई लेबल न हो तो दोबारा छापें; वरना पिकिंग लिस्ट पर जाएँ।',
+  ],
+  'warehousePrintingPrintingStation.groupsGoPickingList': [
+    'Print its picking list',
+    'এর পিকিং লিস্ট ছাপুন',
+    'इसकी पिकिंग लिस्ट छापें',
+  ],
+  'warehousePrintingPrintingStation.groupsDownloadAgain': [
+    'Download again',
+    'আবার ডাউনলোড করুন',
+    'फिर डाउनलोड करें',
+  ],
+  'warehousePrintingPrintingStation.groupsOpenPrint': [
+    'Open the print window',
+    'প্রিন্ট উইন্ডো খুলুন',
+    'प्रिंट विंडो खोलें',
+  ],
+  'warehousePrintingPrintingStation.groupsHideResult': [
+    'Hide this result',
+    'এই ফলাফল লুকান',
+    'यह नतीजा छिपाएँ',
+  ],
+  'warehousePrintingPrintingStation.groupsRefreshed': [
+    'The groups are being refreshed. Tick them again.',
+    'গ্রুপগুলো রিফ্রেশ হচ্ছে। আবার বেছে নিন।',
+    'समूह रीफ़्रेश हो रहे हैं। फिर से चुनें।',
+  ],
+  'warehousePrintingPrintingStation.groupsWait': [
+    'Wait for it to finish, then refresh.',
+    'শেষ হওয়া পর্যন্ত অপেক্ষা করুন, তারপর রিফ্রেশ করুন।',
+    'पूरा होने तक रुकें, फिर रीफ़्रेश करें।',
+  ],
+  'warehousePrintingPrintingStation.groupsSingle': [
+    'Single parcels ({n})',
+    'আলাদা পার্সেল ({n})',
+    'अलग-अलग पार्सल ({n})',
+  ],
+  'warehousePrintingPrintingStation.groupsSingleSub': [
+    'The same parcels one by one, for printing a few labels on their own.',
+    'একই পার্সেল একটি একটি করে, আলাদাভাবে কয়েকটি লেবেল ছাপার জন্য।',
+    'वही पार्सल एक-एक करके, कुछ लेबल अलग से छापने के लिए।',
+  ],
 });

@@ -1,0 +1,280 @@
+/* Label groups on the printing bench. Tokens only (FE-6). Only transform and
+   opacity animate, and nothing does under `prefers-reduced-motion`. */
+
+.lg-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  min-width: 0;
+}
+.lg-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  margin-right: auto;
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+.lg-hint {
+  font-weight: var(--fw-medium);
+}
+
+/* "Select all groups" on the left, Print on the right; stacked on a phone
+   with Print full width, where the thumb is. */
+.lg-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-3);
+  min-width: 0;
+}
+.lg-limit {
+  margin: 0;
+  color: var(--saffron-text);
+}
+
+/* ── The cards ──────────────────────────────────────────────────────────── */
+.lg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15.5rem), 1fr));
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lg-card {
+  position: relative;
+  min-width: 0;
+}
+/* The real checkbox, laid over the card: the whole card is its target and
+   the keyboard and screen readers get a plain checkbox. */
+.lg-card__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.lg-card__label {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 64px;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    transform var(--dur) var(--ease-out),
+    opacity var(--dur) var(--ease-out);
+}
+.lg-card__input:hover + .lg-card__label {
+  border-color: var(--line-strong, var(--accent-line));
+}
+.lg-card__input:active + .lg-card__label {
+  transform: scale(0.985);
+}
+.lg-card__input:focus-visible + .lg-card__label {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.lg-card[data-checked='1'] .lg-card__label {
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+}
+.lg-card__tick {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--line-strong, var(--fg-faint));
+  border-radius: 6px;
+  background: var(--surface);
+}
+.lg-card__tick > svg {
+  fill: none;
+  stroke: var(--accent-fg);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    transform var(--dur) var(--ease-out),
+    opacity var(--dur) var(--ease-out);
+}
+.lg-card[data-checked='1'] .lg-card__tick {
+  border-color: var(--sky);
+  background: var(--sky);
+}
+.lg-card[data-checked='1'] .lg-card__tick > svg {
+  opacity: 1;
+  transform: none;
+}
+.lg-card__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.lg-card__name {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
+}
+.lg-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--sp-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.lg-card__old::before {
+  content: '· ';
+  color: var(--fg-faint);
+}
+
+/* ── What the last print did ────────────────────────────────────────────── */
+.lg-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  animation: lg-in var(--dur) var(--ease-out) both;
+}
+.lg-result[data-tone='good'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+@keyframes lg-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.lg-result__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.lg-result__x {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: -6px -6px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.lg-result__x:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.lg-result__body {
+  margin: 0;
+}
+.lg-failed {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-md);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.lg-failed__title {
+  font-weight: var(--fw-semibold);
+}
+.lg-failed ul {
+  margin: var(--sp-1) 0 0;
+  padding-left: var(--sp-4);
+  overflow-wrap: anywhere;
+}
+.lg-result__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* ── The single-parcel list, folded under the groups ────────────────────── */
+.lg-fold {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  text-align: left;
+  cursor: pointer;
+}
+.lg-fold:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.lg-fold__sub {
+  display: block;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-regular);
+}
+.lg-fold > svg {
+  flex: none;
+  color: var(--fg-muted);
+  transition: transform var(--dur) var(--ease-out);
+}
+.lg-fold[aria-expanded='true'] > svg {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 767px) {
+  .lg-print {
+    width: 100%;
+    min-height: 48px;
+  }
+  .lg-result__links > * {
+    min-height: 44px;
+  }
+  .lg-result__x {
+    width: 44px;
+    height: 44px;
+    margin: -10px -10px 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lg-card__label,
+  .lg-card__tick > svg,
+  .lg-fold > svg {
+    transition: none;
+  }
+  .lg-card__input:active + .lg-card__label {
+    transform: none;
+  }
+  .lg-result {
+    animation: none;
+  }
+}

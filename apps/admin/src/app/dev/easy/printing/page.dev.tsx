@@ -39,6 +39,47 @@ const ROWS = [0, 1, 2, 3, 4, 5].map((i) => ({
 
 const respond: Respond<F> = (fixture, req) => {
   if (req.path.endsWith('/scan-block')) return json(null);
+  if (/printing\/label-groups$/.test(req.path))
+    return json(
+      fixture === 'b'
+        ? { groupSize: 30, totalParcels: 0, groups: [] }
+        : {
+            groupSize: 30,
+            totalParcels: 97,
+            groups: [
+              ['Delhivery · Group 1', 30, 60 * 50],
+              ['Delhivery · Group 2', 30, 60 * 26],
+              ['Delhivery · Group 3', 7, 90],
+              ['Shiprocket — Blue Dart Air Express Priority · Group 1', 30, 60 * 5],
+            ].map(([label, size, mins], i) => ({
+              key: `g${i}`,
+              courierCode: i === 3 ? 'SHIPROCKET' : 'DELHIVERY',
+              courierName: i === 3 ? 'Shiprocket' : 'Delhivery',
+              warehouseId: 'wh-1',
+              label,
+              size,
+              shipmentIds: Array.from({ length: size as number }, (_, n) => `g${i}-s${n}`),
+              oldestPlacedAt: ago(mins as number),
+            })),
+          },
+    );
+  if (/printing\/label-groups\/print$/.test(req.path))
+    return json({
+      batchId: 'b-42',
+      batchNumber: 'PB-2026-11-000042',
+      pdfBase64: 'JVBERi0xLjQKJSVFT0YK',
+      fileName: 'labels-PB-2026-11-000042.pdf',
+      shipmentCount: 59,
+      pageCount: 59,
+      failed: [
+        {
+          shipmentId: 'x1',
+          shipmentNumber: 'SHP-2026-00095',
+          reason: 'This parcel has no AWB yet.',
+        },
+      ],
+      replayed: false,
+    });
   if (/printing\/(label-queue|pick-queue)$/.test(req.path))
     return json(fixture === 'b' ? [] : ROWS);
   if (req.method === 'GET') return json([]);

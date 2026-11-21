@@ -6,7 +6,17 @@ import { InfoButton } from '@/components/easy/info-button';
 import '@/components/easy/easy.css';
 import Link from 'next/link';
 import { useEffect, useState, type KeyboardEvent, type ReactElement } from 'react';
-import { Check, Download, FileCheck2, PackageMinus, Printer, Search, Tags, X } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  Download,
+  FileCheck2,
+  PackageMinus,
+  Printer,
+  Search,
+  Tags,
+  X,
+} from 'lucide-react';
 import { useToast } from '@skydrop/ui/components';
 import { Button } from '@skydrop/ui/app/button';
 import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
@@ -46,6 +56,7 @@ import { ScanSoundToggle } from '@/components/scan-sound-toggle';
 import { downloadPdf, printPdf } from '@/lib/print-pdf';
 import { SelectionTable } from './selection-table';
 import { ShortPickDialog } from './short-pick-dialog';
+import { LabelGroupsPanel } from './label-groups';
 import '../../_components/benches.css';
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/client';
@@ -123,6 +134,9 @@ function useScanSearchVerdict(
 export function PrintingStation(): ReactElement {
   const t = useT();
   const [tab, setTab] = useState<Tab>('labels');
+  // A batch the labels tab just made: Past batches opens already searched
+  // for it, so its picking list is one press away.
+  const [batchToFind, setBatchToFind] = useState('');
 
   return (
     <div className="wh-page ez-touch">
@@ -171,10 +185,18 @@ export function PrintingStation(): ReactElement {
         ))}
       </div>
 
-      {tab === 'labels' && <LabelTab />}
+      {tab === 'labels' && (
+        <LabelTab
+          onOpenBatch={(batchNumber) => {
+            setBatchToFind(batchNumber);
+            setTab('batches');
+          }}
+          onOpenReprint={() => setTab('reprint')}
+        />
+      )}
       {tab === 'reprint' && <ReprintTab />}
       {tab === 'picking' && <PickingTab />}
-      {tab === 'batches' && <BatchesTab />}
+      {tab === 'batches' && <BatchesTab initialSearch={batchToFind} />}
       {tab === 'locate' && <LocateTab />}
     </div>
   );
@@ -182,7 +204,50 @@ export function PrintingStation(): ReactElement {
 
 // ── tab 1 ─────────────────────────────────────────────────────────────
 
-function LabelTab(): ReactElement {
+/**
+ * Groups first, single parcels under them.
+ *
+ * The groups are how a shift prints (whole stacks, one batch each). The flat
+ * list that was the whole tab is still here, unchanged, folded under the
+ * groups for the odd label that has to go out on its own.
+ */
+function LabelTab({
+  onOpenBatch,
+  onOpenReprint,
+}: {
+  readonly onOpenBatch: (batchNumber: string) => void;
+  readonly onOpenReprint: () => void;
+}): ReactElement {
+  const t = useT();
+  const queue = useLabelQueue();
+  const [single, setSingle] = useState(false);
+  const waiting = queue.data?.length ?? 0;
+  return (
+    <div className="wh-stack">
+      <LabelGroupsPanel onOpenBatch={onOpenBatch} onOpenReprint={onOpenReprint} />
+      <button
+        type="button"
+        className="lg-fold"
+        aria-expanded={single}
+        aria-controls="lg-single"
+        onClick={() => setSingle((v) => !v)}
+      >
+        <span>
+          {t('warehousePrintingPrintingStation.groupsSingle', { n: waiting })}
+          <span className="lg-fold__sub">
+            {t('warehousePrintingPrintingStation.groupsSingleSub')}
+          </span>
+        </span>
+        <ChevronDown size={18} aria-hidden />
+      </button>
+      <div id="lg-single" hidden={!single}>
+        {single && <SingleLabelList />}
+      </div>
+    </div>
+  );
+}
+
+function SingleLabelList(): ReactElement {
   const t = useT();
   const queue = useLabelQueue();
   const build = useBuildLabels();
@@ -723,10 +788,10 @@ function ReprintTab(): ReactElement {
 
 // ── tab 3 ─────────────────────────────────────────────────────────────
 
-function BatchesTab(): ReactElement {
+function BatchesTab({ initialSearch = '' }: { readonly initialSearch?: string }): ReactElement {
   const t = useT();
   const code = useCodeLabel();
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const batches = usePickBatches(search);
   const buildList = useBuildPickList();
   const markPicked = useMarkBatchPicked();
