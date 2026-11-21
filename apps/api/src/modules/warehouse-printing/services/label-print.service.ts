@@ -45,7 +45,17 @@ export class LabelPrintService {
     private readonly manualPdf: ManualLabelPdfService,
   ) {}
 
-  async build(shipmentIds: readonly string[], staffId: string): Promise<LabelSheetResult> {
+  async build(
+    shipmentIds: readonly string[],
+    staffId: string,
+    /**
+     * Print-groups flow only: a tag per shipment ("PB-… · 7/67") drawn on
+     * that parcel's label. When set, manual labels are rendered one slot
+     * per parcel so the sheet keeps the exact order given (group order,
+     * then oldest first) and every page knows its parcel.
+     */
+    opts?: { readonly tags?: ReadonlyMap<string, string> },
+  ): Promise<LabelSheetResult> {
     if (shipmentIds.length === 0) {
       throw new BadRequestException({
         code: 'NO_SHIPMENTS_SELECTED',
@@ -88,6 +98,13 @@ export class LabelPrintService {
 
       if (s.isManualCourier) {
         // No API behind a manual courier, so we draw the label (CUR-6).
+        if (opts?.tags !== undefined) {
+          const payload = this.toManualPayload(s);
+          const one = await this.manualPdf.render([payload]);
+          manual.push(payload);
+          slots.push({ shipmentId: id, bytes: one });
+          continue;
+        }
         manual.push(this.toManualPayload(s));
         if (!manualSlotTaken) {
           slots.push({ manualSlot: true });
@@ -120,13 +137,17 @@ export class LabelPrintService {
       slots.push({ shipmentId: id, bytes });
     }
 
-    const manualDoc = manual.length === 0 ? null : await this.manualPdf.render(manual);
+    const manualDoc =
+      manual.length === 0 || opts?.tags !== undefined ? null : await this.manualPdf.render(manual);
     const parts = slots.flatMap((slot) => {
       if (!('manualSlot' in slot)) return [slot];
       return manualDoc === null ? [] : [{ shipmentId: 'manual-labels', bytes: manualDoc }];
     });
 
-    const merged = await this.sheet.merge(parts);
+    const merged = await this.sheet.merge(
+      parts,
+      opts?.tags === undefined ? undefined : { tags: opts.tags },
+    );
     for (const id of merged.failed) {
       const s = shipments.get(id);
       failed.push({

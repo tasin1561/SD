@@ -1330,6 +1330,13 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   },
 
   // ── Warehouse ───────────────────────────────────────────────────────
+  'warehouse.print_group_size': {
+    name: 'Parcels per label group',
+    group: 'Warehouse',
+    what: 'On the Shipping labels tab, parcels are offered in groups: sorted by courier, then oldest order first, cut into groups of this many. The last group of a courier may be smaller. From 1 to 200.',
+    example:
+      'Set to 30: 67 Delhivery parcels show as groups of 30, 30 and 7, oldest orders in Group 1.',
+  },
   'ops.default_warehouse_id': {
     name: 'Default warehouse',
     group: 'Warehouse',

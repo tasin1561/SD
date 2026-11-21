@@ -20,6 +20,8 @@ export interface PrintQueueRow {
   readonly codAmountInr: string | null;
   readonly itemCount: number;
   readonly confirmedAtIso: string | null;
+  /** When the order was placed — the "oldest first" key of label groups. */
+  readonly placedAtIso: string | null;
   readonly labelPrintedAtIso: string | null;
   /** How many label sheets have carried this parcel. Above 1 means a
    *  duplicate may physically exist. */
@@ -53,6 +55,15 @@ export class PrintQueueService {
   /** Parcels with a waybill whose label has NOT been printed. */
   async awaitingLabel(warehouseId?: string): Promise<PrintQueueRow[]> {
     return this.query({ labelPrinted: false, warehouseId });
+  }
+
+  /**
+   * The not-yet-printed pool label groups are cut from: the label queue
+   * minus parcels already claimed by a batch (a batch made by a group print
+   * whose labels are not yet confirmed must not be offered again).
+   */
+  async labelPool(warehouseId?: string): Promise<PrintQueueRow[]> {
+    return this.query({ labelPrinted: false, warehouseId, unbatchedOnly: true });
   }
 
   /**
@@ -124,6 +135,7 @@ export class PrintQueueService {
             orderNumber: true,
             codAmountInr: true,
             confirmedAt: true,
+            placedAt: true,
             seller: { select: { companyName: true } },
             items: { select: { id: true } },
           },
@@ -167,6 +179,7 @@ export class PrintQueueService {
       codAmountInr: l.order.codAmountInr?.toString() ?? null,
       itemCount: l.order.items.length,
       confirmedAtIso: l.order.confirmedAt?.toISOString() ?? null,
+      placedAtIso: l.order.placedAt?.toISOString() ?? null,
       labelPrintedAtIso: l.shipment.labelPrintedAt?.toISOString() ?? null,
       labelPrintCount: l.shipment.labelPrintCount,
       packCompletedAtIso: l.shipment.packCompletedAt?.toISOString() ?? null,

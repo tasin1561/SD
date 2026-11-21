@@ -132,6 +132,13 @@ export class PickBatchService {
     shipmentIds: readonly string[],
     staffId: string,
     ctx?: ClientContext,
+    /**
+     * Label-groups print only: the batch is made in the same click that
+     * builds the labels, so the labels are not yet confirmed printed. The
+     * operator still confirms them afterwards (labels/confirm-printed).
+     * Every other caller keeps the LABEL_NOT_PRINTED gate.
+     */
+    opts?: { readonly skipLabelGate?: boolean },
   ): Promise<PickBatchView> {
     if (shipmentIds.length === 0) {
       throw new BadRequestException({
@@ -178,7 +185,8 @@ export class PickBatchService {
       throw new BadRequestException({ code: 'NO_WAREHOUSE', message: 'No warehouse resolved' });
     }
 
-    const unlabelled = rows.filter((r) => r.labelPrintedAt === null);
+    const unlabelled =
+      opts?.skipLabelGate === true ? [] : rows.filter((r) => r.labelPrintedAt === null);
     if (unlabelled.length > 0) {
       throw new ConflictException({
         code: 'LABEL_NOT_PRINTED',
