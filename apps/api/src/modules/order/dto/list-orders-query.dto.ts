@@ -56,11 +56,13 @@ export class ListOrdersQueryDto {
   @Min(1)
   page?: number;
 
-  @ApiProperty({ required: false, default: 20, minimum: 1, maximum: 100 })
+  // Owner, 2026-11-21: list screens offer 25–500 rows per page. The server
+  // keeps 1 as the floor (dashboard widgets ask for a handful).
+  @ApiProperty({ required: false, default: 20, minimum: 1, maximum: 500 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(500)
   pageSize?: number;
 }
