@@ -33,7 +33,7 @@ import {
 import { useUiT } from '@skydrop/ui/app/i18n-client';
 import { verdict } from '@/i18n/verdict';
 import { InfoButton } from '@/components/easy/info-button';
-import { Pagination } from '@skydrop/ui/app/pagination';
+import { Pagination, ROWS_PER_PAGE, useRowsPerPage } from '@skydrop/ui/app/pagination';
 import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { chipWords, StatusChip } from '@skydrop/ui/app/status-chip';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
@@ -100,7 +100,8 @@ import type { MessageKey } from '@/i18n/catalog';
  */
 
 const STATUSES = Object.values(OrderStatus);
-const PAGE_SIZES = [15, 20, 50, 100] as const;
+/** Sizes an old link may still carry; the picker itself offers ROWS_PER_PAGE. */
+const LINK_PAGE_SIZES = [15, 20, 25, 50, 100, 200, 500] as const;
 
 /**
  * When it was placed, as presets rather than two date pickers.
@@ -123,7 +124,6 @@ const RANGES: ReadonlyArray<{
   // "that week in August", which is a rarer question than "recently".
   { key: 'custom', labelKey: 'orderList.customRange', days: null },
 ];
-const DEFAULT_PAGE_SIZE = 50;
 /** The status tab that means "no status filter". Not an OrderStatus value. */
 const ALL_TAB = 'all';
 
@@ -185,7 +185,8 @@ interface QueryParams {
   readonly from: string;
   readonly to: string;
   readonly page: number;
-  readonly pageSize: number;
+  /** Only when the link itself names a size; otherwise the person's own choice applies. */
+  readonly pageSize: number | null;
 }
 
 function parseParams(sp: URLSearchParams): QueryParams {
@@ -199,7 +200,7 @@ function parseParams(sp: URLSearchParams): QueryParams {
     from: /^\d{4}-\d{2}-\d{2}$/.test(sp.get('from') ?? '') ? (sp.get('from') ?? '') : '',
     to: /^\d{4}-\d{2}-\d{2}$/.test(sp.get('to') ?? '') ? (sp.get('to') ?? '') : '',
     page: Math.max(1, Number(sp.get('page')) || 1),
-    pageSize: (PAGE_SIZES as readonly number[]).includes(size) ? size : DEFAULT_PAGE_SIZE,
+    pageSize: (LINK_PAGE_SIZES as readonly number[]).includes(size) ? size : null,
   };
 }
 
@@ -264,7 +265,7 @@ export function OrdersIndex(): ReactElement {
       if (merged.range === 'custom' && merged.from) nextSp.set('from', merged.from);
       if (merged.range === 'custom' && merged.to) nextSp.set('to', merged.to);
       if (merged.page !== 1) nextSp.set('page', String(merged.page));
-      if (merged.pageSize !== DEFAULT_PAGE_SIZE) nextSp.set('pageSize', String(merged.pageSize));
+      if (merged.pageSize !== null) nextSp.set('pageSize', String(merged.pageSize));
       const qs = nextSp.toString();
       router.replace(qs ? `/orders?${qs}` : '/orders');
     },
@@ -298,7 +299,12 @@ export function OrdersIndex(): ReactElement {
     ...(placedFrom === undefined ? {} : { placedFrom }),
     ...(placedTo === undefined ? {} : { placedTo }),
   };
-  const list = useOrdersList({ ...listFilter, page: params.page, pageSize: params.pageSize });
+  // Rows per page: this person's own choice for this list, kept on the
+  // device. A link that names a size (?pageSize=50) wins for that visit;
+  // picking a size from the footer drops it from the link and remembers it.
+  const [savedSize, setSavedSize] = useRowsPerPage(`seller-orders:${identity?.id ?? 'anon'}`);
+  const pageSize = params.pageSize ?? savedSize;
+  const list = useOrdersList({ ...listFilter, page: params.page, pageSize });
 
   // ── Bulk actions: tick rows on this page, then act on them ──────────
   const uiT = useUiT();
@@ -344,10 +350,7 @@ export function OrdersIndex(): ReactElement {
   const rangeText =
     list.data === undefined || list.data.total === 0
       ? undefined
-      : `${(params.page - 1) * params.pageSize + 1}–${Math.min(
-          params.page * params.pageSize,
-          list.data.total,
-        )}`;
+      : `${(params.page - 1) * pageSize + 1}–${Math.min(params.page * pageSize, list.data.total)}`;
 
   /** A tile filters by ONE status (the list takes one): the first of its
       group that has orders, so the click lands on something non-empty. */
@@ -777,11 +780,14 @@ export function OrdersIndex(): ReactElement {
             <div className="ord-table-foot">
               <Pagination
                 page={params.page}
-                pageSize={params.pageSize}
+                pageSize={pageSize}
                 total={list.data.total}
-                pageSizes={PAGE_SIZES}
+                pageSizes={ROWS_PER_PAGE}
                 onPageChange={(next) => updateUrl({ page: next })}
-                onPageSizeChange={(n) => updateUrl({ pageSize: n, page: 1 })}
+                onPageSizeChange={(n) => {
+                  setSavedSize(n);
+                  updateUrl({ pageSize: null, page: 1 });
+                }}
                 label={t('orderList.ordersPages')}
               />
             </div>

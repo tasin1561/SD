@@ -33,7 +33,7 @@ import {
 } from '@skydrop/ui/app/bulk-actions';
 import { useUiT } from '@skydrop/ui/app/i18n-client';
 import { InfoButton } from '@/components/easy/info-button';
-import { Pagination } from '@skydrop/ui/app/pagination';
+import { Pagination, ROWS_PER_PAGE, useRowsPerPage } from '@skydrop/ui/app/pagination';
 import { chipWords, StatusChip } from '@skydrop/ui/app/status-chip';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
@@ -48,7 +48,6 @@ import { cloneHref } from '@/lib/clone-order';
 import '../_components/as.css';
 import { AboutThis } from '@/components/easy/about';
 
-const PAGE_SIZE = 20;
 const STATUSES = Object.values(OrderStatus);
 
 /**
@@ -107,7 +106,9 @@ function OrdersList(): ReactElement {
     ...(status === '' ? {} : { status }),
     ...(search === '' ? {} : { search }),
   };
-  const list = useMyOrders({ ...listFilter, page, pageSize: PAGE_SIZE });
+  // Rows per page: this person's own choice for this list, kept on the device.
+  const [pageSize, setPageSize] = useRowsPerPage(`associate-orders:${me?.id ?? 'anon'}`);
+  const list = useMyOrders({ ...listFilter, page, pageSize });
 
   // ── Bulk actions: tick rows on this page, then act on them ──────────
   const uiT = useUiT();
@@ -364,7 +365,12 @@ function OrdersList(): ReactElement {
             <div className="as-table-foot">
               <Pagination
                 page={page}
-                pageSize={PAGE_SIZE}
+                pageSize={pageSize}
+                pageSizes={ROWS_PER_PAGE}
+                onPageSizeChange={(n) => {
+                  setPageSize(n);
+                  go({ page: 1 });
+                }}
                 total={list.data.total}
                 onPageChange={(p) => go({ page: p })}
                 label={t('orders.pages')}

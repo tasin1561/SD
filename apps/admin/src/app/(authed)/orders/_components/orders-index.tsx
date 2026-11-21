@@ -35,7 +35,7 @@ import {
 } from '@skydrop/ui/app/bulk-actions';
 import { useUiT } from '@skydrop/ui/app/i18n-client';
 import { hasPermission, useApiClient, useStaffIdentity } from '@skydrop/auth/client';
-import { Pagination } from '@skydrop/ui/app/pagination';
+import { Pagination, ROWS_PER_PAGE, useRowsPerPage } from '@skydrop/ui/app/pagination';
 import { chipWords, StatusChip } from '@skydrop/ui/app/status-chip';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
@@ -62,7 +62,6 @@ import { serverVerdict } from '@/lib/server-verdict';
  * hardcoded hex anywhere on this page (FE-6).
  */
 
-const PAGE_SIZE = 20;
 const STATUSES = Object.values(OrderStatus);
 const SOURCES = Object.values(OrderSource);
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -139,12 +138,14 @@ export function OrdersIndex(): ReactElement {
     ...(placedFrom === undefined ? {} : { placedFrom }),
     ...(placedTo === undefined ? {} : { placedTo }),
   };
-  const list = useOrdersList({ ...listFilter, page: params.page, pageSize: PAGE_SIZE });
+  // Rows per page: this person's own choice for this list, kept on the device.
+  const staff = useStaffIdentity();
+  const [pageSize, setPageSize] = useRowsPerPage(`admin-orders:${staff?.id ?? 'anon'}`);
+  const list = useOrdersList({ ...listFilter, page: params.page, pageSize });
 
   // ── Bulk actions: tick rows on this page, then act on them ──────────
   const uiT = useUiT();
   const client = useApiClient();
-  const staff = useStaffIdentity();
   const pageIds = useMemo(() => (list.data?.items ?? []).map((o) => o.id), [list.data]);
   const selection = useRowSelection(pageIds);
   const bulkActions = useMemo(
@@ -425,7 +426,12 @@ export function OrdersIndex(): ReactElement {
           <div className="oo-card__foot">
             <Pagination
               page={params.page}
-              pageSize={PAGE_SIZE}
+              pageSize={pageSize}
+              pageSizes={ROWS_PER_PAGE}
+              onPageSizeChange={(n) => {
+                setPageSize(n);
+                updateUrl({ page: 1 });
+              }}
               total={list.data.total}
               onPageChange={(next) => updateUrl({ page: next })}
               label={t('ordersList.pagesLabel')}

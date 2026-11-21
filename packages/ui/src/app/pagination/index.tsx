@@ -3,6 +3,7 @@
 import { clsx } from 'clsx';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -203,4 +204,53 @@ export function Pagination({
       )}
     </nav>
   );
+}
+
+/** The sizes an order list offers. The server takes up to 500 a page. */
+export const ROWS_PER_PAGE = [25, 50, 100, 200, 500] as const;
+export const DEFAULT_ROWS_PER_PAGE = 100;
+
+/**
+ * A list's "rows per page", remembered on this device for this person.
+ *
+ * `storageKey` names the list AND the person (`orders:<userId>`), so two
+ * people sharing a browser, or one person's two lists, never share a choice.
+ * It is a display preference only — nothing about the session is kept here.
+ * A missing, blocked or tampered value falls back to the default: storage is
+ * a convenience, never something the list depends on.
+ */
+export function useRowsPerPage(
+  storageKey: string,
+  sizes: readonly number[] = ROWS_PER_PAGE,
+  fallback: number = DEFAULT_ROWS_PER_PAGE,
+): readonly [number, (size: number) => void] {
+  const key = `sd.rows.${storageKey}`;
+  const read = useCallback((): number => {
+    if (typeof window === 'undefined') return fallback;
+    try {
+      const n = Number(window.localStorage.getItem(key));
+      return sizes.includes(n) ? n : fallback;
+    } catch {
+      return fallback;
+    }
+  }, [key, sizes, fallback]);
+  const [size, setSize] = useState<number>(read);
+  // The person can change (sign out, sign in as someone else) without this
+  // component remounting; their own choice is read again when the key moves.
+  useEffect(() => {
+    setSize(read());
+  }, [read]);
+  const choose = useCallback(
+    (next: number): void => {
+      if (!sizes.includes(next)) return;
+      setSize(next);
+      try {
+        window.localStorage.setItem(key, String(next));
+      } catch {
+        // Private mode or a full disk: the choice still holds for this visit.
+      }
+    },
+    [key, sizes],
+  );
+  return [size, choose] as const;
 }
