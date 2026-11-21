@@ -21,7 +21,7 @@ export class ShipmentSelectionDto {
   @ApiProperty({ type: [String], description: 'Shipments to act on, in the order selected' })
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(100)
+  @ArrayMaxSize(1000)
   @IsUUID('7', { each: true })
   shipmentIds!: string[];
 }

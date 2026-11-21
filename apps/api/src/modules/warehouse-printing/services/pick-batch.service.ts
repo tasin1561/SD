@@ -76,7 +76,12 @@ export interface PickListResult {
   readonly printCount: number;
 }
 
-const MAX_PER_BATCH = 60;
+/**
+ * Owner, 2026-11-21: "remove the restrictions" — a day's selection (67)
+ * was refused by the old 60. Kept as a high safety ceiling only, so one
+ * request cannot ask for a PDF large enough to time out.
+ */
+const MAX_PER_BATCH = 1000;
 
 type ActiveReservations = Awaited<
   ReturnType<StockReservationService['listActiveForOrderWithLocations']>
@@ -137,7 +142,7 @@ export class PickBatchService {
     if (shipmentIds.length > MAX_PER_BATCH) {
       throw new BadRequestException({
         code: 'TOO_MANY_SHIPMENTS',
-        message: `A batch holds at most ${MAX_PER_BATCH} parcels; a longer walk than that is two walks`,
+        message: `A batch holds at most ${MAX_PER_BATCH} parcels; select fewer`,
       });
     }
 
