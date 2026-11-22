@@ -32,6 +32,34 @@ export const EXTERNAL_TRACKING_LIMITS = {
 const UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
+/** Per-courier facts live in ONE table, so there is no courier-name branch in the logic (CUR-12). */
+const SOURCES: Record<
+  ExternalCourierCode,
+  {
+    readonly label: string;
+    readonly url: (enc: string) => string;
+    readonly headers: Record<string, string>;
+    /** A status that means "not ours" rather than "broken". */
+    readonly notFoundStatus: number | null;
+    readonly map: (body: unknown, awb: string) => MapResult;
+  }
+> = {
+  delhivery: {
+    label: 'Delhivery',
+    url: (enc) => `https://dlv-api.delhivery.com/v3/unified-tracking?wbn=${enc}`,
+    headers: { Origin: 'https://www.delhivery.com', Referer: 'https://www.delhivery.com/' },
+    notFoundStatus: 400, // malformed waybill
+    map: mapDelhivery,
+  },
+  shiprocket: {
+    label: 'Shiprocket',
+    url: (enc) => `https://apiv2.shiprocket.in/v1/tracking/${enc}`,
+    headers: {},
+    notFoundStatus: null,
+    map: mapShiprocket,
+  },
+};
+
 type Cached = { readonly nf: true } | { readonly nf: false; readonly data: PublicTrackingResponse };
 
 type CourierOutcome =
@@ -109,7 +137,7 @@ export class ExternalTrackingService {
         await this.breakerSuccess(courier);
         return { kind: 'not_found' };
       }
-      mapped = courier === 'delhivery' ? mapDelhivery(body, awb) : mapShiprocket(body, awb);
+      mapped = SOURCES[courier].map(body, awb);
     } catch (err) {
       if (err instanceof ExternalShapeError) {
         await this.shapeChanged(courier, err.message);
@@ -130,16 +158,13 @@ export class ExternalTrackingService {
 
   /** `'NOT_FOUND'` for the courier's own "no such AWB"; throws for every failure. */
   private async fetchJson(courier: ExternalCourierCode, awb: string): Promise<unknown> {
-    const enc = encodeURIComponent(awb);
-    const url =
-      courier === 'delhivery'
-        ? `https://dlv-api.delhivery.com/v3/unified-tracking?wbn=${enc}`
-        : `https://apiv2.shiprocket.in/v1/tracking/${enc}`;
-    const headers: Record<string, string> = { 'User-Agent': UA, Accept: 'application/json' };
-    if (courier === 'delhivery') {
-      headers['Origin'] = 'https://www.delhivery.com';
-      headers['Referer'] = 'https://www.delhivery.com/';
-    }
+    const src = SOURCES[courier];
+    const url = src.url(encodeURIComponent(awb));
+    const headers: Record<string, string> = {
+      'User-Agent': UA,
+      Accept: 'application/json',
+      ...src.headers,
+    };
     const res = await fetch(url, {
       method: 'GET',
       headers,
@@ -148,7 +173,7 @@ export class ExternalTrackingService {
       signal: AbortSignal.timeout(EXTERNAL_TRACKING_LIMITS.timeoutMs),
     });
     // Delhivery answers 400 for a malformed waybill: that is "not theirs".
-    if (courier === 'delhivery' && res.status === 400) return 'NOT_FOUND';
+    if (res.status === SOURCES[courier].notFoundStatus) return 'NOT_FOUND';
     if (!res.ok) throw new Error(`${courier} HTTP ${res.status}`);
     let json: unknown;
     try {
@@ -257,7 +282,7 @@ export class ExternalTrackingService {
     await this.issues.raise({
       kind: SystemIssueKind.INTEGRATION,
       severity: SystemIssueSeverity.MEDIUM,
-      title: `${courier === 'delhivery' ? 'Delhivery' : 'Shiprocket'} public tracking changed shape`,
+      title: `${SOURCES[courier].label} public tracking changed shape`,
       detail:
         `The public tracking page's ${courier} lookup returned something the mapper does not ` +
         `understand (${what}). Customers see "tracking not responding" for AWBs we do not hold. ` +

@@ -1,1 +1,56 @@
-{"statusCode":200,"request_id":"x","message":"Success","data":[{"status":{"status":"RETURNED","statusDateTime":"2026-11-21T07:49:40.018000","statusType":"RT","instructions":"Vehicle delayed - Controllable"},"slot":{"stUtc":1794886200,"src":"DEFAULT","from":"09:00","to":"19:00","date":"22/11/2026"},"referenceNo":"REDACTED-REF","packageType":"COD","awb":"38061110627384","hqStatus":"In Transit","productType":"B2C","destination":"Patiala","uanLat":0,"uanLong":0,"promiseDeliveryDate":"2026-11-19T23:59:59","consignor":"","consignee":"","trackingStates":[{"label":"Out for Return","date":"","scans":[{"scanDate":"","scanDateTime":"","scanNslRemark":"Shipment left for next facility ","cityLocation":"Rajpura","scanType":"RT","scan":"In Transit","scannedLocation":"Chandigarh_RamNagar_GW (Punjab)"}],"scanDateTime":""}],"currentFlow":"Returned","amountText":"Click on Order Details for amount breakup.","fePhoneMasked":"","deliveryDate":"24 Nov 2026, Evening","deliveryPillLabel":"Return"}]}
+{
+  "statusCode": 200,
+  "request_id": "x",
+  "message": "Success",
+  "data": [
+    {
+      "status": {
+        "status": "RETURNED",
+        "statusDateTime": "2026-11-21T07:49:40.018000",
+        "statusType": "RT",
+        "instructions": "Vehicle delayed - Controllable"
+      },
+      "slot": {
+        "stUtc": 1794886200,
+        "src": "DEFAULT",
+        "from": "09:00",
+        "to": "19:00",
+        "date": "22/11/2026"
+      },
+      "referenceNo": "REDACTED-REF",
+      "packageType": "COD",
+      "awb": "38061110627384",
+      "hqStatus": "In Transit",
+      "productType": "B2C",
+      "destination": "Patiala",
+      "uanLat": 0,
+      "uanLong": 0,
+      "promiseDeliveryDate": "2026-11-19T23:59:59",
+      "consignor": "",
+      "consignee": "",
+      "trackingStates": [
+        {
+          "label": "Out for Return",
+          "date": "",
+          "scans": [
+            {
+              "scanDate": "",
+              "scanDateTime": "",
+              "scanNslRemark": "Shipment left for next facility ",
+              "cityLocation": "Rajpura",
+              "scanType": "RT",
+              "scan": "In Transit",
+              "scannedLocation": "Chandigarh_RamNagar_GW (Punjab)"
+            }
+          ],
+          "scanDateTime": ""
+        }
+      ],
+      "currentFlow": "Returned",
+      "amountText": "Click on Order Details for amount breakup.",
+      "fePhoneMasked": "",
+      "deliveryDate": "24 Nov 2026, Evening",
+      "deliveryPillLabel": "Return"
+    }
+  ]
+}

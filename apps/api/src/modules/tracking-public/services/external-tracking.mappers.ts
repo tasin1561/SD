@@ -41,7 +41,8 @@ export function isPlausibleAwb(awb: string): boolean {
 
 /** Delhivery waybills are 11-14 digits; anything else is tried on Shiprocket first. */
 export function courierTryOrder(awb: string): ExternalCourierCode[] {
-  return /^\d{11,14}$/.test(awb) ? ['delhivery', 'shiprocket'] : ['shiprocket', 'delhivery'];
+  const order: ExternalCourierCode[] = ['delhivery', 'shiprocket'];
+  return /^\d{11,14}$/.test(awb) ? order : order.reverse();
 }
 
 /** Free text from a courier: drop phone-like digit runs and emails, cap the length. */

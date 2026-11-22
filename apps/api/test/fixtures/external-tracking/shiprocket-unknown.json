@@ -1,1 +1,6 @@
-{"tracking_data":{"track_status":0,"error":"Aahh! There is no activities found in our DB. Please have some patience it will be updated soon."}}
+{
+  "tracking_data": {
+    "track_status": 0,
+    "error": "Aahh! There is no activities found in our DB. Please have some patience it will be updated soon."
+  }
+}
