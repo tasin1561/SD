@@ -70,7 +70,15 @@ export interface PublicSoldBy {
   logoUrl: string | null;
 }
 
+/** Where a public lookup's facts came from (owner decision 2026-11-22). */
+export type PublicTrackingSource = 'SKYDROP' | 'COURIER_PUBLIC';
+export type ExternalCourierCode = 'delhivery' | 'shiprocket';
+
 export interface PublicTrackingResponse {
+  /** Added by the lookup service. Absent from `findByAwb` itself. */
+  source?: PublicTrackingSource;
+  /** Only for `COURIER_PUBLIC`: which courier's public tracking answered. */
+  courier?: ExternalCourierCode;
   /** RS-10 — see `PublicSoldBy`. Absent unless a reseller store sold it. */
   soldBy?: PublicSoldBy;
   /** The AWB the customer asked about — echoed for confirmation. */

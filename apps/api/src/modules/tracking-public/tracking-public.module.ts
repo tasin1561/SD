@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../infrastructure/prisma/prisma.module';
 import { PublicTrackingReadService } from './services/public-tracking-read.service';
+import { ExternalTrackingService } from './services/external-tracking.service';
+import { PublicTrackingLookupService } from './services/public-tracking-lookup.service';
 import { PublicTrackingController } from './controllers/public-tracking.controller';
 
 /**
@@ -16,7 +18,7 @@ import { PublicTrackingController } from './controllers/public-tracking.controll
 @Module({
   imports: [PrismaModule],
   controllers: [PublicTrackingController],
-  providers: [PublicTrackingReadService],
+  providers: [PublicTrackingReadService, ExternalTrackingService, PublicTrackingLookupService],
   exports: [PublicTrackingReadService],
 })
 export class TrackingPublicModule {}
