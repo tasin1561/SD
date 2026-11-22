@@ -40,6 +40,10 @@ type Dict = {
   // Detail page
   readonly notFoundTitle: string;
   readonly notFoundBody: string;
+  /** COURIER_PUBLIC parcels (owner decision 2026-11-22). `{courier}` is replaced. */
+  readonly externalNote: string;
+  readonly courierDownBody: string;
+  readonly lookupLimitBody: string;
   readonly tryAnother: string;
   /** The lookup itself failed (rate limit, server error, network) —
    *  deliberately NOT "not found", which would tell a customer their
@@ -118,7 +122,11 @@ const EN: Dict = {
   trackButton: 'Track',
   notFoundTitle: 'Tracking number not found',
   notFoundBody:
-    "We couldn't find a parcel for this number. Double-check the AWB from your confirmation email or SMS. Tracking may take up to 24 hours to become active after dispatch.",
+    "We couldn't find this AWB with Delhivery or Shiprocket. Double-check the AWB from your confirmation email or SMS. Tracking may take up to 24 hours to become active after dispatch.",
+  externalNote: "Live status from {courier}'s public tracking. It may be a little behind.",
+  courierDownBody: "The courier's tracking is not responding, try again shortly.",
+  lookupLimitBody:
+    'Too many lookups from your connection. Please wait a few minutes and try again.',
   tryAnother: 'Try another AWB',
   unavailableTitle: 'Tracking is temporarily unavailable',
   unavailableBody:
@@ -186,7 +194,10 @@ const HI: Dict = {
   trackButton: 'ट्रैक करें',
   notFoundTitle: 'ट्रैकिंग नंबर नहीं मिला',
   notFoundBody:
-    'हमें इस नंबर के लिए कोई पार्सल नहीं मिला। कृपया अपनी कन्फर्मेशन ईमेल या SMS से AWB दोबारा जांचें। डिस्पैच के बाद ट्रैकिंग सक्रिय होने में 24 घंटे तक लग सकते हैं।',
+    'हमें यह AWB Delhivery या Shiprocket के पास नहीं मिला। कृपया अपनी कन्फर्मेशन ईमेल या SMS से AWB दोबारा जांचें। डिस्पैच के बाद ट्रैकिंग सक्रिय होने में 24 घंटे तक लग सकते हैं।',
+  externalNote: '{courier} की सार्वजनिक ट्रैकिंग से लाइव स्थिति। यह थोड़ी पीछे हो सकती है।',
+  courierDownBody: 'कूरियर की ट्रैकिंग अभी जवाब नहीं दे रही, कृपया थोड़ी देर बाद फिर प्रयास करें।',
+  lookupLimitBody: 'आपके कनेक्शन से बहुत अधिक लुकअप हुए। कृपया कुछ मिनट रुककर फिर प्रयास करें।',
   tryAnother: 'दूसरा AWB आज़माएँ',
   unavailableTitle: 'ट्रैकिंग अभी अस्थायी रूप से उपलब्ध नहीं है',
   unavailableBody:
@@ -254,7 +265,11 @@ const BN: Dict = {
   trackButton: 'ট্র্যাক করুন',
   notFoundTitle: 'ট্র্যাকিং নম্বর পাওয়া যায়নি',
   notFoundBody:
-    'এই নম্বরে আমরা কোনো পার্সেল খুঁজে পাইনি। আপনার কনফার্মেশন ইমেইল বা SMS থেকে AWB নম্বরটি আবার মিলিয়ে দেখুন। ডিসপ্যাচের পর ট্র্যাকিং চালু হতে ২৪ ঘণ্টা পর্যন্ত সময় লাগতে পারে।',
+    'এই AWB Delhivery বা Shiprocket-এ খুঁজে পাইনি। আপনার কনফার্মেশন ইমেইল বা SMS থেকে AWB নম্বরটি আবার মিলিয়ে দেখুন। ডিসপ্যাচের পর ট্র্যাকিং চালু হতে ২৪ ঘণ্টা পর্যন্ত সময় লাগতে পারে।',
+  externalNote: '{courier}-এর পাবলিক ট্র্যাকিং থেকে লাইভ স্ট্যাটাস। এটি একটু পিছিয়ে থাকতে পারে।',
+  courierDownBody: 'কুরিয়ারের ট্র্যাকিং সাড়া দিচ্ছে না, একটু পরে আবার চেষ্টা করুন।',
+  lookupLimitBody:
+    'আপনার সংযোগ থেকে অনেক বেশি লুকআপ হয়েছে। কয়েক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।',
   tryAnother: 'অন্য একটি AWB চেষ্টা করুন',
   unavailableTitle: 'ট্র্যাকিং সাময়িকভাবে পাওয়া যাচ্ছে না',
   unavailableBody:

@@ -32,6 +32,9 @@ export interface PublicSoldBy {
 }
 
 export interface PublicTrackingResponse {
+  /** `COURIER_PUBLIC`: a parcel we hold no record of, read from the courier's public tracking. */
+  readonly source?: 'SKYDROP' | 'COURIER_PUBLIC';
+  readonly courier?: 'delhivery' | 'shiprocket';
   readonly soldBy?: PublicSoldBy;
   readonly awbNumber: string;
   readonly courierDisplayName: string;

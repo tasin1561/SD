@@ -1,5 +1,6 @@
 import { cache, type ReactElement, type ReactNode } from 'react';
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import Link from 'next/link';
 import { Package, RefreshCw } from 'lucide-react';
 import { buttonClassName } from '@skydrop/ui/app/button';
@@ -34,7 +35,10 @@ import { isTerminal, journeyProgress, journeySteps } from './_components/journey
 type TrackingLookup =
   | { readonly kind: 'found'; readonly data: PublicTrackingResponse }
   | { readonly kind: 'not_found' }
-  | { readonly kind: 'unavailable' };
+  | { readonly kind: 'unavailable'; readonly reason: UnavailableReason };
+
+/** Why we could not ask: picks the sentence, never the outcome. */
+type UnavailableReason = 'generic' | 'courier_down' | 'limited';
 
 /** Long enough for a slow API, short enough that a hung one still
  *  answers the customer instead of spinning until the proxy gives up. */
@@ -43,9 +47,16 @@ const LOOKUP_TIMEOUT_MS = 10_000;
 async function lookupTracking(awb: string): Promise<TrackingLookup> {
   const url = `${apiOrigin()}/public/tracking/${encodeURIComponent(awb)}`;
   try {
+    // The API sees this server, not the visitor: pass the visitor's address
+    // (the one our own proxy appended) so per-person limits are per person.
+    const xff = (await headers()).get('x-forwarded-for');
+    const clientIp = xff?.split(',').pop()?.trim();
     const res = await fetch(url, {
       method: 'GET',
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        ...(clientIp ? { 'x-skydrop-client-ip': clientIp } : {}),
+      },
       cache: 'no-store',
       signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
     });
@@ -54,13 +65,32 @@ async function lookupTracking(awb: string): Promise<TrackingLookup> {
       // 429 and 5xx land here, and so does any other unexpected status:
       // none of them is evidence that the parcel does not exist.
       console.error('Tracking lookup failed', { awb, status: res.status });
-      return { kind: 'unavailable' };
+      return { kind: 'unavailable', reason: await unavailableReason(res) };
     }
     return { kind: 'found', data: (await res.json()) as PublicTrackingResponse };
   } catch (e) {
     console.error('Tracking lookup error', { awb, err: (e as Error).message });
-    return { kind: 'unavailable' };
+    return { kind: 'unavailable', reason: 'generic' };
   }
+}
+
+async function unavailableReason(res: Response): Promise<UnavailableReason> {
+  try {
+    const body = (await res.json()) as { code?: string };
+    if (body.code === 'COURIER_TRACKING_DOWN') return 'courier_down';
+    if (body.code === 'EXTERNAL_LOOKUP_LIMIT') return 'limited';
+  } catch {
+    /* not our JSON: generic */
+  }
+  return 'generic';
+}
+
+function unavailableBodyKey(reason: UnavailableReason) {
+  return reason === 'courier_down'
+    ? 'courierDownBody'
+    : reason === 'limited'
+      ? 'lookupLimitBody'
+      : 'unavailableBody';
 }
 
 /**
@@ -93,7 +123,10 @@ export async function generateMetadata({
   const title = t(locale, lookup.kind === 'not_found' ? 'notFoundTitle' : 'unavailableTitle');
   return {
     title: `${title} — Skydrop tracking`,
-    description: t(locale, lookup.kind === 'not_found' ? 'notFoundBody' : 'unavailableBody'),
+    description: t(
+      locale,
+      lookup.kind === 'not_found' ? 'notFoundBody' : unavailableBodyKey(lookup.reason),
+    ),
     alternates: { canonical: path },
   };
 }
@@ -153,7 +186,9 @@ export default async function AwbPage({
             description={
               <>
                 <span className="tr-miss__awb sk-ident">{decoded}</span>
-                <span className="tr-miss__body">{t(locale, 'unavailableBody')}</span>
+                <span className="tr-miss__body">
+                  {t(locale, unavailableBodyKey(lookup.reason))}
+                </span>
               </>
             }
             action={
@@ -180,7 +215,9 @@ export default async function AwbPage({
   const data = lookup.data;
   // The helper only exists when the owner has switched it on and it is under
   // its own budget; otherwise the page is exactly what it was.
-  const assistantOn = await parcelAssistantAvailable();
+  // The helper answers from OUR records, which a courier-public parcel has none of.
+  const fromCourier = data.source === 'COURIER_PUBLIC';
+  const assistantOn = !fromCourier && (await parcelAssistantAvailable());
   const kind = publicTrackingStatusKind(data.currentStatus);
   const statusWords = humanizeStatus(data.currentStatus, locale);
   const bcp = localeBcp47(locale);
@@ -211,6 +248,12 @@ export default async function AwbPage({
             {t(locale, 'updated')} {new Date(data.currentStatusAt).toLocaleString(bcp)}
           </p>
 
+          {fromCourier && (
+            <p className="tr-summary__updated" data-external-note>
+              {t(locale, 'externalNote').replace('{courier}', data.courierDisplayName)}
+            </p>
+          )}
+
           <dl className="tr-facts">
             {/* RS-10: only a reseller store's order carries soldBy —
                 the customer bought from THAT business, so that is the
@@ -238,10 +281,12 @@ export default async function AwbPage({
                 </dd>
               </div>
             )}
-            <div className="tr-facts__row">
-              <dt>{t(locale, 'destination')}</dt>
-              <dd>{data.destinationCity}</dd>
-            </div>
+            {data.destinationCity && (
+              <div className="tr-facts__row">
+                <dt>{t(locale, 'destination')}</dt>
+                <dd>{data.destinationCity}</dd>
+              </div>
+            )}
             {data.estimatedDeliveryAt && (
               <div className="tr-facts__row">
                 <dt>{t(locale, 'estimatedDelivery')}</dt>

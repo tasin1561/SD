@@ -1,9 +1,10 @@
-import { Controller, Get, HttpCode, HttpStatus, Param } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Param, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { Throttle, minutes } from '@nestjs/throttler';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import { ThrottleSetting } from '../../../common/throttler/throttle-setting.decorator';
-import { PublicTrackingReadService } from '../services/public-tracking-read.service';
+import { PublicTrackingLookupService } from '../services/public-tracking-lookup.service';
 import type { PublicTrackingResponse } from '../dto/public-tracking.response.dto';
 
 /**
@@ -52,7 +53,7 @@ import type { PublicTrackingResponse } from '../dto/public-tracking.response.dto
 @ThrottleSetting('tracking.public_lookup_rate_limit_per_min')
 @Controller('public/tracking')
 export class PublicTrackingController {
-  constructor(private readonly read: PublicTrackingReadService) {}
+  constructor(private readonly lookupService: PublicTrackingLookupService) {}
 
   @Get(':awbNumber')
   @HttpCode(HttpStatus.OK)
@@ -60,7 +61,14 @@ export class PublicTrackingController {
     summary:
       'TRK-8 — open AWB tracking lookup. NO auth (the AWB is the access token). Customer-safe projection only: no internal IDs, no PII, no cross-order data. 404 message is identical for unknown / deleted / unissued AWBs (anti-enumeration). Per-IP rate limit applies.',
   })
-  async lookup(@Param('awbNumber') awbNumber: string): Promise<PublicTrackingResponse> {
-    return this.read.findByAwb(awbNumber);
+  async lookup(
+    @Param('awbNumber') awbNumber: string,
+    @Req() req: Request,
+  ): Promise<PublicTrackingResponse> {
+    // apps/track calls us from its own server, so `req.ip` is the track host;
+    // it forwards the visitor's address in this header. Forgeable by a direct
+    // caller, which is why the external path also has a global ceiling.
+    const forwarded = req.header('x-skydrop-client-ip')?.trim();
+    return this.lookupService.lookup(awbNumber, forwarded || req.ip || null);
   }
 }

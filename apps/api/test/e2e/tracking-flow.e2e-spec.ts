@@ -955,6 +955,7 @@ describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
         'currentStatusAt',
         'destinationCity',
         'estimatedDeliveryAt',
+        'source',
         'timeline',
       ].sort(),
     );
