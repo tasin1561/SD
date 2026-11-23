@@ -11,6 +11,67 @@
   margin-bottom: 0;
 }
 
+/* Ticket header: the way back to all tickets and the breadcrumbs share
+   ONE line, then the shared title row (number · subject, (i), facts,
+   status). The page header's own blocks join this grid directly. */
+.tkt-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--sp-3);
+  min-width: 0;
+}
+.tkt-head > .sk-ph {
+  display: contents;
+}
+.tkt-head > .tkt-back {
+  grid-row: 1;
+  grid-column: 1;
+  padding-right: var(--sp-3);
+  border-right: 1px solid var(--border);
+  min-height: 22px;
+}
+.tkt-head .sk-ph__crumbs {
+  grid-row: 1;
+  grid-column: 2;
+  min-width: 0;
+  margin-left: 0;
+}
+.tkt-head .sk-ph__bar {
+  grid-column: 1 / -1;
+}
+@media (pointer: coarse) {
+  /* Same reach as the breadcrumb links beside it. */
+  .tkt-head > .tkt-back {
+    min-height: 30px;
+  }
+}
+.tkt-head .ez-about__label {
+  display: none;
+}
+/* On a phone the way back is the arrow alone, so the breadcrumbs keep
+   one line beside it; its name stays for screen readers. */
+@media (max-width: 639.98px) {
+  .tkt-head > .tkt-back {
+    min-width: 30px;
+    justify-content: center;
+    padding-right: var(--sp-2);
+  }
+  .tkt-head .tkt-back__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+.tkt-raised {
+  align-self: center;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
 .tkt-section {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

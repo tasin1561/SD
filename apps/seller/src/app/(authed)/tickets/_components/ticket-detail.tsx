@@ -19,7 +19,7 @@ import './tickets.css';
 import { useT, useLocale } from '@/i18n/client';
 import { dateTag } from '@/i18n/format';
 import type { Locale } from '@skydrop/ui/app/i18n';
-import { InfoLabel } from '@/components/easy/about';
+import { AboutThis, InfoLabel } from '@/components/easy/about';
 
 /**
  * One ticket, opened.
@@ -49,10 +49,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
   if (query.isError || query.data === undefined) {
     return (
       <div className="tkt-page">
-        <div>
-          <BackLink />
-          <PageHeader title={t('tickets.ticket')} />
-        </div>
+        <TicketHead title={t('tickets.ticket')} />
         <div className="tkt-card">
           {/* FE-2 — the server's verdict verbatim. A wrong id and
               another seller's ticket both come back TICKET_NOT_FOUND,
@@ -84,26 +81,17 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
 
   return (
     <div className="tkt-page">
-      <div>
-        <BackLink />
-
-        <PageHeader
-          breadcrumbs={[
-            { label: t('tickets.clientConsole') },
-            { label: t('tickets.support'), href: '/tickets' },
-            { label: ticket.ticketNumber },
-          ]}
-          Link={Link}
-          // The NUMBER leads: it is what you quote to us about this ticket.
-          title={
-            <span className="tkt-title">
-              <span className="sk-ident">{ticket.ticketNumber}</span>
-              <span className="tkt-title__sep"> · </span>
-              {ticket.subject}
-            </span>
-          }
-          subtitle={`${raisedBy} on ${formatDateTime(ticket.createdAt, locale)}`}
-          /*
+      <TicketHead
+        crumb={ticket.ticketNumber}
+        // The NUMBER leads: it is what you quote to us about this ticket.
+        title={
+          <span className="tkt-title">
+            <span className="sk-ident">{ticket.ticketNumber}</span>
+            <span className="tkt-title__sep"> · </span>
+            {ticket.subject}
+          </span>
+        }
+        /*
             Standing facts about THIS ticket, under its number.
 
             The comp's chip row here carries an SLA clock, a "CCTV
@@ -113,21 +101,23 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
             a dispute. What IS real is what kind of issue it is and who
             the courier was, so that is what the row says.
           */
-          meta={
-            <span className="tkt-meta">
-              <Fact tone="accent">{humanise(ticket.ticketType)}</Fact>
-              {ticket.courierCode !== null && <Fact>{ticket.courierCode}</Fact>}
-              {raisedByUs && <Fact dot>{t('tickets.openedForYou')}</Fact>}
-            </span>
-          }
-          action={
-            <StatusChip
-              kind={ticketStatusKind(ticket.status)}
-              label={ticketStatusLabel(ticket.status, locale)}
-            />
-          }
-        />
-      </div>
+        meta={
+          <>
+            <Fact tone="accent">{humanise(ticket.ticketType)}</Fact>
+            {ticket.courierCode !== null && <Fact>{ticket.courierCode}</Fact>}
+            {raisedByUs && <Fact dot>{t('tickets.openedForYou')}</Fact>}
+            {/* Who raised it and when: a fact, so it stays in view on
+                the title row rather than behind the (i). */}
+            <span className="tkt-raised">{`${raisedBy} on ${formatDateTime(ticket.createdAt, locale)}`}</span>
+          </>
+        }
+        action={
+          <StatusChip
+            kind={ticketStatusKind(ticket.status)}
+            label={ticketStatusLabel(ticket.status, locale)}
+          />
+        }
+      />
 
       {/* ── Where this ticket has got to ────────────────────────────
              Four standing facts. Every one is a column on the ticket,
@@ -356,21 +346,57 @@ function BackLink(): ReactElement {
   return (
     <Link href="/tickets" className="tkt-back">
       <ArrowLeft size={13} aria-hidden />
-      {t('tickets.allTickets')}
+      <span className="tkt-back__label">{t('tickets.allTickets')}</span>
     </Link>
+  );
+}
+
+/**
+ * The ticket's header: ONE breadcrumb line (with the way back to all
+ * tickets on it) and ONE title row with the (i). Loading, error and the
+ * ticket itself all render it, so the page does not jump when data lands.
+ */
+function TicketHead({
+  crumb,
+  title,
+  meta,
+  action,
+}: {
+  readonly crumb?: string;
+  readonly title: ReactNode;
+  readonly meta?: ReactNode;
+  readonly action?: ReactNode;
+}): ReactElement {
+  const t = useT();
+  return (
+    <div className="tkt-head">
+      <BackLink />
+      <PageHeader
+        breadcrumbs={[
+          { label: t('tickets.clientConsole') },
+          { label: t('tickets.support'), href: '/tickets' },
+          ...(crumb === undefined ? [] : [{ label: crumb }]),
+        ]}
+        Link={Link}
+        title={title}
+        // The (i) leads the facts row rather than sitting alone under the
+        // title: a ticket's subject is long and wraps on a phone.
+        meta={
+          <span className="tkt-meta">
+            <AboutThis text={t('tickets.aboutThisTicket')} />
+            {meta}
+          </span>
+        }
+        action={action}
+      />
+    </div>
   );
 }
 
 function DetailSkeleton(): ReactElement {
   return (
     <div className="tkt-page" aria-busy="true">
-      <div>
-        <BackLink />
-        <div className="tkt-skel__head">
-          <Skeleton height={24} width="66%" />
-          <Skeleton height={14} width="33%" />
-        </div>
-      </div>
+      <TicketHead title={<Skeleton height={24} width="16rem" />} />
       <div className="tkt-card">
         <div className="tkt-skel__grid">
           {Array.from({ length: 6 }, (_, i) => (

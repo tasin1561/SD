@@ -2214,6 +2214,7 @@ export const PORTAL_TEXT_SELLER: ReadonlyArray<TextRow> = [
   ["tickets.whatYouToldUs","What you told us, what we found out, and anything the courier said."],
   ["tickets.creditedToYourSkydrop2","Credited to your Skydrop wallet on {resolvedAt}."],
   ["tickets.itIsPartOf","It is part of your balance now and goes out with your next withdrawal."],
+  ["tickets.aboutThisTicket","Everything about this ticket: where it has got to, any refund paid into your wallet, and the conversation with our team. Quote the TK number when you contact us about it."],
   ["tickets.damageWeFoundOn","Damage we found on returns, and any issue you raise about a parcel. Settled tickets that end in a refund credit your wallet."],
   ["tickets.tryADifferentStage","Try a different stage, or check the ticket number."],
   ["tickets.nothingIsDisputedIf","Nothing is disputed. If a parcel arrives damaged, goes missing, or something else looks wrong, raise it here and we will work it out."],

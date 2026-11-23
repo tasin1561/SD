@@ -118,6 +118,10 @@ export const tickets = defineMessages({
   ],
   'tickets.viewItInYour': ['View it in your wallet', 'আপনার ওয়ালেটে দেখুন'],
   'tickets.allTickets': ['All tickets', 'সব টিকেট'],
+  'tickets.aboutThisTicket': [
+    'Everything about this ticket: where it has got to, any refund paid into your wallet, and the conversation with our team. Quote the TK number when you contact us about it.',
+    'এই টিকেটের সব কিছু: কোন পর্যায়ে আছে, আপনার ওয়ালেটে কোনো রিফান্ড গেছে কি না, আর আমাদের টিমের সাথে কথোপকথন। এ নিয়ে যোগাযোগ করলে TK নম্বরটি বলুন।',
+  ],
   'tickets.updates': ['Updates', 'আপডেট'],
   'tickets.selling': ['Selling', 'বিক্রি'],
   'tickets.tickets': ['Tickets', 'টিকেট'],
