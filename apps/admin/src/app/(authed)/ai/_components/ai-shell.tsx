@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Tabs } from '@skydrop/ui/app/tabs';
 import { useT } from '@/i18n/client';
+import { InfoButton } from '@/components/easy/info-button';
 import { usePermission } from '@/lib/use-permission';
 import { AcHeader, AcPage } from '../../settings/_components/ac-parts';
 import '../ai.css';
@@ -35,7 +36,14 @@ export function AiShell({ children }: { readonly children: ReactNode }): ReactEl
             : 'dashboard';
   return (
     <AcPage>
-      <AcHeader title={t('ai.title')} subtitle={t('ai.subtitle')} />
+      <AcHeader
+        title={
+          <span className="ez-titled">
+            {t('ai.title')}
+            <InfoButton title={t('ai.title')} text={t('ai.subtitle')} />
+          </span>
+        }
+      />
       <Tabs
         label={t('ai.tabs')}
         size="sm"

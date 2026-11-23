@@ -2,7 +2,8 @@
 
 import { useState, type ReactElement } from 'react';
 import { Button } from '@skydrop/ui/app/button';
-import { DateField } from '@skydrop/ui/app/date-field';
+import { DateRangeField } from '@skydrop/ui/app/date-range';
+import { FilterBar, FilterField } from '@skydrop/ui/app/filter-bar';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { KpiCard } from '@skydrop/ui/app/kpi-card';
 import { Skeleton } from '@skydrop/ui/app/skeleton';
@@ -61,23 +62,10 @@ export function AiDashboard(): ReactElement {
 
   return (
     <>
-      <AcSection
+      {/* The range is one field; the Dhaka-day 7/30/90 quick ranges stay beside it. */}
+      <FilterBar
         title={t('ai.dash.range')}
-        note={t('ai.dash.rangeNote', { tz: d?.range.timezone ?? 'Asia/Dhaka' })}
-      >
-        <div className="ai-range">
-          <DateField
-            label={t('ai.dash.from')}
-            value={from}
-            max={to}
-            onChange={(e) => setFrom(e.target.value)}
-          />
-          <DateField
-            label={t('ai.dash.to')}
-            value={to}
-            min={from}
-            onChange={(e) => setTo(e.target.value)}
-          />
+        actions={
           <div className="ai-actions">
             {[7, 30, 90].map((n) => (
               <Button key={n} variant="secondary" size="sm" onClick={() => preset(n)}>
@@ -85,8 +73,22 @@ export function AiDashboard(): ReactElement {
               </Button>
             ))}
           </div>
-        </div>
-      </AcSection>
+        }
+      >
+        <FilterField>
+          <DateRangeField
+            label={`${t('ai.dash.range')} · ${d?.range.timezone ?? 'Asia/Dhaka'}`}
+            from={from}
+            to={to}
+            fromLabel={t('ai.dash.from')}
+            toLabel={t('ai.dash.to')}
+            onChange={(r) => {
+              setFrom(r.from);
+              setTo(r.to);
+            }}
+          />
+        </FilterField>
+      </FilterBar>
 
       {q.isError ? (
         <ErrorState
