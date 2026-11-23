@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { Paperclip, ThumbsDown, ThumbsUp } from 'lucide-react';
-import { Button } from '@skydrop/ui/app/button';
-import { DateField } from '@skydrop/ui/app/date-field';
+import { DateRangeField } from '@skydrop/ui/app/date-range';
+import { FilterBar, FilterField } from '@skydrop/ui/app/filter-bar';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { Select } from '@skydrop/ui/app/select';
 import { Skeleton } from '@skydrop/ui/app/skeleton';
@@ -65,8 +65,15 @@ export function AiConversations(): ReactElement {
   return (
     <>
       <AcAlert tone="warn" message={t('ai.conv.audited')} />
-      <AcSection title={t('ai.conv.filters')}>
-        <div className="ai-filters">
+      <FilterBar
+        title={t('ai.conv.filters')}
+        activeCount={Object.keys(active).length - (f.from !== '' && f.to !== '' ? 1 : 0)}
+        onReset={() => {
+          setF(EMPTY);
+          setOffset(0);
+        }}
+      >
+        <FilterField>
           <Select
             label={t('ai.conv.portal')}
             value={f.portal}
@@ -77,6 +84,8 @@ export function AiConversations(): ReactElement {
               opt(p, t(`ai.portal.${p}`)),
             )}
           </Select>
+        </FilterField>
+        <FilterField>
           <Select
             label={t('ai.conv.language')}
             value={f.language}
@@ -87,6 +96,8 @@ export function AiConversations(): ReactElement {
             {opt('bn', t('ai.lang.bn'))}
             {opt('hi', t('ai.lang.hi'))}
           </Select>
+        </FilterField>
+        <FilterField>
           <Select
             label={t('ai.conv.rating')}
             value={f.rating}
@@ -96,6 +107,8 @@ export function AiConversations(): ReactElement {
             {opt('up', t('ai.conv.thumbsUp'))}
             {opt('down', t('ai.conv.thumbsDown'))}
           </Select>
+        </FilterField>
+        <FilterField>
           <Select
             label={t('ai.conv.notice')}
             value={f.hadNotice}
@@ -105,6 +118,8 @@ export function AiConversations(): ReactElement {
             {opt('error', t('ai.conv.hadError'))}
             {opt('any', t('ai.conv.hadAnyNotice'))}
           </Select>
+        </FilterField>
+        <FilterField>
           <Select
             label={t('ai.conv.attachment')}
             value={f.hasAttachment}
@@ -113,6 +128,8 @@ export function AiConversations(): ReactElement {
             {opt('', t('ai.any'))}
             {opt('true', t('ai.conv.withAttachment'))}
           </Select>
+        </FilterField>
+        <FilterField>
           <Select
             label={t('ai.mon.filter')}
             value={f.monitor}
@@ -121,28 +138,21 @@ export function AiConversations(): ReactElement {
             {opt('', t('ai.any'))}
             {opt('flagged', t('ai.mon.flaggedOnly'))}
           </Select>
-          <DateField
-            label={t('ai.dash.from')}
-            value={f.from}
-            onChange={(e) => set('from', e.target.value)}
-          />
-          <DateField
-            label={t('ai.dash.to')}
-            value={f.to}
-            onChange={(e) => set('to', e.target.value)}
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setF(EMPTY);
+        </FilterField>
+        <FilterField>
+          <DateRangeField
+            label={t('ai.dash.range')}
+            from={f.from}
+            to={f.to}
+            fromLabel={t('ai.dash.from')}
+            toLabel={t('ai.dash.to')}
+            onChange={(r) => {
+              setF((o) => ({ ...o, from: r.from, to: r.to }));
               setOffset(0);
             }}
-          >
-            {t('ai.conv.clear')}
-          </Button>
-        </div>
-      </AcSection>
+          />
+        </FilterField>
+      </FilterBar>
 
       {q.isError ? (
         <ErrorState
