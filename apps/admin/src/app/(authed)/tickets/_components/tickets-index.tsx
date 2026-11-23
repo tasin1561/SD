@@ -8,6 +8,7 @@ import { PageHeader } from '@skydrop/ui/app/page-header';
 import { KpiCard } from '@skydrop/ui/app/kpi-card';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { Select } from '@skydrop/ui/app/select';
+import { FilterBar, FilterField } from '@skydrop/ui/app/filter-bar';
 import { Table, TBody, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
 import { Pagination } from '@skydrop/ui/app/pagination';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
@@ -86,6 +87,15 @@ export function TicketsIndex(): ReactElement {
     .reduce((sum, t) => sum + Number(t.resolutionAmountInr ?? 0), 0);
   const autoRaised = items.filter((t) => t.ticketType === TicketType.SCRAP_DAMAGE).length;
 
+  // The default stage (OPEN) is the worklist, not a filter someone set.
+  const activeFilters = [
+    status !== 'OPEN',
+    ticketType !== '',
+    handling !== '',
+    sellerId !== '',
+    search.trim() !== '',
+  ].filter(Boolean).length;
+
   function changeFilter(apply: () => void): void {
     apply();
     setPage(1);
@@ -150,8 +160,30 @@ export function TicketsIndex(): ReactElement {
         )}
       </div>
 
-      <AfCard>
-        <div className="tk-filters">
+      <FilterBar
+        className="tk-filterbar"
+        activeCount={activeFilters}
+        onReset={() => {
+          setSearch('');
+          setDebounced('');
+          setStatus('OPEN');
+          setTicketType('');
+          setHandling('');
+          setSellerId('');
+          setPage(1);
+        }}
+      >
+        <FilterField wide>
+          <TextField
+            type="search"
+            label={tr('ticketsTicketsIndex.search')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={tr('ticketsTicketsIndex.ticketTkOrderParcelOr')}
+            aria-label={tr('ticketsTicketsIndex.searchTickets')}
+          />
+        </FilterField>
+        <FilterField>
           <Select
             id="ticket-status"
             label={tr('ticketsTicketsIndex.status')}
@@ -163,7 +195,8 @@ export function TicketsIndex(): ReactElement {
             <option value="REVIEWING">{tr('ticketsTicketsIndex.reviewing')}</option>
             <option value="CLOSED">{tr('ticketsTicketsIndex.closed')}</option>
           </Select>
-
+        </FilterField>
+        <FilterField>
           <Select
             id="ticket-type"
             label={tr('ticketsTicketsIndex.type')}
@@ -177,7 +210,8 @@ export function TicketsIndex(): ReactElement {
               </option>
             ))}
           </Select>
-
+        </FilterField>
+        <FilterField>
           <Select
             id="ticket-handling"
             label={tr('ticketsTicketsIndex.handling')}
@@ -185,34 +219,26 @@ export function TicketsIndex(): ReactElement {
             onChange={(e) => changeFilter(() => setHandling(e.target.value))}
           >
             {/*
-              NONE is deliberately not offered. A scrap ticket raised by
-              RTO inspection has no courier to be carried to, so it is
-              neither "software has this" nor "somebody must pick this up";
-              offering it as a third answer would invite the reading that
-              it is waiting on someone.
-            */}
+                NONE is deliberately not offered. A scrap ticket raised by
+                RTO inspection has no courier to be carried to, so it is
+                neither "software has this" nor "somebody must pick this up";
+                offering it as a third answer would invite the reading that
+                it is waiting on someone.
+              */}
             <option value="">{tr('ticketsTicketsIndex.autoAndManual')}</option>
             <option value="MANUAL">{tr('ticketsTicketsIndex.manualNeedsAPerson')}</option>
             <option value="AUTO">{tr('ticketsTicketsIndex.autoSoftwareIsCarryingIt')}</option>
           </Select>
-
+        </FilterField>
+        <FilterField>
           {/* Self-gates on `sellers.view`; renders nothing without it. */}
           <ClientFilter
             id="ticket-client"
             value={sellerId}
             onChange={(v) => changeFilter(() => setSellerId(v))}
           />
-
-          <TextField
-            type="search"
-            label={tr('ticketsTicketsIndex.search')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={tr('ticketsTicketsIndex.ticketTkOrderParcelOr')}
-            aria-label={tr('ticketsTicketsIndex.searchTickets')}
-          />
-        </div>
-      </AfCard>
+        </FilterField>
+      </FilterBar>
 
       {list.isError ? (
         <ErrorState

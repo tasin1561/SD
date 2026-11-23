@@ -68,4 +68,21 @@ describe('admin ticket queue', () => {
       expect(state.calls.at(-1)).toMatchObject({ search: 'TK-2026-000003', page: 1 }),
     );
   });
+
+  it('counts only filters someone set, and Reset goes back to the open worklist', async () => {
+    state.rows = [];
+    state.calls = [];
+    render(<TicketsIndex />);
+    // The default stage (Open) is the worklist, not a filter: no Reset yet.
+    expect(screen.queryByRole('button', { name: /Reset/ })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'SCRAP_DAMAGE' } });
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'CLOSED' } });
+    const reset = await screen.findByRole('button', { name: 'Reset (2)' });
+    fireEvent.click(reset);
+
+    await waitFor(() => expect(state.calls.at(-1)).toMatchObject({ stage: 'OPEN', page: 1 }));
+    expect(state.calls.at(-1)).not.toHaveProperty('ticketType');
+    expect(screen.queryByRole('button', { name: /Reset/ })).toBeNull();
+  });
 });

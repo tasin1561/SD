@@ -116,3 +116,9 @@
   grid-template-columns: minmax(0, 1fr);
   gap: 2px;
 }
+
+/* The queue's filters ride the shared FilterBar. The client select hides
+   itself without `sellers.view`; drop its empty slot so the row closes up. */
+.tk-filterbar .sk-filter__field:has(> .sk-filter__field-control:empty) {
+  display: none;
+}
