@@ -196,63 +196,69 @@ function OrdersList(): ReactElement {
           }
         />
 
-        <FilterBar
-          activeCount={[status !== '', search !== ''].filter(Boolean).length}
-          onReset={() => {
-            setSearchInput('');
-            go({ status: '', search: '', page: 1 });
-          }}
-        >
-          <FilterField wide>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                go({ search: searchInput.trim(), page: 1 });
-              }}
-            >
-              <TextField
-                label={t('orders.search')}
-                aria-label={t('orders.searchAria')}
-                placeholder={t('orders.searchPlaceholder')}
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                trail={
-                  <button
-                    type="submit"
-                    aria-label={t('orders.search')}
-                    title={t('orders.search')}
-                    className="ro-search-btn"
-                  >
-                    <Search size={16} aria-hidden />
-                  </button>
-                }
-              />
-            </form>
-          </FilterField>
-          <FilterField>
-            <Select
-              label={t('orders.status')}
-              aria-label={t('orders.filterByStatus')}
-              value={status}
-              onChange={(e) => go({ status: statusParam(e.target.value), page: 1 })}
-            >
-              <option value="">{t('orders.allStatuses')}</option>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {chipWords(statusLabel(s, locale))}
-                </option>
-              ))}
-            </Select>
-          </FilterField>
-        </FilterBar>
+        {/* Search, status and the status tabs share one row on a wide
+            screen; on a phone the bar folds into "Filters" and the tabs
+            stay in view on their own. */}
+        <div className="ro-filterrow">
+          <FilterBar
+            className="ro-filterbar"
+            activeCount={[status !== '', search !== ''].filter(Boolean).length}
+            onReset={() => {
+              setSearchInput('');
+              go({ status: '', search: '', page: 1 });
+            }}
+          >
+            <FilterField wide>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  go({ search: searchInput.trim(), page: 1 });
+                }}
+              >
+                <TextField
+                  label={t('orders.search')}
+                  aria-label={t('orders.searchAria')}
+                  placeholder={t('orders.searchPlaceholder')}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  trail={
+                    <button
+                      type="submit"
+                      aria-label={t('orders.search')}
+                      title={t('orders.search')}
+                      className="ro-search-btn"
+                    >
+                      <Search size={16} aria-hidden />
+                    </button>
+                  }
+                />
+              </form>
+            </FilterField>
+            <FilterField>
+              <Select
+                label={t('orders.status')}
+                aria-label={t('orders.filterByStatus')}
+                value={status}
+                onChange={(e) => go({ status: statusParam(e.target.value), page: 1 })}
+              >
+                <option value="">{t('orders.allStatuses')}</option>
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {chipWords(statusLabel(s, locale))}
+                  </option>
+                ))}
+              </Select>
+            </FilterField>
+          </FilterBar>
 
-        <Tabs
-          label={t('orders.filterByStatus')}
-          size="sm"
-          items={tabs}
-          value={status === '' ? ALL_TAB : status}
-          onChange={(id) => go({ status: id === ALL_TAB ? '' : statusParam(id), page: 1 })}
-        />
+          <Tabs
+            label={t('orders.filterByStatus')}
+            size="sm"
+            items={tabs}
+            value={status === '' ? ALL_TAB : status}
+            onChange={(id) => go({ status: id === ALL_TAB ? '' : statusParam(id), page: 1 })}
+          />
+        </div>
 
         {list.isPending ? (
           <SkeletonRows rows={6} cols={5} label={t('orders.loading')} />

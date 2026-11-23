@@ -465,3 +465,30 @@
   gap: var(--sp-4);
   min-width: 0;
 }
+
+/* One filter row: the search bar takes the spare width, the status tabs
+   sit beside it and wrap below only when there is no room. */
+.ro-filterrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  min-width: 0;
+}
+.ro-filterrow > .ro-filterbar {
+  flex: 1 1 30rem;
+  min-width: 0;
+}
+.ro-filterrow > .sk-tabs {
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+/* Beside the tabs the bar drops its own frame, so search, status and
+   tabs read as one line of controls rather than a box next to a strip. */
+@media (min-width: 640px) {
+  .ro-filterbar .sk-filter__panel {
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+}

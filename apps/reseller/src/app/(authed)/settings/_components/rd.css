@@ -174,7 +174,17 @@
   text-underline-offset: 2px;
 }
 .rd-banner {
-  margin-bottom: var(--sp-4);
+  margin-bottom: var(--sp-3);
+}
+/* The shell-wide terms banner sits on every page, so it is one slim line:
+   same words, link and colours, less height above the work. */
+.rd-callout.rd-banner {
+  align-items: center;
+  padding: var(--sp-2) var(--sp-3);
+}
+.rd-callout.rd-banner .rd-callout__icon {
+  width: 24px;
+  height: 24px;
 }
 
 /* ── Description list ─────────────────────────────────────────────────── */
