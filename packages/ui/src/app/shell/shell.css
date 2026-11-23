@@ -594,7 +594,7 @@
 }
 @media (min-width: 640px) {
   .sk-shell__content {
-    padding: var(--sp-5) var(--sp-5) calc(env(safe-area-inset-bottom) + var(--sp-6));
+    padding: var(--sp-4) var(--sp-5) calc(env(safe-area-inset-bottom) + var(--sp-6));
   }
 }
 @media (min-width: 1024px) {

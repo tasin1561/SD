@@ -133,15 +133,29 @@ export function PageHeader({
     <div className={clsx('sk-ph', className)} data-sticky={sticky ? '1' : undefined}>
       {crumbs !== undefined && crumbs !== null && <div className="sk-ph__crumbs">{crumbs}</div>}
       {sticky && <div ref={sentinel} className="sk-ph__sentinel" aria-hidden />}
+      {/* ONE row: the title, its count chips and (i), then the page's
+          actions on the right. A long subtitle drops under the title inside
+          the same block; a sticky bar keeps it below, so it never sticks. */}
       <div ref={bar} className="sk-ph__bar" data-condensed={condensed ? '1' : undefined}>
         <span className="sk-ph__backdrop" aria-hidden />
-        <h1 className="sk-ph__title">{title}</h1>
-        {action !== undefined && action !== null && action !== false && (
-          <div className="sk-ph__action">{action}</div>
-        )}
+        <div className="sk-ph__lead">
+          <h1 className="sk-ph__title">{title}</h1>
+          {meta !== undefined && meta !== null && <div className="sk-ph__meta">{meta}</div>}
+          {!sticky && subtitle !== undefined && subtitle !== null && (
+            <div className="sk-ph__subtitle">{subtitle}</div>
+          )}
+        </div>
+        <div className="sk-ph__end">
+          {/* A FilterBar on this page puts its phone "Filters (n)" button here. */}
+          <div className="sk-ph__slot" />
+          {action !== undefined && action !== null && action !== false && (
+            <div className="sk-ph__action">{action}</div>
+          )}
+        </div>
       </div>
-      {meta !== undefined && <div className="sk-ph__meta">{meta}</div>}
-      {subtitle !== undefined && <div className="sk-ph__subtitle">{subtitle}</div>}
+      {sticky && subtitle !== undefined && subtitle !== null && (
+        <div className="sk-ph__subtitle">{subtitle}</div>
+      )}
     </div>
   );
 }

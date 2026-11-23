@@ -864,3 +864,14 @@ a.ez-jump__link:focus-visible {
     order: -1;
   }
 }
+
+/* ── The page's "About this page" in the header's title row ─────────────
+   On its own in the subtitle it is just the (i): it sits beside the title
+   instead of taking a line of its own. The button keeps its full name for
+   screen readers; a longer subtitle still takes its own line. */
+.sk-ph__subtitle:has(> .ez-about:only-child) {
+  flex-basis: auto;
+}
+.sk-ph__subtitle > .ez-about:only-child .ez-about__label {
+  display: none;
+}

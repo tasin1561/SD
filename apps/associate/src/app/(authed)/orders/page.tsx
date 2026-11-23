@@ -134,6 +134,13 @@ function OrdersList(): ReactElement {
     <div className="as-page">
       <PageHeader
         title={t('orders.title')}
+        meta={
+          list.data === undefined ? undefined : (
+            <span className="sk-ph__count sk-figure">
+              {t('orders.shown', { shown: list.data.items.length, total: list.data.total })}
+            </span>
+          )
+        }
         subtitle={
           <AboutThis text={seesOwnOnly(me) ? t('orders.subtitle.own') : t('orders.subtitle.all')} />
         }
@@ -152,7 +159,9 @@ function OrdersList(): ReactElement {
       />
 
       <section className="as-section">
+        {/* The count is in the title row; the heading stays for screen readers. */}
         <SectionHeading
+          className="sk-sh--sr"
           title={t('orders.section')}
           note={
             list.data === undefined

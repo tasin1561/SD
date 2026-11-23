@@ -14,7 +14,7 @@ import { PageHeader } from '@skydrop/ui/app/page-header';
 import { FilterBar, FilterField } from '@skydrop/ui/app/filter-bar';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { Select } from '@skydrop/ui/app/select';
-import { DateField } from '@skydrop/ui/app/date-field';
+import { DateRangeField } from '@skydrop/ui/app/date-range';
 import {
   SelectAllTh,
   SelectTd,
@@ -300,21 +300,13 @@ export function OrdersIndex(): ReactElement {
             ))}
           </Select>
         </FilterField>
-        <FilterField wide>
-          <div className="oc-dates">
-            <DateField
-              label={t('ordersList.placedFrom')}
-              value={params.from}
-              max={params.to || undefined}
-              onChange={(e) => updateUrl({ from: e.target.value, page: 1 })}
-            />
-            <DateField
-              label={t('ordersList.placedTo')}
-              value={params.to}
-              min={params.from || undefined}
-              onChange={(e) => updateUrl({ to: e.target.value, page: 1 })}
-            />
-          </div>
+        <FilterField>
+          <DateRangeField
+            label={t('ordersList.col.placed')}
+            from={params.from}
+            to={params.to}
+            onChange={({ from, to }) => updateUrl({ from, to, page: 1 })}
+          />
         </FilterField>
       </FilterBar>
 

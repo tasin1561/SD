@@ -53,9 +53,12 @@
   color: var(--fg-faint);
 }
 
+/* The page header: a small breadcrumb line, then ONE row with the title,
+   its count chips and (i) on the left and the page's actions on the right.
+   Kept short on purpose — the list or form is what the person came for. */
 .sk-ph {
   display: block;
-  margin-bottom: var(--sp-6);
+  margin-bottom: var(--sp-4);
 }
 /* A sticky title bar must stick relative to the page, not to this
    wrapper — so the wrapper generates no box of its own. */
@@ -63,7 +66,18 @@
   display: contents;
 }
 .sk-ph__crumbs {
-  margin: 0 0 var(--sp-2) -6px;
+  margin: 0 0 2px -6px;
+}
+.sk-ph__crumbs .sk-crumbs ol {
+  font-size: var(--fs-xs);
+}
+.sk-ph__crumbs .sk-crumbs__link {
+  min-height: 22px;
+}
+@media (pointer: coarse) {
+  .sk-ph__crumbs .sk-crumbs__link {
+    min-height: 30px;
+  }
 }
 .sk-ph__sentinel {
   height: 0;
@@ -74,7 +88,7 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--sp-3) var(--sp-4);
+  gap: var(--sp-2) var(--sp-4);
   min-width: 0;
 }
 .sk-ph[data-sticky='1'] .sk-ph__bar {
@@ -96,6 +110,14 @@
 .sk-ph__bar[data-condensed='1'] .sk-ph__backdrop {
   opacity: 1;
 }
+.sk-ph__lead {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--sp-3);
+  min-width: 0;
+}
 .sk-ph__title {
   min-width: 0;
   margin: 0;
@@ -110,6 +132,52 @@
 .sk-ph__bar[data-condensed='1'] .sk-ph__title {
   transform: scale(0.8);
 }
+.sk-ph__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* A sentence of explanation takes its own line under the title; a short
+   control (an (i)) stays on the title row — see the apps' easy.css. */
+.sk-ph__subtitle {
+  flex-basis: 100%;
+  max-width: 72ch;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+}
+.sk-ph[data-sticky='1'] > .sk-ph__subtitle {
+  margin: var(--sp-1) 0 var(--sp-4);
+}
+/* A plain count beside the title ("3 of 3 shown") for pages without their
+   own chip component. */
+.sk-ph__count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-pill);
+  background: var(--accent-tint);
+  color: var(--fg-strong);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+.sk-ph__end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin-left: auto;
+}
+.sk-ph__slot {
+  display: contents;
+}
 .sk-ph__action {
   display: flex;
   flex-wrap: wrap;
@@ -117,30 +185,23 @@
   gap: var(--sp-2);
   min-width: 0;
 }
-.sk-ph__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: var(--sp-2);
-}
-.sk-ph__subtitle {
-  max-width: 72ch;
-  margin-top: var(--sp-2);
-  color: var(--fg-muted);
-  font-size: var(--fs-md);
-  line-height: var(--lh-body);
-}
-.sk-ph[data-sticky='1'] .sk-ph__subtitle,
-.sk-ph[data-sticky='1'] .sk-ph__meta:last-child {
-  margin-bottom: var(--sp-6);
-}
 @media (max-width: 639.98px) {
+  .sk-ph {
+    margin-bottom: var(--sp-3);
+  }
   .sk-ph__title {
     font-size: var(--fs-xl);
   }
-  .sk-ph__action {
-    width: 100%;
+  /* The title row's buttons — "Filters", "Upload", "New" — share one line on
+     a phone: a little less side padding and gap, the same height. */
+  .sk-ph__end,
+  .sk-ph__action,
+  .sk-ph__action > div {
+    gap: 6px;
+  }
+  .sk-ph__end .sk-btn {
+    padding-right: var(--sp-3);
+    padding-left: var(--sp-3);
   }
 }
 
@@ -151,6 +212,17 @@
   justify-content: space-between;
   gap: var(--sp-2) var(--sp-4);
   margin-bottom: var(--sp-3);
+}
+/* A section heading that only screen readers need (its count moved up to
+   the page's title row). */
+.sk-sh--sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .sk-sh__text {
   min-width: 0;

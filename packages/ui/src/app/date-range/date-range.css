@@ -1,0 +1,151 @@
+/* DateRangeField — one from–to field. Tokens only; transform/opacity only. */
+.sk-dr {
+  position: relative;
+  min-width: 0;
+}
+.sk-dr__btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  background: none;
+  color: var(--fg-strong);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sk-dr__btn:not([data-set]) {
+  color: var(--fg-body);
+}
+.sk-dr__btn:focus-visible {
+  outline: none;
+}
+.sk-dr__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sk-dr__icon {
+  pointer-events: none;
+}
+
+.sk-dr__panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  gap: var(--sp-3);
+  width: max(100%, 25rem);
+  max-width: calc(100vw - 2 * var(--sp-3));
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--elev-3, var(--elev-2));
+  transform-origin: top left;
+  animation: sk-dr-in var(--dur-fast) var(--ease-out) both;
+}
+/* Near the right edge of a bar the panel opens leftwards. */
+.sk-dr[data-align='end'] .sk-dr__panel {
+  right: 0;
+  left: auto;
+  transform-origin: top right;
+}
+@keyframes sk-dr-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+.sk-dr__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sk-dr__preset {
+  min-height: 32px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--fg-body);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+}
+.sk-dr__preset:hover {
+  border-color: var(--accent-line);
+  color: var(--fg-strong);
+}
+.sk-dr__preset[aria-pressed='true'] {
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+  color: var(--fg-strong);
+}
+.sk-dr__preset:focus-visible,
+.sk-dr__clear:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.sk-dr__dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+.sk-dr__foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+.sk-dr__clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  margin-right: auto;
+  padding: 0 var(--sp-1);
+  border: 0;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.sk-dr__clear:hover {
+  color: var(--fg-strong);
+}
+/* In the phone filter sheet the sheet's own Done closes everything. */
+.sk-filter[data-open] .sk-dr__done {
+  display: none;
+}
+.sk-filter[data-open] .sk-dr__foot:not(:has(.sk-dr__clear)) {
+  display: none;
+}
+
+/* Phone, and inside the filter sheet: the panel opens in place. */
+@media (max-width: 639.98px) {
+  .sk-dr__panel {
+    position: static;
+    width: auto;
+    max-width: none;
+    margin-top: 6px;
+    box-shadow: none;
+  }
+  .sk-dr__preset,
+  .sk-dr__clear {
+    min-height: 40px;
+  }
+}
+@media (max-width: 359.98px) {
+  .sk-dr__dates {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-dr__panel {
+    animation: none;
+  }
+}

@@ -2,7 +2,17 @@
 
 import { clsx } from 'clsx';
 import { SlidersHorizontal, X } from 'lucide-react';
-import type { ReactElement, ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '../button';
 import { useUiT } from '../i18n-client';
 import './filter-bar.css';
@@ -14,15 +24,30 @@ export interface FilterChip {
   readonly onRemove: () => void;
 }
 
+/** Below this width the bar folds behind a "Filters (n)" button. Keep in step with the CSS. */
+const PHONE = '(max-width: 639.98px)';
+
+const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
 /**
- * FilterBar (u04). A card titled "Filters" with a badge counting the
- * active filters, the controls (children — each wrapped in a
- * `FilterField` for its leading icon), the active filters as removable
- * chips under the bar, a Reset link and, optionally, an accent Apply.
+ * FilterBar — the filters above a list, as ONE compact bar.
  *
- * Many app filters apply live (URL-driven); pass `onApply` only when the
- * filters are staged and need a commit. `activeCount` defaults to the
- * number of chips.
+ * Wide screens: a single row (it wraps to a second row when narrow) of the
+ * controls passed as children — search first and flexible, then the page's
+ * selects and date range — with "Reset (n)" at the end, shown only while
+ * something is filtered. No heading row and no card padding: a thin border
+ * is all that marks it.
+ *
+ * Phones: the bar folds behind a "Filters (n)" button. The button sits in
+ * the page header's title row when the page has one (`PageHeader` leaves a
+ * slot for it), so the list starts right under the title; it opens the same
+ * controls as a bottom sheet. The controls are rendered ONCE either way —
+ * the sheet is the bar, restyled — so their state, labels and the URL they
+ * write are exactly the same on every screen.
+ *
+ * Props are unchanged from the card it replaces: `title` names the sheet,
+ * `activeCount` (default: number of chips) drives the counts, `onApply` is
+ * for staged filters, `actions` sit at the bar's end.
  */
 export function FilterBar({
   title,
@@ -44,43 +69,131 @@ export function FilterBar({
   readonly applyLabel?: string;
   /** Wire to the real request: the Apply button shows busy while true. */
   readonly applying?: boolean;
-  /** Extra controls for the header's right edge. */
+  /** Extra controls for the bar's end. */
   readonly actions?: ReactNode;
   readonly children: ReactNode;
   readonly className?: string | undefined;
 }): ReactElement {
   const t = useUiT();
   const count = activeCount ?? chips.length;
+  const sheetId = `sk-filter-${useId()}`;
+  const [open, setOpen] = useState(false);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const section = useRef<HTMLElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+
+  // The page header's slot, if this bar belongs to a page that has one.
+  useIsoLayoutEffect(() => {
+    const root = section.current?.closest('main') ?? document;
+    setSlot(root.querySelector<HTMLElement>('.sk-ph__slot'));
+  }, []);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    trigger.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const mq = window.matchMedia(PHONE);
+    const onWide = (): void => {
+      if (!mq.matches) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape' && !e.defaultPrevented) close();
+    };
+    const body = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    mq.addEventListener('change', onWide);
+    document.addEventListener('keydown', onKey);
+    // The first filter, not the sheet's close button.
+    const controls = panel.current?.querySelector('.sk-filter__controls');
+    (
+      controls?.querySelector<HTMLElement>('input, select, textarea, button') ??
+      panel.current?.querySelector<HTMLElement>('button')
+    )?.focus();
+    return () => {
+      document.body.style.overflow = body;
+      mq.removeEventListener('change', onWide);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, close]);
+
+  const label = typeof title === 'string' ? title : t('ui.filters.title');
+  const toggle = (
+    <button
+      ref={trigger}
+      type="button"
+      className="sk-filter__toggle"
+      data-active={count > 0 ? '1' : undefined}
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      aria-controls={sheetId}
+      onClick={() => setOpen(true)}
+    >
+      <SlidersHorizontal size={16} aria-hidden />
+      <span>{count > 0 ? t('ui.filters.openN', { n: count }) : t('ui.filters.title')}</span>
+    </button>
+  );
+
   return (
-    <section className={clsx('sk-filter', className)} aria-label={t('ui.filters.title')}>
-      <div className="sk-filter__head">
-        <span className="sk-filter__icon" aria-hidden>
-          <SlidersHorizontal size={16} />
-        </span>
-        <span className="sk-filter__title">{title ?? t('ui.filters.title')}</span>
-        <span className="sk-filter__count sk-figure" data-zero={count === 0 ? '1' : undefined}>
-          {count === 0 ? t('ui.filters.noneActive') : t('ui.filters.nActive', { n: count })}
-        </span>
-        <span className="sk-filter__head-actions">
+    <section
+      ref={section}
+      className={clsx('sk-filter', className)}
+      data-open={open ? '1' : undefined}
+      data-slotted={slot !== null ? '1' : undefined}
+      aria-label={label}
+    >
+      {slot !== null ? createPortal(toggle, slot) : toggle}
+      {open && <div className="sk-filter__backdrop" aria-hidden onClick={close} />}
+      <div
+        ref={panel}
+        id={sheetId}
+        className="sk-filter__panel"
+        role={open ? 'dialog' : undefined}
+        aria-modal={open ? true : undefined}
+        aria-label={open ? label : undefined}
+      >
+        <div className="sk-filter__sheet-head">
+          <span className="sk-filter__sheet-title">{title ?? t('ui.filters.title')}</span>
+          <button
+            type="button"
+            className="sk-filter__sheet-x"
+            aria-label={t('ui.close')}
+            onClick={close}
+          >
+            <X size={18} aria-hidden />
+          </button>
+        </div>
+        <div className="sk-filter__controls">{children}</div>
+        <div className="sk-filter__end">
           {actions}
-          {onReset !== undefined && (
-            <button
-              type="button"
-              className="sk-filter__reset"
-              onClick={onReset}
-              disabled={count === 0}
-            >
-              {t('ui.filters.reset')}
+          {onReset !== undefined && count > 0 && (
+            <button type="button" className="sk-filter__reset" onClick={onReset}>
+              {t('ui.filters.resetN', { n: count })}
             </button>
           )}
           {onApply !== undefined && (
-            <Button variant="primary" size="sm" onClick={onApply} loading={applying}>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                onApply();
+                if (open) close();
+              }}
+              loading={applying}
+            >
               {applyLabel ?? t('ui.filters.apply')}
             </Button>
           )}
-        </span>
+          {onApply === undefined && (
+            <Button variant="primary" className="sk-filter__done" onClick={close}>
+              {t('ui.done')}
+            </Button>
+          )}
+        </div>
       </div>
-      <div className="sk-filter__controls">{children}</div>
       {chips.length > 0 && (
         <ul className="sk-filter__chips" aria-label={t('ui.filters.active')}>
           {chips.map((c) => (
@@ -103,28 +216,24 @@ export function FilterBar({
 }
 
 /**
- * One control in the bar, led by an icon chip. The control itself — a
- * `Select`, a `TextField`, a date input — is the child, unchanged.
+ * One control in the bar. The control itself — a `Select`, a `TextField`,
+ * a `DateRangeField` — is the child, unchanged. `wide` gives it the room a
+ * search box needs. `icon` is accepted for older callers; the compact bar
+ * does not draw it (the control's own label already says what it is).
  */
 export function FilterField({
-  icon,
   children,
   wide = false,
   className,
 }: {
   readonly icon?: ReactNode;
   readonly children: ReactNode;
-  /** Let this control take two columns (a search box). */
+  /** Let this control take the spare width (a search box). */
   readonly wide?: boolean;
   readonly className?: string | undefined;
 }): ReactElement {
   return (
     <div className={clsx('sk-filter__field', className)} data-wide={wide ? '1' : undefined}>
-      {icon !== undefined && (
-        <span className="sk-filter__field-icon" aria-hidden>
-          {icon}
-        </span>
-      )}
       <div className="sk-filter__field-control">{children}</div>
     </div>
   );

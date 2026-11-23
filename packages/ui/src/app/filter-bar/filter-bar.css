@@ -1,115 +1,111 @@
-/* FilterBar (u04). */
+/* FilterBar — one compact bar above a list; a bottom sheet on phones.
+   Tokens only (FE-6). Only transform and opacity animate. */
+
 .sk-filter {
   display: grid;
-  gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4) var(--sp-4);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--surface-2);
-  box-shadow: var(--elev-1);
+  gap: var(--sp-2);
+  min-width: 0;
 }
-.sk-filter__head {
+.sk-filter__panel {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
 }
-.sk-filter__icon {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--r-sm);
-  background: var(--accent-tint);
-  color: var(--sky);
+/* The controls sit straight in the bar's row, so they wrap with it. */
+.sk-filter__controls {
+  display: contents;
 }
-.sk-filter__title {
-  color: var(--fg-strong);
-  font-size: var(--fs-md);
-  font-weight: var(--fw-bold);
+.sk-filter__field {
+  flex: 1 1 11rem;
+  max-width: 17rem;
+  min-width: 0;
 }
-.sk-filter__count {
-  padding: 2px 9px;
-  border-radius: var(--r-pill);
-  background: var(--accent-fill);
-  color: var(--accent-fg);
-  font-size: var(--fs-2xs);
-  font-weight: var(--fw-semibold);
+.sk-filter__field[data-wide='1'] {
+  flex: 3 1 16rem;
+  max-width: none;
 }
-.sk-filter__count[data-zero='1'] {
-  background: var(--surface-3);
-  color: var(--fg-muted);
+.sk-filter__field-control {
+  min-width: 0;
 }
-.sk-filter__head-actions {
+/* Fields in the bar drop the space reserved under them for a hint. */
+.sk-filter__field .sk-field {
+  margin: 0;
+}
+.sk-filter__end {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2);
   margin-left: auto;
 }
+.sk-filter__end:empty {
+  display: none;
+}
 .sk-filter__reset {
-  min-height: var(--tap);
+  min-height: 36px;
   padding: 0 var(--sp-2);
   border: 0;
+  border-radius: var(--r-sm);
   background: none;
   color: var(--sky);
   font: inherit;
   font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
-  text-decoration: underline;
-  text-decoration-color: transparent;
-  text-underline-offset: 3px;
+  white-space: nowrap;
   cursor: pointer;
-  transition: text-decoration-color var(--dur-fast) var(--ease-out);
 }
 .sk-filter__reset:hover {
-  text-decoration-color: currentColor;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
-.sk-filter__reset:disabled {
-  color: var(--fg-faint);
-  cursor: default;
+.sk-filter__reset:focus-visible,
+.sk-filter__toggle:focus-visible,
+.sk-filter__sheet-x:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
-.sk-filter__controls {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
-  gap: var(--sp-3);
-  align-items: end;
+
+/* Phone-only parts, hidden on wide screens. */
+.sk-filter__toggle,
+.sk-filter__sheet-head,
+.sk-filter__done,
+.sk-filter__backdrop {
+  display: none;
 }
-.sk-filter__field {
-  display: flex;
+
+.sk-filter__toggle {
   align-items: center;
-  gap: var(--sp-2);
-  min-width: 0;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  cursor: pointer;
 }
-.sk-filter__field[data-wide='1'] {
-  grid-column: span 2;
+.sk-filter__toggle[data-active='1'] {
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
 }
-@media (max-width: 479.98px) {
-  .sk-filter__field[data-wide='1'] {
-    grid-column: auto;
-  }
-}
-.sk-filter__field-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--r-sm);
-  background: var(--surface-3);
-  color: var(--fg-muted);
-}
-.sk-filter__field-control {
-  flex: 1;
-  min-width: 0;
-}
+
+/* ── Active-filter chips (when a page passes them) ──────────────────────── */
 .sk-filter__chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin: 0;
-  padding: var(--sp-3) 0 0;
-  border-top: 1px dashed var(--line);
+  padding: 0;
   list-style: none;
 }
 .sk-filter__chip {
@@ -160,5 +156,117 @@
   from {
     opacity: 0;
     transform: scale(0.85);
+  }
+}
+
+/* ── Phones: a "Filters (n)" button and a bottom sheet ──────────────────── */
+@media (max-width: 639.98px) {
+  /* With its button in the page header and the sheet closed, the bar takes
+     no room at all — not even the page's gap. */
+  .sk-filter[data-slotted='1']:not([data-open]):not(:has(.sk-filter__chips)) {
+    display: contents;
+  }
+  .sk-filter__toggle {
+    display: inline-flex;
+    justify-self: start;
+  }
+  .sk-filter:not([data-open]) .sk-filter__panel {
+    display: none;
+  }
+  .sk-filter[data-open] .sk-filter__backdrop {
+    position: fixed;
+    z-index: 70;
+    inset: 0;
+    display: block;
+    background: var(--scrim, rgb(15 23 42 / 0.42));
+    animation: sk-filter-fade var(--dur) var(--ease-out) both;
+  }
+  .sk-filter[data-open] .sk-filter__panel {
+    position: fixed;
+    z-index: 71;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: var(--sp-3);
+    max-height: min(86dvh, 86vh);
+    overflow: auto;
+    padding: var(--sp-3) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom));
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: var(--r-xl, 20px) var(--r-xl, 20px) 0 0;
+    box-shadow: var(--elev-3, var(--elev-2));
+    animation: sk-filter-sheet var(--dur) var(--ease-out) both;
+  }
+  .sk-filter[data-open] .sk-filter__controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-3);
+  }
+  .sk-filter[data-open] .sk-filter__field {
+    max-width: none;
+  }
+  .sk-filter[data-open] .sk-filter__sheet-head {
+    position: sticky;
+    top: calc(-1 * var(--sp-3));
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: calc(-1 * var(--sp-3)) calc(-1 * var(--sp-4)) 0;
+    padding: var(--sp-3) var(--sp-2) var(--sp-2) var(--sp-4);
+    background: var(--surface);
+  }
+  .sk-filter__sheet-title {
+    color: var(--fg-strong);
+    font-size: var(--fs-md);
+    font-weight: var(--fw-bold);
+  }
+  .sk-filter__sheet-x {
+    display: grid;
+    place-items: center;
+    width: var(--tap);
+    height: var(--tap);
+    border: 0;
+    border-radius: var(--r-md);
+    background: none;
+    color: var(--fg-muted);
+    cursor: pointer;
+  }
+  .sk-filter[data-open] .sk-filter__end {
+    position: sticky;
+    bottom: calc(-1 * (var(--sp-4) + env(safe-area-inset-bottom)));
+    justify-content: space-between;
+    margin: 0 calc(-1 * var(--sp-4)) calc(-1 * (var(--sp-4) + env(safe-area-inset-bottom)));
+    padding: var(--sp-3) var(--sp-4) calc(var(--sp-3) + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .sk-filter[data-open] .sk-filter__done {
+    display: inline-flex;
+    margin-left: auto;
+  }
+  .sk-filter__reset {
+    min-height: var(--tap);
+  }
+}
+@keyframes sk-filter-sheet {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+@keyframes sk-filter-fade {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-filter__chip,
+  .sk-filter[data-open] .sk-filter__panel,
+  .sk-filter[data-open] .sk-filter__backdrop {
+    animation: none;
   }
 }
