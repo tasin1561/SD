@@ -14,7 +14,7 @@ import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
 import { TextField } from '@skydrop/ui/app/text-field';
-import { DateField } from '@skydrop/ui/app/date-field';
+import { DateRangeField } from '@skydrop/ui/app/date-range';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
@@ -191,17 +191,16 @@ export default function ResellerReportsPage(): ReactElement {
         note={t('resellerReports.daysAreCountedIn')}
       >
         <div className="rs-dates">
-          <DateField
-            id="from"
-            label={t('resellerReports.from')}
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-          />
-          <DateField
-            id="to"
-            label={t('resellerReports.to')}
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
+          <DateRangeField
+            label={t('resellerReports.theWindow')}
+            fromLabel={t('resellerReports.from')}
+            toLabel={t('resellerReports.to')}
+            from={from}
+            to={to}
+            onChange={(r) => {
+              setFrom(r.from);
+              setTo(r.to);
+            }}
           />
         </div>
       </RsSection>

@@ -133,6 +133,7 @@
   transform: scale(0.8);
 }
 .sk-ph__meta {
+  order: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -142,6 +143,7 @@
 /* A sentence of explanation takes its own line under the title; a short
    control (an (i)) stays on the title row — see the apps' easy.css. */
 .sk-ph__subtitle {
+  order: 3;
   flex-basis: 100%;
   max-width: 72ch;
   color: var(--fg-muted);

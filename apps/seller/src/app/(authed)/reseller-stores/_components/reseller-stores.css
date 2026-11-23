@@ -7,7 +7,7 @@
 .rs-page {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--sp-6);
+  gap: var(--sp-4);
   min-width: 0;
 }
 .rs-page > .sk-ph {
