@@ -37,12 +37,17 @@
 .sk-filter__field .sk-field {
   margin: 0;
 }
+.sk-filter__actions,
 .sk-filter__end {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2);
   margin-left: auto;
+}
+/* A page's own extra controls sit at the right end, Reset just after them. */
+.sk-filter__actions + .sk-filter__end {
+  margin-left: 0;
 }
 .sk-filter__end:empty {
   display: none;
@@ -237,6 +242,7 @@
   }
   .sk-filter[data-open] .sk-filter__end {
     position: sticky;
+    z-index: 2;
     bottom: calc(-1 * (var(--sp-4) + env(safe-area-inset-bottom)));
     justify-content: space-between;
     margin: 0 calc(-1 * var(--sp-4)) calc(-1 * (var(--sp-4) + env(safe-area-inset-bottom)));

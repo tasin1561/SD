@@ -905,11 +905,44 @@
 /* 3. Filters: one row, no card */
 .ord-filters {
   position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-2);
   min-width: 0;
+}
+/* On wide screens this bar stays as it was: no border or padding around
+   its small controls, so the list starts where it did. */
+@media (min-width: 640px) {
+  .ord-filters .sk-filter__panel {
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+}
+/* In the bar the controls keep their own sizes: a select with its inline
+   label is as wide as it needs, the search takes the rest. */
+.ord-filters .sk-filter__field:not([data-wide]) {
+  flex: 0 1 auto;
+  max-width: none;
+}
+.ord-filters .sk-filter__actions {
+  position: relative;
+}
+/* Inside the phone filter sheet "More" opens in place, under its button,
+   and the selects take the sheet's full width. */
+.ord-filters[data-open] .ord-sel {
+  display: flex;
+  width: 100%;
+}
+.ord-filters[data-open] .ord-more__panel {
+  position: static;
+  z-index: auto;
+  width: auto;
+  max-height: none;
+  margin-top: var(--sp-2);
+  box-shadow: none;
+}
+.ord-filters[data-open] .sk-filter__actions,
+.ord-filters[data-open] .sk-filter__actions > .ord-more {
+  display: grid;
+  margin-left: 0;
 }
 .ord-ctl {
   min-width: 0;

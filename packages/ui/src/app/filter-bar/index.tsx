@@ -167,8 +167,10 @@ export function FilterBar({
           </button>
         </div>
         <div className="sk-filter__controls">{children}</div>
+        {actions !== undefined && actions !== null && actions !== false && (
+          <div className="sk-filter__actions">{actions}</div>
+        )}
         <div className="sk-filter__end">
-          {actions}
           {onReset !== undefined && count > 0 && (
             <button type="button" className="sk-filter__reset" onClick={onReset}>
               {t('ui.filters.resetN', { n: count })}

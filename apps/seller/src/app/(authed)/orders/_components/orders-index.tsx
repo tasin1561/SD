@@ -34,6 +34,7 @@ import { useUiT } from '@skydrop/ui/app/i18n-client';
 import { verdict } from '@/i18n/verdict';
 import { InfoButton } from '@/components/easy/info-button';
 import { Pagination, ROWS_PER_PAGE, useRowsPerPage } from '@skydrop/ui/app/pagination';
+import { FilterBar, FilterField } from '@skydrop/ui/app/filter-bar';
 import { AwbCopy } from '@skydrop/ui/app/awb-copy';
 import { chipWords, StatusChip } from '@skydrop/ui/app/status-chip';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
@@ -431,6 +432,8 @@ export function OrdersIndex(): ReactElement {
           <span className="ord-head__pill sk-figure">{summary.data?.total ?? '—'}</span>
         </div>
         <div className="ord-head__actions">
+          {/* The phone "Filters (n)" button of the bar below lands here. */}
+          <div className="sk-ph__slot" />
           {/* Only when there IS something waiting. A permanent nav
               item for an empty queue is noise; a queue nobody knows
               about is worse than both. */}
@@ -463,122 +466,123 @@ export function OrdersIndex(): ReactElement {
       <KpiStrip label={t('orderList.kpiStripLabel')} segments={segments} />
 
       <section className="ord-section ord-section--list">
-        {/* ── Filters: one row, no card ─────────────────────────────── */}
-        <div className="ord-filters">
-          <form
-            className="ord-filters__search"
-            role="search"
-            onSubmit={(e) => {
-              e.preventDefault();
-              updateUrl({ search: searchInput.trim(), page: 1 });
-            }}
-          >
-            <Search size={14} aria-hidden className="ord-filters__icon" />
-            <input
-              type="search"
-              className="ord-ctl ord-ctl--search"
-              aria-label={t('orderList.searchOrders')}
-              placeholder={t('orderList.orderNumberRefAwb')}
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
+        {/* ── Filters: the shared one-row bar (a sheet on phones) ─────── */}
+        <FilterBar
+          className="ord-filters"
+          activeCount={activeFilters}
+          onReset={() => {
+            setSearchInput('');
+            // `storeId` too. It counts towards `filtered`, so the
+            // reset is offered because a store is selected — a Reset
+            // that left it selected would not clear the thing that
+            // summoned it.
+            updateUrl({
+              status: '',
+              search: '',
+              range: '',
+              from: '',
+              to: '',
+              storeId: '',
+              page: 1,
+            });
+          }}
+          actions={
+            <MoreFilters
+              open={moreOpen}
+              setOpen={setMoreOpen}
+              activeCount={(params.status !== '' ? 1 : 0) + (custom ? 1 : 0)}
+              status={params.status}
+              statuses={STATUSES.map((s) => ({
+                value: s,
+                label: chipWords(statusLabel(s, locale)),
+              }))}
+              onStatus={(v) => {
+                updateUrl({ status: (v as OrderStatus | '') || '', page: 1 });
+                setMoreOpen(false);
+              }}
+              from={params.from}
+              to={params.to}
+              onFrom={(v) => updateUrl({ range: 'custom', from: v, page: 1 })}
+              onTo={(v) => updateUrl({ range: 'custom', to: v, page: 1 })}
+              showDates
             />
-            {/* Enter submits; the button keeps it reachable by keyboard
-                and by a screen reader ("Search"). */}
-            <button type="submit" className="ord-sr" aria-label={t('orderList.search')}>
-              {t('orderList.search')}
-            </button>
-          </form>
-
-          <div className="ord-sel">
-            <span className="ord-sel__k" aria-hidden>
-              {t('orderList.placedWhen')}
-            </span>
-            <Select
-              label={t('orderList.placedWhen')}
-              aria-label={t('orderList.placedWhen')}
-              value={params.range}
-              onChange={(e) => {
-                updateUrl({ range: e.target.value, from: '', to: '', page: 1 });
-                if (e.target.value === 'custom') setMoreOpen(true);
+          }
+        >
+          <FilterField wide>
+            <form
+              className="ord-filters__search"
+              role="search"
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateUrl({ search: searchInput.trim(), page: 1 });
               }}
             >
-              {RANGES.map((r) => (
-                <option key={r.key} value={r.key}>
-                  {t(r.labelKey)}
-                </option>
-              ))}
-            </Select>
-          </div>
+              <Search size={14} aria-hidden className="ord-filters__icon" />
+              <input
+                type="search"
+                className="ord-ctl ord-ctl--search"
+                aria-label={t('orderList.searchOrders')}
+                placeholder={t('orderList.orderNumberRefAwb')}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+              {/* Enter submits; the button keeps it reachable by keyboard
+                and by a screen reader ("Search"). */}
+              <button type="submit" className="ord-sr" aria-label={t('orderList.search')}>
+                {t('orderList.search')}
+              </button>
+            </form>
+          </FilterField>
+
+          <FilterField>
+            <div className="ord-sel">
+              <span className="ord-sel__k" aria-hidden>
+                {t('orderList.placedWhen')}
+              </span>
+              <Select
+                label={t('orderList.placedWhen')}
+                aria-label={t('orderList.placedWhen')}
+                value={params.range}
+                onChange={(e) => {
+                  updateUrl({ range: e.target.value, from: '', to: '', page: 1 });
+                  if (e.target.value === 'custom') setMoreOpen(true);
+                }}
+              >
+                {RANGES.map((r) => (
+                  <option key={r.key} value={r.key}>
+                    {t(r.labelKey)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </FilterField>
 
           {/* Only when there is a choice to make. One shopfront is the
               ordinary case, and a filter with a single option is a
               control that can only ever narrow to everything. */}
           {stores.length > 1 && (
-            <div className="ord-sel">
-              <span className="ord-sel__k" aria-hidden>
-                {t('orderList.store')}
-              </span>
-              <Select
-                label={t('orderList.store')}
-                aria-label={t('orderList.filterByStore')}
-                value={params.storeId}
-                onChange={(e) => updateUrl({ storeId: e.target.value, page: 1 })}
-              >
-                <option value="">{t('orderList.allStores')}</option>
-                {stores.map((st) => (
-                  <option key={st.id} value={st.id}>
-                    {st.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            <FilterField>
+              <div className="ord-sel">
+                <span className="ord-sel__k" aria-hidden>
+                  {t('orderList.store')}
+                </span>
+                <Select
+                  label={t('orderList.store')}
+                  aria-label={t('orderList.filterByStore')}
+                  value={params.storeId}
+                  onChange={(e) => updateUrl({ storeId: e.target.value, page: 1 })}
+                >
+                  <option value="">{t('orderList.allStores')}</option>
+                  {stores.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </FilterField>
           )}
-
-          <MoreFilters
-            open={moreOpen}
-            setOpen={setMoreOpen}
-            activeCount={(params.status !== '' ? 1 : 0) + (custom ? 1 : 0)}
-            status={params.status}
-            statuses={STATUSES.map((s) => ({
-              value: s,
-              label: chipWords(statusLabel(s, locale)),
-            }))}
-            onStatus={(v) => {
-              updateUrl({ status: (v as OrderStatus | '') || '', page: 1 });
-              setMoreOpen(false);
-            }}
-            from={params.from}
-            to={params.to}
-            onFrom={(v) => updateUrl({ range: 'custom', from: v, page: 1 })}
-            onTo={(v) => updateUrl({ range: 'custom', to: v, page: 1 })}
-            showDates
-          />
-
-          {activeFilters > 0 && (
-            <button
-              type="button"
-              className="ord-filters__reset"
-              onClick={() => {
-                setSearchInput('');
-                // `storeId` too. It counts towards `filtered`, so the
-                // reset is offered because a store is selected — a Reset
-                // that left it selected would not clear the thing that
-                // summoned it.
-                updateUrl({
-                  status: '',
-                  search: '',
-                  range: '',
-                  from: '',
-                  to: '',
-                  storeId: '',
-                  page: 1,
-                });
-              }}
-            >
-              {t('orderList.reset')}
-            </button>
-          )}
-        </div>
+        </FilterBar>
 
         {/* ── The counts live HERE rather than only in a dropdown,
                because "how many are stuck at the call" is the question
