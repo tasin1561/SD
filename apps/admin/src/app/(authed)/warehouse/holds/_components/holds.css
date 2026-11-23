@@ -6,7 +6,7 @@
 .hb-page {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--sp-5, 20px);
+  gap: var(--sp-4);
   min-width: 0;
 }
 .hb-page > .sk-ph {
