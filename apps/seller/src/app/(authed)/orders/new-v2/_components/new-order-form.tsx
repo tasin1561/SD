@@ -1,5 +1,6 @@
 'use client';
 
+import { AboutThis } from '@/components/easy/about';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
@@ -996,7 +997,7 @@ export function NewOrderForm(): ReactElement {
         ]}
         Link={Link}
         title={t('orderNew.newOrder')}
-        subtitle={t('orderNew.whoItGoesTo')}
+        subtitle={<AboutThis text={t('orderNew.whoItGoesTo')} />}
         // Desktop only. The sticky bar carries the same three actions and
         // is always on screen; on a phone the pair together cost about a
         // fifth of the viewport before a single field is visible.

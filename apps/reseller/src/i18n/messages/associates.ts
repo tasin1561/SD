@@ -201,6 +201,7 @@ export const associates = defineMessages({
   ],
   'assoca.all': ['All associates', 'সব অ্যাসোসিয়েট'],
   'assoca.from': ['From', 'শুরু'],
+  'assoca.period': ['Period', 'সময়কাল'],
   'assoca.to': ['To', 'শেষ'],
   'assoca.loading': ['Loading the analysis', 'বিশ্লেষণ লোড হচ্ছে'],
   'assoca.together': ['Everybody together', 'সবাই মিলে'],

@@ -18,7 +18,7 @@ import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
 import { KpiCard } from '@skydrop/ui/app/kpi-card';
 import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { buttonClassName } from '@skydrop/ui/app/button';
-import { DateField } from '@skydrop/ui/app/date-field';
+import { DateRangeField } from '@skydrop/ui/app/date-range';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { istDayRange, lastDays } from '@/lib/ist-day';
@@ -61,17 +61,16 @@ export default function StoreAnalysisPage(): ReactElement {
         }
       />
       <div className="rm-filters">
-        <DateField
-          id="from"
-          label={t('repa.from')}
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-        />
-        <DateField
-          id="to"
-          label={t('repa.to')}
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
+        <DateRangeField
+          label={t('repa.period')}
+          fromLabel={t('repa.from')}
+          toLabel={t('repa.to')}
+          from={from}
+          to={to}
+          onChange={(r) => {
+            setFrom(r.from);
+            setTo(r.to);
+          }}
         />
       </div>
 

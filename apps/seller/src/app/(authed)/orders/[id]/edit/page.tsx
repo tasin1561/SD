@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { AboutThis } from '@/components/easy/about';
 import Link from 'next/link';
 import { PageHeader } from '@skydrop/ui/app/page-header';
 import { EditOrderForm } from './_components/edit-order-form';
@@ -30,7 +31,7 @@ export default async function EditOrderPage({
         ]}
         Link={Link}
         title={t('orderEdit.editOrder')}
-        subtitle={t('orderEdit.aDraftCanBe')}
+        subtitle={<AboutThis text={t('orderEdit.aDraftCanBe')} />}
       />
       <EditOrderForm orderId={id} />
     </div>

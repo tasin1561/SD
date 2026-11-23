@@ -114,6 +114,7 @@ export const reports = defineMessages({
   ],
   'repa.back': ['Profit and loss', 'লাভ-ক্ষতি'],
   'repa.from': ['From', 'শুরু'],
+  'repa.period': ['Period', 'সময়কাল'],
   'repa.to': ['To', 'শেষ'],
   'repa.loading': ['Loading the analysis', 'বিশ্লেষণ লোড হচ্ছে'],
   'repa.orders.title': ['Orders placed in the window', 'এই সময়ে দেওয়া অর্ডার'],

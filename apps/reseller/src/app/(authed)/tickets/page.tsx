@@ -1,5 +1,6 @@
 'use client';
 
+import { AboutThis } from '@/components/easy/about';
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { ArrowRight, Plus } from 'lucide-react';
@@ -56,7 +57,7 @@ export default function TicketsPage(): ReactElement {
     <div className="rc-tkt-page">
       <PageHeader
         title={tr('tkt.title')}
-        subtitle={tr('tkt.subtitle')}
+        subtitle={<AboutThis text={tr('tkt.subtitle')} />}
         action={
           mayRaise ? (
             <Link href="/tickets/new" className={buttonClassName('primary', 'md')}>

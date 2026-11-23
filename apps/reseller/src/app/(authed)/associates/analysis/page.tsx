@@ -15,7 +15,7 @@ import {
   Tr,
   type SortDirection,
 } from '@skydrop/ui/app/data-table';
-import { DateField } from '@skydrop/ui/app/date-field';
+import { DateRangeField } from '@skydrop/ui/app/date-range';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { KpiCard } from '@skydrop/ui/app/kpi-card';
 import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
@@ -147,17 +147,16 @@ export default function AssociateAnalysisPage(): ReactElement {
     <div className="as-page">
       {header}
       <div className="as-filters">
-        <DateField
-          id="from"
-          label={t('assoca.from')}
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-        />
-        <DateField
-          id="to"
-          label={t('assoca.to')}
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
+        <DateRangeField
+          label={t('assoca.period')}
+          fromLabel={t('assoca.from')}
+          toLabel={t('assoca.to')}
+          from={from}
+          to={to}
+          onChange={(r) => {
+            setFrom(r.from);
+            setTo(r.to);
+          }}
         />
       </div>
 
