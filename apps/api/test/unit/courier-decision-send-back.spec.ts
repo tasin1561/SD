@@ -1,4 +1,3 @@
-import { ConflictException } from '@nestjs/common';
 import { OrderStatus, SupersedeReason } from '@skydrop/db';
 import { CourierDecisionService } from '../../src/modules/courier-awb/services/courier-decision.service';
 
@@ -95,7 +94,6 @@ describe('send a booked Shiprocket parcel back for a carrier choice', () => {
 
   it.each([
     ['a waybill still live with the courier', { courierCancelledAt: null }, 'WAYBILL_STILL_LIVE'],
-    ['a non-aggregator courier', { courierCode: 'delhivery' }, 'NOT_AN_AGGREGATOR'],
     ['a packed parcel', { packCompletedAt: new Date() }, 'PARCEL_ALREADY_PACKED'],
     ['a parcel already replaced', { supersededAt: new Date() }, 'SHIPMENT_SUPERSEDED'],
     [
@@ -114,13 +112,14 @@ describe('send a booked Shiprocket parcel back for a carrier choice', () => {
     expect(transitionStatus).not.toHaveBeenCalled();
   });
 
-  it('when the policy would not ask a person, the parcel is booked normally and the call says so', async () => {
-    const { svc, processOrder, transitionStatus } = make(
+  it('nothing to choose (not an aggregator, or the policy would not ask) → refused before any change', async () => {
+    const { svc, supersede, processOrder, transitionStatus } = make(
       {},
-      { kind: 'BOOK', courierCompanyId: null, why: 'policy leaves the choice to the carrier' },
+      { kind: 'BOOK', courierCompanyId: null, why: 'this courier is the carrier' },
     );
-    await expect(send(svc)).rejects.toBeInstanceOf(ConflictException);
-    expect(processOrder).toHaveBeenCalledWith('ord-1');
+    await expect(send(svc)).rejects.toMatchObject({ response: { code: 'NO_CARRIER_CHOICE' } });
+    expect(supersede.supersede).not.toHaveBeenCalled();
+    expect(processOrder).not.toHaveBeenCalled();
     expect(transitionStatus).not.toHaveBeenCalled();
   });
 });

@@ -111,9 +111,6 @@ export class CourierDecisionService {
     };
     if (old.supersededAt !== null)
       refuse('SHIPMENT_SUPERSEDED', 'This parcel record was already replaced');
-    if (old.courierCode !== 'shiprocket') {
-      refuse('NOT_AN_AGGREGATOR', 'Only a Shiprocket parcel has carriers to choose between');
-    }
     if (old.awbNumber !== null && old.courierCancelledAt === null) {
       refuse(
         'WAYBILL_STILL_LIVE',
@@ -125,6 +122,26 @@ export class CourierDecisionService {
     }
     if (link.order.status !== OrderStatus.CONFIRMED) {
       refuse('ORDER_NOT_CONFIRMED', `The order is ${link.order.status}, not CONFIRMED`);
+    }
+
+    // Ask FIRST, before anything changes: a courier with nothing to choose
+    // between (or a policy that would not ask a person) is refused here
+    // rather than half-done.
+    const precheck = await this.choice.decide({
+      shipmentId: old.id,
+      courierCode: old.courierCode,
+      courierAccountId: old.courierAccountId ?? '',
+      sellerId: link.order.sellerId,
+      deliveryPincode: old.destPostalCode,
+      chosenCourierCompanyId: null,
+      weightGrams: old.totalWeightGrams,
+      isCod: old.codAmountInr !== null,
+    });
+    if (precheck.kind !== 'PAUSE') {
+      refuse(
+        'NO_CARRIER_CHOICE',
+        `Nothing to choose for this parcel (${precheck.why}). Only an aggregator parcel under a MANUAL courier policy waits here.`,
+      );
     }
 
     const replaced = await this.supersede.supersede(old.id, SupersedeReason.MANUAL_REPLACEMENT, {
@@ -141,7 +158,9 @@ export class CourierDecisionService {
 
     const decision = await this.choice.decide({
       shipmentId: newShipmentId,
-      courierCode: 'shiprocket',
+      // Whether this courier HAS carriers to choose between is the choice
+      // service's call (CUR-12: no courier-code branch here).
+      courierCode: old.courierCode,
       courierAccountId: old.courierAccountId ?? '',
       sellerId: link.order.sellerId,
       deliveryPincode: old.destPostalCode,
