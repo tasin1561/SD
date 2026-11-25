@@ -95,7 +95,11 @@ export class PrintQueueService {
    * it.
    */
   async reprintable(warehouseId?: string): Promise<PrintQueueRow[]> {
-    return this.query({ labelPrinted: true, warehouseId, notPacked: true });
+    // PICKED too (owner, 2026-11-25): a label torn while the parcel sits
+    // in a picker's tote is still on an unsealed parcel. The boundary is
+    // NOT PACKED (packCompletedAt), not "not yet picked" — and `reprint`
+    // itself already refuses only packed parcels.
+    return this.query({ labelPrinted: true, warehouseId, notPacked: true, includePicked: true });
   }
 
   private async query(opts: {
@@ -103,6 +107,8 @@ export class PrintQueueService {
     warehouseId?: string | undefined;
     unbatchedOnly?: boolean;
     notPacked?: boolean;
+    /** Also list orders already PICKED (the reprint list only). */
+    includePicked?: boolean;
   }): Promise<PrintQueueRow[]> {
     const links = await this.prisma.client.orderShipment.findMany({
       where: {
@@ -110,7 +116,12 @@ export class PrintQueueService {
         // the ORDER's lifecycle status, never the shipment's operational
         // columns (WMS-9).
         order: {
-          status: { in: [OrderStatus.CONFIRMED, OrderStatus.PENDING_PICK] },
+          status: {
+            in:
+              opts.includePicked === true
+                ? [OrderStatus.CONFIRMED, OrderStatus.PENDING_PICK, OrderStatus.PICKED]
+                : [OrderStatus.CONFIRMED, OrderStatus.PENDING_PICK],
+          },
           deletedAt: null,
         },
         shipment: {
