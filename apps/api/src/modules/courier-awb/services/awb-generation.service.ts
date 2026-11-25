@@ -532,11 +532,59 @@ export class AwbGenerationService {
           },
           'Courier refused the parcel; trying another',
         );
+        // CUR-17 applies to the ALTERNATE too (owner, 2026-11-25): a
+        // Delhivery refusal that fails over to Shiprocket was booked with
+        // NO courier id, so Shiprocket picked the carrier itself even
+        // though the policy was MANUAL. Ask the same question we ask for
+        // a parcel that STARTS with the aggregator.
+        const altDecision = await this.choice.decide({
+          shipmentId,
+          courierCode: alternate.courierCode,
+          courierAccountId: alternate.courierAccountId ?? '',
+          sellerId,
+          deliveryPincode: shipment.destPostalCode,
+          chosenCourierCompanyId: shipment.chosenCourierCompanyId,
+          weightGrams: shipment.totalWeightGrams,
+          isCod: shipment.codAmountInr !== null,
+        });
+        if (altDecision.kind === 'PAUSE') {
+          // The parcel now BELONGS to the alternate: the decision desk
+          // lists it, and the booking after the choice must go straight
+          // to that courier with the chosen carrier — not back to the
+          // one that already refused it. Nothing was booked anywhere.
+          await this.prisma.client.shipment.update({
+            where: { id: shipmentId },
+            data: {
+              courierCode: alternate.courierCode,
+              ...(alternate.courierAccountId === null
+                ? {}
+                : { courierAccountId: alternate.courierAccountId }),
+            },
+          });
+          this.logger.log(
+            {
+              shipmentId,
+              refusedBy: shipment.courierCode,
+              movedTo: alternate.courierCode,
+              options: altDecision.options.length,
+              why: altDecision.why,
+            },
+            'Courier refused the parcel; holding it for a carrier decision on the alternate',
+          );
+          return {
+            status: 'AWAITING_COURIER_CHOICE',
+            shipmentId,
+            optionCount: altDecision.options.length,
+          };
+        }
         const second = await this.dispatch.generate(
           {
             ...dispatchInput,
             courierCode: alternate.courierCode,
             courierAccountId: alternate.courierAccountId,
+            ...(altDecision.courierCompanyId !== null
+              ? { courierCompanyId: altDecision.courierCompanyId }
+              : {}),
           },
           runner,
         );

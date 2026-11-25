@@ -79,6 +79,8 @@ function makeService(
     stubCouriers?: string[];
     /** CUR-17 — what CourierChoiceService.decide returns. */
     choice?: ChoiceOutcome;
+    /** CUR-17 per courier — overrides `choice` for that courier code. */
+    choiceByCourier?: Partial<Record<string, ChoiceOutcome>>;
   } = {},
 ) {
   const shipmentFindUnique = jest.fn(async () =>
@@ -105,12 +107,13 @@ function makeService(
     shipment: { update: txShipmentUpdate },
     awbLabel: { create: txAwbLabelCreate, updateMany: txAwbLabelUpdateMany },
   };
+  const shipmentUpdate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({}));
   const client = {
-    shipment: { findUnique: shipmentFindUnique },
+    shipment: { findUnique: shipmentFindUnique, update: shipmentUpdate },
     awbLabel: { findFirst: awbLabelFindFirst },
     courier: { findUnique: courierFindUnique },
   } as {
-    shipment: { findUnique: typeof shipmentFindUnique };
+    shipment: { findUnique: typeof shipmentFindUnique; update: typeof shipmentUpdate };
     awbLabel: { findFirst: typeof awbLabelFindFirst };
     courier: { findUnique: typeof courierFindUnique };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
@@ -191,7 +194,9 @@ function makeService(
   // this file was written against, so a policy nobody set changes
   // nothing here.
   const decide = jest.fn(
-    async () => opts.choice ?? { kind: 'BOOK', courierCompanyId: null, why: 'test default' },
+    async (input?: { courierCode?: string }): Promise<ChoiceOutcome> =>
+      (input?.courierCode !== undefined ? opts.choiceByCourier?.[input.courierCode] : undefined) ??
+      opts.choice ?? { kind: 'BOOK', courierCompanyId: null, why: 'test default' },
   );
   const choice = { decide };
 
@@ -210,6 +215,7 @@ function makeService(
     generate,
     pickAlternate,
     decide,
+    shipmentUpdate,
     isStubMode,
     putObject,
     txShipmentUpdate,
@@ -583,6 +589,59 @@ describe('AwbGenerationService — courier failover (symmetric)', () => {
     expect(written.courierCode).toBe('shiprocket');
     expect(written.awbNumber).toBe('SR1234567890');
     expect(written.courierShipmentId).toBe('887766');
+  });
+
+  // Owner, 2026-11-25: SD-2026-26-000364 / -000346 failed over to Shiprocket
+  // and were booked with Ekart although the policy was MANUAL.
+  it('Delhivery refuses → Shiprocket under a MANUAL policy WAITS for a person, books nothing', async () => {
+    const { svc, generate, decide, shipmentUpdate, txShipmentUpdate } = makeService({
+      dispatchByCourier: { delhivery: REFUSED },
+      alternate: { courierCode: 'shiprocket', courierAccountId: 'sr-acc-1' },
+      choiceByCourier: {
+        shiprocket: { kind: 'PAUSE', options: [{} as never, {} as never], why: 'policy is MANUAL' },
+      },
+    });
+
+    const res = await svc.generateForShipment(SHIP);
+
+    expect(res).toMatchObject({ status: 'AWAITING_COURIER_CHOICE', optionCount: 2 });
+    // Only Delhivery was ever asked to book; Shiprocket was only quoted.
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(generate.mock.calls[0]?.[0].courierCode).toBe('delhivery');
+    expect(decide).toHaveBeenCalledWith(expect.objectContaining({ courierCode: 'shiprocket' }));
+    // The parcel moves to Shiprocket so the desk lists it and the later
+    // booking goes straight there — and no AWB was written.
+    const moved = shipmentUpdate.mock.calls[0]?.[0] as AnyArgs;
+    expect(moved.data).toMatchObject({ courierCode: 'shiprocket', courierAccountId: 'sr-acc-1' });
+    expect(txShipmentUpdate).not.toHaveBeenCalled();
+  });
+
+  it('Delhivery refuses → Shiprocket under CHEAPEST books the chosen carrier id', async () => {
+    const { svc, generate } = makeService({
+      dispatchByCourier: {
+        delhivery: REFUSED,
+        shiprocket: {
+          ok: true,
+          awbNumber: 'SR555',
+          courierShipmentId: '1',
+          courierOrderId: null,
+          carrierName: 'Xpressbees',
+          serviceable: true,
+          errorCode: null,
+          errorMessage: null,
+        },
+      },
+      alternate: { courierCode: 'shiprocket', courierAccountId: 'sr-acc-1' },
+      choiceByCourier: { shiprocket: { kind: 'BOOK', courierCompanyId: 54, why: 'cheapest' } },
+    });
+
+    const res = await svc.generateForShipment(SHIP);
+
+    expect(res.status).toBe('GENERATED');
+    expect(generate.mock.calls[1]?.[0]).toMatchObject({
+      courierCode: 'shiprocket',
+      courierCompanyId: 54,
+    });
   });
 
   it('Shiprocket refuses → Delhivery carries it (the same path, the other way)', async () => {
