@@ -82,7 +82,14 @@ export class CourierOptionSelectionService {
       page. Measured and real: from our actual pickup pin the carrier
       returned exactly one courier.
     */
-    if (options.length === 1) {
+    /*
+      AMENDED 2026-11-25 (owner): under MANUAL a person picks EVEN WHEN
+      there is only one carrier — the owner wants every aggregator parcel
+      on the decision desk, where the single option can be booked or the
+      parcel sent to manual placement instead. Every OTHER policy still
+      books a lone option at once (nothing to rank).
+    */
+    if (options.length === 1 && policy !== 'MANUAL') {
       const only = options[0] as CourierOption;
       return { kind: 'CHOSEN', option: only, why: 'the carrier offered only this one' };
     }
@@ -94,7 +101,10 @@ export class CourierOptionSelectionService {
       case 'MANUAL':
         return {
           kind: 'ASK_A_HUMAN',
-          why: `${options.length} options and policy says a person picks`,
+          why:
+            options.length === 1
+              ? 'one option, and policy says a person picks'
+              : `${options.length} options and policy says a person picks`,
         };
 
       case 'CHEAPEST': {
