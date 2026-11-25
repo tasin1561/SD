@@ -206,6 +206,87 @@ export class CourierDecisionService {
     };
   }
 
+  /**
+   * Send a waiting parcel to MANUAL PLACEMENT instead of picking one of
+   * the offered carriers (owner, 2026-11-25): the aggregator's only
+   * offer may be a carrier staff do not want, and a person then places
+   * it by hand with a backup courier (CUR-8).
+   *
+   * STATUS MOVE ONLY. The live parcel record already has no waybill and
+   * is not retired, which is exactly what the manual-placement queue
+   * lists, so nothing is superseded and no courier is called. Refused
+   * once a waybill exists: that parcel is booked, and placing it again
+   * by hand would be a second shipment for one order.
+   */
+  async sendToManualPlacement(input: {
+    readonly shipmentId: string;
+    readonly staffId: string;
+  }): Promise<{ readonly orderId: string }> {
+    const shipment = await this.prisma.client.shipment.findUnique({
+      where: { id: input.shipmentId },
+      select: {
+        id: true,
+        shipmentNumber: true,
+        supersededAt: true,
+        awbNumber: true,
+        orderShipments: {
+          orderBy: { shipmentSequence: 'asc' },
+          take: 1,
+          select: { orderId: true, order: { select: { status: true } } },
+        },
+      },
+    });
+    if (!shipment) {
+      throw new NotFoundException({ code: 'SHIPMENT_NOT_FOUND', message: 'No such shipment' });
+    }
+    if (shipment.supersededAt !== null) {
+      throw new BadRequestException({
+        code: 'SHIPMENT_SUPERSEDED',
+        message: 'This parcel was retired and replaced; act on the replacement',
+      });
+    }
+    if (shipment.awbNumber !== null) {
+      throw new BadRequestException({
+        code: 'AWB_ALREADY_GENERATED',
+        message: 'This parcel already has a waybill; it cannot be placed by hand as well',
+      });
+    }
+    const link = shipment.orderShipments[0];
+    if (!link) {
+      throw new BadRequestException({
+        code: 'SHIPMENT_HAS_NO_ORDER',
+        message: 'This parcel is not attached to an order',
+      });
+    }
+    if (link.order.status !== OrderStatus.AWAITING_COURIER) {
+      throw new BadRequestException({
+        code: 'ORDER_NOT_AWAITING_COURIER',
+        message: `This order is ${link.order.status}; it is not waiting for a carrier`,
+      });
+    }
+
+    // expectedFrom makes this race-safe against a concurrent choose()
+    // or the TTL sweep: whichever lands second is refused as stale.
+    await this.orderWrite.transitionStatus({
+      orderId: link.orderId,
+      to: OrderStatus.PENDING_MANUAL_PLACEMENT,
+      actor: { type: ActorType.STAFF, id: input.staffId },
+      expectedFrom: OrderStatus.AWAITING_COURIER,
+      reason: `Sent to manual placement from the courier decision desk (parcel ${shipment.shipmentNumber})`,
+    });
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      actorId: input.staffId,
+      action: 'courier_decision.sent_to_manual',
+      entityType: 'shipment',
+      entityId: shipment.id,
+      severity: 'MEDIUM',
+      metadata: { orderId: link.orderId },
+    });
+    return { orderId: link.orderId };
+  }
+
   /** Everything sitting in AWAITING_COURIER, oldest first — the order a
    *  queue is worked in, and the one that makes the oldest wait the
    *  most visible rather than the least. */

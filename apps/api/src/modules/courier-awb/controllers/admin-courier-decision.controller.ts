@@ -78,6 +78,20 @@ export class AdminCourierDecisionController {
     return this.decisions.sendBackForChoice({ shipmentId, staffId: staff.id });
   }
 
+  @Post('shipments/:shipmentId/manual-placement')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Send a waiting parcel to manual placement instead of choosing a carrier',
+    description:
+      'Moves the order from AWAITING_COURIER to PENDING_MANUAL_PLACEMENT so staff place it by hand with a backup courier. No courier is called and nothing is booked. Refused if the parcel already has a waybill or the order is no longer waiting.',
+  })
+  async sendToManual(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('shipmentId', ParseUUIDPipe) shipmentId: string,
+  ): Promise<{ orderId: string }> {
+    return this.decisions.sendToManualPlacement({ shipmentId, staffId: staff.id });
+  }
+
   @Post('sweep-expired')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
