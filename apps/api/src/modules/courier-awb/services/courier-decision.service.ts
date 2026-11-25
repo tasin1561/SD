@@ -1,5 +1,11 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ActorType, OrderStatus, SystemIssueKind } from '@skydrop/db';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { ActorType, OrderStatus, SupersedeReason, SystemIssueKind } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
@@ -8,6 +14,8 @@ import { SystemIssueService } from '../../system-issues/services/system-issue.se
 import type { CourierOption } from '../../courier-shared/services/courier-option-selection.service';
 import { CourierOptionSelectionService } from '../../courier-shared/services/courier-option-selection.service';
 import { AwbGenerationJobService } from './awb-generation-job.service';
+import { AwbSupersedeService } from './awb-supersede.service';
+import { CourierChoiceService } from './courier-choice.service';
 
 const TTL_KEY = 'courier.selection_decision_ttl_hours';
 
@@ -48,7 +56,136 @@ export class CourierDecisionService {
     private readonly selection: CourierOptionSelectionService,
     private readonly issues: SystemIssueService,
     private readonly settings: SettingsResolverService,
+    private readonly supersede: AwbSupersedeService,
+    private readonly choice: CourierChoiceService,
   ) {}
+
+  /**
+   * Send a booked aggregator parcel BACK to this desk (owner, 2026-11-25):
+   * a Delhivery failover booked two parcels with Shiprocket's own carrier
+   * although the policy was MANUAL. Staff cancel the waybill with the
+   * courier first (courier-ops `cancel` — the live write stays there, with
+   * its own guard and audit); this then retires that shipment
+   * (MANUAL_REPLACEMENT, history kept), quotes the carriers for a fresh
+   * one and pauses the order at AWAITING_COURIER so a person picks.
+   *
+   * Refused unless: the courier is Shiprocket, the waybill was CANCELLED
+   * with the courier, nothing is packed or handed over, and the order is
+   * still CONFIRMED.
+   */
+  async sendBackForChoice(input: {
+    readonly shipmentId: string;
+    readonly staffId: string;
+  }): Promise<{
+    readonly orderId: string;
+    readonly newShipmentId: string;
+    readonly options: number;
+  }> {
+    const old = await this.prisma.client.shipment.findUnique({
+      where: { id: input.shipmentId },
+      select: {
+        id: true,
+        shipmentNumber: true,
+        courierCode: true,
+        courierAccountId: true,
+        awbNumber: true,
+        courierCancelledAt: true,
+        packCompletedAt: true,
+        handoverScannedAt: true,
+        supersededAt: true,
+        destPostalCode: true,
+        totalWeightGrams: true,
+        codAmountInr: true,
+        orderShipments: {
+          select: { orderId: true, order: { select: { status: true, sellerId: true } } },
+          take: 1,
+        },
+      },
+    });
+    const link = old?.orderShipments[0];
+    if (!old || !link) {
+      throw new NotFoundException({ code: 'SHIPMENT_NOT_FOUND', message: 'Parcel not found' });
+    }
+    const refuse = (code: string, message: string): never => {
+      throw new ConflictException({ code, message });
+    };
+    if (old.supersededAt !== null)
+      refuse('SHIPMENT_SUPERSEDED', 'This parcel record was already replaced');
+    if (old.courierCode !== 'shiprocket') {
+      refuse('NOT_AN_AGGREGATOR', 'Only a Shiprocket parcel has carriers to choose between');
+    }
+    if (old.awbNumber !== null && old.courierCancelledAt === null) {
+      refuse(
+        'WAYBILL_STILL_LIVE',
+        `Cancel waybill ${old.awbNumber} with the courier first — otherwise it stays booked and charged`,
+      );
+    }
+    if (old.packCompletedAt !== null || old.handoverScannedAt !== null) {
+      refuse('PARCEL_ALREADY_PACKED', `${old.shipmentNumber} is already packed or handed over`);
+    }
+    if (link.order.status !== OrderStatus.CONFIRMED) {
+      refuse('ORDER_NOT_CONFIRMED', `The order is ${link.order.status}, not CONFIRMED`);
+    }
+
+    const replaced = await this.supersede.supersede(old.id, SupersedeReason.MANUAL_REPLACEMENT, {
+      type: ActorType.STAFF,
+      id: input.staffId,
+    });
+    const newShipmentId = replaced.newShipmentId;
+    if (old.courierAccountId !== null) {
+      await this.prisma.client.shipment.update({
+        where: { id: newShipmentId },
+        data: { courierAccountId: old.courierAccountId },
+      });
+    }
+
+    const decision = await this.choice.decide({
+      shipmentId: newShipmentId,
+      courierCode: 'shiprocket',
+      courierAccountId: old.courierAccountId ?? '',
+      sellerId: link.order.sellerId,
+      deliveryPincode: old.destPostalCode,
+      chosenCourierCompanyId: null,
+      weightGrams: old.totalWeightGrams,
+      isCod: old.codAmountInr !== null,
+    });
+    if (decision.kind !== 'PAUSE') {
+      // The replacement exists with no waybill; the normal AWB path books
+      // it under the policy. Say so rather than pretend it is waiting.
+      await this.awbJob.processOrder(link.orderId);
+      refuse(
+        'POLICY_DID_NOT_ASK',
+        `The courier policy booked this parcel itself (${decision.why}); set courier.selection_policy to MANUAL to choose by hand`,
+      );
+    }
+
+    await this.orderWrite.transitionStatus({
+      orderId: link.orderId,
+      to: OrderStatus.AWAITING_COURIER,
+      actor: { type: ActorType.STAFF, id: input.staffId },
+      expectedFrom: OrderStatus.CONFIRMED,
+      reason: `Waybill ${old.awbNumber ?? ''} cancelled; waiting for a carrier to be chosen`,
+    });
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      actorId: input.staffId,
+      action: 'courier_decision.sent_back',
+      entityType: 'shipment',
+      entityId: newShipmentId,
+      severity: 'MEDIUM',
+      metadata: {
+        orderId: link.orderId,
+        replacedShipmentId: old.id,
+        cancelledAwb: old.awbNumber,
+        options: decision.kind === 'PAUSE' ? decision.options.length : 0,
+      },
+    });
+    return {
+      orderId: link.orderId,
+      newShipmentId,
+      options: decision.kind === 'PAUSE' ? decision.options.length : 0,
+    };
+  }
 
   /** Everything sitting in AWAITING_COURIER, oldest first — the order a
    *  queue is worked in, and the one that makes the oldest wait the

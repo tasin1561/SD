@@ -64,6 +64,20 @@ export class AdminCourierDecisionController {
     });
   }
 
+  @Post('shipments/:shipmentId/send-back')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Send a booked Shiprocket parcel back here so a person picks the carrier',
+    description:
+      'For a parcel whose waybill was already CANCELLED with the courier (courier-ops cancel). Retires that parcel record (kept for history), quotes the carriers again for a fresh one and pauses the order at AWAITING_COURIER. Refused if the waybill is still live, the parcel is packed or the order is past CONFIRMED.',
+  })
+  async sendBack(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('shipmentId', ParseUUIDPipe) shipmentId: string,
+  ): Promise<{ orderId: string; newShipmentId: string; options: number }> {
+    return this.decisions.sendBackForChoice({ shipmentId, staffId: staff.id });
+  }
+
   @Post('sweep-expired')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
