@@ -141,7 +141,17 @@ interface CsvPreview {
 }
 
 /** "12 orders" for the order importer, "12 rows" for the catalogue one. */
-function importLabel(t: Translate<MessageKey>, kind: Kind, preview: CsvPreview): string {
+/** The button names the FILE it imports, so it can never be mistaken for the one just picked. */
+function importLabel(
+  t: Translate<MessageKey>,
+  kind: Kind,
+  preview: CsvPreview,
+  fileName: string,
+): string {
+  return t('orderImport.importFromFile', { action: actionLabel(t, kind, preview), fileName });
+}
+
+function actionLabel(t: Translate<MessageKey>, kind: Kind, preview: CsvPreview): string {
   const n = kind === 'orders' ? (preview.orderCount ?? preview.rowCount) : preview.rowCount;
   if (kind === 'orders') {
     // The button has to SAY what pressing it does. Importing this file
@@ -417,6 +427,18 @@ export function CsvImportPanel({
     const f = files[0];
     pickedFile.current = f ?? null;
     setSelectedName(f ? f.name : '');
+    // A NEW file retires the one already checked. Without this the earlier
+    // file's review (and its Import button) stayed on screen, and pressing
+    // it imported THAT file while the new one sat unsent (2026-11-25: the
+    // 15-row file went in when the 55-row one had been picked). The only
+    // next step is now "Upload & check" for the file just chosen.
+    if (f) {
+      setPending(null);
+      setReviewOpen(false);
+      setAutoImported(false);
+      setAutoImportedJobId(null);
+      setStopReason(null);
+    }
   }
 
   async function upload(): Promise<void> {
@@ -995,11 +1017,13 @@ export function CsvImportPanel({
 
             <div className="ord-row">
               <AsyncButton
+                className="imp-import-btn"
+                title={importLabel(t, kind, pending.preview, pending.fileName)}
                 variant="primary"
                 icon={<FileSpreadsheet size={15} />}
                 state={busy === 'processing' ? 'busy' : undefined}
                 labels={{
-                  idle: importLabel(t, kind, pending.preview),
+                  idle: importLabel(t, kind, pending.preview, pending.fileName),
                   busy: t('orderImport.queuing'),
                 }}
                 disabled={
@@ -1046,7 +1070,7 @@ export function CsvImportPanel({
           blocked={pending.preview.missingRequired.length > 0 || pending.preview.exceedsRowLimit}
           busy={busy !== null}
           importing={busy === 'processing'}
-          importLabel={importLabel(t, kind, pending.preview)}
+          importLabel={importLabel(t, kind, pending.preview, pending.fileName)}
           onImport={() => void confirmImport()}
           imported={autoImported}
           errorActions={

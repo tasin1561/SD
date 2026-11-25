@@ -161,6 +161,7 @@ export const orderImport = defineMessages({
   'orderImport.importOrderMany': ['Import {count} orders', '{count}টি অর্ডার ইম্পোর্ট করুন'],
   'orderImport.importRowOne': ['Import {count} row', '{count}টি সারি ইম্পোর্ট করুন'],
   'orderImport.importRowMany': ['Import {count} rows', '{count}টি সারি ইম্পোর্ট করুন'],
+  'orderImport.importFromFile': ['{action} from {fileName}', '{fileName} থেকে {action}'],
   'orderImport.rowProblem': ['Row {rowNumber}: {reason}', 'সারি {rowNumber}: {reason}'],
   'orderImport.didYouMean': [
     '{header} (did you mean {suggestion}?)',

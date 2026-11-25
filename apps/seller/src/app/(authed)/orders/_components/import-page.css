@@ -589,3 +589,18 @@
     gap: 0.125rem;
   }
 }
+
+/* The Import button names its file, and a file name can be long: the label
+   stays on its one rolling line and ends in "…" rather than pushing the
+   button off a phone. The whole label is its accessible name and title. */
+.imp-import-btn {
+  max-width: 100%;
+  min-width: 0;
+}
+.imp-import-btn .sk-async__window {
+  min-width: 0;
+}
+.imp-import-btn .sk-async__strip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

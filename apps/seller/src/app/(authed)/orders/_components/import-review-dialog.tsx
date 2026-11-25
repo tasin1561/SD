@@ -121,6 +121,8 @@ export function ImportReviewDialog(p: ImportReviewDialogProps): ReactElement {
           </Button>
           {p.imported ? null : (
             <AsyncButton
+              className="imp-import-btn"
+              title={p.importLabel}
               variant="primary"
               icon={<FileSpreadsheet size={15} />}
               state={p.importing ? 'busy' : undefined}
