@@ -49,12 +49,26 @@ describe('CourierOptionSelectionService', () => {
     expect(svc.select(three, 'MANUAL', 5)).toMatchObject({ kind: 'ASK_A_HUMAN' });
   });
 
-  it('MANUAL does NOT stop when there is only one option', () => {
-    // A decision screen with one button on it holds a parcel, its
-    // stock and its customer for no gain. Measured, not hypothetical:
-    // our own pickup pin returns exactly one carrier for some lanes.
+  it('MANUAL asks a person even when there is only one option (owner, 2026-11-25)', () => {
+    // The owner wants every Shiprocket parcel on the decision desk under
+    // MANUAL: the one option can be booked there, or the parcel sent to
+    // manual placement instead.
     const r = svc.select([opt(1, 'Only', 40, 3)], 'MANUAL', 5);
-    expect(r).toMatchObject({ kind: 'CHOSEN' });
+    expect(r).toMatchObject({
+      kind: 'ASK_A_HUMAN',
+      why: 'one option, and policy says a person picks',
+    });
+  });
+
+  it('every OTHER policy still books a lone option at once', () => {
+    for (const p of [
+      'CHEAPEST',
+      'FASTEST',
+      'CHEAPEST_WITHIN_DAYS',
+      'SHIPROCKET_DEFAULT',
+    ] as const) {
+      expect(svc.select([opt(1, 'Only', 40, 3)], p, 5)).toMatchObject({ kind: 'CHOSEN' });
+    }
   });
 
   it('an EMPTY list is not a question for a human', () => {
