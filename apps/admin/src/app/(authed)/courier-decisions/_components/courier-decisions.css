@@ -70,3 +70,22 @@
     overflow-wrap: anywhere;
   }
 }
+
+/* The ways out other than a carrier, under the carriers: send to manual
+   placement, and cancel. One row that wraps, never an indented second line. */
+.oq-alt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+@media (pointer: coarse) {
+  .oq-manual {
+    min-height: var(--tap);
+  }
+}
+/* Cancel sits beside "Send to manual placement", the quietest of the three. */
+.oq-cancel {
+  color: var(--red-text);
+}

@@ -49,7 +49,7 @@ const TERMINAL_STATUSES: readonly OrderStatus[] = [
 // a disabled button and told to contact a super admin. The permission is
 // the thing the server actually checks, so it is the thing to ask about.
 
-const CANCELLATION_REASONS = (
+export const CANCELLATION_REASONS = (
   t: Translate<MessageKey>,
 ): ReadonlyArray<{
   value: OrderCancellationReason;

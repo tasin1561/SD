@@ -2984,3 +2984,32 @@ export function useChooseCourier(): UseMutationResult<
     },
   });
 }
+
+/**
+ * Send a waiting parcel to manual placement instead of taking an offered
+ * carrier. Status move only on the server: no courier is called and
+ * nothing is booked. The row leaves the desk at once on success, so the
+ * click visibly landed and cannot be pressed twice.
+ */
+export function useSendToManualPlacement(): UseMutationResult<
+  { orderId: string },
+  Error,
+  { shipmentId: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ shipmentId }) =>
+      client.request<{ orderId: string }>(
+        `/api/admin/courier-decisions/shipments/${shipmentId}/manual-placement`,
+        { method: 'POST' },
+      ),
+    onSuccess: (_r, { shipmentId }) => {
+      queryClient.setQueryData<WaitingCourierChoice[]>(['admin-courier-decisions'], (rows) =>
+        rows?.filter((r) => r.shipmentId !== shipmentId),
+      );
+      void queryClient.invalidateQueries({ queryKey: ['admin-courier-decisions'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+    },
+  });
+}

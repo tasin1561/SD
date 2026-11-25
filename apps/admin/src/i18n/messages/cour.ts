@@ -329,6 +329,26 @@ export const cour = defineMessages({
   'courierDecisionsCourierDecisionIndex.cheapest': [' · cheapest', ' · সবচেয়ে সস্তা'],
   'courierDecisionsCourierDecisionIndex.fastest': [' · fastest', ' · সবচেয়ে দ্রুত'],
   'courierDecisionsCourierDecisionIndex.justNow': ['just now', 'এইমাত্র'],
+  'courierDecisionsCourierDecisionIndex.sendToManual': [
+    'Send to manual placement',
+    'ম্যানুয়াল প্লেসমেন্টে পাঠান',
+    'मैनुअल प्लेसमेंट में भेजें',
+  ],
+  'courierDecisionsCourierDecisionIndex.cancelOrder': [
+    'Cancel order',
+    'অর্ডার বাতিল করুন',
+    'ऑर्डर रद्द करें',
+  ],
+  'courierDecisionsCourierDecisionIndex.orderCancelled': [
+    'Order {orderNo} cancelled',
+    'অর্ডার {orderNo} বাতিল হয়েছে',
+    'ऑर्डर {orderNo} रद्द किया गया',
+  ],
+  'courierDecisionsCourierDecisionIndex.sentToManual': [
+    'Sent to manual placement',
+    'ম্যানুয়াল প্লেসমেন্টে পাঠানো হয়েছে',
+    'मैनुअल प्लेसमेंट में भेजा गया',
+  ],
   'courierDecisionsCourierDecisionIndex.courierDecisions': [
     'Courier decisions',
     'কুরিয়ারের সিদ্ধান্ত',

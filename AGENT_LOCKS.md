@@ -38,7 +38,6 @@ Admin "easy pages" redesign (owner's list of 31 admin pages, 2026-11-13): light 
 - `apps/reseller/src/components/easy/**`, `apps/associate/src/components/easy/**`, `apps/{reseller,associate}/src/i18n/messages/easy.ts` (all NEW), and every screen under `apps/reseller/src/app/(authed)/**` and `apps/associate/src/app/(authed)/**` EXCEPT `apps/reseller/src/app/(authed)/tickets/[id]/**` (Claude Code's, below) — 2026-11-17 — owner asked for the member store and associate portals redesigned the same way as the client portal (phone-first, hints behind an "i", nothing removed). Screen-only: no amount, endpoint, permission or request body changes. Existing message files: keys added only. If Claude Code needs one of these screens, say so and the claim is narrowed.
 
 - `packages/ui/src/app/bulk-actions/**` — 2026-11-20 — the shared bulk bar (order lists of all four consoles, admin Failed deliveries, client pending orders). Merged; kept claimed so its API changes in one place. The rest of the six-change claim (#54–#60 screens) is released.
-- `apps/admin/src/app/(authed)/orders/_components/order-actions-panel.tsx` — 2026-11-25 — ONE change: `export` on its cancellation-reason list, so the courier-decisions desk cancels with the same reasons
 
 ## Claimed by Claude Code
 

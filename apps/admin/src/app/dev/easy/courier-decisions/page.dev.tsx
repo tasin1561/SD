@@ -77,7 +77,12 @@ export default function CourierDecisionsHarness(): ReactElement {
     <EasyHarness
       fixtures={FIXTURES}
       respond={respond}
-      permissions={() => ['courier.dispatch', 'orders.view']}
+      permissions={() => [
+        'courier.dispatch',
+        'orders.view',
+        'orders.courier_choice',
+        'orders.cancel',
+      ]}
     >
       <CourierDecisionIndex />
     </EasyHarness>
